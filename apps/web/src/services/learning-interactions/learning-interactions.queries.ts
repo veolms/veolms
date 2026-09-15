@@ -14,12 +14,172 @@ import type { ApiError } from "../../lib/api-error";
 import { learningInteractionKeys } from "./learning-interactions.keys";
 import { learningInteractionsService } from "./learning-interactions.service";
 import { interactionCreationCoordinator } from "./interaction-creation-coordinator";
+import { desiredStateCoordinator } from "./desired-state-coordinator";
+import { calculateNextLikesCount } from "./cache-updaters";
 import {
   toLearningThreadEntity,
+  getClientEntityId,
   isClientEntityId,
+  getServerEntityId,
+  type LearningReplyCacheItem,
+  type LearningRepliesCacheResponse,
   type LearningThreadCacheResponse,
   type LearningThreadEntity,
 } from "./interaction-entities";
+import type { ReplyCreationRecord } from "./interaction-creation-coordinator";
+
+function getReplySequence(reply: LearningReplyCacheItem): number {
+  return "localSequence" in reply
+    ? reply.localSequence
+    : Number.MAX_SAFE_INTEGER;
+}
+
+function matchesAcceptedReply(
+  reply: LearningReplyCacheItem,
+  desiredAcceptedReplyId: string | null,
+): boolean {
+  return (
+    desiredAcceptedReplyId !== null &&
+    (String(reply.id) === desiredAcceptedReplyId ||
+      getClientEntityId(reply) === desiredAcceptedReplyId ||
+      getServerEntityId(reply) === desiredAcceptedReplyId)
+  );
+}
+
+function projectThreadLocalState(thread: LearningThreadEntity): LearningThreadEntity {
+  const clientId = getClientEntityId(thread);
+  const serverId = getServerEntityId(thread);
+  const acceptedState = desiredStateCoordinator.getAcceptedAnswerState(
+    serverId ?? clientId,
+  );
+  const desiredLiked = desiredStateCoordinator.getLikeProjection(
+    "thread",
+    clientId,
+    serverId,
+  );
+
+  let next = thread;
+  if (
+    acceptedState &&
+    next.acceptedAnswerId !== acceptedState.desiredAcceptedReplyId
+  ) {
+    next = {
+      ...next,
+      acceptedAnswerId: acceptedState.desiredAcceptedReplyId,
+    };
+  }
+  if (desiredLiked !== undefined && Boolean(next.isLiked) !== desiredLiked) {
+    next = {
+      ...next,
+      isLiked: desiredLiked,
+      likesCount: calculateNextLikesCount(
+        next.likesCount ?? 0,
+        next.isLiked,
+        desiredLiked,
+      ),
+    };
+  }
+  return next;
+}
+
+function projectReplyLocalState(
+  reply: LearningReplyCacheItem,
+  threadId: string,
+): LearningReplyCacheItem {
+  const clientId = getClientEntityId(reply);
+  const serverId = getServerEntityId(reply);
+  const acceptedState = desiredStateCoordinator.getAcceptedAnswerState(threadId);
+  const desiredLiked = desiredStateCoordinator.getLikeProjection(
+    "reply",
+    clientId,
+    serverId,
+  );
+
+  let next = reply;
+  if (
+    acceptedState &&
+    Boolean(next.isAccepted) !==
+      matchesAcceptedReply(next, acceptedState.desiredAcceptedReplyId)
+  ) {
+    next = {
+      ...next,
+      isAccepted: matchesAcceptedReply(
+        next,
+        acceptedState.desiredAcceptedReplyId,
+      ),
+    };
+  }
+  if (desiredLiked !== undefined && Boolean(next.isLiked) !== desiredLiked) {
+    next = {
+      ...next,
+      isLiked: desiredLiked,
+      likesCount: calculateNextLikesCount(
+        next.likesCount ?? 0,
+        next.isLiked,
+        desiredLiked,
+      ),
+    };
+  }
+  return next;
+}
+
+export function mergeRepliesWithCreationRecords(
+  response: LearningRepliesListResponse,
+  threadId: string,
+  records: readonly ReplyCreationRecord[],
+): LearningRepliesCacheResponse {
+  const replies: LearningReplyCacheItem[] = [...response.replies];
+  let addedLocalReplies = 0;
+
+  for (const record of records) {
+    const localReply =
+      record.status === "confirmed" && record.serverReply
+        ? {
+            ...record.serverReply,
+            id: record.serverReply.id,
+            threadId: record.serverReply.threadId,
+            clientId: record.clientId,
+            serverId: record.serverReply.id,
+            creationStatus: "confirmed" as const,
+            localSequence: record.localSequence,
+          }
+        : record.optimisticReply;
+    const serverId = record.serverId ?? getServerEntityId(localReply);
+    const existingIndex = serverId
+      ? replies.findIndex((reply) => getServerEntityId(reply) === serverId)
+      : -1;
+
+    if (existingIndex >= 0) {
+      replies[existingIndex] = {
+        ...replies[existingIndex],
+        ...localReply,
+        clientId: record.clientId,
+        serverId,
+        creationStatus: "confirmed" as const,
+        localSequence: record.localSequence,
+      };
+      continue;
+    }
+
+    replies.push(localReply);
+    addedLocalReplies += 1;
+  }
+
+  replies.sort(
+    (left, right) => getReplySequence(left) - getReplySequence(right),
+  );
+  const projectedReplies = replies.map((reply) =>
+    projectReplyLocalState(reply, threadId),
+  );
+  return {
+    ...response,
+    replies: projectedReplies,
+    totalCount:
+      response.totalCount === undefined
+        ? response.totalCount
+        : response.totalCount + addedLocalReplies,
+  };
+}
 
 export function useLessonThreads(
   courseId: string,
@@ -38,7 +198,7 @@ export function useLessonThreads(
       return {
         ...response,
         threads: response.threads.map((thread) =>
-          toLearningThreadEntity(thread),
+          projectThreadLocalState(toLearningThreadEntity(thread)),
         ),
       };
     },
@@ -58,7 +218,7 @@ export function useHubThreads(
       return {
         ...response,
         threads: response.threads.map((thread) =>
-          toLearningThreadEntity(thread),
+          projectThreadLocalState(toLearningThreadEntity(thread)),
         ),
       };
     },
@@ -80,8 +240,8 @@ export function useThreadDetails(
       if (!threadId || isPendingClientId) {
         throw new Error("A confirmed server thread ID is required.");
       }
-      return toLearningThreadEntity(
-        await learningInteractionsService.getThread(threadId),
+      return projectThreadLocalState(
+        toLearningThreadEntity(await learningInteractionsService.getThread(threadId)),
       );
     },
     enabled:
@@ -96,17 +256,25 @@ export function useThreadReplies(
   query?: ListLearningRepliesQuery,
   options?: { enabled?: boolean },
 ) {
-  return useQuery<LearningRepliesListResponse, ApiError>({
+  return useQuery<LearningRepliesCacheResponse, ApiError>({
     queryKey: learningInteractionKeys.threadReplies(threadId ?? "", query),
     queryFn: async () => {
       if (
         !threadId ||
-        (isClientEntityId(threadId) ||
-          interactionCreationCoordinator.hasPendingClientId(threadId))
+        isClientEntityId(threadId) ||
+        interactionCreationCoordinator.hasPendingClientId(threadId)
       ) {
         throw new Error("A confirmed server thread ID is required.");
       }
-      return learningInteractionsService.listReplies(threadId, query);
+      const response = await learningInteractionsService.listReplies(
+        threadId,
+        query,
+      );
+      return mergeRepliesWithCreationRecords(
+        response,
+        threadId,
+        interactionCreationCoordinator.getActiveReplyRecords(threadId),
+      );
     },
     enabled:
       (options?.enabled ?? Boolean(threadId)) &&

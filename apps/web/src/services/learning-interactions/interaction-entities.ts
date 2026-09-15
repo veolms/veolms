@@ -1,5 +1,8 @@
 import type {
+  CreateLearningReplyRequest,
   CreateLearningThreadRequest,
+  LearningReply,
+  LearningThreadAttachmentSummary,
   LearningThread,
 } from "@veolms/contracts";
 
@@ -21,6 +24,23 @@ export type LearningThreadEntity = Omit<LearningThread, "id"> &
     /** Compatibility value for existing view-model consumers. */
     id: string;
   };
+
+export type LearningReplyEntity = Omit<LearningReply, "id" | "threadId"> &
+  ClientEntityIdentity & {
+    id: string;
+    threadId: string;
+    parentClientId?: string;
+    parentServerId?: string;
+    localSequence: number;
+  };
+
+export type LearningReplyCacheItem = LearningReply | LearningReplyEntity;
+
+export type LearningRepliesCacheResponse = {
+  replies: LearningReplyCacheItem[];
+  nextCursor: string | null;
+  totalCount?: number;
+};
 
 export type LearningThreadCacheResponse = {
   threads: LearningThreadEntity[];
@@ -97,6 +117,14 @@ function createClientId(): string {
   return `client-thread-${randomUuid}`;
 }
 
+function createReplyClientId(): string {
+  const randomUuid =
+    typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `client-reply-${randomUuid}`;
+}
+
 function getOptimisticAuthor() {
   return {
     id: "optimistic-user",
@@ -165,5 +193,67 @@ export function createOptimisticLearningThread(
     isOwn: true,
     createdAt: now,
     updatedAt: now,
+  };
+}
+
+function getOptimisticReplyPlainText(content: string): string {
+  return content
+    .replace(/<[^>]*>/g, " ")
+    .replace(/[*_`~#>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export interface OptimisticReplyContext {
+  parentClientId: string;
+  parentServerId?: string;
+  localSequence: number;
+  attachments?: readonly LearningThreadAttachmentSummary[];
+  userId?: string;
+  displayName?: string;
+  username?: string;
+  avatarUrl?: string | null;
+  role?: "Student" | "Instructor" | "Admin";
+}
+
+export function createOptimisticLearningReply(
+  payload: CreateLearningReplyRequest,
+  context: OptimisticReplyContext,
+): LearningReplyEntity {
+  const clientId = createReplyClientId();
+  const now = new Date().toISOString();
+  const author = {
+    id: context.userId ?? "optimistic-user",
+    displayName: context.displayName?.trim() || "You",
+    username: context.username?.trim() || "you",
+    avatarUrl: context.avatarUrl ?? null,
+    role: context.role ?? "Student",
+  };
+
+  return {
+    id: clientId,
+    clientId,
+    serverId: undefined,
+    creationStatus: "pending",
+    threadId: context.parentServerId ?? context.parentClientId,
+    parentReplyId: payload.parentReplyId,
+    replyToReplyId: payload.replyToReplyId,
+    replyToUserId: payload.replyToUserId,
+    userId: author.id,
+    author,
+    content: payload.content,
+    plainText: getOptimisticReplyPlainText(payload.content),
+    timestampSeconds: payload.timestampSeconds ?? null,
+    isAccepted: false,
+    status: "active",
+    likesCount: 0,
+    attachments: [...(context.attachments ?? [])],
+    isLiked: false,
+    isOwn: true,
+    createdAt: now,
+    updatedAt: now,
+    parentClientId: context.parentClientId,
+    parentServerId: context.parentServerId,
+    localSequence: context.localSequence,
   };
 }

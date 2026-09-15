@@ -68,6 +68,8 @@ import {
 import {
   getClientEntityId,
   getServerEntityId,
+  isClientEntityId,
+  isPendingClientEntity,
 } from "../services/learning-interactions/interaction-entities";
 import {
   DiscussionReportDialog,
@@ -587,9 +589,7 @@ function DiscussionInner({
   );
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [notice, setNotice] = useState("");
-  const [creationToast, setCreationToast] = useState<ToastMessage | null>(
-    null,
-  );
+  const [creationToast, setCreationToast] = useState<ToastMessage | null>(null);
   const activeDraft = editingEntry?.draft ?? draft;
   const activeEntryKind = editingEntry?.entryKind ?? entryKind;
   const activeVisibility = editingEntry?.visibility ?? visibility;
@@ -679,9 +679,41 @@ function DiscussionInner({
   }, [combinedEntries, directThreadComment]);
 
   const lastHandledErrorThreadRef = useRef<string | null>(null);
+  const suppressThreadUrlSyncRef = useRef(false);
 
   useEffect(() => {
+    if (suppressThreadUrlSyncRef.current) {
+      if (!threadIdFromUrl) {
+        suppressThreadUrlSyncRef.current = false;
+      }
+      return;
+    }
+
     if (!threadIdFromUrl) {
+      const selectedEntry = openThread
+        ? threadEntries.find(
+            (entry) => getClientEntityId(entry) === String(openThread.id),
+          )
+        : undefined;
+      const selectedServerId = selectedEntry
+        ? getServerEntityId(selectedEntry)
+        : undefined;
+
+      if (selectedEntry && isBackendMode) {
+        if (isPendingClientEntity(selectedEntry)) return;
+        if (selectedServerId) {
+          setSearchParams(
+            (prev) => {
+              const next = new URLSearchParams(prev);
+              next.set("thread", selectedServerId);
+              return next;
+            },
+            { replace: true },
+          );
+          return;
+        }
+      }
+
       if (openThread !== null) {
         setOpenThread(null);
       }
@@ -749,7 +781,18 @@ function DiscussionInner({
         directThreadData &&
         !isCommentOrQaThread(directThreadData));
 
-    if (isDirectFetchFailed) {
+    const selectedEntry = openThread
+      ? threadEntries.find(
+          (entry) => getClientEntityId(entry) === String(openThread.id),
+        )
+      : undefined;
+    const selectedEntryIsValid = Boolean(
+      selectedEntry &&
+      (isPendingClientEntity(selectedEntry) ||
+        getServerEntityId(selectedEntry) === threadIdFromUrl),
+    );
+
+    if (isDirectFetchFailed && !selectedEntryIsValid) {
       if (lastHandledErrorThreadRef.current !== threadIdFromUrl) {
         lastHandledErrorThreadRef.current = threadIdFromUrl;
         setNotice("This discussion thread is unavailable or has been removed.");
@@ -773,6 +816,7 @@ function DiscussionInner({
     isDirectThreadLoading,
     openThread,
     setSearchParams,
+    threadEntries,
     threadIdFromUrl,
   ]);
 
@@ -1164,6 +1208,7 @@ function DiscussionInner({
     threadId: string | number,
     replyId: string | number,
     accepted: boolean,
+    serverReplyId?: string,
   ) => {
     const thread = combinedEntries.find(
       (entry) => getClientEntityId(entry) === String(threadId),
@@ -1171,10 +1216,12 @@ function DiscussionInner({
     const threadIdStr = thread ? getServerEntityId(thread) : undefined;
     const replyIdStr = String(replyId);
     if (isBackendMode) {
-      if (!threadIdStr) return;
+      const authoritativeReplyId = serverReplyId ?? replyIdStr;
+      if (!threadIdStr || isClientEntityId(authoritativeReplyId)) return;
       desiredStateCoordinator.setAcceptedAnswer({
         threadId: threadIdStr,
-        desiredAcceptedReplyId: accepted ? replyIdStr : null,
+        desiredAcceptedReplyId: accepted ? authoritativeReplyId : null,
+        currentBaselineReplyId: thread?.acceptedAnswerId ?? null,
         lessonContext:
           courseId && lessonId ? { courseId, lessonId } : undefined,
         queryClient: queryClient ?? undefined,
@@ -1317,6 +1364,7 @@ function DiscussionInner({
           targetType: "thread" | "reply";
           targetId: string | number;
           authorName?: string;
+          serverId?: string;
         }
       | (string | number),
   ) => {
@@ -1328,8 +1376,8 @@ function DiscussionInner({
                 (entry) => getClientEntityId(entry) === String(target.targetId),
               ) ?? { id: target.targetId },
             )
-          : String(target.targetId);
-      if (!targetId || targetId.startsWith("client-thread-")) return;
+          : target.serverId;
+      if (!targetId || isClientEntityId(targetId)) return;
       setReportingTarget({
         targetType: target.targetType,
         targetId,
@@ -1502,8 +1550,7 @@ function DiscussionInner({
         open={
           openThread !== null &&
           threadEntries.some(
-            (entry) =>
-              getClientEntityId(entry) === String(openThread.id),
+            (entry) => getClientEntityId(entry) === String(openThread.id),
           )
         }
         activeEntryId={openThread?.id ?? null}
@@ -1516,6 +1563,7 @@ function DiscussionInner({
         focusComposerOnOpen={Boolean(openThread?.focusComposer)}
         onOpenChange={(open) => {
           if (!open) {
+            suppressThreadUrlSyncRef.current = true;
             setOpenThread(null);
             setSearchParams((prev) => {
               if (!prev.has("thread")) return prev;
@@ -1554,6 +1602,12 @@ function DiscussionInner({
         onToggleLockThread={handleToggleLockThread}
         onToggleBookmark={handleToggleBookmark}
         onToggleFollow={handleToggleFollow}
+        onReplyCreateError={() =>
+          setCreationToast({
+            message: "Couldn't post your reply. Please try again.",
+            type: "error",
+          })
+        }
       />
       <DiscussionReportDialog
         open={reportDialogOpen}
@@ -1652,6 +1706,7 @@ interface ThreadSurfaceProps {
           targetType: "thread" | "reply";
           targetId: string | number;
           authorName?: string;
+          serverId?: string;
         }
       | (string | number),
   ) => void;

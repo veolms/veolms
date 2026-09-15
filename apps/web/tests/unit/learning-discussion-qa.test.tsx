@@ -322,6 +322,56 @@ describe("Learning Discussion Q&A Specific Actions (Phase 3 Integration)", () =>
     );
   });
 
+  it("keeps Accept Answer disabled until an optimistic reply is confirmed", async () => {
+    const pendingReply = {
+      ...mockQaReplies[0],
+      id: "server-reply-pending",
+      clientId: "client-reply-pending",
+      serverId: undefined,
+      creationStatus: "pending" as const,
+    } as any;
+    mockInteractions.useThreadReplies.mockImplementation((threadId: string) =>
+      threadId === "thread-question-1"
+        ? {
+            data: { replies: [pendingReply], nextCursor: null, totalCount: 1 },
+            isLoading: false,
+            isError: false,
+            refetch: vi.fn(),
+          }
+        : {
+            data: { replies: mockCommentReplies, nextCursor: null, totalCount: 1 },
+            isLoading: false,
+            isError: false,
+            refetch: vi.fn(),
+          },
+    );
+
+    render(
+      <Discussion
+        persistenceKey="test-phase3-pending-accept"
+        courseId="course-1"
+        lessonId="lesson-1"
+        interactionCapabilities={{ allowComments: true, allowQa: true, allowNotes: true }}
+      />,
+    );
+
+    const questionCard = document.getElementById(
+      "discussion-entry-thread-question-1",
+    )!;
+    fireEvent.click(
+      within(questionCard).getByRole("button", { name: /View 1 reply/i }),
+    );
+    const acceptBtn = await screen.findByTestId(
+      "accept-reply-btn-client-reply-pending",
+    );
+    expect(acceptBtn).toBeDisabled();
+
+    fireEvent.click(acceptBtn);
+    expect(
+      mockInteractions.desiredStateCoordinator.setAcceptedAnswer,
+    ).not.toHaveBeenCalled();
+  });
+
   it("2. accepted answer displays accepted-answer-badge on reply, and qa-solved-badge on thread when acceptedAnswerId is set", async () => {
     const threadWithAccepted: LearningThread = {
       ...mockQuestionThread,

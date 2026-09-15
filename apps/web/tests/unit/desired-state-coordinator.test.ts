@@ -5,7 +5,9 @@ import {
   calculateNextLikesCount,
   learningInteractionKeys,
   learningInteractionsService,
+  desiredStateCoordinator as sharedDesiredStateCoordinator,
 } from "../../src/services/learning-interactions";
+import { mergeRepliesWithCreationRecords } from "../../src/services/learning-interactions/learning-interactions.queries";
 import type {
   LearningNotesListResponse,
   LearningRepliesListResponse,
@@ -1194,6 +1196,128 @@ describe("DesiredStateCoordinator & Cache Updaters", () => {
 
       const thread = queryClient.getQueryData<LearningThreadsListResponse>(threadKey)?.threads[0];
       expect(thread?.acceptedAnswerId).toBe("reply-A");
+    });
+
+    it("matches reconciled replies by client identity while transporting server identity", async () => {
+      queryClient.setQueryData<LearningRepliesListResponse>(repliesKey, {
+        replies: [
+          {
+            id: "server-reply-R",
+            clientId: "client-reply-R",
+            serverId: "server-reply-R",
+            creationStatus: "confirmed",
+            threadId: "thread-1",
+            isAccepted: false,
+          } as any,
+        ],
+        nextCursor: null,
+        totalCount: 1,
+      });
+
+      const acceptSpy = vi.spyOn(learningInteractionsService, "acceptReply");
+      coordinator.setAcceptedAnswer({
+        threadId: "thread-1",
+        desiredAcceptedReplyId: "server-reply-R",
+        currentBaselineReplyId: null,
+        debounceMs: 0,
+      });
+
+      expect(
+        queryClient.getQueryData<LearningRepliesListResponse>(repliesKey)
+          ?.replies[0]?.isAccepted,
+      ).toBe(true);
+      await Promise.resolve();
+      expect(acceptSpy).toHaveBeenCalledWith("server-reply-R", {
+        accepted: true,
+      });
+      expect(
+        coordinator.getAcceptedAnswerState("thread-1")?.desiredAcceptedReplyId,
+      ).toBe("server-reply-R");
+    });
+
+    it("preserves the latest accept intent when an older request fails", async () => {
+      let rejectFirst!: (error: Error) => void;
+      const firstRequest = new Promise<never>((_resolve, reject) => {
+        rejectFirst = reject;
+      });
+      const acceptSpy = vi
+        .spyOn(learningInteractionsService, "acceptReply")
+        .mockReturnValueOnce(firstRequest)
+        .mockResolvedValueOnce({
+          replyId: "reply-B",
+          threadId: "thread-1",
+          isAccepted: true,
+          acceptedAnswerId: "reply-B",
+        } as any);
+
+      coordinator.setAcceptedAnswer({
+        threadId: "thread-1",
+        desiredAcceptedReplyId: "reply-A",
+        currentBaselineReplyId: null,
+        debounceMs: 0,
+      });
+      await Promise.resolve();
+
+      coordinator.setAcceptedAnswer({
+        threadId: "thread-1",
+        desiredAcceptedReplyId: "reply-B",
+        debounceMs: 0,
+      });
+      rejectFirst(new Error("failed A"));
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(acceptSpy).toHaveBeenNthCalledWith(2, "reply-B", {
+        accepted: true,
+      });
+      expect(
+        queryClient.getQueryData<LearningRepliesListResponse>(repliesKey)
+          ?.replies.find((reply) => reply.id === "reply-B")?.isAccepted,
+      ).toBe(true);
+    });
+
+    it("reapplies accepted and pending-like projections when a stale reply fetch resolves", () => {
+      sharedDesiredStateCoordinator.reset();
+      sharedDesiredStateCoordinator.setQueryClient(queryClient);
+      sharedDesiredStateCoordinator.setAcceptedAnswer({
+        threadId: "thread-1",
+        desiredAcceptedReplyId: "server-reply-R",
+        currentBaselineReplyId: null,
+        debounceMs: 50,
+      });
+      sharedDesiredStateCoordinator.setLiked({
+        targetType: "reply",
+        targetId: "client-reply-R",
+        serverId: "server-reply-R",
+        threadId: "thread-1",
+        desiredLiked: true,
+        currentBaseline: false,
+        debounceMs: 50,
+      });
+
+      const merged = mergeRepliesWithCreationRecords(
+        {
+          replies: [
+            {
+              id: "server-reply-R",
+              threadId: "thread-1",
+              isAccepted: false,
+              isLiked: false,
+              likesCount: 0,
+            } as any,
+          ],
+          nextCursor: null,
+          totalCount: 1,
+        },
+        "thread-1",
+        [],
+      );
+
+      expect(merged.replies[0]).toMatchObject({
+        isAccepted: true,
+        isLiked: true,
+        likesCount: 1,
+      });
     });
   });
 

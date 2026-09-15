@@ -7,6 +7,7 @@ import axios, {
 import { getApiError, type ApiError } from "./api-error";
 import { authStore } from "../store/auth.store";
 import { interactionCreationCoordinator } from "../services/learning-interactions/interaction-creation-coordinator";
+import { desiredStateCoordinator } from "../services/learning-interactions/desired-state-coordinator";
 import {
   MFA_CHALLENGE_PATH,
   shouldRedirectToMfaChallenge,
@@ -78,6 +79,7 @@ axiosInstance.interceptors.response.use(
     redirectToMfaSetup(apiError);
     if (apiError.status === 401 && error.config?.url !== "/auth/login") {
       authStore.clearAuth();
+      desiredStateCoordinator.reset();
       interactionCreationCoordinator.reset();
     }
     return Promise.reject(apiError);

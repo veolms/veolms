@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { LearningThread } from "@veolms/contracts";
+import type { LearningReply, LearningThread } from "@veolms/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { authStore } from "../../src/store/auth.store";
 import { interactionCreationCoordinator } from "../../src/services/learning-interactions/interaction-creation-coordinator";
@@ -11,7 +11,11 @@ import {
   useThreadReplies,
 } from "../../src/services/learning-interactions/learning-interactions.queries";
 import { learningInteractionKeys } from "../../src/services/learning-interactions/learning-interactions.keys";
-import type { LearningThreadCacheResponse } from "../../src/services/learning-interactions/interaction-entities";
+import type {
+  LearningRepliesCacheResponse,
+  LearningThreadCacheResponse,
+} from "../../src/services/learning-interactions/interaction-entities";
+import { getClientEntityId } from "../../src/services/learning-interactions/interaction-entities";
 import { useCreateLessonThread } from "../../src/services/learning-interactions/learning-interactions.mutations";
 import { learningInteractionsService } from "../../src/services/learning-interactions/learning-interactions.service";
 import {
@@ -60,6 +64,34 @@ function createServerThread(
     isLiked: false,
     isBookmarked: false,
     isFollowing: false,
+    isOwn: true,
+    createdAt: "2026-09-15T10:00:00.000Z",
+    updatedAt: "2026-09-15T10:00:00.000Z",
+  };
+}
+
+function createServerReply(
+  id: string,
+  threadId: string,
+  content: string,
+): LearningReply {
+  return {
+    id,
+    threadId,
+    userId: "user-1",
+    author: {
+      id: "user-1",
+      displayName: "Current User",
+      username: "current-user",
+      avatarUrl: null,
+      role: "Student",
+    },
+    content,
+    plainText: content,
+    status: "active",
+    isAccepted: false,
+    likesCount: 0,
+    isLiked: false,
     isOwn: true,
     createdAt: "2026-09-15T10:00:00.000Z",
     updatedAt: "2026-09-15T10:00:00.000Z",
@@ -301,12 +333,18 @@ describe("Phase 3A optimistic thread creation", () => {
     expect(new Set(confirmed.map((thread) => thread.serverId))).toEqual(
       new Set(serverThreads.map((thread) => thread.id)),
     );
-    expect(confirmed.map((thread) => adaptLearningThreadToComment(thread).entryKind)).toEqual(
+    expect(
+      confirmed.map((thread) => adaptLearningThreadToComment(thread).entryKind),
+    ).toEqual(
       expect.arrayContaining(["comment", "question", "comment", "question"]),
     );
-    expect(records.every((record) =>
-      interactionCreationCoordinator.getThreadRecord(record.clientId) === undefined,
-    )).toBe(true);
+    expect(
+      records.every(
+        (record) =>
+          interactionCreationCoordinator.getThreadRecord(record.clientId) ===
+          undefined,
+      ),
+    ).toBe(true);
 
     const likeSpy = vi
       .spyOn(learningInteractionsService, "toggleLike")
@@ -596,5 +634,627 @@ describe("Phase 3A optimistic thread creation", () => {
         "client-thread-temp",
       ),
     ).not.toContain("thread=");
+  });
+
+  it("creates and reconciles a confirmed-parent reply without invalidation", async () => {
+    const queryClient = createQueryClient();
+    const parentId = "server-parent-1";
+    const replyKey = learningInteractionKeys.threadReplies(parentId, undefined);
+    queryClient.setQueryData<LearningRepliesCacheResponse>(replyKey, {
+      replies: [],
+      nextCursor: null,
+      totalCount: 0,
+    });
+    queryClient.setQueryData<LearningThread>(
+      learningInteractionKeys.threadDetails(parentId),
+      createServerThread(parentId),
+    );
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    let resolveReply!: (reply: LearningReply) => void;
+    const record = interactionCreationCoordinator.beginReplyCreation({
+      queryClient,
+      parentClientId: "client-parent-1",
+      parentServerId: parentId,
+      payload: { content: "Reply A" },
+      dispatch: vi.fn(
+        () => new Promise<LearningReply>((resolve) => (resolveReply = resolve)),
+      ),
+    });
+
+    const pending =
+      queryClient.getQueryData<LearningRepliesCacheResponse>(replyKey);
+    expect(pending?.replies[0]).toMatchObject({
+      id: record.clientId,
+      clientId: record.clientId,
+      creationStatus: "pending",
+      serverId: undefined,
+    });
+    expect(pending?.totalCount).toBe(1);
+
+    resolveReply!(createServerReply("server-reply-1", parentId, "Reply A"));
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryData<LearningRepliesCacheResponse>(replyKey)
+          ?.replies[0],
+      ).toMatchObject({
+        id: "server-reply-1",
+        clientId: record.clientId,
+        serverId: "server-reply-1",
+        creationStatus: "confirmed",
+      }),
+    );
+    expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
+  it("holds pending-parent replies, releases them with the server parent ID, and discards them on parent failure", async () => {
+    const queryClient = createQueryClient();
+    const parent = interactionCreationCoordinator.beginThreadCreation({
+      queryClient,
+      context: { courseId: payload.courseId, lessonId: payload.lessonId },
+      payload,
+    });
+    const dispatch = vi.fn(
+      (parentId: string, replyPayload: { content: string }) =>
+        Promise.resolve(
+          createServerReply(
+            `server-${replyPayload.content.replace(" ", "-")}`,
+            parentId,
+            replyPayload.content,
+          ),
+        ),
+    );
+    const first = interactionCreationCoordinator.beginReplyCreation({
+      queryClient,
+      parentClientId: parent.clientId,
+      payload: { content: "Reply 1" },
+      dispatch,
+    });
+    const second = interactionCreationCoordinator.beginReplyCreation({
+      queryClient,
+      parentClientId: parent.clientId,
+      payload: { content: "Reply 2" },
+      dispatch,
+    });
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(
+      queryClient
+        .getQueryData<LearningRepliesCacheResponse>(
+          learningInteractionKeys.threadReplies(parent.clientId, undefined),
+        )
+        ?.replies.map((reply) => getClientEntityId(reply)),
+    ).toEqual([first.clientId, second.clientId]);
+
+    const serverParent = createServerThread("server-parent-2");
+    interactionCreationCoordinator.confirmThread(
+      queryClient,
+      parent.clientId,
+      serverParent,
+    );
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(dispatch.mock.calls.map(([parentId]) => parentId)).toEqual([
+      serverParent.id,
+      serverParent.id,
+    ]);
+    expect(
+      queryClient
+        .getQueryData<LearningRepliesCacheResponse>(
+          learningInteractionKeys.threadReplies(serverParent.id, undefined),
+        )
+        ?.replies.map((reply) => getClientEntityId(reply)),
+    ).toEqual([first.clientId, second.clientId]);
+
+    interactionCreationCoordinator.reset();
+    const failedParent = interactionCreationCoordinator.beginThreadCreation({
+      queryClient,
+      context: { courseId: payload.courseId, lessonId: payload.lessonId },
+      payload: { ...payload, content: "Failed parent" },
+    });
+    const failedReply = interactionCreationCoordinator.beginReplyCreation({
+      queryClient,
+      parentClientId: failedParent.clientId,
+      payload: { content: "Discard me" },
+      dispatch,
+    });
+    expect(
+      interactionCreationCoordinator.failThread(
+        queryClient,
+        failedParent.clientId,
+      ),
+    ).toBe(true);
+    expect(
+      interactionCreationCoordinator.getReplyRecord(failedReply.clientId),
+    ).toBeUndefined();
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(
+      queryClient.getQueryData<LearningRepliesCacheResponse>(
+        learningInteractionKeys.threadReplies(failedParent.clientId, undefined),
+      )?.replies,
+    ).toEqual([]);
+  });
+
+  it("releases a reply registered after parent confirmation from durable resolution state", () => {
+    const queryClient = createQueryClient();
+    const parent = interactionCreationCoordinator.beginThreadCreation({
+      queryClient,
+      context: { courseId: payload.courseId, lessonId: payload.lessonId },
+      payload,
+    });
+    const serverParent = createServerThread("server-parent-late");
+    interactionCreationCoordinator.confirmThread(
+      queryClient,
+      parent.clientId,
+      serverParent,
+    );
+
+    const dispatch = vi.fn(() => Promise.resolve(
+      createServerReply("server-reply-late", serverParent.id, "Reply late"),
+    ));
+    const reply = interactionCreationCoordinator.beginReplyCreation({
+      queryClient,
+      parentClientId: parent.clientId,
+      payload: { content: "Reply late" },
+      dispatch,
+    });
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith(serverParent.id, reply.payload);
+    expect(
+      interactionCreationCoordinator.getReplyRecord(reply.clientId)?.status,
+    ).toBe("dispatching");
+    expect(
+      interactionCreationCoordinator.getThreadResolution(parent.clientId),
+    ).toMatchObject({
+      status: "confirmed",
+      serverId: serverParent.id,
+    });
+  });
+
+  it("discards a reply registered after parent failure without a POST or descendant toast", () => {
+    const queryClient = createQueryClient();
+    const parent = interactionCreationCoordinator.beginThreadCreation({
+      queryClient,
+      context: { courseId: payload.courseId, lessonId: payload.lessonId },
+      payload,
+    });
+    expect(
+      interactionCreationCoordinator.failThread(queryClient, parent.clientId),
+    ).toBe(true);
+
+    const dispatch = vi.fn();
+    const reply = interactionCreationCoordinator.beginReplyCreation({
+      queryClient,
+      parentClientId: parent.clientId,
+      payload: { content: "Discarded late" },
+      dispatch,
+      onFailure: vi.fn(),
+    });
+
+    expect(reply.status).toBe("failed");
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(interactionCreationCoordinator.getReplyRecord(reply.clientId)).toBeUndefined();
+    expect(
+      interactionCreationCoordinator.getThreadResolution(parent.clientId),
+    ).toMatchObject({ status: "failed" });
+    expect(desiredStateCoordinator.getReplyResolution(reply.clientId)).toMatchObject({
+      status: "failed",
+    });
+  });
+
+  it("releases children registered before and after parent confirmation exactly once", () => {
+    const queryClient = createQueryClient();
+    const parent = interactionCreationCoordinator.beginThreadCreation({
+      queryClient,
+      context: { courseId: payload.courseId, lessonId: payload.lessonId },
+      payload,
+    });
+    const dispatch = vi.fn(() => Promise.resolve(
+      createServerReply("server-reply-child", "server-parent-many", "child"),
+    ));
+    const first = interactionCreationCoordinator.beginReplyCreation({
+      queryClient,
+      parentClientId: parent.clientId,
+      payload: { content: "R1" },
+      dispatch,
+    });
+
+    interactionCreationCoordinator.confirmThread(
+      queryClient,
+      parent.clientId,
+      createServerThread("server-parent-many"),
+    );
+    const second = interactionCreationCoordinator.beginReplyCreation({
+      queryClient,
+      parentClientId: parent.clientId,
+      payload: { content: "R2" },
+      dispatch,
+    });
+    const third = interactionCreationCoordinator.beginReplyCreation({
+      queryClient,
+      parentClientId: parent.clientId,
+      payload: { content: "R3" },
+      dispatch,
+    });
+
+    expect(dispatch).toHaveBeenCalledTimes(3);
+    expect(
+      [first, second, third].map(
+        (reply) =>
+          interactionCreationCoordinator.getReplyRecord(reply.clientId)?.status,
+      ),
+    ).toEqual(["dispatching", "dispatching", "dispatching"]);
+    expect(
+      interactionCreationCoordinator.confirmThread(
+        queryClient,
+        parent.clientId,
+        createServerThread("server-parent-many"),
+      ),
+    ).toBe(false);
+    expect(dispatch).toHaveBeenCalledTimes(3);
+  });
+
+  it.each(["GET-first", "POST-first"] as const)(
+    "preserves a reply across a stale %s response and keeps stable identity",
+    async (race) => {
+      const queryClient = createQueryClient();
+      const parentId = `server-parent-${race}`;
+      let resolveFetch!: (response: {
+        replies: LearningReply[];
+        nextCursor: string | null;
+        totalCount?: number;
+      }) => void;
+      vi.spyOn(learningInteractionsService, "listReplies").mockReturnValue(
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+      );
+      const { result } = renderHook(
+        () => useThreadReplies(parentId, undefined, { enabled: false }),
+        { wrapper: createWrapper(queryClient) },
+      );
+      let resolveCreate!: (reply: LearningReply) => void;
+      const record = interactionCreationCoordinator.beginReplyCreation({
+        queryClient,
+        parentClientId: "client-parent-race",
+        parentServerId: parentId,
+        payload: { content: `Reply ${race}` },
+        dispatch: vi.fn(
+          () =>
+            new Promise<LearningReply>((resolve) => (resolveCreate = resolve)),
+        ),
+      });
+
+      const fetchPromise = result.current.refetch();
+      await waitFor(() =>
+        expect(learningInteractionsService.listReplies).toHaveBeenCalled(),
+      );
+
+      const serverReply = createServerReply(
+        `server-reply-${race}`,
+        parentId,
+        `Reply ${race}`,
+      );
+      if (race === "POST-first") {
+        resolveCreate(serverReply);
+        await waitFor(() =>
+          expect(
+            queryClient.getQueryData<LearningRepliesCacheResponse>(
+              learningInteractionKeys.threadReplies(parentId, undefined),
+            )?.replies[0],
+          ).toMatchObject({
+            clientId: record.clientId,
+            serverId: serverReply.id,
+            creationStatus: "confirmed",
+          }),
+        );
+      }
+
+      resolveFetch({
+        replies: race === "POST-first" ? [serverReply] : [],
+        nextCursor: null,
+        totalCount: race === "POST-first" ? 1 : 0,
+      });
+      await act(async () => {
+        await fetchPromise;
+      });
+
+      if (race === "GET-first") {
+        expect(
+          queryClient.getQueryData<LearningRepliesCacheResponse>(
+            learningInteractionKeys.threadReplies(parentId, undefined),
+          )?.replies[0],
+        ).toMatchObject({
+          clientId: record.clientId,
+          serverId: undefined,
+          creationStatus: "pending",
+        });
+        resolveCreate(serverReply);
+      }
+
+      await waitFor(() => {
+        const replies =
+          queryClient.getQueryData<LearningRepliesCacheResponse>(
+            learningInteractionKeys.threadReplies(parentId, undefined),
+          )?.replies ?? [];
+        expect(replies).toHaveLength(1);
+        expect(replies[0]).toMatchObject({
+          clientId: record.clientId,
+          serverId: serverReply.id,
+          creationStatus: "confirmed",
+        });
+      });
+    },
+  );
+
+  it("merges pending reply Like with creation and releases only the necessary request", async () => {
+    const queryClient = createQueryClient();
+    const parentId = "server-parent-like";
+    queryClient.setQueryData<LearningRepliesCacheResponse>(
+      learningInteractionKeys.threadReplies(parentId, undefined),
+      { replies: [], nextCursor: null, totalCount: 0 },
+    );
+    let resolveCreate!: (reply: LearningReply) => void;
+    const record = interactionCreationCoordinator.beginReplyCreation({
+      queryClient,
+      parentClientId: "client-parent-like",
+      parentServerId: parentId,
+      payload: { content: "Like me" },
+      dispatch: vi.fn(
+        () =>
+          new Promise<LearningReply>((resolve) => (resolveCreate = resolve)),
+      ),
+    });
+    const likeSpy = vi
+      .spyOn(learningInteractionsService, "toggleLike")
+      .mockResolvedValue({ liked: true } as any);
+
+    desiredStateCoordinator.setLiked({
+      targetType: "reply",
+      targetId: record.clientId,
+      threadId: parentId,
+      desiredLiked: true,
+      currentBaseline: false,
+      pendingTarget: true,
+      queryClient,
+      debounceMs: 0,
+    });
+
+    expect(likeSpy).not.toHaveBeenCalled();
+    expect(
+      queryClient.getQueryData<LearningRepliesCacheResponse>(
+        learningInteractionKeys.threadReplies(parentId, undefined),
+      )?.replies[0],
+    ).toMatchObject({
+      clientId: record.clientId,
+      isLiked: true,
+      likesCount: 1,
+    });
+
+    resolveCreate(createServerReply("server-reply-like", parentId, "Like me"));
+    await waitFor(() => expect(likeSpy).toHaveBeenCalledTimes(1));
+    expect(likeSpy).toHaveBeenCalledWith({
+      targetType: "reply",
+      targetId: "server-reply-like",
+    });
+    expect(likeSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({ targetId: record.clientId }),
+    );
+  });
+
+  it("resolves a late Like registration from durable confirmed reply state", async () => {
+    const queryClient = createQueryClient();
+    const parentId = "server-parent-late-like";
+    let resolveCreate!: (reply: LearningReply) => void;
+    const record = interactionCreationCoordinator.beginReplyCreation({
+      queryClient,
+      parentClientId: "client-parent-late-like",
+      parentServerId: parentId,
+      payload: { content: "Late Like" },
+      dispatch: vi.fn(
+        () => new Promise<LearningReply>((resolve) => (resolveCreate = resolve)),
+      ),
+    });
+    const likeSpy = vi
+      .spyOn(learningInteractionsService, "toggleLike")
+      .mockResolvedValue({ liked: true } as any);
+    const serverReply = createServerReply(
+      "server-reply-late-like",
+      parentId,
+      "Late Like",
+    );
+
+    resolveCreate(serverReply);
+    await waitFor(() =>
+      expect(
+        desiredStateCoordinator.getReplyResolution(record.clientId),
+      ).toMatchObject({
+        status: "confirmed",
+        serverId: serverReply.id,
+        isLiked: false,
+      }),
+    );
+
+    desiredStateCoordinator.setLiked({
+      targetType: "reply",
+      targetId: record.clientId,
+      threadId: parentId,
+      desiredLiked: true,
+      currentBaseline: false,
+      pendingTarget: true,
+      queryClient,
+      debounceMs: 0,
+    });
+
+    await waitFor(() => expect(likeSpy).toHaveBeenCalledTimes(1));
+    expect(likeSpy).toHaveBeenCalledWith({
+      targetType: "reply",
+      targetId: serverReply.id,
+    });
+  });
+
+  it("does not retain a Like registered after reply failure", async () => {
+    const queryClient = createQueryClient();
+    const record = interactionCreationCoordinator.beginReplyCreation({
+      queryClient,
+      parentClientId: "client-parent-failed-like",
+      parentServerId: "server-parent-failed-like",
+      payload: { content: "Failed Like" },
+      dispatch: vi.fn(() => Promise.reject(new Error("reply failed"))),
+    });
+    await waitFor(() =>
+      expect(
+        desiredStateCoordinator.getReplyResolution(record.clientId),
+      ).toMatchObject({ status: "failed" }),
+    );
+
+    const likeSpy = vi
+      .spyOn(learningInteractionsService, "toggleLike")
+      .mockResolvedValue({ liked: true } as any);
+    desiredStateCoordinator.setLiked({
+      targetType: "reply",
+      targetId: record.clientId,
+      threadId: "server-parent-failed-like",
+      desiredLiked: true,
+      pendingTarget: true,
+      queryClient,
+      debounceMs: 0,
+    });
+
+    expect(likeSpy).not.toHaveBeenCalled();
+    expect(desiredStateCoordinator.getState("reply", record.clientId)).toBeUndefined();
+  });
+
+  it("coalesces pending reply Like toggles before confirmation", async () => {
+    const queryClient = createQueryClient();
+    const parentId = "server-parent-coalesce";
+    let resolveCreate!: (reply: LearningReply) => void;
+    const record = interactionCreationCoordinator.beginReplyCreation({
+      queryClient,
+      parentClientId: "client-parent-coalesce",
+      parentServerId: parentId,
+      payload: { content: "Coalesce" },
+      dispatch: vi.fn(
+        () =>
+          new Promise<LearningReply>((resolve) => (resolveCreate = resolve)),
+      ),
+    });
+    const likeSpy = vi
+      .spyOn(learningInteractionsService, "toggleLike")
+      .mockResolvedValue({ liked: true } as any);
+
+    for (const desiredLiked of [true, false, true]) {
+      desiredStateCoordinator.setLiked({
+        targetType: "reply",
+        targetId: record.clientId,
+        threadId: parentId,
+        desiredLiked,
+        currentBaseline: desiredLiked ? false : true,
+        pendingTarget: true,
+        queryClient,
+        debounceMs: 0,
+      });
+    }
+
+    resolveCreate(
+      createServerReply("server-reply-coalesce", parentId, "Coalesce"),
+    );
+    await waitFor(() => expect(likeSpy).toHaveBeenCalledTimes(1));
+    expect(likeSpy).toHaveBeenCalledWith({
+      targetType: "reply",
+      targetId: "server-reply-coalesce",
+    });
+  });
+
+  it("does not release a Like request when pending reply intent returns to baseline", async () => {
+    const queryClient = createQueryClient();
+    const parentId = "server-parent-baseline";
+    let resolveCreate!: (reply: LearningReply) => void;
+    const record = interactionCreationCoordinator.beginReplyCreation({
+      queryClient,
+      parentClientId: "client-parent-baseline",
+      parentServerId: parentId,
+      payload: { content: "Baseline" },
+      dispatch: vi.fn(
+        () =>
+          new Promise<LearningReply>((resolve) => (resolveCreate = resolve)),
+      ),
+    });
+    const likeSpy = vi
+      .spyOn(learningInteractionsService, "toggleLike")
+      .mockResolvedValue({ liked: true } as any);
+
+    desiredStateCoordinator.setLiked({
+      targetType: "reply",
+      targetId: record.clientId,
+      threadId: parentId,
+      desiredLiked: true,
+      currentBaseline: false,
+      pendingTarget: true,
+      queryClient,
+      debounceMs: 0,
+    });
+    desiredStateCoordinator.setLiked({
+      targetType: "reply",
+      targetId: record.clientId,
+      threadId: parentId,
+      desiredLiked: false,
+      currentBaseline: true,
+      pendingTarget: true,
+      queryClient,
+      debounceMs: 0,
+    });
+
+    resolveCreate(
+      createServerReply("server-reply-baseline", parentId, "Baseline"),
+    );
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryData<LearningRepliesCacheResponse>(
+          learningInteractionKeys.threadReplies(parentId, undefined),
+        )?.replies[0],
+      ).toMatchObject({
+        clientId: record.clientId,
+        serverId: "server-reply-baseline",
+      }),
+    );
+    expect(likeSpy).not.toHaveBeenCalled();
+  });
+
+  it("cleans pending reply Like state without Like transport on reply or parent failure", async () => {
+    const queryClient = createQueryClient();
+    const likeSpy = vi
+      .spyOn(learningInteractionsService, "toggleLike")
+      .mockResolvedValue({ liked: true } as any);
+    const rejectReply = vi.fn(() => Promise.reject(new Error("reply failed")));
+    const parent = interactionCreationCoordinator.beginThreadCreation({
+      queryClient,
+      context: { courseId: payload.courseId, lessonId: payload.lessonId },
+      payload,
+    });
+    const reply = interactionCreationCoordinator.beginReplyCreation({
+      queryClient,
+      parentClientId: parent.clientId,
+      payload: { content: "Discard like" },
+      dispatch: rejectReply,
+    });
+
+    desiredStateCoordinator.setLiked({
+      targetType: "reply",
+      targetId: reply.clientId,
+      threadId: parent.clientId,
+      desiredLiked: true,
+      currentBaseline: false,
+      pendingTarget: true,
+      queryClient,
+      debounceMs: 0,
+    });
+
+    expect(
+      interactionCreationCoordinator.failThread(queryClient, parent.clientId),
+    ).toBe(true);
+    expect(
+      desiredStateCoordinator.getState("reply", reply.clientId),
+    ).toBeUndefined();
+    expect(likeSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(rejectReply).toHaveBeenCalledTimes(0));
   });
 });

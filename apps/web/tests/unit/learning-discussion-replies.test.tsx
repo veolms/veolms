@@ -539,7 +539,7 @@ describe("Learning Discussion Replies (Phase 2 Integration)", () => {
     expect(postReplyButton).toBeDisabled();
   });
 
-  it("6. create failure preserves draft in composer and does not clear text", async () => {
+  it("6. create failure clears the accepted draft and shows the reply error", async () => {
     createReplyMutateAsync.mockRejectedValueOnce(
       new Error("Network Error on create"),
     );
@@ -571,13 +571,13 @@ describe("Learning Discussion Replies (Phase 2 Integration)", () => {
       fireEvent.click(postReplyButton);
     });
 
-    // Draft remains in the composer!
-    expect(composer.textContent).toContain(
+    // Local acceptance clears the composer before the request settles.
+    expect(composer.textContent).not.toContain(
       "Important draft that must not be lost",
     );
-    // Error notification is displayed
+    // The failed request is surfaced as a reply error.
     expect(
-      screen.getByText("Failed to post reply. Please try again."),
+      screen.getByText("Couldn't post your reply. Please try again."),
     ).toBeInTheDocument();
   });
 

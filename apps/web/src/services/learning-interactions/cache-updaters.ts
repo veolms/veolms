@@ -6,7 +6,11 @@ import type {
   LearningThreadsListResponse,
 } from "@veolms/contracts";
 import { learningInteractionKeys } from "./learning-interactions.keys";
-import { getClientEntityId, getServerEntityId } from "./interaction-entities";
+import {
+  getClientEntityId,
+  getServerEntityId,
+  type LearningRepliesCacheResponse,
+} from "./interaction-entities";
 
 function matchesThreadIdentity(
   thread: { id: string; clientId?: string; serverId?: string },
@@ -136,13 +140,17 @@ export function updateReplyLikeInCache(
   replyId: string,
   desiredLiked: boolean,
 ): void {
-  queryClient.setQueriesData<LearningRepliesListResponse>(
+  queryClient.setQueriesData<LearningRepliesCacheResponse>(
     { queryKey: learningInteractionKeys.threadRepliesRoot(threadId) },
     (old) => {
       if (!old?.replies) return old;
       let hasChange = false;
       const nextReplies = old.replies.map((reply) => {
-        if (reply.id !== replyId) return reply;
+        if (
+          getClientEntityId(reply) !== replyId &&
+          getServerEntityId(reply) !== replyId
+        )
+          return reply;
         const currentLiked = Boolean(reply.isLiked);
         if (currentLiked === desiredLiked) return reply;
         hasChange = true;
@@ -451,7 +459,11 @@ export function updateAcceptedAnswerInCache(
       if (!old?.replies) return old;
       let hasChange = false;
       const nextReplies = old.replies.map((reply) => {
-        const nextIsAccepted = reply.id === desiredAcceptedReplyId;
+        const nextIsAccepted =
+          desiredAcceptedReplyId !== null &&
+          (String(reply.id) === desiredAcceptedReplyId ||
+            getClientEntityId(reply) === desiredAcceptedReplyId ||
+            getServerEntityId(reply) === desiredAcceptedReplyId);
         if (Boolean(reply.isAccepted) === nextIsAccepted) return reply;
         hasChange = true;
         return {

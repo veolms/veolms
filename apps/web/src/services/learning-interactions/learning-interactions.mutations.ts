@@ -15,6 +15,7 @@ import type {
   UpdateLearningReplyRequest,
   UpdateLearningThreadRequest,
   LearningUploadResponse,
+  LearningReply,
   LearningThread,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
@@ -103,22 +104,22 @@ export function useDeleteThread() {
   });
 }
 
+type CreateReplyMutationInput = CreateLearningReplyRequest & {
+  /** Internal transport override; never included in the API payload. */
+  __serverThreadId?: string;
+};
+
 export function useCreateReply(threadId?: string) {
-  const queryClient = useQueryClient();
-  return useMutation<any, ApiError, CreateLearningReplyRequest>({
-    mutationFn: (payload) => {
-      if (!threadId)
+  return useMutation<LearningReply, ApiError, CreateReplyMutationInput>({
+    mutationFn: (input) => {
+      const { __serverThreadId, ...payload } = input;
+      const transportThreadId = __serverThreadId ?? threadId;
+      if (!transportThreadId)
         throw new Error("A confirmed server thread ID is required.");
-      return learningInteractionsService.createReply(threadId, payload);
-    },
-    onSuccess: () => {
-      if (!threadId) return;
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.threadRepliesRoot(threadId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.all,
-      });
+      return learningInteractionsService.createReply(
+        transportThreadId,
+        payload,
+      );
     },
   });
 }

@@ -6,10 +6,11 @@ import {
   getClientEntityId,
   getServerEntityId,
   isPendingClientEntity,
+  type LearningReplyEntity,
 } from "../services/learning-interactions/interaction-entities";
 
 export function adaptLearningReplyToCommentReply(
-  reply: LearningReply,
+  reply: LearningReply | LearningReplyEntity,
   currentUserId?: string,
 ): CommentReply {
   const contentDraft = createDiscussionDraft(reply.content);
@@ -18,7 +19,7 @@ export function adaptLearningReplyToCommentReply(
   }
 
   return {
-    id: reply.id,
+    id: getClientEntityId(reply),
     clientId: getClientEntityId(reply),
     serverId: getServerEntityId(reply),
     creationStatus: isPendingClientEntity(reply) ? "pending" : "confirmed",

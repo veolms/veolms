@@ -1,18 +1,29 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type {
+  CreateLearningReplyRequest,
   CreateLearningThreadRequest,
+  LearningReply,
   LearningThread,
+  LearningThreadAttachmentSummary,
 } from "@veolms/contracts";
 import { authStore } from "../../store/auth.store";
 import {
   createOptimisticLearningThread,
+  createOptimisticLearningReply,
+  type LearningReplyEntity,
   type LearningThreadEntity,
   type OptimisticThreadContext,
 } from "./interaction-entities";
+import { isClientEntityId } from "./interaction-entities";
 import {
   insertOptimisticThreadInLessonCaches,
   reconcileOptimisticThreadInLessonCaches,
   removeOptimisticThreadFromLessonCaches,
+  insertOptimisticReplyInCaches,
+  migrateOptimisticRepliesToServerParent,
+  reconcileOptimisticReplyInCaches,
+  removeOptimisticReplyFromCaches,
+  updateReplyCountInThreadCaches,
   type LessonThreadCacheContext,
 } from "./creation-cache-updaters";
 import { desiredStateCoordinator } from "./desired-state-coordinator";
@@ -33,6 +44,42 @@ export interface BeginThreadCreationArgs {
   author?: OptimisticThreadContext;
 }
 
+export interface ReplyCreationRecord {
+  readonly clientId: string;
+  readonly parentClientId: string;
+  readonly parentServerId?: string;
+  readonly payload: CreateLearningReplyRequest;
+  readonly optimisticReply: LearningReplyEntity;
+  readonly authGeneration: number;
+  readonly userId?: string;
+  readonly localSequence: number;
+  readonly status: "pending" | "dispatching" | "confirmed" | "failed";
+  readonly serverId?: string;
+  readonly serverReply?: LearningReply;
+  readonly dispatch: (
+    parentServerId: string,
+    payload: CreateLearningReplyRequest,
+  ) => Promise<LearningReply>;
+  readonly onFailure?: () => void;
+}
+
+export interface ThreadResolution {
+  readonly clientId: string;
+  readonly status: "confirmed" | "failed";
+  readonly serverId?: string;
+  readonly authGeneration: number;
+}
+
+export interface BeginReplyCreationArgs {
+  queryClient?: QueryClient;
+  parentClientId: string;
+  parentServerId?: string;
+  payload: CreateLearningReplyRequest;
+  attachments?: readonly LearningThreadAttachmentSummary[];
+  dispatch: ReplyCreationRecord["dispatch"];
+  onFailure?: () => void;
+}
+
 function freezeThreadPayload(
   payload: CreateLearningThreadRequest,
 ): CreateLearningThreadRequest {
@@ -46,8 +93,22 @@ function freezeThreadPayload(
   return Object.freeze(frozen) as unknown as CreateLearningThreadRequest;
 }
 
+function freezeReplyPayload(
+  payload: CreateLearningReplyRequest,
+): CreateLearningReplyRequest {
+  return Object.freeze({
+    ...payload,
+    ...(payload.attachmentIds
+      ? { attachmentIds: Object.freeze([...payload.attachmentIds]) }
+      : {}),
+  }) as unknown as CreateLearningReplyRequest;
+}
+
 export class InteractionCreationCoordinator {
   private readonly threadRecords = new Map<string, ThreadCreationRecord>();
+  private readonly replyRecords = new Map<string, ReplyCreationRecord>();
+  private readonly threadResolutions = new Map<string, ThreadResolution>();
+  private replySequence = 0;
 
   beginThreadCreation({
     queryClient,
@@ -91,6 +152,13 @@ export class InteractionCreationCoordinator {
     return this.threadRecords.get(clientId);
   }
 
+  getThreadResolution(clientId: string): ThreadResolution | undefined {
+    const resolution = this.threadResolutions.get(clientId);
+    return resolution?.authGeneration === authStore.getWriteGeneration()
+      ? resolution
+      : undefined;
+  }
+
   confirmThread(
     queryClient: QueryClient,
     clientId: string,
@@ -101,12 +169,47 @@ export class InteractionCreationCoordinator {
     this.threadRecords.delete(clientId);
 
     if (!this.isCurrentAuth(record)) return false;
+    this.threadResolutions.set(clientId, {
+      clientId,
+      status: "confirmed",
+      serverId: serverThread.id,
+      authGeneration: authStore.getWriteGeneration(),
+    });
     reconcileOptimisticThreadInLessonCaches(
       queryClient,
       record.context,
       clientId,
       serverThread,
     );
+    migrateOptimisticRepliesToServerParent(
+      queryClient,
+      clientId,
+      serverThread.id,
+    );
+    const dependentReplies = [...this.replyRecords.values()].filter(
+      (reply) =>
+        reply.parentClientId === clientId && reply.status === "pending",
+    );
+    for (const reply of dependentReplies) {
+      this.replyRecords.set(reply.clientId, {
+        ...reply,
+        optimisticReply: {
+          ...reply.optimisticReply,
+          threadId: serverThread.id,
+          parentServerId: serverThread.id,
+        },
+        parentServerId: serverThread.id,
+        status: "pending",
+      });
+      this.startReplyDispatch(queryClient, reply.clientId, serverThread.id);
+    }
+    if (dependentReplies.length > 0) {
+      updateReplyCountInThreadCaches(
+        queryClient,
+        serverThread.id,
+        dependentReplies.length,
+      );
+    }
     desiredStateCoordinator.resolvePendingThread(clientId, serverThread);
     return true;
   }
@@ -117,6 +220,24 @@ export class InteractionCreationCoordinator {
     this.threadRecords.delete(clientId);
 
     if (!this.isCurrentAuth(record)) return false;
+    this.threadResolutions.set(clientId, {
+      clientId,
+      status: "failed",
+      authGeneration: authStore.getWriteGeneration(),
+    });
+    const dependentReplies = [...this.replyRecords.values()].filter(
+      (reply) =>
+        reply.parentClientId === clientId && reply.status !== "confirmed",
+    );
+    for (const reply of dependentReplies) {
+      this.replyRecords.delete(reply.clientId);
+      desiredStateCoordinator.failPendingReply(reply.clientId);
+      removeOptimisticReplyFromCaches(
+        queryClient,
+        reply.parentServerId ?? reply.parentClientId,
+        reply.clientId,
+      );
+    }
     removeOptimisticThreadFromLessonCaches(
       queryClient,
       record.context,
@@ -126,11 +247,251 @@ export class InteractionCreationCoordinator {
     return true;
   }
 
-  reset(): void {
-    this.threadRecords.clear();
+  beginReplyCreation({
+    queryClient,
+    parentClientId,
+    parentServerId,
+    payload,
+    attachments,
+    dispatch,
+    onFailure,
+  }: BeginReplyCreationArgs): ReplyCreationRecord {
+    const currentUser = authStore.getState().user;
+    const parentResolution = this.getThreadResolution(parentClientId);
+    if (parentResolution?.status === "failed") {
+      return this.createDiscardedReplyRecord(
+        currentUser,
+        parentClientId,
+        parentServerId,
+        payload,
+        attachments,
+        dispatch,
+        onFailure,
+      );
+    }
+
+    const resolvedParentServerId =
+      parentResolution?.status === "confirmed"
+        ? parentResolution.serverId
+        : parentServerId && !isClientEntityId(parentServerId)
+          ? parentServerId
+          : undefined;
+    if (
+      !parentResolution &&
+      resolvedParentServerId &&
+      !this.threadResolutions.has(parentClientId)
+    ) {
+      this.threadResolutions.set(parentClientId, {
+        clientId: parentClientId,
+        status: "confirmed",
+        serverId: resolvedParentServerId,
+        authGeneration: authStore.getWriteGeneration(),
+      });
+    }
+    const immutablePayload = freezeReplyPayload(payload);
+    const localSequence = ++this.replySequence;
+    const optimisticReply = createOptimisticLearningReply(immutablePayload, {
+      parentClientId,
+      parentServerId: resolvedParentServerId,
+      localSequence,
+      attachments,
+      userId: currentUser?.id,
+      displayName: currentUser?.displayName,
+      username: currentUser?.username,
+      avatarUrl: currentUser?.avatarDataUrl,
+      role: getAuthorRole(currentUser?.roles),
+    });
+    const record: ReplyCreationRecord = {
+      clientId: optimisticReply.clientId,
+      parentClientId,
+      parentServerId,
+      payload: immutablePayload,
+      optimisticReply,
+      authGeneration: authStore.getWriteGeneration(),
+      userId: currentUser?.id,
+      localSequence,
+      status: "pending",
+      dispatch,
+      onFailure,
+    };
+    this.replyRecords.set(record.clientId, record);
+    if (queryClient) {
+      insertOptimisticReplyInCaches(
+        queryClient,
+        resolvedParentServerId ?? parentClientId,
+        optimisticReply,
+      );
+    }
+    if (resolvedParentServerId) {
+      this.startReplyDispatch(
+        queryClient,
+        record.clientId,
+        resolvedParentServerId,
+      );
+    }
+    return record;
   }
 
-  private isCurrentAuth(record: ThreadCreationRecord): boolean {
+  private createDiscardedReplyRecord(
+    currentUser: ReturnType<typeof authStore.getState>['user'],
+    parentClientId: string,
+    parentServerId: string | undefined,
+    payload: CreateLearningReplyRequest,
+    attachments: readonly LearningThreadAttachmentSummary[] | undefined,
+    dispatch: ReplyCreationRecord["dispatch"],
+    onFailure: (() => void) | undefined,
+  ): ReplyCreationRecord {
+    const immutablePayload = freezeReplyPayload(payload);
+    const optimisticReply = createOptimisticLearningReply(immutablePayload, {
+      parentClientId,
+      parentServerId,
+      localSequence: ++this.replySequence,
+      attachments,
+      userId: currentUser?.id,
+      displayName: currentUser?.displayName,
+      username: currentUser?.username,
+      avatarUrl: currentUser?.avatarDataUrl,
+      role: getAuthorRole(currentUser?.roles),
+    });
+    desiredStateCoordinator.failPendingReply(optimisticReply.clientId);
+    return {
+      clientId: optimisticReply.clientId,
+      parentClientId,
+      parentServerId,
+      payload: immutablePayload,
+      optimisticReply,
+      authGeneration: authStore.getWriteGeneration(),
+      userId: currentUser?.id,
+      localSequence: optimisticReply.localSequence,
+      status: "failed",
+      dispatch,
+      onFailure,
+    };
+  }
+
+  getReplyRecord(clientId: string): ReplyCreationRecord | undefined {
+    return this.replyRecords.get(clientId);
+  }
+
+  getPendingReplies(parentClientId: string): ReplyCreationRecord[] {
+    return [...this.replyRecords.values()]
+      .filter(
+        (reply) =>
+          reply.parentClientId === parentClientId &&
+          reply.status !== "confirmed" &&
+          reply.status !== "failed",
+      )
+      .sort((left, right) => left.localSequence - right.localSequence);
+  }
+
+  getActiveReplyRecords(parentServerId: string): ReplyCreationRecord[] {
+    return [...this.replyRecords.values()]
+      .filter(
+        (reply) =>
+          reply.parentServerId === parentServerId && this.isCurrentAuth(reply),
+      )
+      .sort((left, right) => left.localSequence - right.localSequence);
+  }
+
+  confirmReply(
+    queryClient: QueryClient | undefined,
+    clientId: string,
+    serverReply: LearningReply,
+  ): boolean {
+    const record = this.replyRecords.get(clientId);
+    if (!record) return false;
+    if (record.status !== "dispatching") return false;
+    if (!this.isCurrentAuth(record) || !record.parentServerId) {
+      this.replyRecords.delete(clientId);
+      return false;
+    }
+    this.replyRecords.set(clientId, {
+      ...record,
+      status: "confirmed",
+      serverId: serverReply.id,
+      serverReply,
+    });
+    desiredStateCoordinator.resolvePendingReply(clientId, serverReply);
+    if (queryClient) {
+      reconcileOptimisticReplyInCaches(
+        queryClient,
+        record.parentServerId,
+        clientId,
+        serverReply,
+      );
+    }
+    return true;
+  }
+
+  failReply(queryClient: QueryClient | undefined, clientId: string): boolean {
+    const record = this.replyRecords.get(clientId);
+    if (!record) return false;
+    if (record.status === "confirmed" || record.status === "failed") {
+      return false;
+    }
+    this.replyRecords.delete(clientId);
+    if (!this.isCurrentAuth(record)) return false;
+    desiredStateCoordinator.failPendingReply(clientId);
+    if (queryClient) {
+      removeOptimisticReplyFromCaches(
+        queryClient,
+        record.parentServerId ?? record.parentClientId,
+        clientId,
+      );
+    }
+    record.onFailure?.();
+    return true;
+  }
+
+  private startReplyDispatch(
+    queryClient: QueryClient | undefined,
+    clientId: string,
+    parentServerId: string,
+  ): void {
+    const record = this.replyRecords.get(clientId);
+    if (!record || record.status !== "pending" || !this.isCurrentAuth(record)) {
+      return;
+    }
+    this.replyRecords.set(clientId, {
+      ...record,
+      parentServerId,
+      status: "dispatching",
+    });
+    void this.dispatchReply(queryClient, clientId, parentServerId);
+  }
+
+  private async dispatchReply(
+    queryClient: QueryClient | undefined,
+    clientId: string,
+    parentServerId: string,
+  ): Promise<void> {
+    const record = this.replyRecords.get(clientId);
+    if (
+      !record ||
+      record.status !== "dispatching" ||
+      !this.isCurrentAuth(record)
+    )
+      return;
+    try {
+      const serverReply = await record.dispatch(parentServerId, record.payload);
+      this.confirmReply(queryClient, clientId, serverReply);
+    } catch {
+      this.failReply(queryClient, clientId);
+    }
+  }
+
+  reset(): void {
+    this.threadRecords.clear();
+    this.replyRecords.clear();
+    this.threadResolutions.clear();
+  }
+
+  private isCurrentAuth(
+    record: Pick<
+      ThreadCreationRecord | ReplyCreationRecord,
+      "authGeneration" | "userId"
+    >,
+  ): boolean {
     const currentUserId = authStore.getState().user?.id;
     return (
       record.authGeneration === authStore.getWriteGeneration() &&

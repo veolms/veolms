@@ -110,9 +110,10 @@ interface CommentCardProps {
   onReport?: (
     target:
       | {
-          targetType: "thread" | "reply";
-          targetId: string | number;
-          authorName?: string;
+        targetType: "thread" | "reply";
+        targetId: string | number;
+        authorName?: string;
+        serverId?: string;
         }
       | (string | number),
   ) => void;
@@ -120,6 +121,7 @@ interface CommentCardProps {
     threadId: string | number,
     replyId: string | number,
     accepted: boolean,
+    serverReplyId?: string,
   ) => Promise<boolean> | void;
   onToggleLockThread?: (
     threadId: string | number,
@@ -283,9 +285,14 @@ export function CommentCard({
     draft: DiscussionDraft,
   ): Promise<boolean> => {
     if (isBackendEntity) {
+      const reply = effectiveReplies.find(
+        (candidate) => getClientEntityId(candidate) === String(replyId),
+      );
+      const serverReplyId = reply ? getServerEntityId(reply) : undefined;
+      if (!serverReplyId) return false;
       try {
         await updateReplyMutation.mutateAsync({
-          replyId: String(replyId),
+          replyId: serverReplyId,
           payload: {
             content: draft.markdown || draft.plainText.trim(),
           },
@@ -306,8 +313,13 @@ export function CommentCard({
     replyId: string | number,
   ): Promise<boolean> => {
     if (isBackendEntity) {
+      const reply = effectiveReplies.find(
+        (candidate) => getClientEntityId(candidate) === String(replyId),
+      );
+      const serverReplyId = reply ? getServerEntityId(reply) : undefined;
+      if (!serverReplyId) return false;
       try {
-        await deleteReplyMutation.mutateAsync(String(replyId));
+        await deleteReplyMutation.mutateAsync(serverReplyId);
         return true;
       } catch {
         return false;
@@ -325,18 +337,21 @@ export function CommentCard({
   const handleLikeReply = (replyId: string | number) => {
     if (isBackendEntity) {
       const reply = effectiveReplies.find(
-        (r) => String(r.id) === String(replyId),
+        (r) => getClientEntityId(r) === String(replyId),
       );
+      if (!reply) return;
       const currentLiked = Boolean(reply?.liked);
       const nextLiked = !currentLiked;
       desiredStateCoordinator.setLiked({
         targetType: "reply",
         targetId: String(replyId),
+        serverId: getServerEntityId(reply),
         threadId: threadId!,
         desiredLiked: nextLiked,
         currentBaseline: currentLiked,
         lessonContext: courseId ? { courseId, lessonId: "" } : undefined,
         queryClient,
+        pendingTarget: !getServerEntityId(reply),
       });
     } else if (isBackendMode) {
       return;
@@ -725,7 +740,12 @@ export function CommentCard({
                     isQuestion={isQuestion}
                     canAcceptAnswer={canAcceptAnswer}
                     onToggleAccept={(replyId, accepted) =>
-                      onToggleAcceptReply?.(comment.id, replyId, accepted)
+                      onToggleAcceptReply?.(
+                        comment.id,
+                        replyId,
+                        accepted,
+                        getServerEntityId(reply),
+                      )
                     }
                     onReply={() => {
                       if (onOpenThread) onOpenThread(comment.id, true);
@@ -739,6 +759,7 @@ export function CommentCard({
                         targetType: "reply",
                         targetId: reply.id,
                         authorName: reply.name,
+                        serverId: getServerEntityId(reply),
                       })
                     }
                     parentThreadId={comment.id}
@@ -775,7 +796,11 @@ interface ReplyCardProps {
   isBackendMode?: boolean;
   isQuestion?: boolean;
   canAcceptAnswer?: boolean;
-  onToggleAccept?: (replyId: string | number, accepted: boolean) => void;
+  onToggleAccept?: (
+    replyId: string | number,
+    accepted: boolean,
+    serverReplyId?: string,
+  ) => void;
   onReply: () => void;
   onEdit: (
     replyId: string | number,
@@ -815,6 +840,8 @@ function ReplyCard({
   const replyLikesCount = isBackendMode
     ? reply.likes
     : reply.likes + (localLiked ? 1 : 0);
+  const canAcceptReply =
+    Boolean(getServerEntityId(reply)) && reply.creationStatus !== "pending";
 
   const saveEdit = async () => {
     if (!hasDiscussionDraftContent(editDraft)) return;
@@ -883,11 +910,16 @@ function ReplyCard({
                   name={reply.name}
                   kind="reply"
                   isOwn={Boolean(reply.isOwn)}
-                  canAcceptAnswer={isQuestion && canAcceptAnswer}
+                  canAcceptAnswer={isQuestion && canAcceptAnswer && canAcceptReply}
                   isAccepted={Boolean(reply.isAccepted)}
                   onToggleAccept={
                     isQuestion && canAcceptAnswer && onToggleAccept
-                      ? () => onToggleAccept(reply.id, !reply.isAccepted)
+                      ? () =>
+                          onToggleAccept(
+                            reply.id,
+                            !reply.isAccepted,
+                            getServerEntityId(reply),
+                          )
                       : undefined
                   }
                   onEdit={() => {
@@ -974,13 +1006,29 @@ function ReplyCard({
                   <button
                     type="button"
                     data-testid={`accept-reply-btn-${reply.id}`}
+                    disabled={
+                      reply.creationStatus === "pending" ||
+                      !getServerEntityId(reply)
+                    }
                     aria-label={
                       reply.isAccepted ? "Unaccept answer" : "Accept answer"
                     }
                     title={
                       reply.isAccepted ? "Unaccept answer" : "Accept answer"
                     }
-                    onClick={() => onToggleAccept(reply.id, !reply.isAccepted)}
+                    onClick={() => {
+                      if (
+                        reply.creationStatus === "pending" ||
+                        !getServerEntityId(reply)
+                      ) {
+                        return;
+                      }
+                      onToggleAccept(
+                        reply.id,
+                        !reply.isAccepted,
+                        getServerEntityId(reply),
+                      );
+                    }}
                     className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-(--accent) ${
                       reply.isAccepted
                         ? "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"

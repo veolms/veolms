@@ -46,6 +46,8 @@ import {
   useUpdateReply,
   desiredStateCoordinator,
 } from "../services/learning-interactions";
+import { interactionCreationCoordinator } from "../services/learning-interactions/interaction-creation-coordinator";
+import type { LearningThreadAttachmentSummary } from "@veolms/contracts";
 import {
   getClientEntityId,
   getServerEntityId,
@@ -118,6 +120,7 @@ interface DiscussionThreadPanelProps {
           targetType: "thread" | "reply";
           targetId: string | number;
           authorName?: string;
+          serverId?: string;
         }
       | (string | number),
   ) => void;
@@ -125,6 +128,7 @@ interface DiscussionThreadPanelProps {
     threadId: string | number,
     replyId: string | number,
     accepted: boolean,
+    serverReplyId?: string,
   ) => void;
   onToggleLockThread?: (threadId: string | number, locked: boolean) => void;
   onToggleBookmark?: (
@@ -135,6 +139,7 @@ interface DiscussionThreadPanelProps {
     threadId: string | number,
     following: boolean,
   ) => Promise<boolean> | void;
+  onReplyCreateError?: () => void;
   courseId?: string;
 }
 
@@ -160,6 +165,7 @@ export function DiscussionThreadPanel({
   onToggleLockThread,
   onToggleBookmark,
   onToggleFollow,
+  onReplyCreateError,
   courseId,
 }: DiscussionThreadPanelProps) {
   const isPhone = useThreadPanelPhoneLayout();
@@ -203,8 +209,8 @@ export function DiscussionThreadPanel({
     id: number;
     entryId: string | number | null;
   }>({ id: 0, entryId: null });
-  const foundIndex = entries.findIndex(
-    (entry) => getClientEntityId(entry) === String(activeEntryId),
+  const foundIndex = entries.findIndex((entry) =>
+    matchesEntryIdentity(entry, activeEntryId),
   );
   const activeIndex = foundIndex >= 0 ? foundIndex : 0;
   const requestComposerFocus = useCallback((entryId: string | number) => {
@@ -659,9 +665,7 @@ export function DiscussionThreadPanel({
               <SwiperSlide key={getClientEntityId(entry)} className="h-full!">
                 <ThreadSlide
                   entry={entry}
-                  active={
-                    getClientEntityId(entry) === String(activeEntryId)
-                  }
+                  active={matchesEntryIdentity(entry, activeEntryId)}
                   isBackendMode={isBackendMode}
                   currentUserId={currentUserId}
                   userRole={userRole}
@@ -691,6 +695,7 @@ export function DiscussionThreadPanel({
                   onToggleLockThread={onToggleLockThread}
                   onToggleBookmark={onToggleBookmark}
                   onToggleFollow={onToggleFollow}
+                  onReplyCreateError={onReplyCreateError}
                   courseId={courseId}
                 />
               </SwiperSlide>
@@ -731,6 +736,7 @@ interface ThreadSlideProps {
           targetType: "thread" | "reply";
           targetId: string | number;
           authorName?: string;
+          serverId?: string;
         }
       | (string | number),
   ) => void;
@@ -738,6 +744,7 @@ interface ThreadSlideProps {
     threadId: string | number,
     replyId: string | number,
     accepted: boolean,
+    serverReplyId?: string,
   ) => void;
   onToggleLockThread?: (threadId: string | number, locked: boolean) => void;
   onToggleBookmark?: (
@@ -748,6 +755,7 @@ interface ThreadSlideProps {
     threadId: string | number,
     following: boolean,
   ) => Promise<boolean> | void;
+  onReplyCreateError?: () => void;
   courseId?: string;
 }
 
@@ -772,6 +780,7 @@ function ThreadSlide({
   onToggleLockThread,
   onToggleBookmark,
   onToggleFollow,
+  onReplyCreateError,
   courseId,
 }: ThreadSlideProps) {
   const isQuestion =
@@ -784,6 +793,7 @@ function ThreadSlide({
   const serverId = getServerEntityId(entry);
   const isBackend = Boolean(isBackendMode && serverId);
   const threadId = serverId;
+  const replyParentId = isBackendMode ? (serverId ?? clientId) : undefined;
   const queryClient = useContext(QueryClientContext);
 
   const {
@@ -791,7 +801,7 @@ function ThreadSlide({
     isLoading: isRepliesLoading,
     isError: isRepliesError,
     refetch: refetchReplies,
-  } = useThreadReplies(threadId, undefined, {
+  } = useThreadReplies(replyParentId, undefined, {
     enabled: isBackend && active,
   });
 
@@ -800,49 +810,65 @@ function ThreadSlide({
   const deleteReplyMutation = useDeleteReply(threadId);
 
   const replies = useMemo<CommentReply[]>(() => {
-    if (!isBackend) {
+    if (!isBackendMode) {
       return entry.thread ?? [];
     }
-    if (!repliesData?.replies) {
-      return [];
-    }
-    return repliesData.replies.map((reply) =>
+    return (repliesData?.replies ?? []).map((reply) =>
       adaptLearningReplyToCommentReply(reply, currentUserId),
     );
-  }, [isBackend, entry.thread, repliesData?.replies, currentUserId]);
+  }, [isBackendMode, entry.thread, repliesData?.replies, currentUserId]);
 
   const handleAddReply = async (
     draft: DiscussionDraft,
     attachmentIds?: string[],
+    attachments?: DiscussionAttachmentItem[],
   ): Promise<boolean> => {
-    if (isBackend) {
-      try {
-        await createReplyMutation.mutateAsync({
-          content: draft.markdown || draft.plainText.trim(),
-          attachmentIds:
-            attachmentIds && attachmentIds.length > 0
-              ? attachmentIds
-              : undefined,
-        });
-        return true;
-      } catch {
-        return false;
-      }
-    } else if (isBackendMode) {
-      return false;
-    } else {
-      onAddReply(entry.id, {
-        id: Date.now(),
-        name: currentUser?.name || "Ashi Singh",
-        time: "Just now",
-        avatar: currentUser?.avatar || "/assets/sofia-avatar-160.webp",
-        text: draft.plainText.trim(),
-        content: draft,
-        likes: 0,
-        isOwn: true,
+    if (isBackendMode) {
+      const payload = {
+        content: draft.markdown || draft.plainText.trim(),
+        attachmentIds:
+          attachmentIds && attachmentIds.length > 0 ? attachmentIds : undefined,
+      };
+      const attachmentSummaries: LearningThreadAttachmentSummary[] = (
+        attachments ?? []
+      ).map((attachment) => ({
+        id: attachment.id,
+        fileName: attachment.fileName,
+        fileUrl: attachment.fileUrl,
+        mimeType: attachment.mimeType,
+        fileSize: attachment.fileSize,
+        kind: attachment.kind ?? "document",
+        metadata:
+          attachment.metadata && typeof attachment.metadata === "object"
+            ? (attachment.metadata as Record<string, unknown>)
+            : null,
+      }));
+      interactionCreationCoordinator.beginReplyCreation({
+        queryClient,
+        parentClientId: clientId,
+        parentServerId: serverId,
+        payload,
+        attachments: attachmentSummaries,
+        dispatch: (parentServerId, replyPayload) =>
+          createReplyMutation.mutateAsync({
+            ...replyPayload,
+            __serverThreadId: parentServerId,
+          }),
+        onFailure: onReplyCreateError,
       });
       return true;
     }
+    onAddReply(entry.id, {
+      id: Date.now(),
+      name: currentUser?.name || "Ashi Singh",
+      time: "Just now",
+      avatar: currentUser?.avatar || "/assets/sofia-avatar-160.webp",
+      text: draft.plainText.trim(),
+      content: draft,
+      likes: 0,
+      isOwn: true,
+    });
+    return true;
   };
 
   const handleEditReply = async (
@@ -850,9 +876,14 @@ function ThreadSlide({
     draft: DiscussionDraft,
   ): Promise<boolean> => {
     if (isBackend) {
+      const reply = replies.find(
+        (candidate) => getClientEntityId(candidate) === String(replyId),
+      );
+      const serverReplyId = reply ? getServerEntityId(reply) : undefined;
+      if (!serverReplyId) return false;
       try {
         await updateReplyMutation.mutateAsync({
-          replyId: String(replyId),
+          replyId: serverReplyId,
           payload: {
             content: draft.markdown || draft.plainText.trim(),
           },
@@ -871,8 +902,13 @@ function ThreadSlide({
     replyId: string | number,
   ): Promise<boolean> => {
     if (isBackend) {
+      const reply = replies.find(
+        (candidate) => getClientEntityId(candidate) === String(replyId),
+      );
+      const serverReplyId = reply ? getServerEntityId(reply) : undefined;
+      if (!serverReplyId) return false;
       try {
-        await deleteReplyMutation.mutateAsync(String(replyId));
+        await deleteReplyMutation.mutateAsync(serverReplyId);
         return true;
       } catch {
         return false;
@@ -884,17 +920,25 @@ function ThreadSlide({
   };
 
   const handleLikeReply = (replyId: string | number) => {
-    if (isBackend) {
-      const reply = replies.find((r) => String(r.id) === String(replyId));
-      const currentLiked = Boolean(reply?.liked);
+    if (isBackendMode) {
+      const reply = replies.find(
+        (candidate) =>
+          String(candidate.clientId ?? candidate.id) === String(replyId),
+      );
+      if (!reply) return;
+      const replyClientId = String(reply.clientId ?? reply.id);
+      const replyServerId = getServerEntityId(reply);
+      const currentLiked = Boolean(reply.liked);
       const nextLiked = !currentLiked;
       desiredStateCoordinator.setLiked({
         targetType: "reply",
-        targetId: String(replyId),
-        threadId: threadId!,
+        targetId: replyClientId,
+        serverId: replyServerId,
+        threadId: threadId ?? clientId,
         desiredLiked: nextLiked,
         currentBaseline: currentLiked,
         queryClient,
+        pendingTarget: !replyServerId,
       });
     } else {
       const reply = replies.find((r) => r.id === replyId);
@@ -972,13 +1016,18 @@ function ThreadSlide({
                 isQuestion={isQuestion}
                 canAcceptAnswer={canAcceptAnswer}
                 onToggleAcceptReply={(replyId, accepted) =>
-                  onToggleAcceptReply?.(entry.id, replyId, accepted)
+                  onToggleAcceptReply?.(
+                    entry.id,
+                    replyId,
+                    accepted,
+                    getServerEntityId(reply),
+                  )
                 }
                 onReply={entry.isLocked ? () => {} : focusComposer}
                 onEdit={handleEditReply}
                 onDelete={handleDeleteReply}
                 onLikeReply={handleLikeReply}
-                onReport={onReport}
+                    onReport={onReport}
                 courseId={courseId}
               />
             ))
@@ -1017,7 +1066,6 @@ function ThreadSlide({
             focusRequest={focusRequest}
             onFocusHandled={onComposerFocusHandled}
             onSubmit={handleAddReply}
-            isPending={createReplyMutation.isPending}
             courseId={courseId}
           />
         ))}
@@ -1242,7 +1290,11 @@ function ThreadReplyEntry({
   reply: CommentReply;
   isQuestion?: boolean;
   canAcceptAnswer?: boolean;
-  onToggleAcceptReply?: (replyId: string | number, accepted: boolean) => void;
+  onToggleAcceptReply?: (
+    replyId: string | number,
+    accepted: boolean,
+    serverReplyId?: string,
+  ) => void;
   onReply: () => void;
   onEdit: (
     replyId: string | number,
@@ -1256,11 +1308,14 @@ function ThreadReplyEntry({
           targetType: "thread" | "reply";
           targetId: string | number;
           authorName?: string;
+          serverId?: string;
         }
       | (string | number),
   ) => void;
   courseId?: string;
 }) {
+  const canAcceptReply =
+    Boolean(getServerEntityId(reply)) && reply.creationStatus !== "pending";
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(
     reply.content ?? createDiscussionDraft(reply.text),
@@ -1342,11 +1397,18 @@ function ThreadReplyEntry({
                   name={reply.name}
                   kind="reply"
                   isOwn={Boolean(reply.isOwn)}
-                  canAcceptAnswer={isQuestion && canAcceptAnswer}
+                  canAcceptAnswer={
+                    isQuestion && canAcceptAnswer && canAcceptReply
+                  }
                   isAccepted={Boolean(reply.isAccepted)}
                   onToggleAccept={
                     isQuestion && canAcceptAnswer && onToggleAcceptReply
-                      ? () => onToggleAcceptReply(reply.id, !reply.isAccepted)
+                      ? () =>
+                          onToggleAcceptReply(
+                            reply.id,
+                            !reply.isAccepted,
+                            getServerEntityId(reply),
+                          )
                       : undefined
                   }
                   onEdit={() => {
@@ -1371,6 +1433,7 @@ function ThreadReplyEntry({
                       targetType: "reply",
                       targetId: reply.id,
                       authorName: reply.name,
+                      serverId: getServerEntityId(reply),
                     })
                   }
                   className="absolute -top-1 right-0 z-20 shrink-0"
@@ -1433,15 +1496,21 @@ function ThreadReplyEntry({
                   <button
                     type="button"
                     data-testid={`accept-reply-btn-${reply.id}`}
+                    disabled={!canAcceptReply}
                     aria-label={
                       reply.isAccepted ? "Unaccept answer" : "Accept answer"
                     }
                     title={
                       reply.isAccepted ? "Unaccept answer" : "Accept answer"
                     }
-                    onClick={() =>
-                      onToggleAcceptReply(reply.id, !reply.isAccepted)
-                    }
+                    onClick={() => {
+                      if (!canAcceptReply) return;
+                      onToggleAcceptReply(
+                        reply.id,
+                        !reply.isAccepted,
+                        getServerEntityId(reply),
+                      );
+                    }}
                     className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-(--accent) ${
                       reply.isAccepted
                         ? "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"
@@ -1494,7 +1563,6 @@ function ThreadReplyComposer({
   focusRequest,
   onFocusHandled,
   onSubmit,
-  isPending = false,
   courseId,
 }: {
   entry: Comment;
@@ -1504,8 +1572,8 @@ function ThreadReplyComposer({
   onSubmit: (
     draft: DiscussionDraft,
     attachmentIds?: string[],
-  ) => Promise<boolean>;
-  isPending?: boolean;
+    attachments?: DiscussionAttachmentItem[],
+  ) => Promise<boolean> | boolean;
   courseId?: string;
 }) {
   const [composerKey, setComposerKey] = useState(0);
@@ -1521,7 +1589,6 @@ function ThreadReplyComposer({
     useState<DiscussionFormattingState>(EMPTY_FORMATTING_STATE);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  const shouldFocusRef = useRef(false);
 
   useEffect(() => {
     setDraft(createEmptyDiscussionDraft());
@@ -1536,7 +1603,7 @@ function ThreadReplyComposer({
     onFocusHandled(entry.id, focusRequest);
   }, [editorController, entry.id, focusRequest, onFocusHandled]);
 
-  const isPendingSubmission = isSubmitting || isPending;
+  const isPendingSubmission = isSubmitting;
   const canSubmit = hasDiscussionDraftContent(draft) && !isPendingSubmission;
 
   const submit = async () => {
@@ -1547,21 +1614,18 @@ function ThreadReplyComposer({
       const success = await onSubmit(
         draft,
         replyAttachments.map((a) => a.id),
+        replyAttachments,
       );
       if (success) {
-        shouldFocusRef.current = true;
         setDraft(createEmptyDiscussionDraft());
         setReplyAttachments([]);
         setComposerKey((k) => k + 1);
         setSubmitError("");
-        window.setTimeout(() => {
-          editorController?.focus();
-        }, 0);
       } else {
-        setSubmitError("Failed to post reply. Please try again.");
+        setSubmitError("Couldn't post your reply. Please try again.");
       }
     } catch {
-      setSubmitError("Failed to post reply. Please try again.");
+      setSubmitError("Couldn't post your reply. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -1571,12 +1635,6 @@ function ThreadReplyComposer({
     controller: DiscussionEditorController | null,
   ) => {
     setEditorController(controller);
-    if (controller && shouldFocusRef.current) {
-      shouldFocusRef.current = false;
-      window.setTimeout(() => {
-        controller.focus();
-      }, 0);
-    }
   };
 
   const composerAvatar = currentUser?.avatar || "/assets/sofia-avatar-160.webp";
@@ -1587,12 +1645,12 @@ function ThreadReplyComposer({
       className="-mx-4 -mb-4 mt-0 grid shrink-0 grid-rows-[auto_auto] overflow-hidden rounded-t-xl bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] transition-colors duration-150 focus-within:bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] sm:mx-0 sm:mb-0 sm:rounded-xl"
     >
       <DiscussionEditor
-        documentId={`thread-reply-${entry.id}-${composerKey}`}
+        documentId={`thread-reply-${entry.id}`}
+        resetToken={composerKey}
         value={draft}
         label={`Reply to ${entry.name}`}
         placeholderText="Write a reply…"
         autoGrow
-        autoFocus={shouldFocusRef.current}
         courseId={courseId}
         mentionsEnabled={true}
         onChange={setDraft}
@@ -1647,6 +1705,18 @@ function ThreadReplyComposer({
         </button>
       </div>
     </div>
+  );
+}
+
+function matchesEntryIdentity(
+  entry: Comment,
+  activeEntryId: string | number | null,
+): boolean {
+  if (activeEntryId === null) return false;
+  const identity = String(activeEntryId);
+  return (
+    getClientEntityId(entry) === identity ||
+    getServerEntityId(entry) === identity
   );
 }
 

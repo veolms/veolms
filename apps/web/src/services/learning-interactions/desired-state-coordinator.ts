@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { LearningThread } from "@veolms/contracts";
+import type { LearningReply, LearningThread } from "@veolms/contracts";
 import { queryClient as defaultQueryClient } from "../../lib/query-client";
 import { learningInteractionsService } from "./learning-interactions.service";
 import {
@@ -11,6 +11,7 @@ import {
   updateThreadLikeInCache,
   updateThreadLockInCache,
 } from "./cache-updaters";
+import { isClientEntityId } from "./interaction-entities";
 
 export type OptimisticSyncStatus = "pending" | "confirmed" | "failed";
 
@@ -28,6 +29,8 @@ export type TargetLikeType = "thread" | "reply" | "note";
 export interface SetLikedOptions {
   targetType: TargetLikeType;
   targetId: string;
+  /** Transport identity when targetId is the stable client identity. */
+  serverId?: string;
   desiredLiked: boolean;
   currentBaseline?: boolean;
   lessonContext?: { courseId: string; lessonId: string };
@@ -35,7 +38,7 @@ export interface SetLikedOptions {
   debounceMs?: number; // Optional micro-delay before network dispatch (default: 30ms)
   onFailure?: (error: unknown) => void;
   queryClient?: QueryClient;
-  /** Keeps a client-keyed thread intent local until creation resolves. */
+  /** Keeps a client-keyed entity intent local until creation resolves. */
   pendingTarget?: boolean;
 }
 
@@ -118,6 +121,7 @@ interface ThreadAcceptedAnswerState {
   threadId: string;
   serverBaselineAcceptedReplyId: string | null;
   desiredAcceptedReplyId: string | null;
+  intentRevision: number;
   inFlightTargetReplyId: string | null;
   inFlightAccepted: boolean | null;
   abortController: AbortController | null;
@@ -127,11 +131,21 @@ interface ThreadAcceptedAnswerState {
   queryClient: QueryClient;
 }
 
+export interface ReplyResolution {
+  readonly clientId: string;
+  readonly status: "confirmed" | "failed";
+  readonly serverId?: string;
+  readonly threadId?: string;
+  readonly isLiked?: boolean;
+  readonly generation: number;
+}
+
 export class DesiredStateCoordinator {
   private generation = 1;
   private entries = new Map<string, EntityLikeState>();
   private booleanEntries = new Map<string, ThreadBooleanState>();
   private acceptAnswerEntries = new Map<string, ThreadAcceptedAnswerState>();
+  private replyResolutions = new Map<string, ReplyResolution>();
   private queryClient: QueryClient;
 
   constructor(queryClient: QueryClient = defaultQueryClient) {
@@ -205,6 +219,7 @@ export class DesiredStateCoordinator {
       }
     }
     this.acceptAnswerEntries.clear();
+    this.replyResolutions.clear();
   }
 
   /**
@@ -247,6 +262,46 @@ export class DesiredStateCoordinator {
     return this.acceptAnswerEntries.get(this.acceptAnswerKey(threadId));
   }
 
+  /** Returns the latest locally desired like value for either entity identity. */
+  getLikeProjection(
+    targetType: TargetLikeType,
+    clientId: string,
+    serverId?: string,
+  ): boolean | undefined {
+    const directState = this.entries.get(this.likeKey(targetType, clientId));
+    if (directState) return directState.desiredState;
+
+    if (serverId) {
+      const serverState = this.entries.get(this.likeKey(targetType, serverId));
+      if (serverState) return serverState.desiredState;
+    }
+
+    for (const state of this.entries.values()) {
+      if (
+        state.targetType === targetType &&
+        (state.targetId === clientId || state.serverId === serverId)
+      ) {
+        return state.desiredState;
+      }
+    }
+
+    return undefined;
+  }
+
+  getReplyResolution(clientId: string): ReplyResolution | undefined {
+    const resolution = this.replyResolutions.get(clientId);
+    return resolution?.generation === this.generation ? resolution : undefined;
+  }
+
+  private setReplyResolution(
+    resolution: Omit<ReplyResolution, "generation">,
+  ): void {
+    this.replyResolutions.set(resolution.clientId, {
+      ...resolution,
+      generation: this.generation,
+    });
+  }
+
   /** Resolves client-keyed pending thread intents after creation reconciliation. */
   resolvePendingThread(clientId: string, serverThread: LearningThread): void {
     const like = this.entries.get(this.likeKey("thread", clientId));
@@ -276,6 +331,37 @@ export class DesiredStateCoordinator {
     );
   }
 
+  /** Resolves a client-keyed pending reply Like after reply creation. */
+  resolvePendingReply(clientId: string, serverReply: LearningReply): void {
+    this.setReplyResolution({
+      clientId,
+      status: "confirmed",
+      serverId: serverReply.id,
+      threadId: serverReply.threadId,
+      isLiked: Boolean(serverReply.isLiked),
+    });
+    const state = this.entries.get(this.likeKey("reply", clientId));
+    if (!state) return;
+    state.serverId = serverReply.id;
+    state.threadId = serverReply.threadId;
+    state.serverBaseline = Boolean(serverReply.isLiked);
+    this.applyLikeCacheUpdate(
+      "reply",
+      clientId,
+      state.desiredState,
+      state.queryClient,
+      state.lessonContext,
+      state.threadId,
+    );
+    this.scheduleLikeConvergence(state, 0);
+  }
+
+  /** Drops a pending reply Like when reply creation fails or its parent fails. */
+  failPendingReply(clientId: string): void {
+    this.setReplyResolution({ clientId, status: "failed" });
+    this.dropLikeState(this.likeKey("reply", clientId));
+  }
+
   failPendingThread(clientId: string): void {
     this.dropLikeState(this.likeKey("thread", clientId));
     this.dropBooleanState(this.booleanKey("bookmark", clientId));
@@ -288,7 +374,9 @@ export class DesiredStateCoordinator {
     serverId: string,
     baseline: boolean,
   ): void {
-    const state = this.booleanEntries.get(this.booleanKey(targetType, clientId));
+    const state = this.booleanEntries.get(
+      this.booleanKey(targetType, clientId),
+    );
     if (!state) return;
     state.serverId = serverId;
     state.serverBaseline = baseline;
@@ -330,6 +418,7 @@ export class DesiredStateCoordinator {
   setLiked({
     targetType,
     targetId,
+    serverId,
     desiredLiked,
     currentBaseline,
     lessonContext,
@@ -339,16 +428,28 @@ export class DesiredStateCoordinator {
     queryClient,
     pendingTarget,
   }: SetLikedOptions): void {
+    const replyResolution =
+      targetType === "reply" ? this.getReplyResolution(targetId) : undefined;
+    if (replyResolution?.status === "failed") return;
+    const resolvedReplyServerId =
+      replyResolution?.status === "confirmed"
+        ? replyResolution.serverId
+        : undefined;
     const key = this.likeKey(targetType, targetId);
     let state = this.entries.get(key);
     const activeClient = queryClient ?? this.queryClient;
 
     if (!state) {
-      const baseline = currentBaseline ?? !desiredLiked;
+      const baseline =
+        targetType === "reply" && replyResolution?.status === "confirmed"
+          ? Boolean(replyResolution.isLiked)
+          : (currentBaseline ?? !desiredLiked);
       state = {
         targetType,
         targetId,
-        serverId: pendingTarget ? undefined : targetId,
+        serverId: pendingTarget
+          ? resolvedReplyServerId
+          : (serverId ?? resolvedReplyServerId ?? targetId),
         serverBaseline: baseline,
         desiredState: desiredLiked,
         intentRevision: 1,
@@ -364,6 +465,11 @@ export class DesiredStateCoordinator {
     } else {
       state.desiredState = desiredLiked;
       state.intentRevision += 1;
+      if (serverId) state.serverId = serverId;
+      if (resolvedReplyServerId && !state.serverId) {
+        state.serverId = resolvedReplyServerId;
+        state.serverBaseline = Boolean(replyResolution?.isLiked);
+      }
       state.queryClient = activeClient;
       if (lessonContext) state.lessonContext = lessonContext;
       if (threadId) state.threadId = threadId;
@@ -397,27 +503,20 @@ export class DesiredStateCoordinator {
     threadId?: string,
   ): void {
     if (targetType === "thread") {
-      updateThreadLikeInCache(
-        client,
-        targetId,
-        desiredLiked,
-        lessonContext,
-      );
+      updateThreadLikeInCache(client, targetId, desiredLiked, lessonContext);
     } else if (targetType === "reply") {
       if (threadId) {
-        updateReplyLikeInCache(
-          client,
-          threadId,
-          targetId,
-          desiredLiked,
-        );
+        updateReplyLikeInCache(client, threadId, targetId, desiredLiked);
       }
     } else if (targetType === "note") {
       updateNoteLikeInCache(client, targetId, desiredLiked);
     }
   }
 
-  private scheduleLikeConvergence(state: EntityLikeState, delayMs: number): void {
+  private scheduleLikeConvergence(
+    state: EntityLikeState,
+    delayMs: number,
+  ): void {
     if (state.dispatchTimer !== null) {
       clearTimeout(state.dispatchTimer);
       state.dispatchTimer = null;
@@ -667,7 +766,12 @@ export class DesiredStateCoordinator {
     lessonContext?: { courseId: string; lessonId: string },
   ): void {
     if (targetType === "bookmark") {
-      updateThreadBookmarkInCache(client, threadId, desiredValue, lessonContext);
+      updateThreadBookmarkInCache(
+        client,
+        threadId,
+        desiredValue,
+        lessonContext,
+      );
     } else if (targetType === "follow") {
       updateThreadFollowInCache(client, threadId, desiredValue, lessonContext);
     } else if (targetType === "lock") {
@@ -842,6 +946,14 @@ export class DesiredStateCoordinator {
     onFailure,
     queryClient,
   }: SetAcceptedAnswerOptions): void {
+    if (
+      isClientEntityId(threadId) ||
+      (desiredAcceptedReplyId !== null &&
+        isClientEntityId(desiredAcceptedReplyId))
+    ) {
+      return;
+    }
+
     const key = this.acceptAnswerKey(threadId);
     let state = this.acceptAnswerEntries.get(key);
     const activeClient = queryClient ?? this.queryClient;
@@ -853,6 +965,7 @@ export class DesiredStateCoordinator {
         threadId,
         serverBaselineAcceptedReplyId: baseline,
         desiredAcceptedReplyId,
+        intentRevision: 1,
         inFlightTargetReplyId: null,
         inFlightAccepted: null,
         abortController: null,
@@ -864,6 +977,7 @@ export class DesiredStateCoordinator {
       this.acceptAnswerEntries.set(key, state);
     } else {
       state.desiredAcceptedReplyId = desiredAcceptedReplyId;
+      state.intentRevision += 1;
       state.queryClient = activeClient;
       if (lessonContext) state.lessonContext = lessonContext;
       if (onFailure) state.onFailure = onFailure;
@@ -936,6 +1050,7 @@ export class DesiredStateCoordinator {
 
     state.inFlightTargetReplyId = targetReplyId;
     state.inFlightAccepted = targetAccepted;
+    const requestRevision = state.intentRevision;
 
     const controller = new AbortController();
     state.abortController = controller;
@@ -960,7 +1075,9 @@ export class DesiredStateCoordinator {
 
         state.serverBaselineAcceptedReplyId = authoritativeReplyId;
 
-        if (state.desiredAcceptedReplyId !== state.serverBaselineAcceptedReplyId) {
+        if (
+          state.desiredAcceptedReplyId !== state.serverBaselineAcceptedReplyId
+        ) {
           // Intent changed while request was in-flight, continue convergence
           this.processAcceptedConvergence(state, capturedGen);
         } else if (authoritativeReplyId !== state.desiredAcceptedReplyId) {
@@ -980,6 +1097,24 @@ export class DesiredStateCoordinator {
         state.abortController = null;
         state.inFlightTargetReplyId = null;
         state.inFlightAccepted = null;
+
+        if (state.intentRevision !== requestRevision) {
+          // The failed request represented an older intent. The server
+          // baseline did not change, so preserve and converge the latest
+          // desired answer instead of rolling it back.
+          updateAcceptedAnswerInCache(
+            state.queryClient,
+            state.threadId,
+            state.desiredAcceptedReplyId,
+            state.lessonContext,
+          );
+          if (
+            state.desiredAcceptedReplyId !== state.serverBaselineAcceptedReplyId
+          ) {
+            this.processAcceptedConvergence(state, capturedGen);
+          }
+          return;
+        }
 
         // Roll back desired state to authoritative server baseline
         const rollbackReplyId = state.serverBaselineAcceptedReplyId;
