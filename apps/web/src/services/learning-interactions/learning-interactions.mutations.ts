@@ -14,7 +14,6 @@ import type {
   UpdateLearningNoteRequest,
   UpdateLearningReplyRequest,
   UpdateLearningThreadRequest,
-  LearningUploadResponse,
   LearningReply,
   LearningThread,
   LearningNote,
@@ -30,6 +29,11 @@ import {
   type OptimisticEditKind,
 } from "./optimistic-edit-coordinator";
 import { updateOptimisticEditInCaches } from "./edit-cache-updaters";
+import {
+  toInteractionAttachment,
+  type LocalComposerAttachment,
+} from "./attachment-model";
+import { uploadInteractionAttachments } from "./interaction-attachment-upload";
 
 export interface OptimisticEditMutationMeta {
   clientId: string;
@@ -97,21 +101,59 @@ function rollbackOptimisticEdit(
   }
 }
 
+type LocalAttachmentCreateMeta = {
+  /** Stable optimistic identity, used only by the frontend creation coordinator. */
+  __clientId?: string;
+  /** Files held locally until the user commits Post. */
+  __localAttachments?: readonly LocalComposerAttachment[];
+};
+
+type CreateThreadMutationInput = CreateLearningThreadRequest &
+  LocalAttachmentCreateMeta;
+
 export function useCreateLessonThread(courseId: string, lessonId: string) {
   const queryClient = useQueryClient();
   return useMutation<
     LearningThread,
     ApiError,
-    CreateLearningThreadRequest,
+    CreateThreadMutationInput,
     { clientId: string }
   >({
-    mutationFn: (payload) =>
-      learningInteractionsService.createThread(courseId, lessonId, payload),
+    mutationFn: async (input) => {
+      const { __clientId, __localAttachments = [], ...payload } = input;
+      const uploadedAttachments = await uploadInteractionAttachments(
+        __localAttachments,
+        (attachmentClientId, patch) => {
+          if (__clientId) {
+            interactionCreationCoordinator.updateThreadAttachment(
+              queryClient,
+              __clientId,
+              attachmentClientId,
+              patch,
+            );
+          }
+        },
+      );
+      const attachmentIds = [
+        ...(payload.attachmentIds ?? []),
+        ...uploadedAttachments.map((attachment) => attachment.id),
+      ];
+      return learningInteractionsService.createThread(courseId, lessonId, {
+        ...payload,
+        ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
+      });
+    },
     onMutate: (payload) => {
+      const { __clientId, __localAttachments = [], ...threadPayload } = payload;
       const record = interactionCreationCoordinator.beginThreadCreation({
         queryClient,
         context: { courseId, lessonId },
-        payload,
+        payload: threadPayload,
+        author: {
+          clientId: __clientId,
+          attachments: __localAttachments.map(toInteractionAttachment),
+        },
+        localAttachments: __localAttachments,
       });
       return { clientId: record.clientId };
     },
@@ -182,24 +224,45 @@ export function useDeleteThread() {
 type CreateReplyMutationInput = CreateLearningReplyRequest & {
   /** Internal transport override; never included in the API payload. */
   __serverThreadId?: string;
-};
+} &
+  LocalAttachmentCreateMeta;
 
 type CreateNoteMutationInput = CreateLearningNoteRequest & {
-  /** Local-only metadata used for the optimistic cache entity. */
+  /** Legacy metadata accepted while older callers migrate to local Files. */
   __attachments?: LearningNote["attachments"];
-};
+} &
+  LocalAttachmentCreateMeta;
 
 export function useCreateReply(threadId?: string) {
+  const queryClient = useQueryClient();
   return useMutation<LearningReply, ApiError, CreateReplyMutationInput>({
-    mutationFn: (input) => {
-      const { __serverThreadId, ...payload } = input;
+    mutationFn: async (input) => {
+      const { __serverThreadId, __clientId, __localAttachments = [], ...payload } =
+        input;
       const transportThreadId = __serverThreadId ?? threadId;
       if (!transportThreadId)
         throw new Error("A confirmed server thread ID is required.");
-      return learningInteractionsService.createReply(
-        transportThreadId,
-        payload,
+      const uploadedAttachments = await uploadInteractionAttachments(
+        __localAttachments,
+        (attachmentClientId, patch) => {
+          if (__clientId) {
+            interactionCreationCoordinator.updateReplyAttachment(
+              queryClient,
+              __clientId,
+              attachmentClientId,
+              patch,
+            );
+          }
+        },
       );
+      const attachmentIds = [
+        ...(payload.attachmentIds ?? []),
+        ...uploadedAttachments.map((attachment) => attachment.id),
+      ];
+      return learningInteractionsService.createReply(transportThreadId, {
+        ...payload,
+        ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
+      });
     },
   });
 }
@@ -320,10 +383,42 @@ export function useCreateNote() {
     CreateNoteMutationInput,
     { clientId: string }
   >({
-    mutationFn: ({ __attachments: _attachments, ...payload }) =>
-      learningInteractionsService.createNote(payload),
+    mutationFn: async (input) => {
+      const {
+        __attachments: _attachments,
+        __clientId,
+        __localAttachments = [],
+        ...payload
+      } = input;
+      const uploadedAttachments = await uploadInteractionAttachments(
+        __localAttachments,
+        (attachmentClientId, patch) => {
+          if (__clientId) {
+            interactionCreationCoordinator.updateNoteAttachment(
+              queryClient,
+              __clientId,
+              attachmentClientId,
+              patch,
+            );
+          }
+        },
+      );
+      const attachmentIds = [
+        ...(payload.attachmentIds ?? []),
+        ...uploadedAttachments.map((attachment) => attachment.id),
+      ];
+      return learningInteractionsService.createNote({
+        ...payload,
+        ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
+      });
+    },
     onMutate: (payload) => {
-      const { __attachments, ...notePayload } = payload;
+      const {
+        __attachments,
+        __clientId,
+        __localAttachments = [],
+        ...notePayload
+      } = payload;
       const record = interactionCreationCoordinator.beginNoteCreation({
         queryClient,
         context: {
@@ -331,7 +426,12 @@ export function useCreateNote() {
           lessonId: notePayload.lessonId,
         },
         payload: notePayload,
-        attachments: __attachments,
+        clientId: __clientId,
+        attachments:
+          __localAttachments.length > 0
+            ? __localAttachments.map(toInteractionAttachment)
+            : __attachments,
+        localAttachments: __localAttachments,
         dispatch: (notePayload) =>
           learningInteractionsService.createNote(notePayload),
       });
@@ -443,12 +543,5 @@ export function useUnsuspendUser() {
         payload.userId,
         payload,
       ),
-  });
-}
-
-export function useUploadDiscussionAttachment() {
-  return useMutation<LearningUploadResponse, ApiError, File>({
-    mutationFn: (file: File) =>
-      learningInteractionsService.uploadAttachmentDirect(file),
   });
 }

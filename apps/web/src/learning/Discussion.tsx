@@ -6,7 +6,6 @@ import React, {
   useRef,
   useState,
 } from "react";
-import type { LearningThreadAttachmentSummary } from "@veolms/contracts";
 import { QueryClientContext } from "@tanstack/react-query";
 import { useInRouterContext, useSearchParams } from "react-router";
 import { createPortal } from "react-dom";
@@ -32,7 +31,6 @@ import {
 
 export type { InteractionCapabilities };
 import { DiscussionThreadPanel } from "./DiscussionThreadPanel";
-import type { DiscussionAttachmentItem } from "./discussion-attachments";
 import {
   DESCRIPTION_SURFACE_BASE,
   LessonDescription,
@@ -66,6 +64,11 @@ import {
   useUpdateThread,
   useUserNotes,
 } from "../services/learning-interactions";
+import {
+  createClientEntityId,
+  revokeLocalAttachmentPreview,
+  type LocalComposerAttachment,
+} from "../services/learning-interactions/attachment-model";
 import { optimisticEditCoordinator } from "../services/learning-interactions/optimistic-edit-coordinator";
 import { optimisticDeletionCoordinator } from "../services/learning-interactions/optimistic-deletion-coordinator";
 import {
@@ -91,23 +94,6 @@ const CURRENT_USER = {
 };
 
 const EMPTY_MOBILE_COMPOSER_DRAFT = createEmptyDiscussionDraft();
-
-function toOptimisticAttachmentSummary(
-  attachment: DiscussionAttachmentItem,
-): LearningThreadAttachmentSummary {
-  const metadata = attachment.metadata;
-  return {
-    id: attachment.id,
-    fileName: attachment.fileName,
-    fileUrl: attachment.fileUrl,
-    mimeType: attachment.mimeType,
-    fileSize: attachment.fileSize,
-    kind: attachment.kind ?? "document",
-    ...(metadata && typeof metadata === "object"
-      ? { metadata: metadata as Record<string, unknown> }
-      : {}),
-  };
-}
 
 function getThreadIdentityValues(entry: Comment): string[] {
   return Array.from(
@@ -589,8 +575,20 @@ function DiscussionInner({
     isStoredDiscussionDraft,
   );
   const [composerAttachments, setComposerAttachments] = useState<
-    DiscussionAttachmentItem[]
+    LocalComposerAttachment[]
   >([]);
+  const composerAttachmentsRef = useRef(composerAttachments);
+
+  useEffect(() => {
+    composerAttachmentsRef.current = composerAttachments;
+  }, [composerAttachments]);
+
+  useEffect(
+    () => () => {
+      composerAttachmentsRef.current.forEach(revokeLocalAttachmentPreview);
+    },
+    [],
+  );
 
   const sanitizeStoredEntries = (items: Comment[]): Comment[] =>
     items.filter((entry) => entry.entryKind !== "note");
@@ -925,19 +923,18 @@ function DiscussionInner({
         }
       }
 
+      const localAttachments = [...composerAttachments];
       const notePayload = {
         courseId,
         lessonId,
         content: activeDraft.markdown,
         visibility: activeVisibility,
-        attachmentIds:
-          composerAttachments.length > 0
-            ? composerAttachments.map((a) => a.id)
-            : undefined,
-        __attachments:
-          composerAttachments.length > 0
-            ? composerAttachments.map(toOptimisticAttachmentSummary)
-            : undefined,
+        ...(localAttachments.length > 0
+          ? {
+              __clientId: createClientEntityId("note"),
+              __localAttachments: localAttachments,
+            }
+          : {}),
       } as const;
 
       try {
@@ -1022,16 +1019,19 @@ function DiscussionInner({
         }
       }
 
+      const localAttachments = [...composerAttachments];
       const createPayload = {
         courseId,
         lessonId: lessonId || undefined,
         kind: activeEntryKind === "question" ? "question" : "comment",
         content: activeDraft.markdown,
         visibility: threadVisibility,
-        attachmentIds:
-          composerAttachments.length > 0
-            ? composerAttachments.map((a) => a.id)
-            : undefined,
+        ...(localAttachments.length > 0
+          ? {
+              __clientId: createClientEntityId("thread"),
+              __localAttachments: localAttachments,
+            }
+          : {}),
       } as const;
 
       // Capture and clear the submitted snapshot before dispatch. The
@@ -1839,8 +1839,8 @@ interface ThreadSurfaceProps {
   availableFilters: readonly (readonly [DiscussionEntryFilter, string])[];
   enabledKinds: DiscussionEntryKind[];
   promptText: string;
-  attachments?: DiscussionAttachmentItem[];
-  onAttachmentsChange?: (attachments: DiscussionAttachmentItem[]) => void;
+  attachments?: LocalComposerAttachment[];
+  onAttachmentsChange?: (attachments: LocalComposerAttachment[]) => void;
   onDraftChange: (value: DiscussionDraft) => void;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;

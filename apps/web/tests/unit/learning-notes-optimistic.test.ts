@@ -21,6 +21,7 @@ import {
 import { learningInteractionKeys } from "../../src/services/learning-interactions/learning-interactions.keys";
 import { useCreateNote } from "../../src/services/learning-interactions/learning-interactions.mutations";
 import { learningInteractionsService } from "../../src/services/learning-interactions/learning-interactions.service";
+import type { LocalComposerAttachment } from "../../src/services/learning-interactions/attachment-model";
 
 const notePayload = {
   courseId: "course-1",
@@ -153,6 +154,112 @@ describe("Phase 4A optimistic Note creation", () => {
       creationStatus: "confirmed",
     });
     expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
+  it("uploads local Note files after optimistic insertion and sends only resolved attachment IDs", async () => {
+    const queryClient = createQueryClient();
+    const key = learningInteractionKeys.notes({
+      courseId: notePayload.courseId,
+      lessonId: notePayload.lessonId,
+      limit: 50,
+    });
+    queryClient.setQueryData<LearningNotesCacheResponse>(key, {
+      notes: [],
+      nextCursor: null,
+    });
+    const localAttachment: LocalComposerAttachment = {
+      id: "client-note-attachment",
+      file: new File(["note"], "note.pdf", { type: "application/pdf" }),
+      fileName: "note.pdf",
+      mimeType: "application/pdf",
+      fileSize: 4,
+      kind: "document",
+      mediaType: "document",
+    };
+    let resolveUpload: (value: any) => void = () => undefined;
+    vi.spyOn(learningInteractionsService, "uploadAttachmentDirect").mockImplementation(
+      () => new Promise((resolve) => {
+        resolveUpload = resolve;
+      }),
+    );
+    let resolveCreate: (value: LearningNote) => void = () => undefined;
+    vi.spyOn(learningInteractionsService, "createNote").mockImplementation(
+      () => new Promise((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+    const { result } = renderHook(() => useCreateNote(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    let request!: Promise<LearningNote>;
+    act(() => {
+      request = result.current.mutateAsync({
+        ...notePayload,
+        __clientId: "client-note-with-attachment",
+        __localAttachments: [localAttachment],
+      });
+    });
+
+    await waitFor(() => {
+      expect(queryClient.getQueryData<LearningNotesCacheResponse>(key)?.notes[0])
+        .toMatchObject({
+          clientId: "client-note-with-attachment",
+          creationStatus: "pending",
+          attachments: [
+            {
+              id: "client-note-attachment",
+              uploadState: "uploading",
+            },
+          ],
+        });
+    });
+    expect(learningInteractionsService.createNote).not.toHaveBeenCalled();
+
+    resolveUpload({
+      id: "server-note-attachment",
+      url: "/uploads/note.pdf",
+      fileName: "note.pdf",
+      mediaType: "document",
+      mimeType: "application/pdf",
+      size: 4,
+      kind: "document",
+    });
+    await waitFor(() =>
+      expect(learningInteractionsService.createNote).toHaveBeenCalledWith(
+        expect.objectContaining({ attachmentIds: ["server-note-attachment"] }),
+      ),
+    );
+
+    resolveCreate({
+      ...createServerNote("server-note-with-attachment"),
+      attachments: [
+        {
+          id: "server-note-attachment",
+          kind: "document",
+          fileName: "note.pdf",
+          fileUrl: "/uploads/note.pdf",
+          mimeType: "application/pdf",
+          fileSize: 4,
+        },
+      ],
+    });
+    await act(async () => {
+      await request;
+    });
+
+    expect(queryClient.getQueryData<LearningNotesCacheResponse>(key)?.notes[0])
+      .toMatchObject({
+        clientId: "client-note-with-attachment",
+        serverId: "server-note-with-attachment",
+        attachments: [
+          {
+            id: "client-note-attachment",
+            serverId: "server-note-attachment",
+            uploadState: "confirmed",
+          },
+        ],
+      });
   });
 
   it("isolates concurrent out-of-order success and failure", async () => {

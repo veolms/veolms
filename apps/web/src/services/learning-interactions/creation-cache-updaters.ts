@@ -19,6 +19,11 @@ import {
   type LearningThreadCacheResponse,
   type LearningThreadEntity,
 } from "./interaction-entities";
+import {
+  mergeConfirmedInteractionAttachments,
+  type InteractionAttachment,
+  type InteractionAttachmentPatch,
+} from "./attachment-model";
 
 export interface LessonThreadCacheContext {
   courseId: string;
@@ -163,9 +168,14 @@ export function reconcileOptimisticNoteInCaches(
   clientId: string,
   serverNote: LearningNote,
   localSequence: number,
+  localAttachments?: readonly InteractionAttachment[],
 ): void {
   const confirmedNote: LearningNoteEntity = {
     ...serverNote,
+    attachments: mergeConfirmedInteractionAttachments(
+      serverNote.attachments,
+      localAttachments,
+    ),
     id: clientId,
     clientId,
     serverId: serverNote.id,
@@ -205,6 +215,33 @@ export function reconcileOptimisticNoteInCaches(
   });
 
   if (!reconciled) addToCanonicalNoteCache(queryClient, context, confirmedNote);
+}
+
+export function updateOptimisticNoteAttachmentInCaches(
+  queryClient: QueryClient,
+  clientId: string,
+  attachmentClientId: string,
+  patch: InteractionAttachmentPatch,
+): void {
+  forEachNoteCache(queryClient, (old) => {
+    let changed = false;
+    const notes = old.notes.map((note) => {
+      if (getNoteClientId(note) !== clientId || !("attachments" in note)) {
+        return note;
+      }
+      let noteChanged = false;
+      const attachments = (note.attachments ?? []).map((attachment) => {
+        if (getAttachmentClientId(attachment) !== attachmentClientId) {
+          return attachment;
+        }
+        changed = true;
+        noteChanged = true;
+        return { ...attachment, ...patch };
+      });
+      return noteChanged ? { ...note, attachments } : note;
+    });
+    return changed ? { ...old, notes } : old;
+  });
 }
 
 export function removeOptimisticNoteFromCaches(
@@ -396,9 +433,14 @@ export function reconcileOptimisticReplyInCaches(
   parentServerId: string,
   clientId: string,
   serverReply: LearningReply,
+  localAttachments?: readonly InteractionAttachment[],
 ): void {
   const confirmedReply: LearningReplyEntity = {
     ...serverReply,
+    attachments: mergeConfirmedInteractionAttachments(
+      serverReply.attachments,
+      localAttachments,
+    ),
     id: serverReply.id,
     threadId: serverReply.threadId,
     clientId,
@@ -433,6 +475,33 @@ export function reconcileOptimisticReplyInCaches(
       }),
     );
   }
+}
+
+export function updateOptimisticReplyAttachmentInCaches(
+  queryClient: QueryClient,
+  parentId: string,
+  clientId: string,
+  attachmentClientId: string,
+  patch: InteractionAttachmentPatch,
+): void {
+  setReplyCaches(queryClient, parentId, (old) => {
+    if (!old) return old;
+    let changed = false;
+    const replies = old.replies.map((reply) => {
+      if (getReplyClientId(reply) !== clientId) return reply;
+      let replyChanged = false;
+      const attachments = (reply.attachments ?? []).map((attachment) => {
+        if (getAttachmentClientId(attachment) !== attachmentClientId) {
+          return attachment;
+        }
+        changed = true;
+        replyChanged = true;
+        return { ...attachment, ...patch };
+      });
+      return replyChanged ? { ...reply, attachments } : reply;
+    });
+    return changed ? { ...old, replies } : old;
+  });
 }
 
 export function removeOptimisticReplyFromCaches(
@@ -557,9 +626,14 @@ export function reconcileOptimisticThreadInLessonCaches(
   context: LessonThreadCacheContext,
   clientId: string,
   serverThread: LearningThread,
+  localAttachments?: readonly InteractionAttachment[],
 ): void {
   const confirmedThread = {
     ...serverThread,
+    attachments: mergeConfirmedInteractionAttachments(
+      serverThread.attachments,
+      localAttachments,
+    ),
     id: serverThread.id,
     clientId,
     serverId: serverThread.id,
@@ -624,6 +698,33 @@ export function reconcileOptimisticThreadInLessonCaches(
   }
 }
 
+export function updateOptimisticThreadAttachmentInCaches(
+  queryClient: QueryClient,
+  context: LessonThreadCacheContext,
+  clientId: string,
+  attachmentClientId: string,
+  patch: InteractionAttachmentPatch,
+): void {
+  setLessonThreadCaches(queryClient, context, (old) => {
+    if (!old?.threads) return old;
+    let changed = false;
+    const threads = old.threads.map((thread) => {
+      if (getClientEntityId(thread) !== clientId) return thread;
+      let threadChanged = false;
+      const attachments = (thread.attachments ?? []).map((attachment) => {
+        if (getAttachmentClientId(attachment) !== attachmentClientId) {
+          return attachment;
+        }
+        changed = true;
+        threadChanged = true;
+        return { ...attachment, ...patch };
+      });
+      return threadChanged ? { ...thread, attachments } : thread;
+    });
+    return changed ? { ...old, threads } : old;
+  });
+}
+
 export function removeOptimisticThreadFromLessonCaches(
   queryClient: QueryClient,
   context: LessonThreadCacheContext,
@@ -636,4 +737,8 @@ export function removeOptimisticThreadFromLessonCaches(
     );
     return threads.length === old.threads.length ? old : { ...old, threads };
   });
+}
+
+function getAttachmentClientId(attachment: { id: string; clientId?: string }): string {
+  return attachment.clientId ?? attachment.id;
 }

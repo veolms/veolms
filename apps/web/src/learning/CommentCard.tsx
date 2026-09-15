@@ -613,6 +613,7 @@ export function CommentCard({
               <DiscussionMarkdown
                 content={comment.content ?? createDiscussionDraft(comment.text)}
                 label={`${entryLabel} by ${comment.name}`}
+                linkedAttachments={comment.attachments}
                 className="mt-0.5 pr-9 sm:pr-10"
               />
 
@@ -1038,6 +1039,7 @@ function ReplyCard({
                 <DiscussionMarkdown
                   content={reply.content ?? createDiscussionDraft(reply.text)}
                   label={`Reply by ${reply.name}`}
+                  linkedAttachments={reply.attachments}
                   className="mt-0.5 pr-9 sm:pr-10"
                 />
               )}

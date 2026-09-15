@@ -47,12 +47,17 @@ import {
   desiredStateCoordinator,
 } from "../services/learning-interactions";
 import {
+  createClientEntityId,
+  revokeLocalAttachmentPreview,
+  toInteractionAttachment,
+  type LocalComposerAttachment,
+} from "../services/learning-interactions/attachment-model";
+import {
   optimisticDeletionCoordinator,
   useOptimisticDeletion,
 } from "../services/learning-interactions/optimistic-deletion-coordinator";
 import { optimisticEditCoordinator } from "../services/learning-interactions/optimistic-edit-coordinator";
 import { interactionCreationCoordinator } from "../services/learning-interactions/interaction-creation-coordinator";
-import type { LearningThreadAttachmentSummary } from "@veolms/contracts";
 import {
   getClientEntityId,
   getServerEntityId,
@@ -835,39 +840,28 @@ function ThreadSlide({
 
   const handleAddReply = async (
     draft: DiscussionDraft,
-    attachmentIds?: string[],
-    attachments?: DiscussionAttachmentItem[],
+    attachments?: LocalComposerAttachment[],
   ): Promise<boolean> => {
     if (isBackendMode) {
+      const localAttachments = [...(attachments ?? [])];
+      const replyClientId = createClientEntityId("reply");
       const payload = {
         content: draft.markdown || draft.plainText.trim(),
-        attachmentIds:
-          attachmentIds && attachmentIds.length > 0 ? attachmentIds : undefined,
       };
-      const attachmentSummaries: LearningThreadAttachmentSummary[] = (
-        attachments ?? []
-      ).map((attachment) => ({
-        id: attachment.id,
-        fileName: attachment.fileName,
-        fileUrl: attachment.fileUrl,
-        mimeType: attachment.mimeType,
-        fileSize: attachment.fileSize,
-        kind: attachment.kind ?? "document",
-        metadata:
-          attachment.metadata && typeof attachment.metadata === "object"
-            ? (attachment.metadata as Record<string, unknown>)
-            : null,
-      }));
       interactionCreationCoordinator.beginReplyCreation({
         queryClient,
         parentClientId: clientId,
         parentServerId: serverId,
         payload,
-        attachments: attachmentSummaries,
+        clientId: replyClientId,
+        attachments: localAttachments.map(toInteractionAttachment),
+        localAttachments,
         dispatch: (parentServerId, replyPayload) =>
           createReplyMutation.mutateAsync({
             ...replyPayload,
             __serverThreadId: parentServerId,
+            __clientId: replyClientId,
+            __localAttachments: localAttachments,
           }),
         onFailure: onReplyCreateError,
       });
@@ -1265,6 +1259,7 @@ function ThreadRootEntry({
           <DiscussionMarkdown
             content={entry.content ?? createDiscussionDraft(entry.text)}
             label={`Discussion entry by ${entry.name}`}
+            linkedAttachments={entry.attachments}
             className="mt-0.5 max-w-3xl pr-9 sm:pr-10"
           />
           {entry.attachments && entry.attachments.length > 0 ? (
@@ -1527,6 +1522,7 @@ function ThreadReplyEntry({
                 <DiscussionMarkdown
                   content={reply.content ?? createDiscussionDraft(reply.text)}
                   label={`Reply by ${reply.name}`}
+                  linkedAttachments={reply.attachments}
                   className="mt-0.5 max-w-3xl pr-9 sm:pr-10"
                 />
               )}
@@ -1626,8 +1622,7 @@ function ThreadReplyComposer({
   onFocusHandled: (entryId: string | number, requestId: number) => void;
   onSubmit: (
     draft: DiscussionDraft,
-    attachmentIds?: string[],
-    attachments?: DiscussionAttachmentItem[],
+    attachments?: LocalComposerAttachment[],
   ) => Promise<boolean> | boolean;
   courseId?: string;
 }) {
@@ -1636,8 +1631,9 @@ function ThreadReplyComposer({
     createEmptyDiscussionDraft,
   );
   const [replyAttachments, setReplyAttachments] = useState<
-    DiscussionAttachmentItem[]
+    LocalComposerAttachment[]
   >([]);
+  const replyAttachmentsRef = useRef(replyAttachments);
   const [editorController, setEditorController] =
     useState<DiscussionEditorController | null>(null);
   const [formattingState, setFormattingState] =
@@ -1646,8 +1642,22 @@ function ThreadReplyComposer({
   const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
+    replyAttachmentsRef.current = replyAttachments;
+  }, [replyAttachments]);
+
+  useEffect(
+    () => () => {
+      replyAttachmentsRef.current.forEach(revokeLocalAttachmentPreview);
+    },
+    [],
+  );
+
+  useEffect(() => {
     setDraft(createEmptyDiscussionDraft());
-    setReplyAttachments([]);
+    setReplyAttachments((current) => {
+      current.forEach(revokeLocalAttachmentPreview);
+      return [];
+    });
     setComposerKey(0);
     setSubmitError("");
   }, [entry.clientId ?? entry.id]);
@@ -1668,7 +1678,6 @@ function ThreadReplyComposer({
     try {
       const success = await onSubmit(
         draft,
-        replyAttachments.map((a) => a.id),
         replyAttachments,
       );
       if (success) {
@@ -1711,25 +1720,19 @@ function ThreadReplyComposer({
         onChange={setDraft}
         onControllerChange={handleControllerChange}
         onFormattingStateChange={setFormattingState}
-        onAttachmentUploaded={(att) => {
-          setReplyAttachments((prev) => [
-            ...prev,
-            {
-              id: att.id || crypto.randomUUID(),
-              fileName: att.fileName,
-              fileUrl: att.url,
-              mimeType: att.mimeType,
-              fileSize: att.size,
-              kind: att.kind,
-              mediaType: att.mediaType,
-            },
-          ]);
+        onAttachmentError={(message) => setSubmitError(message ?? "")}
+        onAttachmentSelected={(attachment) => {
+          setReplyAttachments((prev) => [...prev, attachment]);
         }}
       />
       <AttachmentComposerPreview
         attachments={replyAttachments}
         onRemove={(id) => {
-          setReplyAttachments((prev) => prev.filter((a) => a.id !== id));
+          setReplyAttachments((prev) => {
+            const attachment = prev.find((item) => item.id === id);
+            if (attachment) revokeLocalAttachmentPreview(attachment);
+            return prev.filter((item) => item.id !== id);
+          });
         }}
       />
       {submitError && (

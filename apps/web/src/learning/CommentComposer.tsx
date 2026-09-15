@@ -18,9 +18,11 @@ import type { DiscussionFormattingState } from "./discussion-editor/commands";
 import type { InteractionCapabilities } from "./discussionFeed";
 import {
   AttachmentComposerPreview,
-  type DiscussionAttachmentItem,
 } from "./discussion-attachments";
-import type { StoredDiscussionAttachment } from "./discussion-editor/image-storage";
+import {
+  revokeLocalAttachmentPreview,
+  type LocalComposerAttachment,
+} from "../services/learning-interactions/attachment-model";
 
 interface CommentComposerProps {
   draft: DiscussionDraft;
@@ -32,8 +34,8 @@ interface CommentComposerProps {
   capabilities?: InteractionCapabilities;
   editing?: boolean;
   isSubmitting?: boolean;
-  attachments?: DiscussionAttachmentItem[];
-  onAttachmentsChange?: (attachments: DiscussionAttachmentItem[]) => void;
+  attachments?: LocalComposerAttachment[];
+  onAttachmentsChange?: (attachments: LocalComposerAttachment[]) => void;
   onDraftChange: (value: DiscussionDraft) => void;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
@@ -71,7 +73,7 @@ export function CommentComposer({
   const [editorResetToken, setEditorResetToken] = useState(0);
   const [formattingState, setFormattingState] =
     useState<DiscussionFormattingState>(EMPTY_FORMATTING_STATE);
-  const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [composerStep, setComposerStep] = useState<"compose" | "publish">(
     "compose",
   );
@@ -79,13 +81,23 @@ export function CommentComposer({
     "forward" | "back"
   >("forward");
   const [internalAttachments, setInternalAttachments] = useState<
-    DiscussionAttachmentItem[]
+    LocalComposerAttachment[]
   >([]);
+  const internalAttachmentsRef = useRef(internalAttachments);
+  useEffect(() => {
+    internalAttachmentsRef.current = internalAttachments;
+  }, [internalAttachments]);
+  useEffect(
+    () => () => {
+      internalAttachmentsRef.current.forEach(revokeLocalAttachmentPreview);
+    },
+    [],
+  );
   const effectiveAttachments = attachmentsProp ?? internalAttachments;
   const setEffectiveAttachments = (
     next:
-      | DiscussionAttachmentItem[]
-      | ((prev: DiscussionAttachmentItem[]) => DiscussionAttachmentItem[]),
+      | LocalComposerAttachment[]
+      | ((prev: LocalComposerAttachment[]) => LocalComposerAttachment[]),
   ) => {
     if (onAttachmentsChangeProp) {
       const resolved =
@@ -96,20 +108,13 @@ export function CommentComposer({
     }
   };
 
-  const handleAttachmentUploaded = (stored: StoredDiscussionAttachment) => {
-    const item: DiscussionAttachmentItem = {
-      id: stored.id || crypto.randomUUID(),
-      fileName: stored.fileName,
-      fileUrl: stored.url,
-      mimeType: stored.mimeType,
-      fileSize: stored.size,
-      kind: stored.kind,
-      mediaType: stored.mediaType,
-    };
-    setEffectiveAttachments((prev) => [...prev, item]);
+  const handleAttachmentSelected = (attachment: LocalComposerAttachment) => {
+    setEffectiveAttachments((prev) => [...prev, attachment]);
   };
 
   const handleRemoveAttachment = (id: string) => {
+    const attachment = effectiveAttachments.find((item) => item.id === id);
+    if (attachment) revokeLocalAttachmentPreview(attachment);
     setEffectiveAttachments((prev) => prev.filter((a) => a.id !== id));
   };
 
@@ -137,7 +142,7 @@ export function CommentComposer({
     setComposerStep("compose");
     setTransitionDirection("back");
     setFormattingState(EMPTY_FORMATTING_STATE);
-    setAttachmentNotice(null);
+    setAttachmentError(null);
     setInternalAttachments([]);
     onAttachmentsChangeProp?.([]);
   };
@@ -189,21 +194,18 @@ export function CommentComposer({
               onChange={onDraftChange}
               onControllerChange={setEditorController}
               onFormattingStateChange={setFormattingState}
-              onAttachmentNotice={setAttachmentNotice}
-              onAttachmentUploaded={handleAttachmentUploaded}
+              onAttachmentError={setAttachmentError}
+              onAttachmentSelected={handleAttachmentSelected}
             />
-            {attachmentNotice && (
-              <div
-                role="status"
-                className="absolute top-15 right-3 left-3 z-10 rounded-lg bg-(--surface-elevated,var(--surface)) px-3 py-2 text-xs text-(--text-secondary) shadow-[0_12px_34px_rgba(0,0,0,0.3),0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)] sm:left-auto sm:max-w-72"
-              >
-                {attachmentNotice}
-              </div>
-            )}
             <AttachmentComposerPreview
               attachments={effectiveAttachments}
               onRemove={handleRemoveAttachment}
             />
+            {attachmentError && (
+              <p role="alert" className="px-3 pb-2 text-xs text-red-500">
+                {attachmentError}
+              </p>
+            )}
           </div>
 
           <div

@@ -43,6 +43,11 @@ import type {
 import { api } from "../../lib/api-client";
 import { requireServerEntityId } from "./interaction-entities";
 
+export interface AttachmentUploadProgress {
+  loaded: number;
+  total?: number;
+}
+
 export const learningInteractionsService = {
   // Threads (Lessons & Assignments)
   listLessonThreads(
@@ -253,10 +258,19 @@ export const learningInteractionsService = {
     return api.post<LearningAttachment>("/attachments/complete", payload);
   },
 
-  uploadAttachmentDirect(file: File): Promise<LearningUploadResponse> {
+  uploadAttachmentDirect(
+    file: File,
+    onProgress?: (progress: AttachmentUploadProgress) => void,
+  ): Promise<LearningUploadResponse> {
     const formData = new FormData();
     formData.append("file", file, file.name);
-    return api.post<LearningUploadResponse>("/attachments/upload", formData);
+    return api.post<LearningUploadResponse>("/attachments/upload", formData, {
+      onUploadProgress: (event) =>
+        onProgress?.({
+          loaded: event.loaded,
+          ...(event.total && event.total > 0 ? { total: event.total } : {}),
+        }),
+    });
   },
 
   // Reporting

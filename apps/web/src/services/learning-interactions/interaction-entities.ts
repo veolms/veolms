@@ -7,6 +7,10 @@ import type {
   LearningThreadAttachmentSummary,
   LearningThread,
 } from "@veolms/contracts";
+import {
+  createClientEntityId,
+  type InteractionAttachment,
+} from "./attachment-model";
 
 export type ClientEntityCreationStatus = "pending" | "confirmed";
 
@@ -21,27 +25,33 @@ export interface ClientEntityIdentity {
   creationStatus: ClientEntityCreationStatus;
 }
 
-export type LearningThreadEntity = Omit<LearningThread, "id"> &
+export type LearningThreadEntity = Omit<LearningThread, "id" | "attachments"> &
   ClientEntityIdentity & {
     /** Compatibility value for existing view-model consumers. */
     id: string;
+    attachments?: InteractionAttachment[];
   };
 
-export type LearningReplyEntity = Omit<LearningReply, "id" | "threadId"> &
+export type LearningReplyEntity = Omit<
+  LearningReply,
+  "id" | "threadId" | "attachments"
+> &
   ClientEntityIdentity & {
     id: string;
     threadId: string;
     parentClientId?: string;
     parentServerId?: string;
     localSequence: number;
+    attachments?: InteractionAttachment[];
   };
 
-export type LearningNoteEntity = Omit<LearningNote, "id"> &
+export type LearningNoteEntity = Omit<LearningNote, "id" | "attachments"> &
   ClientEntityIdentity & {
     /** Compatibility value for existing view-model consumers. */
     id: string;
     localSequence: number;
     authorAvatarUrl?: string;
+    attachments: InteractionAttachment[];
   };
 
 export type LearningNoteCacheItem = LearningNote | LearningNoteEntity;
@@ -127,29 +137,6 @@ export function toLearningThreadEntity(
   };
 }
 
-function createClientId(): string {
-  const randomUuid =
-    typeof globalThis.crypto?.randomUUID === "function"
-      ? globalThis.crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `client-thread-${randomUuid}`;
-}
-
-function createReplyClientId(): string {
-  const randomUuid =
-    typeof globalThis.crypto?.randomUUID === "function"
-      ? globalThis.crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `client-reply-${randomUuid}`;
-}
-
-function createNoteClientId(): string {
-  const randomUuid =
-    typeof globalThis.crypto?.randomUUID === "function"
-      ? globalThis.crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `client-note-${randomUuid}`;
-}
 
 function getOptimisticAuthor() {
   return {
@@ -169,6 +156,8 @@ function getOptimisticPlainText(content: string): string {
 }
 
 export interface OptimisticThreadContext {
+  clientId?: string;
+  attachments?: readonly InteractionAttachment[];
   userId?: string;
   displayName?: string;
   username?: string;
@@ -180,7 +169,7 @@ export function createOptimisticLearningThread(
   payload: CreateLearningThreadRequest,
   context: OptimisticThreadContext = {},
 ): LearningThreadEntity {
-  const clientId = createClientId();
+  const clientId = context.clientId ?? createClientEntityId("thread");
   const now = new Date().toISOString();
   const author = {
     ...getOptimisticAuthor(),
@@ -212,7 +201,7 @@ export function createOptimisticLearningThread(
     likesCount: 0,
     repliesCount: 0,
     tags: payload.tags,
-    attachments: [],
+    attachments: [...(context.attachments ?? [])],
     isLiked: false,
     isBookmarked: false,
     isFollowing: false,
@@ -231,10 +220,11 @@ function getOptimisticReplyPlainText(content: string): string {
 }
 
 export interface OptimisticReplyContext {
+  clientId?: string;
   parentClientId: string;
   parentServerId?: string;
   localSequence: number;
-  attachments?: readonly LearningThreadAttachmentSummary[];
+  attachments?: readonly InteractionAttachment[];
   userId?: string;
   displayName?: string;
   username?: string;
@@ -243,8 +233,9 @@ export interface OptimisticReplyContext {
 }
 
 export interface OptimisticNoteContext {
+  clientId?: string;
   localSequence: number;
-  attachments?: readonly NonNullable<LearningNote["attachments"]>[number][];
+  attachments?: readonly InteractionAttachment[];
   userId?: string;
   displayName?: string;
   username?: string;
@@ -255,7 +246,7 @@ export function createOptimisticLearningNote(
   payload: CreateLearningNoteRequest,
   context: OptimisticNoteContext,
 ): LearningNoteEntity {
-  const clientId = createNoteClientId();
+  const clientId = context.clientId ?? createClientEntityId("note");
   const now = new Date().toISOString();
   const displayName = context.displayName?.trim() || "You";
   const username = context.username?.trim() || "you";
@@ -297,7 +288,7 @@ export function createOptimisticLearningReply(
   payload: CreateLearningReplyRequest,
   context: OptimisticReplyContext,
 ): LearningReplyEntity {
-  const clientId = createReplyClientId();
+  const clientId = context.clientId ?? createClientEntityId("reply");
   const now = new Date().toISOString();
   const author = {
     id: context.userId ?? "optimistic-user",

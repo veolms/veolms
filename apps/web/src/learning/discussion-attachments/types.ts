@@ -1,13 +1,35 @@
+import type { AttachmentUploadState } from "../../services/learning-interactions";
+
 export interface DiscussionAttachmentItem {
   id: string;
+  clientId?: string;
+  serverId?: string;
   fileName: string;
-  fileUrl: string;
+  fileUrl?: string;
+  localPreviewUrl?: string;
   mimeType: string;
   fileSize: number;
   kind?: "image" | "screenshot" | "code" | "document";
   mediaType?: "image" | "video" | "code" | "document";
+  uploadState?: AttachmentUploadState;
+  uploadProgress?: number;
   metadata?: unknown;
 }
+
+export type AttachmentVisualItem = Pick<
+  DiscussionAttachmentItem,
+  | "id"
+  | "clientId"
+  | "fileName"
+  | "fileUrl"
+  | "localPreviewUrl"
+  | "mimeType"
+  | "fileSize"
+  | "kind"
+  | "mediaType"
+  | "uploadState"
+  | "uploadProgress"
+>;
 
 export function formatFileSize(bytes: number): string {
   if (!bytes || bytes <= 0) return "0 B";
@@ -41,4 +63,10 @@ export function getAttachmentCategory(
     return "code";
   }
   return "document";
+}
+
+export function getAttachmentVisualUrl(
+  attachment: AttachmentVisualItem,
+): string | undefined {
+  return attachment.localPreviewUrl ?? attachment.fileUrl;
 }

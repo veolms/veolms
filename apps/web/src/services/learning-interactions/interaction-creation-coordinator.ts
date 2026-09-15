@@ -6,7 +6,6 @@ import type {
   LearningNote,
   LearningReply,
   LearningThread,
-  LearningThreadAttachmentSummary,
 } from "@veolms/contracts";
 import { authStore } from "../../store/auth.store";
 import {
@@ -20,6 +19,12 @@ import {
 } from "./interaction-entities";
 import { isClientEntityId } from "./interaction-entities";
 import {
+  revokeLocalAttachmentPreview,
+  type InteractionAttachment,
+  type InteractionAttachmentPatch,
+  type LocalComposerAttachment,
+} from "./attachment-model";
+import {
   insertOptimisticThreadInLessonCaches,
   reconcileOptimisticThreadInLessonCaches,
   removeOptimisticThreadFromLessonCaches,
@@ -31,6 +36,9 @@ import {
   insertOptimisticNoteInCaches,
   reconcileOptimisticNoteInCaches,
   removeOptimisticNoteFromCaches,
+  updateOptimisticNoteAttachmentInCaches,
+  updateOptimisticReplyAttachmentInCaches,
+  updateOptimisticThreadAttachmentInCaches,
   type NoteCacheContext,
   type LessonThreadCacheContext,
 } from "./creation-cache-updaters";
@@ -43,6 +51,7 @@ export interface ThreadCreationRecord {
   readonly authGeneration: number;
   readonly userId?: string;
   readonly optimisticThread: LearningThreadEntity;
+  readonly localAttachments?: readonly LocalComposerAttachment[];
 }
 
 export interface BeginThreadCreationArgs {
@@ -50,6 +59,7 @@ export interface BeginThreadCreationArgs {
   context: LessonThreadCacheContext;
   payload: CreateLearningThreadRequest;
   author?: OptimisticThreadContext;
+  localAttachments?: readonly LocalComposerAttachment[];
 }
 
 export interface ReplyCreationRecord {
@@ -69,6 +79,7 @@ export interface ReplyCreationRecord {
     payload: CreateLearningReplyRequest,
   ) => Promise<LearningReply>;
   readonly onFailure?: () => void;
+  readonly localAttachments?: readonly LocalComposerAttachment[];
 }
 
 export interface ThreadResolution {
@@ -83,7 +94,9 @@ export interface BeginReplyCreationArgs {
   parentClientId: string;
   parentServerId?: string;
   payload: CreateLearningReplyRequest;
-  attachments?: readonly LearningThreadAttachmentSummary[];
+  clientId?: string;
+  attachments?: readonly InteractionAttachment[];
+  localAttachments?: readonly LocalComposerAttachment[];
   dispatch: ReplyCreationRecord["dispatch"];
   onFailure?: () => void;
 }
@@ -104,13 +117,16 @@ export interface NoteCreationRecord {
     payload: CreateLearningNoteRequest,
   ) => Promise<LearningNote>;
   readonly onFailure?: () => void;
+  readonly localAttachments?: readonly LocalComposerAttachment[];
 }
 
 export interface BeginNoteCreationArgs {
   queryClient: QueryClient;
   context: NoteCacheContext;
   payload: CreateLearningNoteRequest;
-  attachments?: LearningNoteEntity["attachments"];
+  clientId?: string;
+  attachments?: readonly InteractionAttachment[];
+  localAttachments?: readonly LocalComposerAttachment[];
   dispatch: NoteCreationRecord["dispatch"];
   onFailure?: () => void;
 }
@@ -163,7 +179,9 @@ export class InteractionCreationCoordinator {
     queryClient,
     context,
     payload,
+    clientId,
     attachments,
+    localAttachments,
     dispatch,
     onFailure,
   }: BeginNoteCreationArgs): NoteCreationRecord {
@@ -171,6 +189,7 @@ export class InteractionCreationCoordinator {
     const immutablePayload = freezeNotePayload(payload);
     const localSequence = ++this.noteSequence;
     const optimisticNote = createOptimisticLearningNote(immutablePayload, {
+      clientId,
       localSequence,
       attachments,
       userId: currentUser?.id,
@@ -183,6 +202,7 @@ export class InteractionCreationCoordinator {
       payload: immutablePayload,
       context: { ...context },
       optimisticNote,
+      localAttachments,
       authGeneration: authStore.getWriteGeneration(),
       userId: currentUser?.id,
       localSequence,
@@ -214,6 +234,31 @@ export class InteractionCreationCoordinator {
       .sort((left, right) => left.localSequence - right.localSequence);
   }
 
+  updateNoteAttachment(
+    queryClient: QueryClient,
+    clientId: string,
+    attachmentClientId: string,
+    patch: InteractionAttachmentPatch,
+  ): void {
+    const record = this.noteRecords.get(clientId);
+    if (!record || record.status !== "pending") return;
+    const optimisticNote = {
+      ...record.optimisticNote,
+      attachments: patchInteractionAttachments(
+        record.optimisticNote.attachments ?? [],
+        attachmentClientId,
+        patch,
+      ),
+    };
+    this.noteRecords.set(clientId, { ...record, optimisticNote });
+    updateOptimisticNoteAttachmentInCaches(
+      queryClient,
+      clientId,
+      attachmentClientId,
+      patch,
+    );
+  }
+
   confirmNote(
     queryClient: QueryClient,
     clientId: string,
@@ -223,6 +268,7 @@ export class InteractionCreationCoordinator {
     if (!record || record.status !== "pending") return false;
     if (!this.isCurrentAuth(record)) {
       this.noteRecords.delete(clientId);
+      releaseLocalAttachmentPreviews(record.localAttachments);
       return false;
     }
 
@@ -247,7 +293,9 @@ export class InteractionCreationCoordinator {
       clientId,
       serverNote,
       record.localSequence,
+      record.optimisticNote.attachments,
     );
+    releaseLocalAttachmentPreviews(record.localAttachments);
     desiredStateCoordinator.resolvePendingNote(clientId, serverNote);
     return true;
   }
@@ -256,6 +304,7 @@ export class InteractionCreationCoordinator {
     const record = this.noteRecords.get(clientId);
     if (!record || record.status !== "pending") return false;
     this.noteRecords.delete(clientId);
+    releaseLocalAttachmentPreviews(record.localAttachments);
     if (!this.isCurrentAuth(record)) return false;
     desiredStateCoordinator.failPendingNote(clientId);
     removeOptimisticNoteFromCaches(queryClient, record.context, clientId);
@@ -268,6 +317,7 @@ export class InteractionCreationCoordinator {
     context,
     payload,
     author,
+    localAttachments,
   }: BeginThreadCreationArgs): ThreadCreationRecord {
     const currentUser = authStore.getState().user;
     const immutablePayload = freezeThreadPayload(payload);
@@ -286,6 +336,7 @@ export class InteractionCreationCoordinator {
       authGeneration: authStore.getWriteGeneration(),
       userId: currentUser?.id,
       optimisticThread,
+      localAttachments,
     };
 
     this.threadRecords.set(record.clientId, record);
@@ -312,6 +363,32 @@ export class InteractionCreationCoordinator {
       : undefined;
   }
 
+  updateThreadAttachment(
+    queryClient: QueryClient,
+    clientId: string,
+    attachmentClientId: string,
+    patch: InteractionAttachmentPatch,
+  ): void {
+    const record = this.threadRecords.get(clientId);
+    if (!record) return;
+    const optimisticThread = {
+      ...record.optimisticThread,
+      attachments: patchInteractionAttachments(
+        record.optimisticThread.attachments ?? [],
+        attachmentClientId,
+        patch,
+      ),
+    };
+    this.threadRecords.set(clientId, { ...record, optimisticThread });
+    updateOptimisticThreadAttachmentInCaches(
+      queryClient,
+      record.context,
+      clientId,
+      attachmentClientId,
+      patch,
+    );
+  }
+
   confirmThread(
     queryClient: QueryClient,
     clientId: string,
@@ -321,7 +398,10 @@ export class InteractionCreationCoordinator {
     if (!record) return false;
     this.threadRecords.delete(clientId);
 
-    if (!this.isCurrentAuth(record)) return false;
+    if (!this.isCurrentAuth(record)) {
+      releaseLocalAttachmentPreviews(record.localAttachments);
+      return false;
+    }
     this.threadResolutions.set(clientId, {
       clientId,
       status: "confirmed",
@@ -333,7 +413,9 @@ export class InteractionCreationCoordinator {
       record.context,
       clientId,
       serverThread,
+      record.optimisticThread.attachments,
     );
+    releaseLocalAttachmentPreviews(record.localAttachments);
     migrateOptimisticRepliesToServerParent(
       queryClient,
       clientId,
@@ -371,6 +453,7 @@ export class InteractionCreationCoordinator {
     const record = this.threadRecords.get(clientId);
     if (!record) return false;
     this.threadRecords.delete(clientId);
+    releaseLocalAttachmentPreviews(record.localAttachments);
 
     if (!this.isCurrentAuth(record)) return false;
     this.threadResolutions.set(clientId, {
@@ -384,6 +467,7 @@ export class InteractionCreationCoordinator {
     );
     for (const reply of dependentReplies) {
       this.replyRecords.delete(reply.clientId);
+      releaseLocalAttachmentPreviews(reply.localAttachments);
       desiredStateCoordinator.failPendingReply(reply.clientId);
       removeOptimisticReplyFromCaches(
         queryClient,
@@ -405,7 +489,9 @@ export class InteractionCreationCoordinator {
     parentClientId,
     parentServerId,
     payload,
+    clientId,
     attachments,
+    localAttachments,
     dispatch,
     onFailure,
   }: BeginReplyCreationArgs): ReplyCreationRecord {
@@ -417,7 +503,9 @@ export class InteractionCreationCoordinator {
         parentClientId,
         parentServerId,
         payload,
+        clientId,
         attachments,
+        localAttachments,
         dispatch,
         onFailure,
       );
@@ -444,6 +532,7 @@ export class InteractionCreationCoordinator {
     const immutablePayload = freezeReplyPayload(payload);
     const localSequence = ++this.replySequence;
     const optimisticReply = createOptimisticLearningReply(immutablePayload, {
+      clientId,
       parentClientId,
       parentServerId: resolvedParentServerId,
       localSequence,
@@ -460,6 +549,7 @@ export class InteractionCreationCoordinator {
       parentServerId,
       payload: immutablePayload,
       optimisticReply,
+      localAttachments,
       authGeneration: authStore.getWriteGeneration(),
       userId: currentUser?.id,
       localSequence,
@@ -490,12 +580,15 @@ export class InteractionCreationCoordinator {
     parentClientId: string,
     parentServerId: string | undefined,
     payload: CreateLearningReplyRequest,
-    attachments: readonly LearningThreadAttachmentSummary[] | undefined,
+    clientId: string | undefined,
+    attachments: readonly InteractionAttachment[] | undefined,
+    localAttachments: readonly LocalComposerAttachment[] | undefined,
     dispatch: ReplyCreationRecord["dispatch"],
     onFailure: (() => void) | undefined,
   ): ReplyCreationRecord {
     const immutablePayload = freezeReplyPayload(payload);
     const optimisticReply = createOptimisticLearningReply(immutablePayload, {
+      clientId,
       parentClientId,
       parentServerId,
       localSequence: ++this.replySequence,
@@ -507,12 +600,14 @@ export class InteractionCreationCoordinator {
       role: getAuthorRole(currentUser?.roles),
     });
     desiredStateCoordinator.failPendingReply(optimisticReply.clientId);
+    releaseLocalAttachmentPreviews(localAttachments);
     return {
       clientId: optimisticReply.clientId,
       parentClientId,
       parentServerId,
       payload: immutablePayload,
       optimisticReply,
+      localAttachments,
       authGeneration: authStore.getWriteGeneration(),
       userId: currentUser?.id,
       localSequence: optimisticReply.localSequence,
@@ -546,6 +641,39 @@ export class InteractionCreationCoordinator {
       .sort((left, right) => left.localSequence - right.localSequence);
   }
 
+  updateReplyAttachment(
+    queryClient: QueryClient | undefined,
+    clientId: string,
+    attachmentClientId: string,
+    patch: InteractionAttachmentPatch,
+  ): void {
+    const record = this.replyRecords.get(clientId);
+    if (
+      !record ||
+      (record.status !== "pending" && record.status !== "dispatching")
+    ) {
+      return;
+    }
+    const optimisticReply = {
+      ...record.optimisticReply,
+      attachments: patchInteractionAttachments(
+        record.optimisticReply.attachments ?? [],
+        attachmentClientId,
+        patch,
+      ),
+    };
+    this.replyRecords.set(clientId, { ...record, optimisticReply });
+    if (queryClient) {
+      updateOptimisticReplyAttachmentInCaches(
+        queryClient,
+        record.parentServerId ?? record.parentClientId,
+        clientId,
+        attachmentClientId,
+        patch,
+      );
+    }
+  }
+
   confirmReply(
     queryClient: QueryClient | undefined,
     clientId: string,
@@ -556,6 +684,7 @@ export class InteractionCreationCoordinator {
     if (record.status !== "dispatching") return false;
     if (!this.isCurrentAuth(record) || !record.parentServerId) {
       this.replyRecords.delete(clientId);
+      releaseLocalAttachmentPreviews(record.localAttachments);
       return false;
     }
     this.replyRecords.set(clientId, {
@@ -571,8 +700,10 @@ export class InteractionCreationCoordinator {
         record.parentServerId,
         clientId,
         serverReply,
+        record.optimisticReply.attachments,
       );
     }
+    releaseLocalAttachmentPreviews(record.localAttachments);
     return true;
   }
 
@@ -583,6 +714,7 @@ export class InteractionCreationCoordinator {
       return false;
     }
     this.replyRecords.delete(clientId);
+    releaseLocalAttachmentPreviews(record.localAttachments);
     if (!this.isCurrentAuth(record)) return false;
     desiredStateCoordinator.failPendingReply(clientId);
     if (queryClient) {
@@ -634,6 +766,15 @@ export class InteractionCreationCoordinator {
   }
 
   reset(): void {
+    for (const record of this.threadRecords.values()) {
+      releaseLocalAttachmentPreviews(record.localAttachments);
+    }
+    for (const record of this.replyRecords.values()) {
+      releaseLocalAttachmentPreviews(record.localAttachments);
+    }
+    for (const record of this.noteRecords.values()) {
+      releaseLocalAttachmentPreviews(record.localAttachments);
+    }
     this.threadRecords.clear();
     this.replyRecords.clear();
     this.noteRecords.clear();
@@ -652,6 +793,24 @@ export class InteractionCreationCoordinator {
       record.userId === currentUserId
     );
   }
+}
+
+function patchInteractionAttachments(
+  attachments: readonly InteractionAttachment[],
+  attachmentClientId: string,
+  patch: InteractionAttachmentPatch,
+): InteractionAttachment[] {
+  return attachments.map((attachment) =>
+    (attachment.clientId ?? attachment.id) === attachmentClientId
+      ? { ...attachment, ...patch }
+      : attachment,
+  );
+}
+
+function releaseLocalAttachmentPreviews(
+  attachments: readonly LocalComposerAttachment[] | undefined,
+): void {
+  attachments?.forEach(revokeLocalAttachmentPreview);
 }
 
 function getAuthorRole(

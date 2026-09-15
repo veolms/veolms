@@ -16,13 +16,17 @@ import type {
   LearningThreadCacheResponse,
 } from "../../src/services/learning-interactions/interaction-entities";
 import { getClientEntityId } from "../../src/services/learning-interactions/interaction-entities";
-import { useCreateLessonThread } from "../../src/services/learning-interactions/learning-interactions.mutations";
+import {
+  useCreateLessonThread,
+  useCreateReply,
+} from "../../src/services/learning-interactions/learning-interactions.mutations";
 import { learningInteractionsService } from "../../src/services/learning-interactions/learning-interactions.service";
 import {
   getCoursePlayerPath,
   getCoursePlayerThread,
 } from "../../src/learning/coursePlayerNavigation";
 import { adaptLearningThreadToComment } from "../../src/learning/learning-threads.adapter";
+import type { LocalComposerAttachment } from "../../src/services/learning-interactions/attachment-model";
 
 const payload = {
   courseId: "course-1",
@@ -170,6 +174,307 @@ describe("Phase 3A optimistic thread creation", () => {
     expect(confirmed?.[0]?.serverId).toBe(serverThread.id);
     expect(confirmed?.[0]?.creationStatus).toBe("confirmed");
     expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
+  it.each(["comment", "question"] as const)(
+    "keeps a %s attachment local until optimistic creation has started, then creates with uploaded IDs",
+    async (kind) => {
+      const queryClient = createQueryClient();
+      const key = learningInteractionKeys.lessonThreads(
+        payload.courseId,
+        payload.lessonId,
+        { kind: "all", status: "all", sort: "latest", limit: 100 },
+      );
+      queryClient.setQueryData<LearningThreadCacheResponse>(key, {
+        threads: [],
+        nextCursor: null,
+      });
+      const localAttachment: LocalComposerAttachment = {
+        id: `client-attachment-${kind}`,
+        file: new File(["image"], `${kind}.png`, { type: "image/png" }),
+        fileName: `${kind}.png`,
+        mimeType: "image/png",
+        fileSize: 5,
+        kind: "image",
+        mediaType: "image",
+        localPreviewUrl: `blob:${kind}`,
+      };
+      let resolveUpload: (value: any) => void = () => undefined;
+      let reportUploadProgress:
+        | ((event: { loaded: number; total?: number }) => void)
+        | undefined;
+      vi.spyOn(learningInteractionsService, "uploadAttachmentDirect").mockImplementation(
+        (_file, onProgress) =>
+          new Promise((resolve) => {
+            resolveUpload = resolve;
+            reportUploadProgress = onProgress;
+          }),
+      );
+      let resolveCreate: (value: LearningThread) => void = () => undefined;
+      vi.spyOn(learningInteractionsService, "createThread").mockImplementation(
+        () => new Promise((resolve) => {
+          resolveCreate = resolve;
+        }),
+      );
+
+      const { result } = renderHook(
+        () => useCreateLessonThread(payload.courseId, payload.lessonId),
+        { wrapper: createWrapper(queryClient) },
+      );
+      const clientId = `client-thread-${kind}-attachment`;
+      let request!: Promise<LearningThread>;
+      act(() => {
+        request = result.current.mutateAsync({
+          ...payload,
+          kind,
+          __clientId: clientId,
+          __localAttachments: [localAttachment],
+        });
+      });
+
+      await waitFor(() => {
+        const pending = queryClient.getQueryData<LearningThreadCacheResponse>(key)
+          ?.threads[0];
+        expect(pending).toMatchObject({
+          clientId,
+          creationStatus: "pending",
+          attachments: [
+            {
+              id: localAttachment.id,
+              clientId: localAttachment.id,
+              fileUrl: "blob:" + kind,
+              uploadState: "uploading",
+            },
+          ],
+        });
+      });
+      expect(learningInteractionsService.createThread).not.toHaveBeenCalled();
+
+      act(() => reportUploadProgress?.({ loaded: 2, total: 5 }));
+      await waitFor(() => {
+        expect(
+          queryClient.getQueryData<LearningThreadCacheResponse>(key)?.threads[0]
+            ?.attachments?.[0]?.uploadProgress,
+        ).toBe(0.4);
+      });
+
+      resolveUpload({
+        id: `server-attachment-${kind}`,
+        url: `/uploads/${kind}.png`,
+        fileName: `${kind}.png`,
+        mediaType: "image",
+        mimeType: "image/png",
+        size: 5,
+        kind: "image",
+      });
+      await waitFor(() =>
+        expect(learningInteractionsService.createThread).toHaveBeenCalledWith(
+          payload.courseId,
+          payload.lessonId,
+          expect.objectContaining({
+            kind,
+            attachmentIds: [`server-attachment-${kind}`],
+          }),
+        ),
+      );
+
+      resolveCreate({
+        ...createServerThread(`server-thread-${kind}`, payload.content, kind),
+        attachments: [
+          {
+            id: `server-attachment-${kind}`,
+            kind: "image",
+            fileName: `${kind}.png`,
+            fileUrl: `/uploads/${kind}.png`,
+            mimeType: "image/png",
+            fileSize: 5,
+          },
+        ],
+      });
+      await act(async () => {
+        await request;
+      });
+
+      expect(
+        queryClient.getQueryData<LearningThreadCacheResponse>(key)?.threads[0]
+          ?.attachments?.[0],
+      ).toMatchObject({
+        id: localAttachment.id,
+        clientId: localAttachment.id,
+        serverId: `server-attachment-${kind}`,
+        fileUrl: `/uploads/${kind}.png`,
+        uploadState: "confirmed",
+      });
+    },
+  );
+
+  it("keeps an optimistic Reply visible while upload resolves, then creates it with the server attachment ID", async () => {
+    const queryClient = createQueryClient();
+    const parentServerId = "server-parent-with-reply";
+    const key = learningInteractionKeys.threadReplies(parentServerId, undefined);
+    queryClient.setQueryData<LearningRepliesCacheResponse>(key, {
+      replies: [],
+      nextCursor: null,
+    });
+    const localAttachment: LocalComposerAttachment = {
+      id: "client-reply-attachment",
+      file: new File(["reply"], "reply.txt", { type: "text/plain" }),
+      fileName: "reply.txt",
+      mimeType: "text/plain",
+      fileSize: 5,
+      kind: "document",
+      mediaType: "document",
+    };
+    let resolveUpload: (value: any) => void = () => undefined;
+    vi.spyOn(learningInteractionsService, "uploadAttachmentDirect").mockImplementation(
+      () => new Promise((resolve) => {
+        resolveUpload = resolve;
+      }),
+    );
+    let resolveCreate: (value: LearningReply) => void = () => undefined;
+    vi.spyOn(learningInteractionsService, "createReply").mockImplementation(
+      () => new Promise((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+    const { result } = renderHook(() => useCreateReply(), {
+      wrapper: createWrapper(queryClient),
+    });
+    const replyClientId = "client-reply-with-attachment";
+
+    act(() => {
+      interactionCreationCoordinator.beginReplyCreation({
+        queryClient,
+        parentClientId: "client-parent-with-reply",
+        parentServerId,
+        payload: { content: "Reply with an attachment" },
+        clientId: replyClientId,
+        attachments: [
+          {
+            id: localAttachment.id,
+            clientId: localAttachment.id,
+            kind: localAttachment.kind,
+            fileName: localAttachment.fileName,
+            fileUrl: "",
+            mimeType: localAttachment.mimeType,
+            fileSize: localAttachment.fileSize,
+            uploadState: "uploading",
+            uploadProgress: 0,
+          },
+        ],
+        localAttachments: [localAttachment],
+        dispatch: (threadId, replyPayload) =>
+          result.current.mutateAsync({
+            ...replyPayload,
+            __serverThreadId: threadId,
+            __clientId: replyClientId,
+            __localAttachments: [localAttachment],
+          }),
+      });
+    });
+
+    await waitFor(() => {
+      expect(queryClient.getQueryData<LearningRepliesCacheResponse>(key)?.replies[0])
+        .toMatchObject({
+          clientId: replyClientId,
+          creationStatus: "pending",
+          attachments: [{ id: localAttachment.id, uploadState: "uploading" }],
+        });
+    });
+    expect(learningInteractionsService.createReply).not.toHaveBeenCalled();
+
+    resolveUpload({
+      id: "server-reply-attachment",
+      url: "/uploads/reply.txt",
+      fileName: "reply.txt",
+      mediaType: "document",
+      mimeType: "text/plain",
+      size: 5,
+      kind: "document",
+    });
+    await waitFor(() =>
+      expect(learningInteractionsService.createReply).toHaveBeenCalledWith(
+        parentServerId,
+        expect.objectContaining({ attachmentIds: ["server-reply-attachment"] }),
+      ),
+    );
+
+    resolveCreate({
+      ...createServerReply(
+        "server-reply-with-attachment",
+        parentServerId,
+        "Reply with an attachment",
+      ),
+      attachments: [
+        {
+          id: "server-reply-attachment",
+          kind: "document",
+          fileName: "reply.txt",
+          fileUrl: "/uploads/reply.txt",
+          mimeType: "text/plain",
+          fileSize: 5,
+        },
+      ],
+    });
+    await waitFor(() => {
+      expect(queryClient.getQueryData<LearningRepliesCacheResponse>(key)?.replies[0])
+        .toMatchObject({
+          clientId: replyClientId,
+          serverId: "server-reply-with-attachment",
+          attachments: [
+            {
+              id: localAttachment.id,
+              serverId: "server-reply-attachment",
+              uploadState: "confirmed",
+            },
+          ],
+        });
+    });
+  });
+
+  it("removes the optimistic Thread when upload fails before create transport", async () => {
+    const queryClient = createQueryClient();
+    const key = learningInteractionKeys.lessonThreads(
+      payload.courseId,
+      payload.lessonId,
+      { kind: "all", status: "all", sort: "latest", limit: 100 },
+    );
+    queryClient.setQueryData<LearningThreadCacheResponse>(key, {
+      threads: [],
+      nextCursor: null,
+    });
+    vi.spyOn(learningInteractionsService, "uploadAttachmentDirect").mockRejectedValue(
+      new Error("upload failed"),
+    );
+    const createSpy = vi.spyOn(learningInteractionsService, "createThread");
+    const { result } = renderHook(
+      () => useCreateLessonThread(payload.courseId, payload.lessonId),
+      { wrapper: createWrapper(queryClient) },
+    );
+
+    await expect(
+      result.current.mutateAsync({
+        ...payload,
+        __clientId: "client-thread-upload-failure",
+        __localAttachments: [
+          {
+            id: "client-failed-attachment",
+            file: new File(["failed"], "failed.pdf", {
+              type: "application/pdf",
+            }),
+            fileName: "failed.pdf",
+            mimeType: "application/pdf",
+            fileSize: 6,
+            kind: "document",
+            mediaType: "document",
+          },
+        ],
+      }),
+    ).rejects.toThrow("upload failed");
+
+    expect(queryClient.getQueryData<LearningThreadCacheResponse>(key)?.threads)
+      .toEqual([]);
+    expect(createSpy).not.toHaveBeenCalled();
   });
 
   it.each(["comment", "question"] as const)(

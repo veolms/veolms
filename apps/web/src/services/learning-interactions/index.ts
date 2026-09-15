@@ -10,3 +10,4 @@ export * from "./interaction-creation-coordinator";
 export * from "./optimistic-edit-coordinator";
 export * from "./optimistic-deletion-coordinator";
 export * from "./edit-cache-updaters";
+export * from "./attachment-model";

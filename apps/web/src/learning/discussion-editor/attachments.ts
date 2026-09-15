@@ -1,16 +1,14 @@
-import type { DiscussionEditorCommands } from "./commands";
 import {
-  localDiscussionAttachmentStorage,
-  type DiscussionAttachmentStorage,
-  type StoredDiscussionAttachment,
-} from "./image-storage";
+  createLocalComposerAttachment,
+  type LocalComposerAttachment,
+} from "../../services/learning-interactions";
 
 const MAX_ATTACHMENT_BYTES = 50_000_000;
 
 export interface DiscussionAttachmentResult {
-  inserted: boolean;
+  accepted: boolean;
   message: string | null;
-  attachment?: StoredDiscussionAttachment;
+  attachment?: LocalComposerAttachment;
 }
 
 const ALLOWED_MIME_PATTERNS = [
@@ -71,42 +69,17 @@ export function getClipboardMediaFiles(
   return Array.from(clipboardData.files);
 }
 
-export async function insertDiscussionAttachment(
-  commands: DiscussionEditorCommands,
+export function selectDiscussionAttachment(
   file: File,
-  storage: DiscussionAttachmentStorage = localDiscussionAttachmentStorage,
-): Promise<DiscussionAttachmentResult> {
+): DiscussionAttachmentResult {
   const validationMessage = validateAttachment(file);
-  if (validationMessage) return { inserted: false, message: validationMessage };
+  if (validationMessage) return { accepted: false, message: validationMessage };
 
-  try {
-    const stored = await storage.upload(file);
-    const escapedName = escapeMarkdownLabel(
-      file.name || stored.fileName || "attachment",
-    );
-
-    const isMedia =
-      stored.mediaType === "image" ||
-      stored.mediaType === "video" ||
-      file.type.startsWith("image/") ||
-      file.type.startsWith("video/");
-
-    if (isMedia) {
-      const isVideo =
-        stored.mediaType === "video" || file.type.startsWith("video/");
-      const alt = isVideo ? `video: ${escapedName}` : escapedName;
-      commands.insertMarkdown(`\n![${alt}](${stored.url})\n`);
-    } else {
-      commands.insertMarkdown(`\n[${escapedName}](${stored.url})\n`);
-    }
-
-    return { inserted: true, message: null, attachment: stored };
-  } catch {
-    return {
-      inserted: false,
-      message: `Failed to upload "${file.name}". Please try again.`,
-    };
-  }
+  return {
+    accepted: true,
+    message: null,
+    attachment: createLocalComposerAttachment(file),
+  };
 }
 
 function validateAttachment(file: File): string | null {
@@ -125,8 +98,4 @@ function validateAttachment(file: File): string | null {
   }
 
   return null;
-}
-
-function escapeMarkdownLabel(value: string) {
-  return value.replace(/[\\\[\]]/g, "\\$&");
 }

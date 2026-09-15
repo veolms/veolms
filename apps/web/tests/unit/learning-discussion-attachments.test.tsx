@@ -135,6 +135,51 @@ describe("DiscussionAttachmentsList Component", () => {
     expect(downloadLink).toHaveAttribute("download", "diagram.png");
   });
 
+  it("opens images in the in-app viewer rather than a new browser tab", () => {
+    render(<DiscussionAttachmentsList attachments={[sampleAttachments[0]!]} />);
+
+    const imageButton = screen.getByRole("button", {
+      name: "View image diagram.png",
+    });
+    expect(imageButton.closest("a")).toBeNull();
+    fireEvent.click(imageButton);
+    expect(screen.getByTestId("discussion-image-viewer")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close image preview" }));
+    expect(screen.queryByRole("button", { name: "Close image preview" })).toBeNull();
+  });
+
+  it("closes the image viewer on the native Escape/cancel event", () => {
+    render(<DiscussionAttachmentsList attachments={[sampleAttachments[0]!]} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "View image diagram.png" }),
+    );
+    fireEvent.cancel(screen.getByTestId("discussion-image-viewer"));
+    expect(screen.queryByRole("button", { name: "Close image preview" })).toBeNull();
+  });
+
+  it("uses the attachment surface for upload progress without a numeric bar", () => {
+    render(
+      <DiscussionAttachmentsList
+        attachments={[
+          {
+            ...sampleAttachments[0]!,
+            id: "client-image",
+            clientId: "client-image",
+            localPreviewUrl: "blob:preview",
+            uploadState: "uploading",
+            uploadProgress: 0.4,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId("attachment-upload-treatment")).toHaveStyle({
+      width: "60%",
+    });
+    expect(screen.queryByText("40%")).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+  });
+
   it("renders videos with video element and download link", () => {
     render(<DiscussionAttachmentsList attachments={[sampleAttachments[1]!]} />);
 
@@ -237,19 +282,16 @@ describe("AttachmentComposerPreview Component", () => {
     expect(onRemove).toHaveBeenCalledWith("a-1");
   });
 
-  it("shows uploading spinner when isUploading is true", () => {
+  it("does not render a separate upload notice in the composer", () => {
     render(
       <AttachmentComposerPreview
         attachments={[]}
         onRemove={() => {}}
-        isUploading={true}
       />,
     );
 
-    expect(
-      screen.getByTestId("composer-uploading-indicator"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Uploading attachment…")).toBeInTheDocument();
+    expect(screen.queryByTestId("composer-uploading-indicator")).toBeNull();
+    expect(screen.queryByText("Uploading attachment…")).toBeNull();
   });
 });
 

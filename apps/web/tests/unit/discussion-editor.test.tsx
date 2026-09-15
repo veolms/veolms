@@ -7,10 +7,12 @@ import { describe, expect, it, vi } from "vitest";
 import { CommentComposer } from "../../src/learning/CommentComposer.tsx";
 import { CommentFormattingToolbar } from "../../src/learning/CommentFormattingToolbar.tsx";
 import { DiscussionMarkdown } from "../../src/learning/discussion-editor/DiscussionMarkdown.tsx";
-import { insertDiscussionAttachment } from "../../src/learning/discussion-editor/attachments.ts";
+import { selectDiscussionAttachment } from "../../src/learning/discussion-editor/attachments.ts";
 import { htmlToDiscussionMarkdown } from "../../src/learning/discussion-editor/clipboard.ts";
 import { createDiscussionEditorCommands } from "../../src/learning/discussion-editor/commands.ts";
 import { createDiscussionDraft } from "../../src/learning/discussion-editor/types.ts";
+import { revokeLocalAttachmentPreview } from "../../src/services/learning-interactions/attachment-model.ts";
+import { learningInteractionsService } from "../../src/services/learning-interactions/learning-interactions.service.ts";
 
 describe("discussion Markdown editor commands", () => {
   it.each([
@@ -277,42 +279,85 @@ interface Course {
       ),
     ).toBe("## Plan\n\n**Important** [link](https://example.com)\n\n-   One");
   });
-});
 
-describe("discussion attachment storage", () => {
-  it("uploads an image to a stable URL and inserts canonical Markdown", async () => {
-    const insertMarkdown = vi.fn();
-    const result = await insertDiscussionAttachment(
-      createCommandStub(insertMarkdown),
-      new File(["image"], "diagram.png", { type: "image/png" }),
-      {
-        upload: vi.fn(async (file) => ({
-          url: "/api/v1/dev/discussion-uploads/stable.png",
-          fileName: "stable.png",
-          mediaType: "image" as const,
-          mimeType: file.type,
-          size: file.size,
-        })),
-      },
+  it("suppresses only legacy generated attachment Markdown matched by URL and label", () => {
+    render(
+      <DiscussionMarkdown
+        label="Legacy attachment comment"
+        content={createDiscussionDraft(
+          "![diagram.png](/uploads/diagram.png)\n\n[diagram.png](/uploads/diagram.png)\n\n[Keep this link](https://example.com)",
+        )}
+        linkedAttachments={[
+          {
+            id: "attachment-1",
+            fileName: "diagram.png",
+            fileUrl: "/uploads/diagram.png",
+            mimeType: "image/png",
+            fileSize: 1,
+            kind: "image",
+          },
+        ]}
+      />,
     );
 
-    expect(result).toMatchObject({ inserted: true, message: null });
-    expect(insertMarkdown).toHaveBeenCalledWith(
-      "\n![diagram.png](/api/v1/dev/discussion-uploads/stable.png)\n",
+    expect(screen.queryByRole("img", { name: "diagram.png" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "diagram.png" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Keep this link" })).toHaveAttribute(
+      "href",
+      "https://example.com",
     );
   });
+});
 
-  it("does not insert a broken URL when upload fails", async () => {
-    const insertMarkdown = vi.fn();
-    const result = await insertDiscussionAttachment(
-      createCommandStub(insertMarkdown),
-      new File(["image"], "diagram.png", { type: "image/png" }),
-      { upload: vi.fn(async () => Promise.reject(new Error("offline"))) },
+describe("local discussion attachment selection", () => {
+  it("keeps an image local without changing editor content", () => {
+    const file = new File(["image"], "diagram.png", { type: "image/png" });
+    const result = selectDiscussionAttachment(file);
+
+    expect(result).toMatchObject({ accepted: true, message: null });
+    expect(result.attachment?.file).toBe(file);
+    expect(result.attachment?.fileName).toBe("diagram.png");
+  });
+
+  it("rejects unsupported files before they enter local composer state", () => {
+    const result = selectDiscussionAttachment(
+      new File(["binary"], "payload.exe", {
+        type: "application/octet-stream",
+      }),
     );
 
-    expect(result.inserted).toBe(false);
-    expect(result.message).toMatch(/Failed to upload|could not be uploaded/i);
-    expect(insertMarkdown).not.toHaveBeenCalled();
+    expect(result.accepted).toBe(false);
+    expect(result.message).toMatch(/supported image, video, document, or code/i);
+  });
+
+  it.each([
+    ["image", "diagram.png", "image/png"],
+    ["video", "walkthrough.mp4", "video/mp4"],
+    ["document", "outline.pdf", "application/pdf"],
+  ])("selects a %s without an upload request or generated Markdown", (_kind, name, type) => {
+    const uploadSpy = vi.spyOn(learningInteractionsService, "uploadAttachmentDirect");
+    const result = selectDiscussionAttachment(new File(["local"], name, { type }));
+
+    expect(result.accepted).toBe(true);
+    expect(uploadSpy).not.toHaveBeenCalled();
+    expect(result.attachment?.fileName).toBe(name);
+    expect(result.attachment?.file).toBeInstanceOf(File);
+  });
+
+  it("creates and revokes local media previews without transport", () => {
+    const createObjectURL = vi.fn(() => "blob:local-preview");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
+
+    const result = selectDiscussionAttachment(
+      new File(["image"], "preview.png", { type: "image/png" }),
+    );
+    expect(result.attachment?.localPreviewUrl).toBe("blob:local-preview");
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+
+    revokeLocalAttachmentPreview(result.attachment!);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:local-preview");
+    vi.unstubAllGlobals();
   });
 });
 
@@ -362,8 +407,8 @@ function createEditorControllerStub() {
   return {
     ...createCommandStub(vi.fn()),
     attach: vi.fn(async () => ({
-      inserted: true,
-      message: "Attachment uploaded.",
+      accepted: true,
+      message: null,
     })),
     getMarkdown: vi.fn(() => ""),
   };

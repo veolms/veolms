@@ -6,25 +6,24 @@ import { ImageIcon as ImageIcon } from "@phosphor-icons/react/Image";
 import { VideoCameraIcon as VideoCamera } from "@phosphor-icons/react/VideoCamera";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import {
-  type DiscussionAttachmentItem,
+  type AttachmentVisualItem,
   formatFileSize,
   getAttachmentCategory,
+  getAttachmentVisualUrl,
 } from "./types";
 
 interface AttachmentComposerPreviewProps {
-  attachments: DiscussionAttachmentItem[];
+  attachments: readonly AttachmentVisualItem[];
   onRemove: (id: string) => void;
-  isUploading?: boolean;
   className?: string;
 }
 
 export function AttachmentComposerPreview({
   attachments,
   onRemove,
-  isUploading = false,
   className = "",
 }: AttachmentComposerPreviewProps) {
-  if (attachments.length === 0 && !isUploading) {
+  if (attachments.length === 0) {
     return null;
   }
 
@@ -38,6 +37,7 @@ export function AttachmentComposerPreview({
           attachment.mimeType,
           attachment.kind,
         );
+        const visualUrl = getAttachmentVisualUrl(attachment);
         const isPdf =
           attachment.mimeType === "application/pdf" ||
           attachment.fileName.toLowerCase().endsWith(".pdf");
@@ -46,12 +46,28 @@ export function AttachmentComposerPreview({
           <div
             key={attachment.id}
             data-testid="composer-attachment-item"
-            className="flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] py-1.5 pr-2 pl-2.5 text-xs text-(--text) shadow-xs transition-colors"
+            className="flex max-w-full items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] py-1.5 pr-2 pl-2.5 text-xs text-(--text) shadow-xs transition-colors"
           >
-            {category === "image" ? (
-              <ImageIcon size={16} className="shrink-0 text-amber-500" />
+            {category === "image" && visualUrl ? (
+              <img
+                src={visualUrl}
+                alt=""
+                className="h-12 w-16 shrink-0 rounded-md bg-black/5 object-cover dark:bg-white/5"
+              />
             ) : category === "video" ? (
-              <VideoCamera size={16} className="shrink-0 text-purple-500" />
+              visualUrl ? (
+                <video
+                  src={visualUrl}
+                  muted
+                  preload="metadata"
+                  className="h-12 w-16 shrink-0 rounded-md bg-black object-cover"
+                  aria-label={`Video attachment: ${attachment.fileName}`}
+                />
+              ) : (
+                <VideoCamera size={16} className="shrink-0 text-purple-500" />
+              )
+            ) : category === "image" ? (
+              <ImageIcon size={16} className="shrink-0 text-amber-500" />
             ) : isPdf ? (
               <FilePdf size={16} className="shrink-0 text-red-500" />
             ) : category === "code" ? (
@@ -80,15 +96,6 @@ export function AttachmentComposerPreview({
           </div>
         );
       })}
-      {isUploading && (
-        <div
-          data-testid="composer-uploading-indicator"
-          className="flex items-center gap-2 rounded-lg border border-dashed border-[color-mix(in_srgb,var(--accent)_40%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] px-3 py-1.5 text-xs text-(--accent)"
-        >
-          <span className="size-3 animate-spin rounded-full border-2 border-(--accent) border-t-transparent" />
-          <span>Uploading attachment…</span>
-        </div>
-      )}
     </div>
   );
 }

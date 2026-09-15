@@ -8,6 +8,7 @@ import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { DiscussionContent } from "./types";
+import type { DiscussionAttachmentItem } from "../discussion-attachments";
 
 const MENTION_PATTERN = /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,30})(?=[^A-Za-z0-9_]|$)/g;
 
@@ -93,14 +94,30 @@ export function highlightMentionsInNode(node: React.ReactNode): React.ReactNode 
 interface DiscussionMarkdownProps {
   content: DiscussionContent;
   label: string;
+  /** Linked attachments allow safe suppression of legacy generated Markdown. */
+  linkedAttachments?: readonly DiscussionAttachmentItem[];
   className?: string;
 }
 
 export function DiscussionMarkdown({
   content,
   label,
+  linkedAttachments,
   className = "",
 }: DiscussionMarkdownProps) {
+  const isGeneratedAttachmentMarkdown = (
+    url: string | undefined,
+    label: string | undefined,
+  ) =>
+    Boolean(
+      url &&
+        label &&
+        linkedAttachments?.some(
+          (attachment) =>
+            attachment.fileUrl === url && attachment.fileName === label,
+        ),
+    );
+
   return (
     <div
       role="document"
@@ -112,16 +129,20 @@ export function DiscussionMarkdown({
         skipHtml
         urlTransform={safeMarkdownUrl}
         components={{
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              target={href?.startsWith("#") ? undefined : "_blank"}
-              rel={href?.startsWith("#") ? undefined : "noopener noreferrer"}
-              className="font-medium text-(--accent-ink,var(--accent)) underline decoration-[color-mix(in_srgb,var(--accent)_45%,transparent)] underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-            >
-              {children}
-            </a>
-          ),
+          a: ({ href, children }) => {
+            const linkLabel = flattenMarkdownText(children);
+            if (isGeneratedAttachmentMarkdown(href, linkLabel)) return null;
+            return (
+              <a
+                href={href}
+                target={href?.startsWith("#") ? undefined : "_blank"}
+                rel={href?.startsWith("#") ? undefined : "noopener noreferrer"}
+                className="font-medium text-(--accent-ink,var(--accent)) underline decoration-[color-mix(in_srgb,var(--accent)_45%,transparent)] underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+              >
+                {children}
+              </a>
+            );
+          },
           blockquote: ({ children }) => (
             <blockquote className="my-3 border-l-3 border-(--accent) pl-4 text-(--muted)">
               {highlightMentionsInNode(children)}
@@ -159,6 +180,12 @@ export function DiscussionMarkdown({
           ),
           img: ({ src, alt }) => {
             if (!src) return null;
+            const attachmentLabel = alt?.toLowerCase().startsWith("video:")
+              ? alt.slice(6).trim()
+              : alt;
+            if (isGeneratedAttachmentMarkdown(src, attachmentLabel)) {
+              return null;
+            }
             if (alt?.toLowerCase().startsWith("video:")) {
               return (
                 <video
@@ -214,6 +241,19 @@ export function DiscussionMarkdown({
       </ReactMarkdown>
     </div>
   );
+}
+
+function flattenMarkdownText(node: React.ReactNode): string | undefined {
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (Array.isArray(node)) {
+    const parts = node
+      .map(flattenMarkdownText)
+      .filter((part): part is string => part !== undefined);
+    return parts.length > 0 ? parts.join("") : undefined;
+  }
+  return undefined;
 }
 
 interface HighlightedCodeBlockProps {

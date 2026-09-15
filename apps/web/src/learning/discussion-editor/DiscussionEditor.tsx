@@ -20,16 +20,16 @@ import {
   type DiscussionEditorCommands,
   type DiscussionFormattingState,
 } from "./commands";
-import { insertDiscussionAttachment } from "./attachments";
+import { selectDiscussionAttachment } from "./attachments";
 import { createDiscussionDraft, type DiscussionDraft } from "./types";
 import "./atomic-editor.css";
 import {
   DISCUSSION_ATTACHMENTS_ENABLED,
-  type StoredDiscussionAttachment,
 } from "./image-storage";
+import type { LocalComposerAttachment } from "../../services/learning-interactions";
 
 export interface DiscussionEditorController extends DiscussionEditorCommands {
-  attach(file: File): Promise<{ inserted: boolean; message: string | null }>;
+  attach(file: File): Promise<{ accepted: boolean; message: string | null }>;
   getMarkdown(): string;
 }
 
@@ -48,8 +48,8 @@ interface DiscussionEditorProps {
   onChange: (draft: DiscussionDraft) => void;
   onControllerChange?: (controller: DiscussionEditorController | null) => void;
   onFormattingStateChange?: (state: DiscussionFormattingState) => void;
-  onAttachmentNotice?: (message: string | null) => void;
-  onAttachmentUploaded?: (attachment: StoredDiscussionAttachment) => void;
+  onAttachmentError?: (message: string | null) => void;
+  onAttachmentSelected?: (attachment: LocalComposerAttachment) => void;
 }
 
 export function DiscussionEditor({
@@ -67,8 +67,8 @@ export function DiscussionEditor({
   onChange,
   onControllerChange,
   onFormattingStateChange,
-  onAttachmentNotice,
-  onAttachmentUploaded,
+  onAttachmentError,
+  onAttachmentSelected,
 }: DiscussionEditorProps) {
   const atomicHandleRef = useRef<AtomicCodeMirrorEditorHandle | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -76,8 +76,8 @@ export function DiscussionEditor({
   const onChangeRef = useLatest(onChange);
   const onControllerChangeRef = useLatest(onControllerChange);
   const onFormattingStateChangeRef = useLatest(onFormattingStateChange);
-  const onAttachmentNoticeRef = useLatest(onAttachmentNotice);
-  const onAttachmentUploadedRef = useLatest(onAttachmentUploaded);
+  const onAttachmentErrorRef = useLatest(onAttachmentError);
+  const onAttachmentSelectedRef = useLatest(onAttachmentSelected);
   const [commands] = useState(() =>
     createDiscussionEditorCommands(() => viewRef.current),
   );
@@ -88,19 +88,18 @@ export function DiscussionEditor({
       attach: async (file) => {
         if (!DISCUSSION_ATTACHMENTS_ENABLED) {
           const message = "Attachments are not available in this deployment.";
-          onAttachmentNoticeRef.current?.(message);
-          return { inserted: false, message };
+          onAttachmentErrorRef.current?.(message);
+          return { accepted: false, message };
         }
-        onAttachmentNoticeRef.current?.("Uploading attachment…");
-        const result = await insertDiscussionAttachment(commands, file);
-        onAttachmentNoticeRef.current?.(result.message);
-        if (result.inserted && result.attachment) {
-          onAttachmentUploadedRef.current?.(result.attachment);
+        const result = selectDiscussionAttachment(file);
+        onAttachmentErrorRef.current?.(result.message);
+        if (result.accepted && result.attachment) {
+          onAttachmentSelectedRef.current?.(result.attachment);
         }
         return result;
       },
     }),
-    [commands, onAttachmentNoticeRef, onAttachmentUploadedRef],
+    [commands, onAttachmentErrorRef, onAttachmentSelectedRef],
   );
 
   const mentionExtensions = useMemo(() => {
