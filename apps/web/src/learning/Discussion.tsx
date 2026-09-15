@@ -66,6 +66,7 @@ import {
   useUpdateThread,
   useUserNotes,
 } from "../services/learning-interactions";
+import { optimisticEditCoordinator } from "../services/learning-interactions/optimistic-edit-coordinator";
 import {
   getClientEntityId,
   getServerEntityId,
@@ -515,10 +516,6 @@ function DiscussionInner({
     return "Student";
   }, [currentUser?.roles]);
 
-  const isSubmitting =
-    updateNoteMutation.isPending ||
-    updateThreadMutation.isPending;
-
   const backendNotes = useMemo<Comment[]>(() => {
     if (!courseId || !lessonId || !capabilities.allowNotes || !notesData?.notes)
       return [];
@@ -655,7 +652,6 @@ function DiscussionInner({
   const canSubmitDraft =
     draftHasContent &&
     !draftIsTooLong &&
-    !isSubmitting &&
     (isBackendMode ? Boolean(courseId) : true);
 
   useEffect(() => {
@@ -902,15 +898,41 @@ function DiscussionInner({
           setNotice("This note is still being posted.");
           return false;
         }
+        const noteClientId = note
+          ? getClientEntityId(note)
+          : String(editingEntry.id);
+        if (optimisticEditCoordinator.isEditing("note", noteClientId)) {
+          setNotice("This note is already being updated.");
+          return false;
+        }
+        const baseline = {
+          content: note?.content?.markdown ?? note?.text ?? "",
+          plainText: note?.content?.plainText ?? note?.text ?? "",
+          visibility: note?.visibility,
+        };
+        const optimistic = {
+          content: activeDraft.markdown,
+          plainText: activeDraft.plainText,
+          visibility: activeVisibility,
+        };
         try {
-          await updateNoteMutation.mutateAsync({
+          const request = updateNoteMutation.mutateAsync({
             noteId: noteServerId,
             payload: {
               content: activeDraft.markdown,
+              visibility: activeVisibility,
+            },
+            __optimistic: {
+              clientId: noteClientId,
+              serverId: noteServerId,
+              baseline,
+              optimistic,
             },
           });
           setEditingEntry(null);
           setNotice("");
+          onLocallyAccepted?.();
+          await request;
           return true;
         } catch (error) {
           setNotice("Failed to update note. Please try again.");
@@ -965,20 +987,51 @@ function DiscussionInner({
         submittedVisibility === "private" ? "public" : submittedVisibility;
 
       if (editingEntry) {
+        const thread = combinedEntries.find(
+          (entry) => getClientEntityId(entry) === String(editingEntry.id),
+        );
+        const threadServerId = thread
+          ? getServerEntityId(thread)
+          : undefined;
+        if (!threadServerId) {
+          setNotice("This discussion entry is still being posted.");
+          return false;
+        }
+        const threadClientId = thread
+          ? getClientEntityId(thread)
+          : String(editingEntry.id);
+        if (optimisticEditCoordinator.isEditing("thread", threadClientId)) {
+          setNotice("This discussion entry is already being updated.");
+          return false;
+        }
+        const baseline = {
+          content: thread?.content?.markdown ?? thread?.text ?? "",
+          plainText: thread?.content?.plainText ?? thread?.text ?? "",
+          visibility: thread?.visibility,
+        };
+        const optimistic = {
+          content: activeDraft.markdown,
+          plainText: activeDraft.plainText,
+          visibility: threadVisibility,
+        };
         try {
-          await updateThreadMutation.mutateAsync({
-            threadId: getServerEntityId(
-              combinedEntries.find(
-                (entry) => getClientEntityId(entry) === String(editingEntry.id),
-              ) ?? { id: editingEntry.id },
-            )!,
+          const request = updateThreadMutation.mutateAsync({
+            threadId: threadServerId,
             payload: {
               content: activeDraft.markdown,
               visibility: threadVisibility,
             },
+            __optimistic: {
+              clientId: threadClientId,
+              serverId: threadServerId,
+              baseline,
+              optimistic,
+            },
           });
           setEditingEntry(null);
           setNotice("");
+          onLocallyAccepted?.();
+          await request;
           return true;
         } catch (error) {
           setNotice("Failed to update discussion entry. Please try again.");
@@ -1165,6 +1218,11 @@ function DiscussionInner({
   const beginEditingEntry = (entry: Comment) => {
     if (isBackendMode && !getServerEntityId(entry)) {
       setNotice("This discussion entry is still being posted.");
+      return;
+    }
+    const editKind = entry.entryKind === "note" ? "note" : "thread";
+    if (optimisticEditCoordinator.isEditing(editKind, getClientEntityId(entry))) {
+      setNotice("This discussion entry is already being updated.");
       return;
     }
     const entryKind =
@@ -1538,7 +1596,6 @@ function DiscussionInner({
         draftIsTooLong={draftIsTooLong}
         draftAttachmentCount={draftAttachmentCount}
         canSubmitDraft={canSubmitDraft}
-        isSubmitting={isSubmitting}
         attachments={composerAttachments}
         onAttachmentsChange={setComposerAttachments}
         isNotesLoading={isNotesLoading}
@@ -1630,6 +1687,9 @@ function DiscussionInner({
         onToggleLockThread={handleToggleLockThread}
         onToggleBookmark={handleToggleBookmark}
         onToggleFollow={handleToggleFollow}
+        onReplyEditFailure={() =>
+          setNotice("Failed to update reply. Please try again.")
+        }
         courseId={courseId}
       />
       <DiscussionThreadPanel
@@ -1693,6 +1753,9 @@ function DiscussionInner({
             message: "Couldn't post your reply. Please try again.",
             type: "error",
           })
+        }
+        onReplyEditError={() =>
+          setNotice("Failed to update reply. Please try again.")
         }
       />
       <DiscussionReportDialog
@@ -1814,6 +1877,7 @@ interface ThreadSurfaceProps {
     threadId: string | number,
     following: boolean,
   ) => Promise<boolean> | void;
+  onReplyEditFailure?: () => void;
   courseId?: string;
 }
 
@@ -1866,6 +1930,7 @@ function ThreadSurface({
   onToggleLockThread,
   onToggleBookmark,
   onToggleFollow,
+  onReplyEditFailure,
   courseId,
 }: ThreadSurfaceProps) {
   const isPhone = usePhoneComposerLayout();
@@ -2237,6 +2302,7 @@ function ThreadSurface({
                 onLike={onLike}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                onEditFailure={onReplyEditFailure}
                 onReport={onReport}
                 onOpenThread={onOpenThread}
                 isBackendMode={isBackendMode}

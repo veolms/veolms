@@ -107,6 +107,7 @@ interface CommentCardProps {
   onOpenThread?: (id: string | number, focusComposer?: boolean) => void;
   onEdit?: (comment: Comment) => void;
   onDelete?: (id: string | number) => void;
+  onEditFailure?: () => void;
   onReport?: (
     target:
       | {
@@ -147,6 +148,7 @@ export function CommentCard({
   onOpenThread,
   onEdit = () => undefined,
   onDelete = () => undefined,
+  onEditFailure = () => undefined,
   onReport = () => undefined,
   onToggleAcceptReply,
   onToggleLockThread,
@@ -289,14 +291,27 @@ export function CommentCard({
         (candidate) => getClientEntityId(candidate) === String(replyId),
       );
       const serverReplyId = reply ? getServerEntityId(reply) : undefined;
-      if (!serverReplyId) return false;
+      if (!reply || !serverReplyId) return false;
       try {
-        await updateReplyMutation.mutateAsync({
+        const request = updateReplyMutation.mutateAsync({
           replyId: serverReplyId,
           payload: {
             content: draft.markdown || draft.plainText.trim(),
           },
+          __optimistic: {
+            clientId: getClientEntityId(reply),
+            serverId: serverReplyId,
+            baseline: {
+              content: reply.content?.markdown ?? reply.text,
+              plainText: reply.content?.plainText ?? reply.text,
+            },
+            optimistic: {
+              content: draft.markdown || draft.plainText.trim(),
+              plainText: draft.plainText,
+            },
+          },
         });
+        void request.catch(() => onEditFailure());
         return true;
       } catch {
         return false;
@@ -506,6 +521,7 @@ export function CommentCard({
                   name={comment.name}
                   kind={entryKind}
                   isOwn={Boolean(comment.isOwn)}
+                  canEdit={!isBackendMode || Boolean(serverId)}
                   onEdit={() => onEdit(comment)}
                   onShare={() =>
                     serverId
@@ -910,6 +926,7 @@ function ReplyCard({
                   name={reply.name}
                   kind="reply"
                   isOwn={Boolean(reply.isOwn)}
+                  canEdit={!isBackendMode || Boolean(getServerEntityId(reply))}
                   canAcceptAnswer={isQuestion && canAcceptAnswer && canAcceptReply}
                   isAccepted={Boolean(reply.isAccepted)}
                   onToggleAccept={
@@ -1144,6 +1161,7 @@ interface CommentActionMenuProps {
   name: string;
   kind: DiscussionEntryKind | "reply";
   isOwn: boolean;
+  canEdit?: boolean;
   canLock?: boolean;
   isLocked?: boolean;
   onToggleLock?: () => void;
@@ -1165,6 +1183,7 @@ export function CommentActionMenu({
   name,
   kind,
   isOwn,
+  canEdit = true,
   canLock = false,
   isLocked = false,
   onToggleLock,
@@ -1205,11 +1224,13 @@ export function CommentActionMenu({
       {isNote ? (
         isOwn ? (
           <>
-            <MenuAction
-              Icon={PencilSimple}
-              label="Edit note"
-              onClick={onEdit}
-            />
+            {canEdit && (
+              <MenuAction
+                Icon={PencilSimple}
+                label="Edit note"
+                onClick={onEdit}
+              />
+            )}
             <MenuDivider />
             <MenuAction
               Icon={Trash}
@@ -1235,11 +1256,13 @@ export function CommentActionMenu({
         )
       ) : isOwn ? (
         <>
-          <MenuAction
-            Icon={PencilSimple}
-            label={`Edit ${actionLabel}`}
-            onClick={onEdit}
-          />
+          {canEdit && (
+            <MenuAction
+              Icon={PencilSimple}
+              label={`Edit ${actionLabel}`}
+              onClick={onEdit}
+            />
+          )}
           {canBookmark && onToggleBookmark && (
             <MenuAction
               Icon={BookmarkSimple}

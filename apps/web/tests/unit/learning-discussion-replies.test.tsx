@@ -624,6 +624,10 @@ describe("Learning Discussion Replies (Phase 2 Integration)", () => {
       payload: expect.objectContaining({
         content: "Updated reply content",
       }),
+      __optimistic: expect.objectContaining({
+        clientId: "reply-comment-102",
+        serverId: "reply-comment-102",
+      }),
     });
   });
 

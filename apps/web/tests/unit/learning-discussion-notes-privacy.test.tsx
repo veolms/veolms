@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -336,6 +336,64 @@ describe("Learning Space Notes Ownership & Privacy", () => {
 
       expect(screen.getByText(/edit note/i)).toBeInTheDocument();
       expect(screen.getByText(/delete note/i)).toBeInTheDocument();
+    });
+
+    it("closes a Note editor before its PATCH settles", async () => {
+      let resolveUpdate: ((value: unknown) => void) | undefined;
+      const updateNoteMutateAsync = vi.fn(
+        () => new Promise((resolve) => { resolveUpdate = resolve; }),
+      );
+      mockInteractions.useUserNotes.mockReturnValue({
+        data: { notes: [studentOwnNote] },
+        isLoading: false,
+        isError: false,
+        refetch: vi.fn(),
+      });
+      mockInteractions.useUpdateNote.mockReturnValue({
+        mutateAsync: updateNoteMutateAsync,
+        isPending: false,
+      });
+
+      render(
+        <QueryClientProvider client={createTestQueryClient()}>
+          <Discussion
+            courseId="course-123"
+            lessonId="lesson-456"
+            persistenceKey="course-123:lesson-456-edit-note"
+          />
+        </QueryClientProvider>,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Notes" }));
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: /more actions for hero alom/i,
+        }),
+      );
+      fireEvent.click(screen.getByRole("menuitem", { name: /edit note/i }));
+      fireEvent.click(
+        await screen.findByRole("button", {
+          name: "Next: choose publishing options",
+        }),
+      );
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+      });
+
+      expect(updateNoteMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          noteId: "note-student-1",
+          payload: expect.objectContaining({
+            content: "My personal study note",
+            visibility: "private",
+          }),
+        }),
+      );
+      expect(
+        screen.getByRole("button", { name: "Open discussion composer" }),
+      ).toBeInTheDocument();
+
+      await act(async () => resolveUpdate?.({}));
     });
   });
 

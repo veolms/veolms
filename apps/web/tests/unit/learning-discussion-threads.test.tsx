@@ -773,7 +773,11 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
     ).toBeInTheDocument();
   });
 
-  it("4. edits own thread with useUpdateThread", async () => {
+  it("4. accepts a thread edit locally before PATCH settles", async () => {
+    let resolveUpdate: ((value: unknown) => void) | undefined;
+    updateThreadMutateAsync.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveUpdate = resolve; }),
+    );
     render(
       <Discussion
         persistenceKey="test-phase1-edit"
@@ -812,7 +816,16 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
         content: "How does error boundary isolation work?",
         visibility: "public",
       },
+      __optimistic: expect.objectContaining({
+        clientId: "thread-qa-1",
+        serverId: "thread-qa-1",
+      }),
     });
+    expect(
+      screen.getByRole("button", { name: "Open discussion composer" }),
+    ).toBeInTheDocument();
+
+    await act(async () => resolveUpdate?.({}));
   });
 
   it("5. toggles like on root thread using targetType: 'thread'", () => {

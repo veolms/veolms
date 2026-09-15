@@ -7,3 +7,5 @@ export * from "./cache-updaters";
 export * from "./interaction-entities";
 export * from "./creation-cache-updaters";
 export * from "./interaction-creation-coordinator";
+export * from "./optimistic-edit-coordinator";
+export * from "./edit-cache-updaters";

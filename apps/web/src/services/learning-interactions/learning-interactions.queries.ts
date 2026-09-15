@@ -16,6 +16,8 @@ import { learningInteractionsService } from "./learning-interactions.service";
 import { interactionCreationCoordinator } from "./interaction-creation-coordinator";
 import { desiredStateCoordinator } from "./desired-state-coordinator";
 import { calculateNextLikesCount } from "./cache-updaters";
+import { applyOptimisticEditFields } from "./edit-cache-updaters";
+import { optimisticEditCoordinator } from "./optimistic-edit-coordinator";
 import {
   toLearningThreadEntity,
   getClientEntityId,
@@ -51,7 +53,19 @@ function matchesAcceptedReply(
   );
 }
 
-function projectThreadLocalState(thread: LearningThreadEntity): LearningThreadEntity {
+function entityMatchesEditFields(
+  entity: { content?: string; plainText?: string; visibility?: string },
+  fields: { content?: string; plainText?: string; visibility?: string },
+): boolean {
+  return (
+    (fields.content === undefined || entity.content === fields.content) &&
+    (fields.plainText === undefined || entity.plainText === fields.plainText) &&
+    (fields.visibility === undefined || entity.visibility === fields.visibility)
+  );
+}
+
+export function projectThreadLocalState(thread: LearningThreadEntity): LearningThreadEntity {
+  thread = projectThreadEditState(thread);
   const clientId = getClientEntityId(thread);
   const serverId = getServerEntityId(thread);
   const acceptedState = desiredStateCoordinator.getAcceptedAnswerState(
@@ -87,10 +101,35 @@ function projectThreadLocalState(thread: LearningThreadEntity): LearningThreadEn
   return next;
 }
 
-function projectReplyLocalState(
+function projectThreadEditState(
+  thread: LearningThreadEntity,
+): LearningThreadEntity {
+  const record = optimisticEditCoordinator.findForEntity("thread", thread);
+  if (!record) return thread;
+  const fields = record.authoritative ?? record.optimistic;
+  if (
+    record.status === "confirmed" &&
+    entityMatchesEditFields(thread, fields)
+  ) {
+    optimisticEditCoordinator.acknowledge("thread", record.clientId);
+  }
+  return {
+    ...applyOptimisticEditFields(
+    thread as unknown as { id: string | number; content?: string; plainText?: string; visibility?: string },
+    fields,
+    ),
+    id: record.clientId,
+    clientId: record.clientId,
+    serverId: record.serverId,
+    creationStatus: "confirmed",
+  } as LearningThreadEntity;
+}
+
+export function projectReplyLocalState(
   reply: LearningReplyCacheItem,
   threadId: string,
 ): LearningReplyCacheItem {
+  reply = projectReplyEditState(reply);
   const clientId = getClientEntityId(reply);
   const serverId = getServerEntityId(reply);
   const acceptedState = desiredStateCoordinator.getAcceptedAnswerState(threadId);
@@ -128,9 +167,34 @@ function projectReplyLocalState(
   return next;
 }
 
-function projectNoteLocalState(
+function projectReplyEditState(
+  reply: LearningReplyCacheItem,
+): LearningReplyCacheItem {
+  const record = optimisticEditCoordinator.findForEntity("reply", reply);
+  if (!record) return reply;
+  const fields = record.authoritative ?? record.optimistic;
+  if (
+    record.status === "confirmed" &&
+    entityMatchesEditFields(reply, fields)
+  ) {
+    optimisticEditCoordinator.acknowledge("reply", record.clientId);
+  }
+  return {
+    ...applyOptimisticEditFields(
+      reply as unknown as { id: string | number; content?: string; plainText?: string; visibility?: string },
+      fields,
+    ),
+    id: record.clientId,
+    clientId: record.clientId,
+    serverId: record.serverId,
+    creationStatus: "confirmed",
+  } as LearningReplyCacheItem;
+}
+
+export function projectNoteLocalState(
   note: LearningNoteCacheItem,
 ): LearningNoteCacheItem {
+  note = projectNoteEditState(note);
   const clientId = getClientEntityId(note);
   const serverId = getServerEntityId(note);
   const desiredLiked = desiredStateCoordinator.getLikeProjection(
@@ -152,6 +216,30 @@ function projectNoteLocalState(
       desiredLiked,
     ),
   };
+}
+
+function projectNoteEditState(
+  note: LearningNoteCacheItem,
+): LearningNoteCacheItem {
+  const record = optimisticEditCoordinator.findForEntity("note", note);
+  if (!record) return note;
+  const fields = record.authoritative ?? record.optimistic;
+  if (
+    record.status === "confirmed" &&
+    entityMatchesEditFields(note, fields)
+  ) {
+    optimisticEditCoordinator.acknowledge("note", record.clientId);
+  }
+  return {
+    ...applyOptimisticEditFields(
+      note as unknown as { id: string | number; content?: string; plainText?: string; visibility?: string },
+      fields,
+    ),
+    id: record.clientId,
+    clientId: record.clientId,
+    serverId: record.serverId,
+    creationStatus: "confirmed",
+  } as LearningNoteCacheItem;
 }
 
 function noteMatchesQuery(

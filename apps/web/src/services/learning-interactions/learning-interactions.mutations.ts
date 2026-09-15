@@ -23,6 +23,79 @@ import type { ApiError } from "../../lib/api-error";
 import { learningInteractionKeys } from "./learning-interactions.keys";
 import { learningInteractionsService } from "./learning-interactions.service";
 import { interactionCreationCoordinator } from "./interaction-creation-coordinator";
+import {
+  getOptimisticEditFields,
+  optimisticEditCoordinator,
+  type OptimisticEditFields,
+  type OptimisticEditKind,
+} from "./optimistic-edit-coordinator";
+import { updateOptimisticEditInCaches } from "./edit-cache-updaters";
+
+export interface OptimisticEditMutationMeta {
+  clientId: string;
+  serverId: string;
+  baseline: OptimisticEditFields;
+  optimistic: OptimisticEditFields;
+}
+
+interface OptimisticEditMutationContext extends OptimisticEditMutationMeta {
+  kind: OptimisticEditKind;
+}
+
+function beginOptimisticEdit(
+  queryClient: ReturnType<typeof useQueryClient>,
+  kind: OptimisticEditKind,
+  meta: OptimisticEditMutationMeta,
+): OptimisticEditMutationContext {
+  const record = optimisticEditCoordinator.begin({ kind, ...meta });
+  if (!record) throw new Error("This entity is already being edited.");
+  updateOptimisticEditInCaches(
+    queryClient,
+    kind,
+    meta.clientId,
+    meta.serverId,
+    meta.optimistic,
+  );
+  return { ...meta, kind };
+}
+
+function confirmOptimisticEdit(
+  queryClient: ReturnType<typeof useQueryClient>,
+  response: unknown,
+  context: OptimisticEditMutationContext,
+): void {
+  const authoritative = getOptimisticEditFields(response, context.optimistic);
+  if (
+    optimisticEditCoordinator.confirm(
+      context.kind,
+      context.clientId,
+      authoritative,
+    )
+  ) {
+    updateOptimisticEditInCaches(
+      queryClient,
+      context.kind,
+      context.clientId,
+      context.serverId,
+      authoritative,
+    );
+  }
+}
+
+function rollbackOptimisticEdit(
+  queryClient: ReturnType<typeof useQueryClient>,
+  context: OptimisticEditMutationContext,
+): void {
+  if (optimisticEditCoordinator.fail(context.kind, context.clientId)) {
+    updateOptimisticEditInCaches(
+      queryClient,
+      context.kind,
+      context.clientId,
+      context.serverId,
+      context.baseline,
+    );
+  }
+}
 
 export function useCreateLessonThread(courseId: string, lessonId: string) {
   const queryClient = useQueryClient();
@@ -60,13 +133,21 @@ export function useCreateLessonThread(courseId: string, lessonId: string) {
   });
 }
 
+type UpdateThreadMutationInput =
+  | {
+      threadId?: string;
+      payload: UpdateLearningThreadRequest;
+      __optimistic?: OptimisticEditMutationMeta;
+    }
+  | UpdateLearningThreadRequest;
+
 export function useUpdateThread(threadId?: string) {
   const queryClient = useQueryClient();
   return useMutation<
     any,
     ApiError,
-    | { threadId?: string; payload: UpdateLearningThreadRequest }
-    | UpdateLearningThreadRequest
+    UpdateThreadMutationInput,
+    OptimisticEditMutationContext | undefined
   >({
     mutationFn: (variables) => {
       if ("payload" in variables) {
@@ -77,17 +158,19 @@ export function useUpdateThread(threadId?: string) {
       if (!threadId) throw new Error("threadId is required to update thread");
       return learningInteractionsService.updateThread(threadId, variables);
     },
-    onSuccess: (_data, variables) => {
-      const id =
-        "payload" in variables ? (variables.threadId ?? threadId) : threadId;
-      if (id) {
-        queryClient.invalidateQueries({
-          queryKey: learningInteractionKeys.threadDetails(id),
-        });
-      }
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.all,
-      });
+    onMutate: (variables) => {
+      if (!("payload" in variables) || !variables.__optimistic) return undefined;
+      return beginOptimisticEdit(
+        queryClient,
+        "thread",
+        variables.__optimistic,
+      );
+    },
+    onSuccess: (data, _variables, context) => {
+      if (context) confirmOptimisticEdit(queryClient, data, context);
+    },
+    onError: (_error, _variables, context) => {
+      if (context) rollbackOptimisticEdit(queryClient, context);
     },
   });
 }
@@ -135,15 +218,28 @@ export function useUpdateReply(threadId?: string) {
   return useMutation<
     any,
     ApiError,
-    { replyId: string; payload: UpdateLearningReplyRequest }
+    {
+      replyId: string;
+      payload: UpdateLearningReplyRequest;
+      __optimistic?: OptimisticEditMutationMeta;
+    },
+    OptimisticEditMutationContext | undefined
   >({
     mutationFn: ({ replyId, payload }) =>
       learningInteractionsService.updateReply(replyId, payload),
-    onSuccess: () => {
-      if (!threadId) return;
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.threadRepliesRoot(threadId),
-      });
+    onMutate: (variables) => {
+      if (!variables.__optimistic) return undefined;
+      return beginOptimisticEdit(
+        queryClient,
+        "reply",
+        variables.__optimistic,
+      );
+    },
+    onSuccess: (data, _variables, context) => {
+      if (context) confirmOptimisticEdit(queryClient, data, context);
+    },
+    onError: (_error, _variables, context) => {
+      if (context) rollbackOptimisticEdit(queryClient, context);
     },
   });
 }
@@ -279,13 +375,21 @@ export function useCreateNote() {
   });
 }
 
+type UpdateNoteMutationInput =
+  | {
+      noteId?: string;
+      payload: UpdateLearningNoteRequest;
+      __optimistic?: OptimisticEditMutationMeta;
+    }
+  | UpdateLearningNoteRequest;
+
 export function useUpdateNote(noteId?: string) {
   const queryClient = useQueryClient();
   return useMutation<
     any,
     ApiError,
-    | { noteId?: string; payload: UpdateLearningNoteRequest }
-    | UpdateLearningNoteRequest
+    UpdateNoteMutationInput,
+    OptimisticEditMutationContext | undefined
   >({
     mutationFn: (variables) => {
       if ("payload" in variables) {
@@ -296,10 +400,19 @@ export function useUpdateNote(noteId?: string) {
       if (!noteId) throw new Error("noteId is required to update note");
       return learningInteractionsService.updateNote(noteId, variables);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.notesRoot(),
-      });
+    onMutate: (variables) => {
+      if (!("payload" in variables) || !variables.__optimistic) return undefined;
+      return beginOptimisticEdit(
+        queryClient,
+        "note",
+        variables.__optimistic,
+      );
+    },
+    onSuccess: (data, _variables, context) => {
+      if (context) confirmOptimisticEdit(queryClient, data, context);
+    },
+    onError: (_error, _variables, context) => {
+      if (context) rollbackOptimisticEdit(queryClient, context);
     },
   });
 }

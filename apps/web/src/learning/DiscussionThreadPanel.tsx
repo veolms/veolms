@@ -140,6 +140,7 @@ interface DiscussionThreadPanelProps {
     following: boolean,
   ) => Promise<boolean> | void;
   onReplyCreateError?: () => void;
+  onReplyEditError?: () => void;
   courseId?: string;
 }
 
@@ -166,6 +167,7 @@ export function DiscussionThreadPanel({
   onToggleBookmark,
   onToggleFollow,
   onReplyCreateError,
+  onReplyEditError,
   courseId,
 }: DiscussionThreadPanelProps) {
   const isPhone = useThreadPanelPhoneLayout();
@@ -696,6 +698,7 @@ export function DiscussionThreadPanel({
                   onToggleBookmark={onToggleBookmark}
                   onToggleFollow={onToggleFollow}
                   onReplyCreateError={onReplyCreateError}
+                  onReplyEditError={onReplyEditError}
                   courseId={courseId}
                 />
               </SwiperSlide>
@@ -756,6 +759,7 @@ interface ThreadSlideProps {
     following: boolean,
   ) => Promise<boolean> | void;
   onReplyCreateError?: () => void;
+  onReplyEditError?: () => void;
   courseId?: string;
 }
 
@@ -781,6 +785,7 @@ function ThreadSlide({
   onToggleBookmark,
   onToggleFollow,
   onReplyCreateError,
+  onReplyEditError,
   courseId,
 }: ThreadSlideProps) {
   const isQuestion =
@@ -880,14 +885,27 @@ function ThreadSlide({
         (candidate) => getClientEntityId(candidate) === String(replyId),
       );
       const serverReplyId = reply ? getServerEntityId(reply) : undefined;
-      if (!serverReplyId) return false;
+      if (!reply || !serverReplyId) return false;
       try {
-        await updateReplyMutation.mutateAsync({
+        const request = updateReplyMutation.mutateAsync({
           replyId: serverReplyId,
           payload: {
             content: draft.markdown || draft.plainText.trim(),
           },
+          __optimistic: {
+            clientId: getClientEntityId(reply),
+            serverId: serverReplyId,
+            baseline: {
+              content: reply.content?.markdown ?? reply.text,
+              plainText: reply.content?.plainText ?? reply.text,
+            },
+            optimistic: {
+              content: draft.markdown || draft.plainText.trim(),
+              plainText: draft.plainText,
+            },
+          },
         });
+        void request.catch(() => onReplyEditError?.());
         return true;
       } catch {
         return false;
@@ -1013,6 +1031,7 @@ function ThreadSlide({
                 key={reply.clientId ?? reply.id}
                 parentId={clientId}
                 reply={reply}
+                isBackendMode={isBackendMode}
                 isQuestion={isQuestion}
                 canAcceptAnswer={canAcceptAnswer}
                 onToggleAcceptReply={(replyId, accepted) =>
@@ -1276,6 +1295,7 @@ function ThreadRootEntry({
 function ThreadReplyEntry({
   parentId,
   reply,
+  isBackendMode = false,
   isQuestion = false,
   canAcceptAnswer = false,
   onToggleAcceptReply,
@@ -1288,6 +1308,7 @@ function ThreadReplyEntry({
 }: {
   parentId: string | number;
   reply: CommentReply;
+  isBackendMode?: boolean;
   isQuestion?: boolean;
   canAcceptAnswer?: boolean;
   onToggleAcceptReply?: (
@@ -1397,6 +1418,7 @@ function ThreadReplyEntry({
                   name={reply.name}
                   kind="reply"
                   isOwn={Boolean(reply.isOwn)}
+                  canEdit={!isBackendMode || Boolean(getServerEntityId(reply))}
                   canAcceptAnswer={
                     isQuestion && canAcceptAnswer && canAcceptReply
                   }
