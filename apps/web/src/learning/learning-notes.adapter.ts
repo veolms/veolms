@@ -1,6 +1,11 @@
 import type { LearningNote } from "@veolms/contracts";
 import type { Comment } from "./CommentCard";
 import { createDiscussionDraft } from "./discussion-editor/types";
+import {
+  getClientEntityId,
+  getServerEntityId,
+  isPendingClientEntity,
+} from "../services/learning-interactions/interaction-entities";
 
 export function formatRelativeTime(dateInput: string | Date): string {
   const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
@@ -44,11 +49,15 @@ export function adaptLearningNoteToComment(
   // Real note author avatar if DTO provides one, else current user avatar if own, else safe fallback
   const avatar =
     (note as { authorAvatarUrl?: string }).authorAvatarUrl ||
-    (isOwn && currentUserAvatar ? currentUserAvatar : "/assets/sofia-avatar-160.webp");
+    (isOwn && currentUserAvatar
+      ? currentUserAvatar
+      : "/assets/sofia-avatar-160.webp");
 
   return {
     id: note.id,
-    clientId: (note as any).clientId ?? note.id,
+    clientId: getClientEntityId(note),
+    serverId: getServerEntityId(note),
+    creationStatus: isPendingClientEntity(note) ? "pending" : "confirmed",
     name,
     time: formatRelativeTime(note.createdAt),
     avatar,

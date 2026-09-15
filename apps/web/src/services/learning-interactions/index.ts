@@ -4,3 +4,6 @@ export * from "./learning-interactions.queries";
 export * from "./learning-interactions.mutations";
 export * from "./desired-state-coordinator";
 export * from "./cache-updaters";
+export * from "./interaction-entities";
+export * from "./creation-cache-updaters";
+export * from "./interaction-creation-coordinator";

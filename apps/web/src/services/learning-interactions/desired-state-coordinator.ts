@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import type { LearningThread } from "@veolms/contracts";
 import { queryClient as defaultQueryClient } from "../../lib/query-client";
 import { learningInteractionsService } from "./learning-interactions.service";
 import {
@@ -34,11 +35,14 @@ export interface SetLikedOptions {
   debounceMs?: number; // Optional micro-delay before network dispatch (default: 30ms)
   onFailure?: (error: unknown) => void;
   queryClient?: QueryClient;
+  /** Keeps a client-keyed thread intent local until creation resolves. */
+  pendingTarget?: boolean;
 }
 
 interface EntityLikeState {
   targetType: TargetLikeType;
   targetId: string;
+  serverId?: string;
   serverBaseline: boolean;
   desiredState: boolean;
   inFlightState: boolean | null;
@@ -60,6 +64,7 @@ export interface SetBookmarkedOptions {
   debounceMs?: number;
   onFailure?: (error: unknown) => void;
   queryClient?: QueryClient;
+  pendingTarget?: boolean;
 }
 
 export interface SetFollowedOptions {
@@ -70,6 +75,7 @@ export interface SetFollowedOptions {
   debounceMs?: number;
   onFailure?: (error: unknown) => void;
   queryClient?: QueryClient;
+  pendingTarget?: boolean;
 }
 
 export interface SetLockedOptions {
@@ -85,6 +91,7 @@ export interface SetLockedOptions {
 interface ThreadBooleanState {
   targetType: BooleanTargetType;
   threadId: string;
+  serverId?: string;
   serverBaseline: boolean;
   desiredState: boolean;
   inFlightState: boolean | null;
@@ -238,6 +245,77 @@ export class DesiredStateCoordinator {
     return this.acceptAnswerEntries.get(this.acceptAnswerKey(threadId));
   }
 
+  /** Resolves client-keyed pending thread intents after creation reconciliation. */
+  resolvePendingThread(clientId: string, serverThread: LearningThread): void {
+    const like = this.entries.get(this.likeKey("thread", clientId));
+    if (like) {
+      like.serverId = serverThread.id;
+      like.serverBaseline = Boolean(serverThread.isLiked);
+      this.applyLikeCacheUpdate(
+        "thread",
+        clientId,
+        like.desiredState,
+        like.queryClient,
+        like.lessonContext,
+      );
+      this.scheduleLikeConvergence(like, 0);
+    }
+    this.resolvePendingBoolean(
+      "bookmark",
+      clientId,
+      serverThread.id,
+      Boolean(serverThread.isBookmarked),
+    );
+    this.resolvePendingBoolean(
+      "follow",
+      clientId,
+      serverThread.id,
+      Boolean(serverThread.isFollowing),
+    );
+  }
+
+  failPendingThread(clientId: string): void {
+    this.dropLikeState(this.likeKey("thread", clientId));
+    this.dropBooleanState(this.booleanKey("bookmark", clientId));
+    this.dropBooleanState(this.booleanKey("follow", clientId));
+  }
+
+  private resolvePendingBoolean(
+    targetType: "bookmark" | "follow",
+    clientId: string,
+    serverId: string,
+    baseline: boolean,
+  ): void {
+    const state = this.booleanEntries.get(this.booleanKey(targetType, clientId));
+    if (!state) return;
+    state.serverId = serverId;
+    state.serverBaseline = baseline;
+    this.applyBooleanCacheUpdate(
+      targetType,
+      clientId,
+      state.desiredState,
+      state.queryClient,
+      state.lessonContext,
+    );
+    this.scheduleBooleanConvergence(state, 0);
+  }
+
+  private dropLikeState(key: string): void {
+    const state = this.entries.get(key);
+    if (state?.dispatchTimer !== null && state?.dispatchTimer !== undefined) {
+      clearTimeout(state.dispatchTimer);
+    }
+    this.entries.delete(key);
+  }
+
+  private dropBooleanState(key: string): void {
+    const state = this.booleanEntries.get(key);
+    if (state?.dispatchTimer !== null && state?.dispatchTimer !== undefined) {
+      clearTimeout(state.dispatchTimer);
+    }
+    this.booleanEntries.delete(key);
+  }
+
   // ==========================================
   // LIKES (Thread, Reply, Note)
   // ==========================================
@@ -257,6 +335,7 @@ export class DesiredStateCoordinator {
     debounceMs = 30,
     onFailure,
     queryClient,
+    pendingTarget,
   }: SetLikedOptions): void {
     const key = this.likeKey(targetType, targetId);
     let state = this.entries.get(key);
@@ -267,6 +346,7 @@ export class DesiredStateCoordinator {
       state = {
         targetType,
         targetId,
+        serverId: pendingTarget ? undefined : targetId,
         serverBaseline: baseline,
         desiredState: desiredLiked,
         inFlightState: null,
@@ -356,6 +436,7 @@ export class DesiredStateCoordinator {
     capturedGen: number,
   ): void {
     if (this.generation !== capturedGen) return;
+    if (!state.serverId) return;
     if (state.inFlightState !== null) return;
     if (state.desiredState === state.serverBaseline) return;
 
@@ -368,7 +449,7 @@ export class DesiredStateCoordinator {
     learningInteractionsService
       .toggleLike({
         targetType: state.targetType,
-        targetId: state.targetId,
+        targetId: state.serverId,
       })
       .then((response) => {
         if (this.generation !== capturedGen) return;
@@ -424,10 +505,12 @@ export class DesiredStateCoordinator {
     debounceMs = 30,
     onFailure,
     queryClient,
+    pendingTarget,
   }: SetBookmarkedOptions): void {
     this.setBooleanDesiredState({
       targetType: "bookmark",
       threadId,
+      pendingTarget,
       desiredState: desiredBookmarked,
       currentBaseline,
       lessonContext,
@@ -448,10 +531,12 @@ export class DesiredStateCoordinator {
     debounceMs = 30,
     onFailure,
     queryClient,
+    pendingTarget,
   }: SetFollowedOptions): void {
     this.setBooleanDesiredState({
       targetType: "follow",
       threadId,
+      pendingTarget,
       desiredState: desiredFollowed,
       currentBaseline,
       lessonContext,
@@ -498,6 +583,7 @@ export class DesiredStateCoordinator {
     debounceMs = 30,
     onFailure,
     queryClient,
+    pendingTarget,
   }: {
     targetType: BooleanTargetType;
     threadId: string;
@@ -507,6 +593,7 @@ export class DesiredStateCoordinator {
     debounceMs?: number;
     onFailure?: (error: unknown) => void;
     queryClient?: QueryClient;
+    pendingTarget?: boolean;
   }): void {
     const key = this.booleanKey(targetType, threadId);
     let state = this.booleanEntries.get(key);
@@ -517,6 +604,7 @@ export class DesiredStateCoordinator {
       state = {
         targetType,
         threadId,
+        serverId: pendingTarget ? undefined : threadId,
         serverBaseline: baseline,
         desiredState,
         inFlightState: null,
@@ -589,6 +677,7 @@ export class DesiredStateCoordinator {
     capturedGen: number,
   ): void {
     if (this.generation !== capturedGen) return;
+    if (!state.serverId) return;
 
     // Never allow parallel requests for the same thread
     if (state.inFlightState !== null) return;
@@ -605,11 +694,11 @@ export class DesiredStateCoordinator {
 
     let apiCall: Promise<any>;
     if (state.targetType === "bookmark") {
-      apiCall = learningInteractionsService.toggleBookmark(state.threadId);
+      apiCall = learningInteractionsService.toggleBookmark(state.serverId);
     } else if (state.targetType === "follow") {
-      apiCall = learningInteractionsService.toggleFollow(state.threadId);
+      apiCall = learningInteractionsService.toggleFollow(state.serverId);
     } else {
-      apiCall = learningInteractionsService.lockThread(state.threadId, {
+      apiCall = learningInteractionsService.lockThread(state.serverId, {
         isLocked: targetState,
       });
     }

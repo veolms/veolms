@@ -44,10 +44,16 @@ import {
   DiscussionAttachmentsList,
   type DiscussionAttachmentItem,
 } from "./discussion-attachments";
+import {
+  getClientEntityId,
+  getServerEntityId,
+} from "../services/learning-interactions/interaction-entities";
 
 export interface CommentReply {
   id: string | number;
   clientId?: string;
+  serverId?: string;
+  creationStatus?: "pending" | "confirmed";
   name: string;
   time: string;
   avatar: string;
@@ -64,6 +70,8 @@ export interface CommentReply {
 export interface Comment {
   id: string | number;
   clientId?: string;
+  serverId?: string;
+  creationStatus?: "pending" | "confirmed";
   name: string;
   time: string;
   avatar: string;
@@ -169,7 +177,10 @@ export function CommentCard({
   const entryLabel =
     entryKind === "question" ? "Q&A" : isNote ? "Note" : "Comment";
 
-  const threadId = String(comment.id);
+  const clientId = getClientEntityId(comment);
+  const serverId = getServerEntityId(comment);
+  const isBackendEntity = Boolean(isBackendMode && serverId);
+  const threadId = serverId;
   const { data: authUser } = useCurrentUser();
   const effectiveUserId = currentUserId ?? authUser?.id;
   const isQuestion = entryKind === "question" || Boolean(comment.isQuestion);
@@ -194,7 +205,7 @@ export function CommentCard({
     isError: isRepliesError,
     refetch: refetchReplies,
   } = useThreadReplies(threadId, undefined, {
-    enabled: isBackendMode && repliesOpen && !isNote,
+    enabled: isBackendEntity && repliesOpen && !isNote,
   });
 
   const updateReplyMutation = useUpdateReply(threadId);
@@ -207,7 +218,7 @@ export function CommentCard({
     );
   }, [repliesData?.replies, effectiveUserId]);
 
-  const effectiveReplies = isBackendMode ? backendReplies : localReplies;
+  const effectiveReplies = isBackendEntity ? backendReplies : localReplies;
 
   const unloadedReplyCount = Math.max(
     0,
@@ -217,7 +228,7 @@ export function CommentCard({
     repliesData?.totalCount !== undefined
       ? repliesData.totalCount
       : repliesData?.replies?.length;
-  const replyCount = isBackendMode
+  const replyCount = isBackendEntity
     ? backendCount !== undefined
       ? backendCount
       : (comment.replies ?? 0)
@@ -271,7 +282,7 @@ export function CommentCard({
     replyId: string | number,
     draft: DiscussionDraft,
   ): Promise<boolean> => {
-    if (isBackendMode) {
+    if (isBackendEntity) {
       try {
         await updateReplyMutation.mutateAsync({
           replyId: String(replyId),
@@ -283,6 +294,8 @@ export function CommentCard({
       } catch {
         return false;
       }
+    } else if (isBackendMode) {
+      return false;
     } else {
       updateReply(replyId, draft);
       return true;
@@ -292,13 +305,15 @@ export function CommentCard({
   const handleDeleteReply = async (
     replyId: string | number,
   ): Promise<boolean> => {
-    if (isBackendMode) {
+    if (isBackendEntity) {
       try {
         await deleteReplyMutation.mutateAsync(String(replyId));
         return true;
       } catch {
         return false;
       }
+    } else if (isBackendMode) {
+      return false;
     } else {
       setLocalReplies((current) =>
         current.filter((item) => item.id !== replyId),
@@ -308,7 +323,7 @@ export function CommentCard({
   };
 
   const handleLikeReply = (replyId: string | number) => {
-    if (isBackendMode) {
+    if (isBackendEntity) {
       const reply = effectiveReplies.find(
         (r) => String(r.id) === String(replyId),
       );
@@ -317,12 +332,14 @@ export function CommentCard({
       desiredStateCoordinator.setLiked({
         targetType: "reply",
         targetId: String(replyId),
-        threadId,
+        threadId: threadId!,
         desiredLiked: nextLiked,
         currentBaseline: currentLiked,
         lessonContext: courseId ? { courseId, lessonId: "" } : undefined,
         queryClient,
       });
+    } else if (isBackendMode) {
+      return;
     } else {
       setLocalReplies((current) =>
         current.map((r) => {
@@ -340,7 +357,7 @@ export function CommentCard({
 
   return (
     <article
-      id={`discussion-entry-${comment.id}`}
+      id={`discussion-entry-${clientId}`}
       data-discussion-entry={entryKind}
       data-deletion-pending={deletion.pending || undefined}
       className={`relative -mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4 ${hasReplies ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${deletion.pending ? "min-h-19" : ""}`}
@@ -451,7 +468,11 @@ export function CommentCard({
                       className="inline-flex items-center gap-1 rounded-md bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-1.5 py-0.5 text-[11px] font-medium text-(--text-secondary)"
                       title="Bookmarked"
                     >
-                      <BookmarkSimple size={12} weight="bold" aria-hidden="true" />
+                      <BookmarkSimple
+                        size={12}
+                        weight="bold"
+                        aria-hidden="true"
+                      />
                       <span>Bookmarked</span>
                     </span>
                   )}
@@ -472,12 +493,14 @@ export function CommentCard({
                   isOwn={Boolean(comment.isOwn)}
                   onEdit={() => onEdit(comment)}
                   onShare={() =>
-                    void shareDiscussionEntry(
-                      comment.id,
-                      comment.name,
-                      comment.text,
-                      { isNote: comment.entryKind === "note" },
-                    )
+                    serverId
+                      ? void shareDiscussionEntry(
+                          serverId,
+                          comment.name,
+                          comment.text,
+                          { isNote: comment.entryKind === "note" },
+                        )
+                      : undefined
                   }
                   onDelete={deletion.begin}
                   onReport={() =>
@@ -562,7 +585,10 @@ export function CommentCard({
                     aria-label={isCommentLiked ? "Unlike" : "Like"}
                     className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isCommentLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
                   >
-                    <ThumbsUp size={19} weight={isCommentLiked ? "fill" : "regular"} />
+                    <ThumbsUp
+                      size={19}
+                      weight={isCommentLiked ? "fill" : "regular"}
+                    />
                     <span>{comment.likes}</span>
                   </button>
 
@@ -664,7 +690,7 @@ export function CommentCard({
               className="mt-2.5 space-y-2.5"
               data-testid="inline-replies-container"
             >
-              {isBackendMode && isRepliesLoading ? (
+              {isBackendEntity && isRepliesLoading ? (
                 <div
                   className="py-4 text-center"
                   data-testid="learning-replies-loading"
@@ -674,7 +700,7 @@ export function CommentCard({
                     Loading replies…
                   </p>
                 </div>
-              ) : isBackendMode && isRepliesError ? (
+              ) : isBackendEntity && isRepliesError ? (
                 <div
                   className="py-4 text-center"
                   data-testid="learning-replies-error"
@@ -693,7 +719,7 @@ export function CommentCard({
               ) : effectiveReplies.length > 0 ? (
                 effectiveReplies.map((reply) => (
                   <ReplyCard
-                    key={reply.id}
+                    key={reply.clientId ?? reply.id}
                     reply={reply}
                     isBackendMode={isBackendMode}
                     isQuestion={isQuestion}
@@ -871,9 +897,14 @@ function ReplyCard({
                     setEditing(true);
                   }}
                   onShare={() =>
-                    void shareDiscussionEntry(reply.id, reply.name, reply.text, {
-                      parentThreadId,
-                    })
+                    void shareDiscussionEntry(
+                      reply.id,
+                      reply.name,
+                      reply.text,
+                      {
+                        parentThreadId,
+                      },
+                    )
                   }
                   onDelete={deletion.begin}
                   onReport={onReport}
@@ -1126,7 +1157,11 @@ export function CommentActionMenu({
       {isNote ? (
         isOwn ? (
           <>
-            <MenuAction Icon={PencilSimple} label="Edit note" onClick={onEdit} />
+            <MenuAction
+              Icon={PencilSimple}
+              label="Edit note"
+              onClick={onEdit}
+            />
             <MenuDivider />
             <MenuAction
               Icon={Trash}

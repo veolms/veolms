@@ -15,20 +15,45 @@ import type {
   UpdateLearningReplyRequest,
   UpdateLearningThreadRequest,
   LearningUploadResponse,
+  LearningThread,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { learningInteractionKeys } from "./learning-interactions.keys";
 import { learningInteractionsService } from "./learning-interactions.service";
+import { interactionCreationCoordinator } from "./interaction-creation-coordinator";
 
 export function useCreateLessonThread(courseId: string, lessonId: string) {
   const queryClient = useQueryClient();
-  return useMutation<any, ApiError, CreateLearningThreadRequest>({
+  return useMutation<
+    LearningThread,
+    ApiError,
+    CreateLearningThreadRequest,
+    { clientId: string }
+  >({
     mutationFn: (payload) =>
       learningInteractionsService.createThread(courseId, lessonId, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.all,
+    onMutate: (payload) => {
+      const record = interactionCreationCoordinator.beginThreadCreation({
+        queryClient,
+        context: { courseId, lessonId },
+        payload,
       });
+      return { clientId: record.clientId };
+    },
+    onSuccess: (serverThread, _payload, context) => {
+      interactionCreationCoordinator.confirmThread(
+        queryClient,
+        context.clientId,
+        serverThread,
+      );
+    },
+    onError: (_error, _payload, context) => {
+      if (context) {
+        interactionCreationCoordinator.failThread(
+          queryClient,
+          context.clientId,
+        );
+      }
     },
   });
 }
@@ -78,12 +103,16 @@ export function useDeleteThread() {
   });
 }
 
-export function useCreateReply(threadId: string) {
+export function useCreateReply(threadId?: string) {
   const queryClient = useQueryClient();
   return useMutation<any, ApiError, CreateLearningReplyRequest>({
-    mutationFn: (payload) =>
-      learningInteractionsService.createReply(threadId, payload),
+    mutationFn: (payload) => {
+      if (!threadId)
+        throw new Error("A confirmed server thread ID is required.");
+      return learningInteractionsService.createReply(threadId, payload);
+    },
     onSuccess: () => {
+      if (!threadId) return;
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.threadRepliesRoot(threadId),
       });
@@ -94,7 +123,7 @@ export function useCreateReply(threadId: string) {
   });
 }
 
-export function useUpdateReply(threadId: string) {
+export function useUpdateReply(threadId?: string) {
   const queryClient = useQueryClient();
   return useMutation<
     any,
@@ -104,6 +133,7 @@ export function useUpdateReply(threadId: string) {
     mutationFn: ({ replyId, payload }) =>
       learningInteractionsService.updateReply(replyId, payload),
     onSuccess: () => {
+      if (!threadId) return;
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.threadRepliesRoot(threadId),
       });
@@ -111,11 +141,12 @@ export function useUpdateReply(threadId: string) {
   });
 }
 
-export function useDeleteReply(threadId: string) {
+export function useDeleteReply(threadId?: string) {
   const queryClient = useQueryClient();
   return useMutation<any, ApiError, string>({
     mutationFn: (replyId) => learningInteractionsService.deleteReply(replyId),
     onSuccess: () => {
+      if (!threadId) return;
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.threadRepliesRoot(threadId),
       });

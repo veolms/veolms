@@ -65,6 +65,10 @@ import {
   useUserNotes,
 } from "../services/learning-interactions";
 import {
+  getClientEntityId,
+  getServerEntityId,
+} from "../services/learning-interactions/interaction-entities";
+import {
   DiscussionReportDialog,
   type ReportTarget,
   type ReportSubmissionPayload,
@@ -297,9 +301,7 @@ const isStoredEntries = (value: unknown): value is Comment[] =>
   );
 
 type SetURLSearchParams = (
-  nextInit?:
-    | URLSearchParams
-    | ((prev: URLSearchParams) => URLSearchParams),
+  nextInit?: URLSearchParams | ((prev: URLSearchParams) => URLSearchParams),
   navigateOpts?: { replace?: boolean },
 ) => void;
 
@@ -459,7 +461,6 @@ function DiscussionInner({
   const isSubmitting =
     createNoteMutation.isPending ||
     updateNoteMutation.isPending ||
-    createThreadMutation.isPending ||
     updateThreadMutation.isPending;
 
   const backendNotes = useMemo<Comment[]>(() => {
@@ -500,11 +501,9 @@ function DiscussionInner({
   });
 
   const directThreadComment = useMemo<Comment | null>(() => {
-    if (!directThreadData || !isCommentOrQaThread(directThreadData)) return null;
-    return adaptLearningThreadToComment(
-      directThreadData,
-      currentUser?.id,
-    );
+    if (!directThreadData || !isCommentOrQaThread(directThreadData))
+      return null;
+    return adaptLearningThreadToComment(directThreadData, currentUser?.id);
   }, [currentUser?.id, directThreadData]);
 
   const backendThreads = useMemo<Comment[]>(() => {
@@ -628,7 +627,9 @@ function DiscussionInner({
     if (isBackendMode) {
       const all = [...backendNotes, ...backendThreads];
       if (optimisticallyHiddenIds.size === 0) return all;
-      return all.filter((entry) => !optimisticallyHiddenIds.has(entry.id));
+      return all.filter(
+        (entry) => !optimisticallyHiddenIds.has(getClientEntityId(entry)),
+      );
     }
     return [...backendNotes, ...entries];
   }, [
@@ -654,17 +655,20 @@ function DiscussionInner({
     const list = combinedEntries.filter((entry) => entry.entryKind !== "note");
     if (!directThreadComment) {
       return Array.from(
-        new Map(list.map((entry) => [String(entry.id), entry])).values(),
+        new Map(
+          list.map((entry) => [getClientEntityId(entry), entry]),
+        ).values(),
       );
     }
     const exists = list.some(
-      (entry) => String(entry.id) === String(directThreadComment.id),
+      (entry) =>
+        getServerEntityId(entry) === getServerEntityId(directThreadComment),
     );
     if (!exists) {
       return [directThreadComment, ...list];
     }
     return list.map((entry) =>
-      String(entry.id) === String(directThreadComment.id)
+      getServerEntityId(entry) === getServerEntityId(directThreadComment)
         ? directThreadComment
         : entry,
     );
@@ -680,16 +684,26 @@ function DiscussionInner({
       return;
     }
 
-    if (String(openThread?.id) === threadIdFromUrl) {
+    if (
+      openThread &&
+      getServerEntityId(
+        threadEntries.find(
+          (entry) => getClientEntityId(entry) === String(openThread.id),
+        ) ?? { id: openThread.id },
+      ) === threadIdFromUrl
+    ) {
       return;
     }
 
     const matchingEntry = threadEntries.find(
-      (entry) => String(entry.id) === threadIdFromUrl,
+      (entry) => getServerEntityId(entry) === threadIdFromUrl,
     );
 
     if (matchingEntry) {
-      setOpenThread({ id: matchingEntry.id, focusComposer: false });
+      setOpenThread({
+        id: getClientEntityId(matchingEntry),
+        focusComposer: false,
+      });
       return;
     }
 
@@ -758,7 +772,9 @@ function DiscussionInner({
     threadIdFromUrl,
   ]);
 
-  const submitEntry = async (): Promise<boolean> => {
+  const submitEntry = async (
+    onLocallyAccepted?: () => void,
+  ): Promise<boolean> => {
     if (draftIsTooLong) {
       setNotice(COMMENT_LENGTH_NOTICE);
       return false;
@@ -830,7 +846,11 @@ function DiscussionInner({
       if (editingEntry) {
         try {
           await updateThreadMutation.mutateAsync({
-            threadId: String(editingEntry.id),
+            threadId: getServerEntityId(
+              combinedEntries.find(
+                (entry) => getClientEntityId(entry) === String(editingEntry.id),
+              ) ?? { id: editingEntry.id },
+            )!,
             payload: {
               content: activeDraft.markdown,
               visibility: threadVisibility,
@@ -845,23 +865,28 @@ function DiscussionInner({
         }
       }
 
+      const createPayload = {
+        courseId,
+        lessonId: lessonId || undefined,
+        kind: activeEntryKind === "question" ? "question" : "comment",
+        content: activeDraft.markdown,
+        visibility: threadVisibility,
+        attachmentIds:
+          composerAttachments.length > 0
+            ? composerAttachments.map((a) => a.id)
+            : undefined,
+      } as const;
+
+      // Capture and clear the submitted snapshot before dispatch. The
+      // coordinator retains the immutable payload for reconciliation and
+      // future recovery; a failure must never restore over newer input.
+      setDraft(createEmptyDiscussionDraft());
+      setComposerAttachments([]);
+
       try {
-        await createThreadMutation.mutateAsync({
-          courseId,
-          lessonId: lessonId || undefined,
-          kind: activeEntryKind === "question" ? "question" : "comment",
-          content: activeDraft.markdown,
-          visibility: threadVisibility,
-          attachmentIds:
-            composerAttachments.length > 0
-              ? composerAttachments.map((a) => a.id)
-              : undefined,
-        });
-        setDraft(createEmptyDiscussionDraft());
-        setComposerAttachments([]);
-        setEntryFilter(
-          enabledKinds.length > 1 ? "all" : (enabledKinds[0] ?? "all"),
-        );
+        const request = createThreadMutation.mutateAsync(createPayload);
+        onLocallyAccepted?.();
+        await request;
         setNotice("");
         return true;
       } catch (error) {
@@ -943,19 +968,37 @@ function DiscussionInner({
   const onLike = (id: string | number, liked?: boolean) => {
     if (isBackendMode) {
       const entry =
-        combinedEntries.find((e) => e.id === id) ??
-        backendNotes.find((n) => n.id === id) ??
-        backendThreads.find((t) => t.id === id) ??
-        entries.find((e) => e.id === id);
+        combinedEntries.find((e) => getClientEntityId(e) === String(id)) ??
+        backendNotes.find((n) => getClientEntityId(n) === String(id)) ??
+        backendThreads.find((t) => getClientEntityId(t) === String(id)) ??
+        entries.find((e) => getClientEntityId(e) === String(id));
+      const serverId = entry ? getServerEntityId(entry) : undefined;
+      if (!entry) return;
       const isNote =
-        entry?.entryKind === "note" || backendNotes.some((n) => n.id === id);
+        entry.entryKind === "note" ||
+        backendNotes.some((n) => getClientEntityId(n) === String(id));
       const targetType: "note" | "thread" = isNote ? "note" : "thread";
       const currentLiked = Boolean(entry?.liked);
       const desiredLiked = typeof liked === "boolean" ? liked : !currentLiked;
 
+      if (!serverId && entry.entryKind !== "note") {
+        desiredStateCoordinator.setLiked({
+          targetType: "thread",
+          targetId: getClientEntityId(entry),
+          pendingTarget: true,
+          desiredLiked,
+          currentBaseline: currentLiked,
+          lessonContext:
+            courseId && lessonId ? { courseId, lessonId } : undefined,
+          queryClient,
+        });
+        return;
+      }
+      if (!serverId) return;
+
       desiredStateCoordinator.setLiked({
         targetType,
-        targetId: String(id),
+        targetId: serverId,
         desiredLiked,
         currentBaseline: currentLiked,
         lessonContext:
@@ -980,6 +1023,10 @@ function DiscussionInner({
   };
 
   const beginEditingEntry = (entry: Comment) => {
+    if (isBackendMode && !getServerEntityId(entry)) {
+      setNotice("This discussion entry is still being posted.");
+      return;
+    }
     const entryKind =
       entry.entryKind ?? (entry.isQuestion ? "question" : "comment");
     setEditingEntry({
@@ -992,18 +1039,24 @@ function DiscussionInner({
   };
 
   const deleteEntry = async (id: string | number) => {
-    const isBackendNote = backendNotes.some((note) => note.id === id);
-    setOptimisticallyHiddenIds((prev) => new Set(prev).add(id));
+    const entry = combinedEntries.find(
+      (candidate) => getClientEntityId(candidate) === String(id),
+    );
+    const serverId = entry ? getServerEntityId(entry) : undefined;
+    if (isBackendMode && !serverId) return;
+    const isBackendNote = entry?.entryKind === "note";
+    const clientId = entry ? getClientEntityId(entry) : String(id);
+    setOptimisticallyHiddenIds((prev) => new Set(prev).add(clientId));
 
     if (isBackendNote) {
       try {
-        await deleteNoteMutation.mutateAsync(String(id));
+        await deleteNoteMutation.mutateAsync(serverId!);
         setEditingEntry((current) => (current?.id === id ? null : current));
         setNotice("");
       } catch (error) {
         setOptimisticallyHiddenIds((prev) => {
           const next = new Set(prev);
-          next.delete(id);
+          next.delete(clientId);
           return next;
         });
         setNotice("Failed to delete note. Please try again.");
@@ -1013,13 +1066,13 @@ function DiscussionInner({
 
     if (isBackendMode) {
       try {
-        await deleteThreadMutation.mutateAsync(String(id));
+        await deleteThreadMutation.mutateAsync(serverId!);
         setEditingEntry((current) => (current?.id === id ? null : current));
         setNotice("");
       } catch (error) {
         setOptimisticallyHiddenIds((prev) => {
           const next = new Set(prev);
-          next.delete(id);
+          next.delete(clientId);
           return next;
         });
         setNotice("Failed to delete discussion entry. Please try again.");
@@ -1102,9 +1155,13 @@ function DiscussionInner({
     replyId: string | number,
     accepted: boolean,
   ) => {
-    const threadIdStr = String(threadId);
+    const thread = combinedEntries.find(
+      (entry) => getClientEntityId(entry) === String(threadId),
+    );
+    const threadIdStr = thread ? getServerEntityId(thread) : undefined;
     const replyIdStr = String(replyId);
     if (isBackendMode) {
+      if (!threadIdStr) return;
       desiredStateCoordinator.setAcceptedAnswer({
         threadId: threadIdStr,
         desiredAcceptedReplyId: accepted ? replyIdStr : null,
@@ -1143,8 +1200,12 @@ function DiscussionInner({
     threadId: string | number,
     locked: boolean,
   ) => {
-    const threadIdStr = String(threadId);
+    const thread = combinedEntries.find(
+      (entry) => getClientEntityId(entry) === String(threadId),
+    );
+    const threadIdStr = thread ? getServerEntityId(thread) : undefined;
     if (isBackendMode) {
+      if (!threadIdStr) return;
       desiredStateCoordinator.setLocked({
         threadId: threadIdStr,
         desiredLocked: locked,
@@ -1170,10 +1231,15 @@ function DiscussionInner({
     threadId: string | number,
     bookmarked: boolean,
   ): Promise<boolean> => {
-    const threadIdStr = String(threadId);
+    const thread = combinedEntries.find(
+      (entry) => getClientEntityId(entry) === String(threadId),
+    );
+    const threadIdStr = thread ? getServerEntityId(thread) : undefined;
     if (isBackendMode) {
+      if (!thread) return false;
       desiredStateCoordinator.setBookmarked({
-        threadId: threadIdStr,
+        threadId: threadIdStr ?? getClientEntityId(thread),
+        pendingTarget: !threadIdStr,
         desiredBookmarked: bookmarked,
         currentBaseline: !bookmarked,
         lessonContext:
@@ -1207,10 +1273,15 @@ function DiscussionInner({
     threadId: string | number,
     following: boolean,
   ): Promise<boolean> => {
-    const threadIdStr = String(threadId);
+    const thread = combinedEntries.find(
+      (entry) => getClientEntityId(entry) === String(threadId),
+    );
+    const threadIdStr = thread ? getServerEntityId(thread) : undefined;
     if (isBackendMode) {
+      if (!thread) return false;
       desiredStateCoordinator.setFollowed({
-        threadId: threadIdStr,
+        threadId: threadIdStr ?? getClientEntityId(thread),
+        pendingTarget: !threadIdStr,
         desiredFollowed: following,
         currentBaseline: !following,
         lessonContext:
@@ -1246,15 +1317,29 @@ function DiscussionInner({
       | (string | number),
   ) => {
     if (typeof target === "object") {
+      const targetId =
+        target.targetType === "thread"
+          ? getServerEntityId(
+              combinedEntries.find(
+                (entry) => getClientEntityId(entry) === String(target.targetId),
+              ) ?? { id: target.targetId },
+            )
+          : String(target.targetId);
+      if (!targetId || targetId.startsWith("client-thread-")) return;
       setReportingTarget({
         targetType: target.targetType,
-        targetId: String(target.targetId),
+        targetId,
         authorName: target.authorName,
       });
     } else {
+      const entry = combinedEntries.find(
+        (candidate) => getClientEntityId(candidate) === String(target),
+      );
+      const targetId = entry ? getServerEntityId(entry) : String(target);
+      if (!targetId || targetId.startsWith("client-thread-")) return;
       setReportingTarget({
         targetType: "thread",
-        targetId: String(target),
+        targetId,
       });
     }
     setReportDialogOpen(true);
@@ -1380,12 +1465,18 @@ function DiscussionInner({
         onDelete={deleteEntry}
         onReport={handleOpenReport}
         onOpenThread={(id, focusComposer = false) => {
-          const entry = combinedEntries.find((e) => String(e.id) === String(id));
+          const entry = combinedEntries.find(
+            (candidate) => getClientEntityId(candidate) === String(id),
+          );
           if (entry?.entryKind === "note") return;
-          setOpenThread({ id, focusComposer });
+          if (!entry) return;
+          const clientId = getClientEntityId(entry);
+          const serverId = getServerEntityId(entry);
+          setOpenThread({ id: clientId, focusComposer });
           setSearchParams((prev) => {
             const next = new URLSearchParams(prev);
-            next.set("thread", String(id));
+            if (serverId) next.set("thread", serverId);
+            else next.delete("thread");
             return next;
           });
         }}
@@ -1401,7 +1492,10 @@ function DiscussionInner({
       <DiscussionThreadPanel
         open={
           openThread !== null &&
-          threadEntries.some((e) => String(e.id) === String(openThread.id))
+          threadEntries.some(
+            (entry) =>
+              getClientEntityId(entry) === String(openThread.id),
+          )
         }
         activeEntryId={openThread?.id ?? null}
         entries={threadEntries}
@@ -1429,7 +1523,12 @@ function DiscussionInner({
           setSearchParams(
             (prev) => {
               const next = new URLSearchParams(prev);
-              next.set("thread", String(id));
+              const entry = threadEntries.find(
+                (candidate) => getClientEntityId(candidate) === String(id),
+              );
+              const serverId = entry ? getServerEntityId(entry) : undefined;
+              if (serverId) next.set("thread", serverId);
+              else next.delete("thread");
               return next;
             },
             { replace: true },
@@ -1531,7 +1630,7 @@ interface ThreadSurfaceProps {
   onDraftChange: (value: DiscussionDraft) => void;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
-  onSubmit: () => Promise<boolean> | void;
+  onSubmit: (onLocallyAccepted?: () => void) => Promise<boolean> | void;
   onCancelEdit: () => void;
   onEntryFilterChange: (filter: DiscussionEntryFilter) => void;
   onFeedSortChange: (sort: DiscussionFeedSort) => void;
@@ -1766,12 +1865,19 @@ function ThreadSurface({
       document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
   }, [closeComposer, composerMode]);
 
-  const submitAndCollapse = async () => {
-    if (!canSubmitDraft) return;
-    const result = await onSubmit();
-    if (result !== false) {
+  const submitAndCollapse = async (onLocallyAccepted?: () => void) => {
+    if (!canSubmitDraft) return false;
+    let acceptedLocally = false;
+    const result = await onSubmit(() => {
+      acceptedLocally = true;
+      setComposerMode("collapsed");
+      onLocallyAccepted?.();
+    });
+    const succeeded = result !== false;
+    if (succeeded && !acceptedLocally) {
       setComposerMode("collapsed");
     }
+    return succeeded;
   };
 
   if (isInteractionCapabilitiesLoading) {
@@ -1976,7 +2082,7 @@ function ThreadSurface({
           <>
             {entries.map((entry) => (
               <CommentCard
-                key={entry.id}
+                key={getClientEntityId(entry)}
                 comment={entry}
                 onLike={onLike}
                 onEdit={onEdit}

@@ -2,6 +2,11 @@ import type { LearningReply } from "@veolms/contracts";
 import type { CommentReply } from "./CommentCard";
 import { createDiscussionDraft } from "./discussion-editor/types";
 import { formatRelativeTime } from "./learning-notes.adapter";
+import {
+  getClientEntityId,
+  getServerEntityId,
+  isPendingClientEntity,
+} from "../services/learning-interactions/interaction-entities";
 
 export function adaptLearningReplyToCommentReply(
   reply: LearningReply,
@@ -14,7 +19,9 @@ export function adaptLearningReplyToCommentReply(
 
   return {
     id: reply.id,
-    clientId: (reply as any).clientId ?? reply.id,
+    clientId: getClientEntityId(reply),
+    serverId: getServerEntityId(reply),
+    creationStatus: isPendingClientEntity(reply) ? "pending" : "confirmed",
     name: reply.author.displayName || reply.author.username || "Learner",
     time: formatRelativeTime(reply.createdAt),
     avatar: reply.author.avatarUrl || "/assets/sofia-avatar-160.webp",

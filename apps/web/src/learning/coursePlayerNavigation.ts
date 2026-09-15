@@ -361,7 +361,8 @@ export function getCoursePlayerReturnPath(search: string): string {
 
 export function getCoursePlayerThread(search: string): string | null {
   const thread = new URLSearchParams(search).get("thread");
-  return thread && thread.trim().length > 0 ? thread.trim() : null;
+  const normalized = thread?.trim();
+  return normalized && !normalized.startsWith("client-") ? normalized : null;
 }
 
 export function getCoursePlayerPath(
@@ -382,7 +383,7 @@ export function getCoursePlayerPath(
   const search = new URLSearchParams({ from: normalizedOrigin });
   if (normalizedReturnPath !== fallbackReturnPath)
     search.set("returnTo", normalizedReturnPath);
-  if (threadId && threadId.trim())
+  if (threadId && threadId.trim() && !threadId.trim().startsWith("client-"))
     search.set("thread", threadId.trim());
   return `/learn/${encodeURIComponent(courseId)}/${getLessonSlug(lessonId)}?${search.toString()}`;
 }

@@ -1,5 +1,6 @@
 import type { Comment } from "./CommentCard";
 import type { DiscussionEntryKind } from "./discussion-editor/types";
+import { getClientEntityId } from "../services/learning-interactions/interaction-entities";
 
 export type DiscussionEntryFilter = "all" | DiscussionEntryKind;
 export type DiscussionFeedSort = "newest" | "top" | "mine";
@@ -65,7 +66,7 @@ export function getEntryTimestamp(entry: Comment): number {
 export function compareEntriesNewest(left: Comment, right: Comment): number {
   const diff = getEntryTimestamp(right) - getEntryTimestamp(left);
   if (diff !== 0) return diff;
-  return String(right.id).localeCompare(String(left.id));
+  return getClientEntityId(right).localeCompare(getClientEntityId(left));
 }
 
 export function applyDiscussionFeed({
@@ -82,7 +83,7 @@ export function applyDiscussionFeed({
   capabilities?: InteractionCapabilities;
 }): Comment[] {
   const uniqueEntries = Array.from(
-    new Map(entries.map((entry) => [entry.id, entry])).values(),
+    new Map(entries.map((entry) => [getClientEntityId(entry), entry])).values(),
   );
   const capabilityFiltered = capabilities
     ? uniqueEntries.filter((entry) => {

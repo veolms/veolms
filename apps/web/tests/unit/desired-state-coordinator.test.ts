@@ -176,6 +176,139 @@ describe("DesiredStateCoordinator & Cache Updaters", () => {
     });
   });
 
+  describe("pending optimistic threads", () => {
+    it("keeps client-keyed like, bookmark, and follow intents local until creation resolves", async () => {
+      const clientId = "client-thread-pending";
+      const serverId = "server-thread-confirmed";
+      const threadKey = [
+        ...learningInteractionKeys.all,
+        "lesson-threads",
+        "c1",
+        "l1",
+      ];
+      queryClient.setQueryData<LearningThreadsListResponse>(threadKey, {
+        threads: [
+          {
+            id: clientId,
+            clientId,
+            creationStatus: "pending",
+            isLiked: false,
+            likesCount: 0,
+            isBookmarked: false,
+            isFollowing: false,
+          } as any,
+        ],
+        nextCursor: null,
+      });
+
+      coordinator.setLiked({
+        targetType: "thread",
+        targetId: clientId,
+        pendingTarget: true,
+        desiredLiked: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 0,
+      });
+      coordinator.setBookmarked({
+        threadId: clientId,
+        pendingTarget: true,
+        desiredBookmarked: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 0,
+      });
+      coordinator.setFollowed({
+        threadId: clientId,
+        pendingTarget: true,
+        desiredFollowed: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 0,
+      });
+
+      expect(toggleLikeSpy).not.toHaveBeenCalled();
+      expect(learningInteractionsService.toggleBookmark).not.toHaveBeenCalled();
+      expect(learningInteractionsService.toggleFollow).not.toHaveBeenCalled();
+      expect(queryClient.getQueryData<LearningThreadsListResponse>(threadKey)?.threads[0]).toMatchObject({
+        isLiked: true,
+        likesCount: 1,
+        isBookmarked: true,
+        isFollowing: true,
+      });
+
+      coordinator.resolvePendingThread(clientId, {
+        id: serverId,
+        isLiked: false,
+        isBookmarked: false,
+        isFollowing: false,
+      } as any);
+      await Promise.resolve();
+
+      expect(toggleLikeSpy).toHaveBeenCalledWith({
+        targetType: "thread",
+        targetId: serverId,
+      });
+      expect(learningInteractionsService.toggleBookmark).toHaveBeenCalledWith(
+        serverId,
+      );
+      expect(learningInteractionsService.toggleFollow).toHaveBeenCalledWith(
+        serverId,
+      );
+    });
+
+    it("coalesces a pending like back to its authoritative create baseline", () => {
+      const clientId = "client-thread-coalesced";
+      coordinator.setLiked({
+        targetType: "thread",
+        targetId: clientId,
+        pendingTarget: true,
+        desiredLiked: true,
+        currentBaseline: false,
+        debounceMs: 0,
+      });
+      coordinator.setLiked({
+        targetType: "thread",
+        targetId: clientId,
+        pendingTarget: true,
+        desiredLiked: false,
+        currentBaseline: false,
+        debounceMs: 0,
+      });
+      coordinator.resolvePendingThread(clientId, {
+        id: "server-thread-coalesced",
+        isLiked: false,
+      } as any);
+
+      expect(toggleLikeSpy).not.toHaveBeenCalled();
+    });
+
+    it("drops pending intents on create failure without dispatching engagement", () => {
+      const clientId = "client-thread-failed";
+      coordinator.setBookmarked({
+        threadId: clientId,
+        pendingTarget: true,
+        desiredBookmarked: true,
+        currentBaseline: false,
+        debounceMs: 0,
+      });
+      coordinator.setFollowed({
+        threadId: clientId,
+        pendingTarget: true,
+        desiredFollowed: true,
+        currentBaseline: false,
+        debounceMs: 0,
+      });
+
+      coordinator.failPendingThread(clientId);
+
+      expect(coordinator.getBookmarkState(clientId)).toBeUndefined();
+      expect(coordinator.getFollowState(clientId)).toBeUndefined();
+      expect(learningInteractionsService.toggleBookmark).not.toHaveBeenCalled();
+      expect(learningInteractionsService.toggleFollow).not.toHaveBeenCalled();
+    });
+  });
+
   describe("3. Coalescing & Convergence", () => {
     it("neutralizes rapid opposing clicks within debounce window with 0 network calls", async () => {
       coordinator.setLiked({

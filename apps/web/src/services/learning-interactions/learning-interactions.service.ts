@@ -41,6 +41,7 @@ import type {
   UserSuspension,
 } from "@veolms/contracts";
 import { api } from "../../lib/api-client";
+import { requireServerEntityId } from "./interaction-entities";
 
 export const learningInteractionsService = {
   // Threads (Lessons & Assignments)
@@ -86,18 +87,21 @@ export const learningInteractionsService = {
   },
 
   getThread(threadId: string): Promise<LearningThread> {
-    return api.get<LearningThread>(`/threads/${threadId}`);
+    const serverId = requireServerEntityId(threadId);
+    return api.get<LearningThread>(`/threads/${serverId}`);
   },
 
   updateThread(
     threadId: string,
     payload: UpdateLearningThreadRequest,
   ): Promise<LearningThread> {
-    return api.patch<LearningThread>(`/threads/${threadId}`, payload);
+    const serverId = requireServerEntityId(threadId);
+    return api.patch<LearningThread>(`/threads/${serverId}`, payload);
   },
 
   deleteThread(threadId: string): Promise<{ message: string }> {
-    return api.delete<{ message: string }>(`/threads/${threadId}`);
+    const serverId = requireServerEntityId(threadId);
+    return api.delete<{ message: string }>(`/threads/${serverId}`);
   },
 
   // Replies
@@ -105,8 +109,9 @@ export const learningInteractionsService = {
     threadId: string,
     query?: ListLearningRepliesQuery,
   ): Promise<LearningRepliesListResponse> {
+    const serverId = requireServerEntityId(threadId);
     return api.get<LearningRepliesListResponse>(
-      `/threads/${threadId}/replies`,
+      `/threads/${serverId}/replies`,
       { params: query },
     );
   },
@@ -115,71 +120,76 @@ export const learningInteractionsService = {
     threadId: string,
     payload: CreateLearningReplyRequest,
   ): Promise<LearningReply> {
-    return api.post<LearningReply>(
-      `/threads/${threadId}/replies`,
-      payload,
-    );
+    const serverId = requireServerEntityId(threadId);
+    return api.post<LearningReply>(`/threads/${serverId}/replies`, payload);
   },
 
   updateReply(
     replyId: string,
     payload: UpdateLearningReplyRequest,
   ): Promise<LearningReply> {
-    return api.patch<LearningReply>(`/replies/${replyId}`, payload);
+    const serverId = requireServerEntityId(replyId);
+    return api.patch<LearningReply>(`/replies/${serverId}`, payload);
   },
 
   deleteReply(replyId: string): Promise<{ message: string }> {
-    return api.delete<{ message: string }>(`/replies/${replyId}`);
+    const serverId = requireServerEntityId(replyId);
+    return api.delete<{ message: string }>(`/replies/${serverId}`);
   },
 
   acceptReply(
     replyId: string,
     payload?: AcceptReplyRequest,
   ): Promise<AcceptReplyResponse> {
+    const serverId = requireServerEntityId(replyId);
     return api.post<AcceptReplyResponse>(
-      `/replies/${replyId}/accept`,
+      `/replies/${serverId}/accept`,
       payload,
     );
   },
 
   // Engagements
   toggleLike(payload: ToggleLikeRequest): Promise<ToggleLikeResponse> {
-    return api.post<ToggleLikeResponse>(
-      "/interactions/likes",
-      payload,
-    );
+    const serverId = requireServerEntityId(payload.targetId);
+    return api.post<ToggleLikeResponse>("/interactions/likes", {
+      ...payload,
+      targetId: serverId,
+    });
   },
 
   toggleBookmark(threadId: string): Promise<ToggleBookmarkResponse> {
-    return api.post<ToggleBookmarkResponse>(
-      `/threads/${threadId}/bookmark`,
-    );
+    const serverId = requireServerEntityId(threadId);
+    return api.post<ToggleBookmarkResponse>(`/threads/${serverId}/bookmark`);
   },
 
   toggleFollow(threadId: string): Promise<ToggleFollowResponse> {
-    return api.post<ToggleFollowResponse>(
-      `/threads/${threadId}/follow`,
-    );
+    const serverId = requireServerEntityId(threadId);
+    return api.post<ToggleFollowResponse>(`/threads/${serverId}/follow`);
   },
 
   lockThread(
     threadId: string,
     payload: LockThreadRequest,
   ): Promise<LockThreadResponse> {
-    return api.post<LockThreadResponse>(
-      `/threads/${threadId}/lock`,
-      payload,
+    const serverId = requireServerEntityId(threadId);
+    return api.post<LockThreadResponse>(`/threads/${serverId}/lock`, payload);
+  },
+
+  autocompleteUsers(
+    query: UserAutocompleteQuery,
+  ): Promise<UserAutocompleteResponse> {
+    return api.get<UserAutocompleteResponse>(
+      "/interactions/users/autocomplete",
+      {
+        params: query,
+      },
     );
   },
 
-  autocompleteUsers(query: UserAutocompleteQuery): Promise<UserAutocompleteResponse> {
-    return api.get<UserAutocompleteResponse>("/interactions/users/autocomplete", {
-      params: query,
-    });
-  },
-
   // Notes
-  listNotes(query?: ListLearningNotesQuery): Promise<LearningNotesListResponse> {
+  listNotes(
+    query?: ListLearningNotesQuery,
+  ): Promise<LearningNotesListResponse> {
     return api.get<LearningNotesListResponse>("/notes", {
       params: query,
     });
@@ -188,7 +198,9 @@ export const learningInteractionsService = {
   getCourseNotesOverview(
     courseId: string,
   ): Promise<CourseNotesOverviewResponse> {
-    return api.get<CourseNotesOverviewResponse>(`/courses/${courseId}/notes-overview`);
+    return api.get<CourseNotesOverviewResponse>(
+      `/courses/${courseId}/notes-overview`,
+    );
   },
 
   createNote(payload: CreateLearningNoteRequest): Promise<LearningNote> {
@@ -196,18 +208,21 @@ export const learningInteractionsService = {
   },
 
   getNote(noteId: string): Promise<LearningNote> {
-    return api.get<LearningNote>(`/notes/${noteId}`);
+    const serverId = requireServerEntityId(noteId);
+    return api.get<LearningNote>(`/notes/${serverId}`);
   },
 
   updateNote(
     noteId: string,
     payload: UpdateLearningNoteRequest,
   ): Promise<LearningNote> {
-    return api.patch<LearningNote>(`/notes/${noteId}`, payload);
+    const serverId = requireServerEntityId(noteId);
+    return api.patch<LearningNote>(`/notes/${serverId}`, payload);
   },
 
   deleteNote(noteId: string): Promise<{ message: string }> {
-    return api.delete<{ message: string }>(`/notes/${noteId}`);
+    const serverId = requireServerEntityId(noteId);
+    return api.delete<{ message: string }>(`/notes/${serverId}`);
   },
 
   // Attachments
@@ -235,34 +250,35 @@ export const learningInteractionsService = {
   completeUpload(
     payload: CompleteAttachmentUploadRequest,
   ): Promise<LearningAttachment> {
-    return api.post<LearningAttachment>(
-      "/attachments/complete",
-      payload,
-    );
+    return api.post<LearningAttachment>("/attachments/complete", payload);
   },
 
   uploadAttachmentDirect(file: File): Promise<LearningUploadResponse> {
     const formData = new FormData();
     formData.append("file", file, file.name);
-    return api.post<LearningUploadResponse>(
-      "/attachments/upload",
-      formData,
-    );
+    return api.post<LearningUploadResponse>("/attachments/upload", formData);
   },
 
   // Reporting
   createReport(payload: CreateReportRequest): Promise<{ message: string }> {
-    return api.post<{ message: string }>(
-      "/reports",
-      payload,
-    );
+    const serverId = requireServerEntityId(payload.targetId);
+    return api.post<{ message: string }>("/reports", {
+      ...payload,
+      targetId: serverId,
+    });
   },
 
   // Course Moderation
-  listCourseReports(courseId: string, query?: ListReportsQuery): Promise<ReportsListResponse> {
-    return api.get<ReportsListResponse>(`/courses/${courseId}/moderation/reports`, {
-      params: query,
-    });
+  listCourseReports(
+    courseId: string,
+    query?: ListReportsQuery,
+  ): Promise<ReportsListResponse> {
+    return api.get<ReportsListResponse>(
+      `/courses/${courseId}/moderation/reports`,
+      {
+        params: query,
+      },
+    );
   },
 
   moderateCourseThread(
@@ -270,8 +286,9 @@ export const learningInteractionsService = {
     threadId: string,
     payload: ModerateThreadRequest,
   ): Promise<{ message: string }> {
+    const serverId = requireServerEntityId(threadId);
     return api.post<{ message: string }>(
-      `/courses/${courseId}/moderation/threads/${threadId}`,
+      `/courses/${courseId}/moderation/threads/${serverId}`,
       payload,
     );
   },
@@ -281,8 +298,9 @@ export const learningInteractionsService = {
     replyId: string,
     payload: ModerateReplyRequest,
   ): Promise<{ message: string }> {
+    const serverId = requireServerEntityId(replyId);
     return api.post<{ message: string }>(
-      `/courses/${courseId}/moderation/replies/${replyId}`,
+      `/courses/${courseId}/moderation/replies/${serverId}`,
       payload,
     );
   },
@@ -326,8 +344,9 @@ export const learningInteractionsService = {
     threadId: string,
     payload: ModerateThreadRequest,
   ): Promise<{ message: string }> {
+    const serverId = requireServerEntityId(threadId);
     return api.post<{ message: string }>(
-      `/moderation/threads/${threadId}`,
+      `/moderation/threads/${serverId}`,
       payload,
     );
   },
@@ -336,8 +355,9 @@ export const learningInteractionsService = {
     replyId: string,
     payload: ModerateReplyRequest,
   ): Promise<{ message: string }> {
+    const serverId = requireServerEntityId(replyId);
     return api.post<{ message: string }>(
-      `/moderation/replies/${replyId}`,
+      `/moderation/replies/${serverId}`,
       payload,
     );
   },

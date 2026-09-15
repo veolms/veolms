@@ -6,6 +6,18 @@ import type {
   LearningThreadsListResponse,
 } from "@veolms/contracts";
 import { learningInteractionKeys } from "./learning-interactions.keys";
+import { getClientEntityId, getServerEntityId } from "./interaction-entities";
+
+function matchesThreadIdentity(
+  thread: { id: string; clientId?: string; serverId?: string },
+  identity: string,
+): boolean {
+  return (
+    thread.id === identity ||
+    getClientEntityId(thread) === identity ||
+    getServerEntityId(thread) === identity
+  );
+}
 
 /**
  * Transition-aware counter updater.
@@ -52,7 +64,7 @@ export function updateThreadLikeInCache(
       if (!old?.threads) return old;
       let hasChange = false;
       const nextThreads = old.threads.map((thread) => {
-        if (thread.id !== threadId) return thread;
+        if (!matchesThreadIdentity(thread, threadId)) return thread;
         const currentLiked = Boolean(thread.isLiked);
         if (currentLiked === desiredLiked) return thread;
         hasChange = true;
@@ -96,7 +108,7 @@ export function updateThreadLikeInCache(
       if (!old?.threads) return old;
       let hasChange = false;
       const nextThreads = old.threads.map((thread) => {
-        if (thread.id !== threadId) return thread;
+        if (!matchesThreadIdentity(thread, threadId)) return thread;
         const currentLiked = Boolean(thread.isLiked);
         if (currentLiked === desiredLiked) return thread;
         hasChange = true;
@@ -230,7 +242,7 @@ export function updateThreadBookmarkInCache(
       if (!old?.threads) return old;
       let hasChange = false;
       const nextThreads = old.threads.map((thread) => {
-        if (thread.id !== threadId) return thread;
+        if (!matchesThreadIdentity(thread, threadId)) return thread;
         if (Boolean(thread.isBookmarked) === desiredBookmarked) return thread;
         hasChange = true;
         return {
@@ -262,7 +274,7 @@ export function updateThreadBookmarkInCache(
       if (!old?.threads) return old;
       let hasChange = false;
       const nextThreads = old.threads.map((thread) => {
-        if (thread.id !== threadId) return thread;
+        if (!matchesThreadIdentity(thread, threadId)) return thread;
         if (Boolean(thread.isBookmarked) === desiredBookmarked) return thread;
         hasChange = true;
         return {
@@ -303,7 +315,7 @@ export function updateThreadFollowInCache(
       if (!old?.threads) return old;
       let hasChange = false;
       const nextThreads = old.threads.map((thread) => {
-        if (thread.id !== threadId) return thread;
+        if (!matchesThreadIdentity(thread, threadId)) return thread;
         if (Boolean(thread.isFollowing) === desiredFollowed) return thread;
         hasChange = true;
         return {
@@ -335,7 +347,7 @@ export function updateThreadFollowInCache(
       if (!old?.threads) return old;
       let hasChange = false;
       const nextThreads = old.threads.map((thread) => {
-        if (thread.id !== threadId) return thread;
+        if (!matchesThreadIdentity(thread, threadId)) return thread;
         if (Boolean(thread.isFollowing) === desiredFollowed) return thread;
         hasChange = true;
         return {
@@ -376,7 +388,7 @@ export function updateThreadLockInCache(
       if (!old?.threads) return old;
       let hasChange = false;
       const nextThreads = old.threads.map((thread) => {
-        if (thread.id !== threadId) return thread;
+        if (!matchesThreadIdentity(thread, threadId)) return thread;
         if (Boolean(thread.isLocked) === desiredLocked) return thread;
         hasChange = true;
         return {
@@ -408,7 +420,7 @@ export function updateThreadLockInCache(
       if (!old?.threads) return old;
       let hasChange = false;
       const nextThreads = old.threads.map((thread) => {
-        if (thread.id !== threadId) return thread;
+        if (!matchesThreadIdentity(thread, threadId)) return thread;
         if (Boolean(thread.isLocked) === desiredLocked) return thread;
         hasChange = true;
         return {
@@ -482,7 +494,7 @@ export function updateAcceptedAnswerInCache(
       if (!old?.threads) return old;
       let hasChange = false;
       const nextThreads = old.threads.map((thread) => {
-        if (thread.id !== threadId) return thread;
+        if (!matchesThreadIdentity(thread, threadId)) return thread;
         if (thread.acceptedAnswerId === desiredAcceptedReplyId) {
           return thread;
         }
@@ -503,7 +515,7 @@ export function updateAcceptedAnswerInCache(
       if (!old?.threads) return old;
       let hasChange = false;
       const nextThreads = old.threads.map((thread) => {
-        if (thread.id !== threadId) return thread;
+        if (!matchesThreadIdentity(thread, threadId)) return thread;
         if (thread.acceptedAnswerId === desiredAcceptedReplyId) {
           return thread;
         }

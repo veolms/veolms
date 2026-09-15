@@ -6,6 +6,7 @@ import axios, {
 } from "axios";
 import { getApiError, type ApiError } from "./api-error";
 import { authStore } from "../store/auth.store";
+import { interactionCreationCoordinator } from "../services/learning-interactions/interaction-creation-coordinator";
 import {
   MFA_CHALLENGE_PATH,
   shouldRedirectToMfaChallenge,
@@ -44,9 +45,12 @@ axiosInstance.interceptors.request.use(
   (config) => {
     if (isReactRouterBuildRequest()) {
       return Promise.reject(
-        Object.assign(new Error("API requests are disabled during prerender."), {
-          config,
-        }),
+        Object.assign(
+          new Error("API requests are disabled during prerender."),
+          {
+            config,
+          },
+        ),
       );
     }
     if (typeof FormData !== "undefined" && config.data instanceof FormData) {
@@ -74,6 +78,7 @@ axiosInstance.interceptors.response.use(
     redirectToMfaSetup(apiError);
     if (apiError.status === 401 && error.config?.url !== "/auth/login") {
       authStore.clearAuth();
+      interactionCreationCoordinator.reset();
     }
     return Promise.reject(apiError);
   },

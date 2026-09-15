@@ -37,7 +37,7 @@ interface CommentComposerProps {
   onDraftChange: (value: DiscussionDraft) => void;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
-  onSubmit: () => void;
+  onSubmit: (onLocallyAccepted?: () => void) => Promise<boolean> | void;
   onClose: () => void;
   courseId?: string;
   autoFocus?: boolean;
@@ -68,6 +68,7 @@ export function CommentComposer({
   const reviewHeadingRef = useRef<HTMLDivElement>(null);
   const [editorController, setEditorController] =
     useState<DiscussionEditorController | null>(null);
+  const [editorResetToken, setEditorResetToken] = useState(0);
   const [formattingState, setFormattingState] =
     useState<DiscussionFormattingState>(EMPTY_FORMATTING_STATE);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
@@ -129,6 +130,18 @@ export function CommentComposer({
     window.setTimeout(() => editorController?.focus(), 0);
   };
 
+  const resetAfterLocalSubmit = () => {
+    // This callback is invoked only when the local optimistic create is
+    // accepted; mutation settlement must never alter a newer draft.
+    setEditorResetToken((current) => current + 1);
+    setComposerStep("compose");
+    setTransitionDirection("back");
+    setFormattingState(EMPTY_FORMATTING_STATE);
+    setAttachmentNotice(null);
+    setInternalAttachments([]);
+    onAttachmentsChangeProp?.([]);
+  };
+
   return (
     <div
       data-comment-composer-surface
@@ -156,6 +169,7 @@ export function CommentComposer({
           >
             <DiscussionEditor
               documentId={documentId}
+              resetToken={editorResetToken}
               value={draft}
               label={getEditorLabel(entryKind, editing)}
               placeholderText={
@@ -260,7 +274,7 @@ export function CommentComposer({
                     : `Post ${getEntryKindLabel(entryKind)}`
               }
               disabled={!canSubmit || isSubmitting}
-              onClick={onSubmit}
+              onClick={() => onSubmit(resetAfterLocalSubmit)}
               className="inline-flex h-10 items-center gap-2 rounded-lg bg-(--accent) px-4 text-sm font-semibold text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_55%,transparent)] transition-colors hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
             >
               {editing ? (

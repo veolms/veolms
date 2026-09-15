@@ -2,6 +2,12 @@ import type { LearningThread } from "@veolms/contracts";
 import type { Comment } from "./CommentCard";
 import { createDiscussionDraft } from "./discussion-editor/types";
 import { formatRelativeTime } from "./learning-notes.adapter";
+import {
+  getClientEntityId,
+  getServerEntityId,
+  isPendingClientEntity,
+  type ThreadEntityLike,
+} from "../services/learning-interactions/interaction-entities";
 
 export function isCommentOrQaThread(thread: LearningThread): boolean {
   return (
@@ -12,7 +18,7 @@ export function isCommentOrQaThread(thread: LearningThread): boolean {
 }
 
 export function adaptLearningThreadToComment(
-  thread: LearningThread,
+  thread: ThreadEntityLike,
   currentUserId?: string,
 ): Comment {
   const contentDraft = createDiscussionDraft(thread.content);
@@ -32,8 +38,12 @@ export function adaptLearningThreadToComment(
     : undefined;
 
   return {
-    id: thread.id,
-    clientId: (thread as any).clientId ?? thread.id,
+    // Comment.id is UI identity. It must remain stable while an optimistic
+    // thread is reconciled from its temporary client ID to a server UUID.
+    id: getClientEntityId(thread),
+    clientId: getClientEntityId(thread),
+    serverId: getServerEntityId(thread),
+    creationStatus: isPendingClientEntity(thread) ? "pending" : "confirmed",
     name: thread.author.displayName || thread.author.username || "Learner",
     time: formatRelativeTime(thread.createdAt),
     avatar: thread.author.avatarUrl || "/assets/sofia-avatar-160.webp",
@@ -60,4 +70,3 @@ export function adaptLearningThreadToComment(
     isFollowing: Boolean(thread.isFollowing),
   };
 }
-

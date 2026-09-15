@@ -2,8 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import type {
   LearningNotesListResponse,
   LearningRepliesListResponse,
-  LearningThread,
-  LearningThreadsListResponse,
   ListLearningNotesQuery,
   ListLearningRepliesQuery,
   ListLearningThreadsQuery,
@@ -15,6 +13,13 @@ import type {
 import type { ApiError } from "../../lib/api-error";
 import { learningInteractionKeys } from "./learning-interactions.keys";
 import { learningInteractionsService } from "./learning-interactions.service";
+import { interactionCreationCoordinator } from "./interaction-creation-coordinator";
+import {
+  toLearningThreadEntity,
+  isClientEntityId,
+  type LearningThreadCacheResponse,
+  type LearningThreadEntity,
+} from "./interaction-entities";
 
 export function useLessonThreads(
   courseId: string,
@@ -22,10 +27,21 @@ export function useLessonThreads(
   query?: ListLearningThreadsQuery,
   options?: { enabled?: boolean },
 ) {
-  return useQuery<LearningThreadsListResponse, ApiError>({
+  return useQuery<LearningThreadCacheResponse, ApiError>({
     queryKey: learningInteractionKeys.lessonThreads(courseId, lessonId, query),
-    queryFn: () =>
-      learningInteractionsService.listLessonThreads(courseId, lessonId, query),
+    queryFn: async () => {
+      const response = await learningInteractionsService.listLessonThreads(
+        courseId,
+        lessonId,
+        query,
+      );
+      return {
+        ...response,
+        threads: response.threads.map((thread) =>
+          toLearningThreadEntity(thread),
+        ),
+      };
+    },
     enabled: options?.enabled ?? Boolean(courseId && lessonId),
     staleTime: 30 * 1000,
   });
@@ -35,34 +51,68 @@ export function useHubThreads(
   query?: ListLearningThreadsQuery,
   options?: { enabled?: boolean },
 ) {
-  return useQuery<LearningThreadsListResponse, ApiError>({
+  return useQuery<LearningThreadCacheResponse, ApiError>({
     queryKey: learningInteractionKeys.hubThreads(query),
-    queryFn: () => learningInteractionsService.listHubThreads(query),
+    queryFn: async () => {
+      const response = await learningInteractionsService.listHubThreads(query);
+      return {
+        ...response,
+        threads: response.threads.map((thread) =>
+          toLearningThreadEntity(thread),
+        ),
+      };
+    },
     enabled: options?.enabled ?? true,
     staleTime: 30 * 1000,
   });
 }
 
 export function useThreadDetails(
-  threadId: string,
+  threadId: string | undefined,
   options?: { enabled?: boolean },
 ) {
-  return useQuery<LearningThread, ApiError>({
-    queryKey: learningInteractionKeys.threadDetails(threadId),
-    queryFn: () => learningInteractionsService.getThread(threadId),
-    enabled: options?.enabled ?? Boolean(threadId),
+  const isPendingClientId =
+    isClientEntityId(threadId) ||
+    interactionCreationCoordinator.hasPendingClientId(threadId);
+  return useQuery<LearningThreadEntity, ApiError>({
+    queryKey: learningInteractionKeys.threadDetails(threadId ?? ""),
+    queryFn: async () => {
+      if (!threadId || isPendingClientId) {
+        throw new Error("A confirmed server thread ID is required.");
+      }
+      return toLearningThreadEntity(
+        await learningInteractionsService.getThread(threadId),
+      );
+    },
+    enabled:
+      (options?.enabled ?? Boolean(threadId)) &&
+      Boolean(threadId) &&
+      !isPendingClientId,
   });
 }
 
 export function useThreadReplies(
-  threadId: string,
+  threadId: string | undefined,
   query?: ListLearningRepliesQuery,
   options?: { enabled?: boolean },
 ) {
   return useQuery<LearningRepliesListResponse, ApiError>({
-    queryKey: learningInteractionKeys.threadReplies(threadId, query),
-    queryFn: () => learningInteractionsService.listReplies(threadId, query),
-    enabled: options?.enabled ?? Boolean(threadId),
+    queryKey: learningInteractionKeys.threadReplies(threadId ?? "", query),
+    queryFn: async () => {
+      if (
+        !threadId ||
+        (isClientEntityId(threadId) ||
+          interactionCreationCoordinator.hasPendingClientId(threadId))
+      ) {
+        throw new Error("A confirmed server thread ID is required.");
+      }
+      return learningInteractionsService.listReplies(threadId, query);
+    },
+    enabled:
+      (options?.enabled ?? Boolean(threadId)) &&
+      Boolean(threadId) &&
+      !isClientEntityId(threadId) &&
+      !interactionCreationCoordinator.hasPendingClientId(threadId),
   });
 }
 
@@ -83,9 +133,13 @@ export function useUserAutocomplete(
 ) {
   const searchTerm = query.query ?? query.q ?? "";
   return useQuery<UserAutocompleteResponse, ApiError>({
-    queryKey: learningInteractionKeys.autocompleteUsers(query.courseId, searchTerm),
+    queryKey: learningInteractionKeys.autocompleteUsers(
+      query.courseId,
+      searchTerm,
+    ),
     queryFn: () => learningInteractionsService.autocompleteUsers(query),
-    enabled: options?.enabled ?? Boolean(query.courseId && searchTerm.length >= 1),
+    enabled:
+      options?.enabled ?? Boolean(query.courseId && searchTerm.length >= 1),
     staleTime: 60 * 1000,
   });
 }

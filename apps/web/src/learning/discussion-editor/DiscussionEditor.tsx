@@ -36,6 +36,7 @@ export interface DiscussionEditorController extends DiscussionEditorCommands {
 interface DiscussionEditorProps {
   value: DiscussionDraft;
   documentId: string;
+  resetToken?: number;
   label: string;
   placeholderText: string;
   invalid?: boolean;
@@ -54,6 +55,7 @@ interface DiscussionEditorProps {
 export function DiscussionEditor({
   value,
   documentId,
+  resetToken = 0,
   label,
   placeholderText,
   invalid = false,
@@ -70,6 +72,7 @@ export function DiscussionEditor({
 }: DiscussionEditorProps) {
   const atomicHandleRef = useRef<AtomicCodeMirrorEditorHandle | null>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const previousResetTokenRef = useRef(resetToken);
   const onChangeRef = useLatest(onChange);
   const onControllerChangeRef = useLatest(onControllerChange);
   const onFormattingStateChangeRef = useLatest(onFormattingStateChange);
@@ -174,6 +177,22 @@ export function DiscussionEditor({
     content.setAttribute("aria-label", label);
     content.setAttribute("aria-invalid", invalid ? "true" : "false");
   }, [invalid, label]);
+
+  useEffect(() => {
+    if (previousResetTokenRef.current === resetToken) return;
+    previousResetTokenRef.current = resetToken;
+
+    const view = viewRef.current;
+    if (!view || view.state.doc.length === 0) return;
+
+    view.dispatch({
+      changes: {
+        from: 0,
+        to: view.state.doc.length,
+        insert: "",
+      },
+    });
+  }, [resetToken]);
 
   useEffect(() => {
     const callback = onControllerChangeRef.current;

@@ -46,6 +46,10 @@ import {
   useUpdateReply,
   desiredStateCoordinator,
 } from "../services/learning-interactions";
+import {
+  getClientEntityId,
+  getServerEntityId,
+} from "../services/learning-interactions/interaction-entities";
 import { adaptLearningReplyToCommentReply } from "./learning-replies.adapter";
 import { useUndoableDeletion, UndoDeleteButton } from "./useUndoableDeletion";
 import {
@@ -200,7 +204,7 @@ export function DiscussionThreadPanel({
     entryId: string | number | null;
   }>({ id: 0, entryId: null });
   const foundIndex = entries.findIndex(
-    (entry) => String(entry.id) === String(activeEntryId),
+    (entry) => getClientEntityId(entry) === String(activeEntryId),
   );
   const activeIndex = foundIndex >= 0 ? foundIndex : 0;
   const requestComposerFocus = useCallback((entryId: string | number) => {
@@ -648,20 +652,23 @@ export function DiscussionThreadPanel({
             }}
             onSlideChange={(swiper) => {
               const entry = entries[swiper.activeIndex];
-              if (entry) onActiveEntryChange(entry.id);
+              if (entry) onActiveEntryChange(getClientEntityId(entry));
             }}
           >
             {entries.map((entry) => (
-              <SwiperSlide key={entry.id} className="h-full!">
+              <SwiperSlide key={getClientEntityId(entry)} className="h-full!">
                 <ThreadSlide
                   entry={entry}
-                  active={String(entry.id) === String(activeEntryId)}
+                  active={
+                    getClientEntityId(entry) === String(activeEntryId)
+                  }
                   isBackendMode={isBackendMode}
                   currentUserId={currentUserId}
                   userRole={userRole}
                   currentUser={currentUser}
                   focusRequest={
-                    String(composerFocusRequest.entryId) === String(entry.id)
+                    String(composerFocusRequest.entryId) ===
+                    getClientEntityId(entry)
                       ? composerFocusRequest.id
                       : 0
                   }
@@ -773,8 +780,10 @@ function ThreadSlide({
   const canLock = Boolean(entry.isOwn || isModerator);
   const canAcceptAnswer = isQuestion && Boolean(entry.isOwn || isModerator);
 
-  const isBackend = Boolean(isBackendMode && typeof entry.id === "string");
-  const threadId = String(entry.id);
+  const clientId = getClientEntityId(entry);
+  const serverId = getServerEntityId(entry);
+  const isBackend = Boolean(isBackendMode && serverId);
+  const threadId = serverId;
   const queryClient = useContext(QueryClientContext);
 
   const {
@@ -819,6 +828,8 @@ function ThreadSlide({
       } catch {
         return false;
       }
+    } else if (isBackendMode) {
+      return false;
     } else {
       onAddReply(entry.id, {
         id: Date.now(),
@@ -880,7 +891,7 @@ function ThreadSlide({
       desiredStateCoordinator.setLiked({
         targetType: "reply",
         targetId: String(replyId),
-        threadId,
+        threadId: threadId!,
         desiredLiked: nextLiked,
         currentBaseline: currentLiked,
         queryClient,
@@ -955,8 +966,8 @@ function ThreadSlide({
           ) : replies.length > 0 ? (
             replies.map((reply) => (
               <ThreadReplyEntry
-                key={reply.id}
-                parentId={entry.id}
+                key={reply.clientId ?? reply.id}
+                parentId={clientId}
                 reply={reply}
                 isQuestion={isQuestion}
                 canAcceptAnswer={canAcceptAnswer}
@@ -1045,6 +1056,7 @@ function ThreadRootEntry({
 }) {
   const isEntryLiked = Boolean(entry.liked);
   const isNote = entry.entryKind === "note" || (entry as any).kind === "note";
+  const serverId = getServerEntityId(entry);
 
   const replyCount = Math.max(entry.replies ?? 0, entry.thread?.length ?? 0);
 
@@ -1143,7 +1155,9 @@ function ThreadRootEntry({
               }
               onEdit={onEdit}
               onShare={() =>
-                void shareDiscussionEntry(entry.id, entry.name, entry.text)
+                serverId
+                  ? void shareDiscussionEntry(serverId, entry.name, entry.text)
+                  : undefined
               }
               onDelete={onDelete}
               onReport={onReport}
@@ -1342,9 +1356,14 @@ function ThreadReplyEntry({
                     setEditing(true);
                   }}
                   onShare={() =>
-                    void shareDiscussionEntry(reply.id, reply.name, reply.text, {
-                      parentThreadId: parentId,
-                    })
+                    void shareDiscussionEntry(
+                      reply.id,
+                      reply.name,
+                      reply.text,
+                      {
+                        parentThreadId: parentId,
+                      },
+                    )
                   }
                   onDelete={deletion.begin}
                   onReport={() =>

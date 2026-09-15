@@ -4,6 +4,7 @@ import {
   adaptLearningThreadToComment,
   isCommentOrQaThread,
 } from "../../src/learning/learning-threads.adapter";
+import type { LearningThreadEntity } from "../../src/services/learning-interactions/interaction-entities";
 
 describe("learning-threads.adapter", () => {
   const mockBaseThread: LearningThread = {
@@ -73,6 +74,26 @@ describe("learning-threads.adapter", () => {
       expect(adapted.isOwn).toBe(true);
       expect(adapted.timestampSeconds).toBe(42);
     });
+
+    it.each(["comment", "question"] as const)(
+      "uses client identity for a reconciled %s view model while retaining its server transport identity",
+      (kind) => {
+        const reconciled: LearningThreadEntity = {
+          ...mockBaseThread,
+          id: "server-thread-uuid-1",
+          kind,
+          clientId: "client-thread-uuid-1",
+          serverId: "server-thread-uuid-1",
+          creationStatus: "confirmed",
+        };
+
+        const adapted = adaptLearningThreadToComment(reconciled);
+
+        expect(adapted.id).toBe("client-thread-uuid-1");
+        expect(adapted.clientId).toBe("client-thread-uuid-1");
+        expect(adapted.serverId).toBe("server-thread-uuid-1");
+      },
+    );
 
     it("maps author role without fabrication", () => {
       const studentThread: LearningThread = {
@@ -180,4 +201,3 @@ describe("learning-threads.adapter", () => {
     });
   });
 });
-
