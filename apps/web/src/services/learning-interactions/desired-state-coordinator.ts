@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { LearningReply, LearningThread } from "@veolms/contracts";
+import type { LearningNote, LearningReply, LearningThread } from "@veolms/contracts";
 import { queryClient as defaultQueryClient } from "../../lib/query-client";
 import { learningInteractionsService } from "./learning-interactions.service";
 import {
@@ -140,12 +140,21 @@ export interface ReplyResolution {
   readonly generation: number;
 }
 
+export interface NoteResolution {
+  readonly clientId: string;
+  readonly status: "confirmed" | "failed";
+  readonly serverId?: string;
+  readonly isLiked?: boolean;
+  readonly generation: number;
+}
+
 export class DesiredStateCoordinator {
   private generation = 1;
   private entries = new Map<string, EntityLikeState>();
   private booleanEntries = new Map<string, ThreadBooleanState>();
   private acceptAnswerEntries = new Map<string, ThreadAcceptedAnswerState>();
   private replyResolutions = new Map<string, ReplyResolution>();
+  private noteResolutions = new Map<string, NoteResolution>();
   private queryClient: QueryClient;
 
   constructor(queryClient: QueryClient = defaultQueryClient) {
@@ -220,6 +229,7 @@ export class DesiredStateCoordinator {
     }
     this.acceptAnswerEntries.clear();
     this.replyResolutions.clear();
+    this.noteResolutions.clear();
   }
 
   /**
@@ -302,6 +312,20 @@ export class DesiredStateCoordinator {
     });
   }
 
+  getNoteResolution(clientId: string): NoteResolution | undefined {
+    const resolution = this.noteResolutions.get(clientId);
+    return resolution?.generation === this.generation ? resolution : undefined;
+  }
+
+  private setNoteResolution(
+    resolution: Omit<NoteResolution, "generation">,
+  ): void {
+    this.noteResolutions.set(resolution.clientId, {
+      ...resolution,
+      generation: this.generation,
+    });
+  }
+
   /** Resolves client-keyed pending thread intents after creation reconciliation. */
   resolvePendingThread(clientId: string, serverThread: LearningThread): void {
     const like = this.entries.get(this.likeKey("thread", clientId));
@@ -356,10 +380,40 @@ export class DesiredStateCoordinator {
     this.scheduleLikeConvergence(state, 0);
   }
 
+  /** Resolves a client-keyed pending Note Like after Note creation. */
+  resolvePendingNote(clientId: string, serverNote: LearningNote): void {
+    this.setNoteResolution({
+      clientId,
+      status: "confirmed",
+      serverId: serverNote.id,
+      isLiked: Boolean(serverNote.isLiked),
+    });
+    const state = this.entries.get(this.likeKey("note", clientId));
+    if (!state) return;
+    state.serverId = serverNote.id;
+    state.serverBaseline = Boolean(serverNote.isLiked);
+    this.applyLikeCacheUpdate(
+      "note",
+      clientId,
+      state.desiredState,
+      state.queryClient,
+      state.lessonContext,
+      undefined,
+      state.serverId,
+    );
+    this.scheduleLikeConvergence(state, 0);
+  }
+
   /** Drops a pending reply Like when reply creation fails or its parent fails. */
   failPendingReply(clientId: string): void {
     this.setReplyResolution({ clientId, status: "failed" });
     this.dropLikeState(this.likeKey("reply", clientId));
+  }
+
+  /** Drops a pending Note Like when Note creation fails. */
+  failPendingNote(clientId: string): void {
+    this.setNoteResolution({ clientId, status: "failed" });
+    this.dropLikeState(this.likeKey("note", clientId));
   }
 
   failPendingThread(clientId: string): void {
@@ -430,10 +484,13 @@ export class DesiredStateCoordinator {
   }: SetLikedOptions): void {
     const replyResolution =
       targetType === "reply" ? this.getReplyResolution(targetId) : undefined;
-    if (replyResolution?.status === "failed") return;
-    const resolvedReplyServerId =
-      replyResolution?.status === "confirmed"
-        ? replyResolution.serverId
+    const noteResolution =
+      targetType === "note" ? this.getNoteResolution(targetId) : undefined;
+    const creationResolution = replyResolution ?? noteResolution;
+    if (creationResolution?.status === "failed") return;
+    const resolvedServerId =
+      creationResolution?.status === "confirmed"
+        ? creationResolution.serverId
         : undefined;
     const key = this.likeKey(targetType, targetId);
     let state = this.entries.get(key);
@@ -441,15 +498,15 @@ export class DesiredStateCoordinator {
 
     if (!state) {
       const baseline =
-        targetType === "reply" && replyResolution?.status === "confirmed"
-          ? Boolean(replyResolution.isLiked)
+        creationResolution?.status === "confirmed"
+          ? Boolean(creationResolution.isLiked)
           : (currentBaseline ?? !desiredLiked);
       state = {
         targetType,
         targetId,
         serverId: pendingTarget
-          ? resolvedReplyServerId
-          : (serverId ?? resolvedReplyServerId ?? targetId),
+          ? resolvedServerId
+          : (serverId ?? resolvedServerId ?? targetId),
         serverBaseline: baseline,
         desiredState: desiredLiked,
         intentRevision: 1,
@@ -466,9 +523,9 @@ export class DesiredStateCoordinator {
       state.desiredState = desiredLiked;
       state.intentRevision += 1;
       if (serverId) state.serverId = serverId;
-      if (resolvedReplyServerId && !state.serverId) {
-        state.serverId = resolvedReplyServerId;
-        state.serverBaseline = Boolean(replyResolution?.isLiked);
+      if (resolvedServerId && !state.serverId) {
+        state.serverId = resolvedServerId;
+        state.serverBaseline = Boolean(creationResolution?.isLiked);
       }
       state.queryClient = activeClient;
       if (lessonContext) state.lessonContext = lessonContext;
@@ -484,6 +541,7 @@ export class DesiredStateCoordinator {
       state.queryClient,
       state.lessonContext,
       state.threadId,
+      state.serverId,
     );
 
     // 2. Schedule convergence dispatch
@@ -501,6 +559,7 @@ export class DesiredStateCoordinator {
     client: QueryClient,
     lessonContext?: { courseId: string; lessonId: string },
     threadId?: string,
+    serverId?: string,
   ): void {
     if (targetType === "thread") {
       updateThreadLikeInCache(client, targetId, desiredLiked, lessonContext);
@@ -509,7 +568,7 @@ export class DesiredStateCoordinator {
         updateReplyLikeInCache(client, threadId, targetId, desiredLiked);
       }
     } else if (targetType === "note") {
-      updateNoteLikeInCache(client, targetId, desiredLiked);
+      updateNoteLikeInCache(client, targetId, desiredLiked, serverId);
     }
   }
 
@@ -587,6 +646,7 @@ export class DesiredStateCoordinator {
             state.queryClient,
             state.lessonContext,
             state.threadId,
+            state.serverId,
           );
           if (state.desiredState !== state.serverBaseline) {
             this.processLikeConvergence(state, capturedGen);
@@ -603,6 +663,7 @@ export class DesiredStateCoordinator {
           state.queryClient,
           state.lessonContext,
           state.threadId,
+          state.serverId,
         );
 
         if (state.onFailure) {

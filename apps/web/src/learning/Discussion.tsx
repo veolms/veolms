@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import type { LearningThreadAttachmentSummary } from "@veolms/contracts";
 import { QueryClientContext } from "@tanstack/react-query";
 import { useInRouterContext, useSearchParams } from "react-router";
 import { createPortal } from "react-dom";
@@ -88,6 +89,23 @@ const CURRENT_USER = {
 };
 
 const EMPTY_MOBILE_COMPOSER_DRAFT = createEmptyDiscussionDraft();
+
+function toOptimisticAttachmentSummary(
+  attachment: DiscussionAttachmentItem,
+): LearningThreadAttachmentSummary {
+  const metadata = attachment.metadata;
+  return {
+    id: attachment.id,
+    fileName: attachment.fileName,
+    fileUrl: attachment.fileUrl,
+    mimeType: attachment.mimeType,
+    fileSize: attachment.fileSize,
+    kind: attachment.kind ?? "document",
+    ...(metadata && typeof metadata === "object"
+      ? { metadata: metadata as Record<string, unknown> }
+      : {}),
+  };
+}
 
 function getThreadIdentityValues(entry: Comment): string[] {
   return Array.from(
@@ -498,7 +516,6 @@ function DiscussionInner({
   }, [currentUser?.roles]);
 
   const isSubmitting =
-    createNoteMutation.isPending ||
     updateNoteMutation.isPending ||
     updateThreadMutation.isPending;
 
@@ -877,9 +894,17 @@ function DiscussionInner({
       }
 
       if (editingEntry) {
+        const note = combinedEntries.find(
+          (entry) => getClientEntityId(entry) === String(editingEntry.id),
+        );
+        const noteServerId = note ? getServerEntityId(note) : undefined;
+        if (!noteServerId) {
+          setNotice("This note is still being posted.");
+          return false;
+        }
         try {
           await updateNoteMutation.mutateAsync({
-            noteId: String(editingEntry.id),
+            noteId: noteServerId,
             payload: {
               content: activeDraft.markdown,
             },
@@ -893,8 +918,7 @@ function DiscussionInner({
         }
       }
 
-      try {
-        await createNoteMutation.mutateAsync({
+      const notePayload = {
           courseId,
           lessonId,
           content: activeDraft.markdown,
@@ -903,16 +927,25 @@ function DiscussionInner({
             composerAttachments.length > 0
               ? composerAttachments.map((a) => a.id)
               : undefined,
-        });
+        __attachments:
+          composerAttachments.length > 0
+            ? composerAttachments.map(toOptimisticAttachmentSummary)
+            : undefined,
+      } as const;
+
+      try {
+        const request = createNoteMutation.mutateAsync(notePayload);
         setDraft(createEmptyDiscussionDraft());
         setComposerAttachments([]);
-        setEntryFilter(
-          enabledKinds.length > 1 ? "all" : (enabledKinds[0] ?? "all"),
-        );
         setNotice("");
+        onLocallyAccepted?.();
+        await request;
         return true;
       } catch (error) {
-        setNotice("Failed to save note. Please try again.");
+        setCreationToast({
+          message: "Couldn't save your note. Please try again.",
+          type: "error",
+        });
         return false;
       }
     }
@@ -1075,9 +1108,9 @@ function DiscussionInner({
       const currentLiked = Boolean(entry?.liked);
       const desiredLiked = typeof liked === "boolean" ? liked : !currentLiked;
 
-      if (!serverId && entry.entryKind !== "note") {
+      if (!serverId) {
         desiredStateCoordinator.setLiked({
-          targetType: "thread",
+          targetType,
           targetId: getClientEntityId(entry),
           pendingTarget: true,
           desiredLiked,
@@ -1088,7 +1121,20 @@ function DiscussionInner({
         });
         return;
       }
-      if (!serverId) return;
+
+      if (isNote) {
+        desiredStateCoordinator.setLiked({
+          targetType: "note",
+          targetId: getClientEntityId(entry),
+          serverId,
+          desiredLiked,
+          currentBaseline: currentLiked,
+          lessonContext:
+            courseId && lessonId ? { courseId, lessonId } : undefined,
+          queryClient,
+        });
+        return;
+      }
 
       desiredStateCoordinator.setLiked({
         targetType,

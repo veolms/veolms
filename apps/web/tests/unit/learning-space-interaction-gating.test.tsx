@@ -880,7 +880,7 @@ describe("Learning Space Notes Cleanup and Temporary Guard", () => {
       });
     });
 
-    it("retains draft on create failure and displays error notice", async () => {
+    it("removes the draft on create failure and displays a creation toast", async () => {
       const mutateAsync = vi.fn().mockRejectedValue(new Error("Network error"));
       notesMocks.useCreateNote.mockReturnValue({
         mutateAsync,
@@ -920,12 +920,17 @@ describe("Learning Space Notes Cleanup and Temporary Guard", () => {
 
       await waitFor(() => {
         expect(mutateAsync).toHaveBeenCalled();
+        expect(
+          screen.getByText("Couldn't save your note. Please try again."),
+        ).toBeInTheDocument();
       });
 
-      // Error status announced
       expect(
-        screen.getByText("Failed to save note. Please try again."),
+        screen.getByText("Couldn't save your note. Please try again."),
       ).toBeInTheDocument();
+      expect(
+        screen.queryByText("Draft that should not be lost"),
+      ).not.toBeInTheDocument();
     });
 
     it("calls deleteNote mutation when deleting a note and leaves Comments/Q&A sessionStorage untouched", async () => {
@@ -1025,4 +1030,3 @@ describe("Learning Space Notes Cleanup and Temporary Guard", () => {
     });
   });
 });
-

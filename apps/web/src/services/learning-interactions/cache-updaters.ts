@@ -1,6 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type {
-  LearningNotesListResponse,
   LearningRepliesListResponse,
   LearningThread,
   LearningThreadsListResponse,
@@ -9,6 +8,8 @@ import { learningInteractionKeys } from "./learning-interactions.keys";
 import {
   getClientEntityId,
   getServerEntityId,
+  type LearningNoteCacheItem,
+  type LearningNotesCacheResponse,
   type LearningRepliesCacheResponse,
 } from "./interaction-entities";
 
@@ -176,15 +177,22 @@ export function updateNoteLikeInCache(
   queryClient: QueryClient,
   noteId: string,
   desiredLiked: boolean,
+  serverId?: string,
 ): void {
   // 1. Update notes list queries
-  queryClient.setQueriesData<LearningNotesListResponse>(
+  queryClient.setQueriesData<LearningNotesCacheResponse>(
     { queryKey: learningInteractionKeys.notesRoot() },
     (old) => {
       if (!old?.notes) return old;
       let hasChange = false;
       const nextNotes = old.notes.map((note) => {
-        if (note.id !== noteId) return note;
+        if (
+          note.id !== noteId &&
+          getClientEntityId(note) !== noteId &&
+          getServerEntityId(note) !== noteId
+        ) {
+          return note;
+        }
         const currentLiked = Boolean(note.isLiked);
         if (currentLiked === desiredLiked) return note;
         hasChange = true;
@@ -203,23 +211,35 @@ export function updateNoteLikeInCache(
   );
 
   // 2. Update note details query if cached
-  queryClient.setQueryData(
-    learningInteractionKeys.noteDetails(noteId),
-    (old: any) => {
-      if (!old) return old;
-      const currentLiked = Boolean(old.isLiked);
-      if (currentLiked === desiredLiked) return old;
-      return {
-        ...old,
-        isLiked: desiredLiked,
-        likesCount: calculateNextLikesCount(
-          old.likesCount ?? 0,
-          old.isLiked,
-          desiredLiked,
-        ),
-      };
-    },
-  );
+  for (const detailId of new Set([noteId, serverId].filter(Boolean))) {
+    queryClient.setQueryData(
+      learningInteractionKeys.noteDetails(detailId!),
+      (old: LearningNoteCacheItem | undefined) => {
+        if (!old) return old;
+        if (
+          old.id !== noteId &&
+          old.id !== serverId &&
+          getClientEntityId(old) !== noteId &&
+          getClientEntityId(old) !== serverId &&
+          getServerEntityId(old) !== noteId &&
+          getServerEntityId(old) !== serverId
+        ) {
+          return old;
+        }
+        const currentLiked = Boolean(old.isLiked);
+        if (currentLiked === desiredLiked) return old;
+        return {
+          ...old,
+          isLiked: desiredLiked,
+          likesCount: calculateNextLikesCount(
+            old.likesCount ?? 0,
+            old.isLiked,
+            desiredLiked,
+          ),
+        };
+      },
+    );
+  }
 }
 
 /**

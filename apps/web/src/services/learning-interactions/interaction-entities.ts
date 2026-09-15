@@ -1,5 +1,7 @@
 import type {
+  CreateLearningNoteRequest,
   CreateLearningReplyRequest,
+  LearningNote,
   CreateLearningThreadRequest,
   LearningReply,
   LearningThreadAttachmentSummary,
@@ -33,6 +35,22 @@ export type LearningReplyEntity = Omit<LearningReply, "id" | "threadId"> &
     parentServerId?: string;
     localSequence: number;
   };
+
+export type LearningNoteEntity = Omit<LearningNote, "id"> &
+  ClientEntityIdentity & {
+    /** Compatibility value for existing view-model consumers. */
+    id: string;
+    localSequence: number;
+    authorAvatarUrl?: string;
+  };
+
+export type LearningNoteCacheItem = LearningNote | LearningNoteEntity;
+
+export type LearningNotesCacheResponse = {
+  notes: LearningNoteCacheItem[];
+  nextCursor: string | null;
+  totalCount?: number;
+};
 
 export type LearningReplyCacheItem = LearningReply | LearningReplyEntity;
 
@@ -125,6 +143,14 @@ function createReplyClientId(): string {
   return `client-reply-${randomUuid}`;
 }
 
+function createNoteClientId(): string {
+  const randomUuid =
+    typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `client-note-${randomUuid}`;
+}
+
 function getOptimisticAuthor() {
   return {
     id: "optimistic-user",
@@ -214,6 +240,57 @@ export interface OptimisticReplyContext {
   username?: string;
   avatarUrl?: string | null;
   role?: "Student" | "Instructor" | "Admin";
+}
+
+export interface OptimisticNoteContext {
+  localSequence: number;
+  attachments?: readonly NonNullable<LearningNote["attachments"]>[number][];
+  userId?: string;
+  displayName?: string;
+  username?: string;
+  avatarUrl?: string | null;
+}
+
+export function createOptimisticLearningNote(
+  payload: CreateLearningNoteRequest,
+  context: OptimisticNoteContext,
+): LearningNoteEntity {
+  const clientId = createNoteClientId();
+  const now = new Date().toISOString();
+  const displayName = context.displayName?.trim() || "You";
+  const username = context.username?.trim() || "you";
+  const plainText = payload.content
+    .replace(/<[^>]*>/g, " ")
+    .replace(/[*_`~#>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return {
+    id: clientId,
+    clientId,
+    serverId: undefined,
+    creationStatus: "pending",
+    localSequence: context.localSequence,
+    userId: context.userId ?? "optimistic-user",
+    authorName: displayName,
+    authorUsername: username,
+    authorAvatarUrl: context.avatarUrl ?? undefined,
+    courseId: payload.courseId,
+    lessonId: payload.lessonId,
+    title: payload.title,
+    content: payload.content,
+    plainText,
+    visibility: payload.visibility ?? "private",
+    tags: [...(payload.tags ?? [])],
+    timestampSeconds: payload.timestampSeconds ?? null,
+    likesCount: 0,
+    repliesCount: 0,
+    isLiked: false,
+    isOwn: true,
+    attachments: [...(context.attachments ?? [])],
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 export function createOptimisticLearningReply(

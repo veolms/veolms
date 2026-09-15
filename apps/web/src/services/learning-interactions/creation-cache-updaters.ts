@@ -1,10 +1,18 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { LearningReply, LearningThread } from "@veolms/contracts";
+import type {
+  LearningNote,
+  LearningReply,
+  LearningThread,
+  ListLearningNotesQuery,
+} from "@veolms/contracts";
 import { learningInteractionKeys } from "./learning-interactions.keys";
 import {
   getClientEntityId,
   getServerEntityId,
   isLearningThreadEntity,
+  type LearningNoteCacheItem,
+  type LearningNoteEntity,
+  type LearningNotesCacheResponse,
   type LearningReplyCacheItem,
   type LearningReplyEntity,
   type LearningRepliesCacheResponse,
@@ -13,6 +21,11 @@ import {
 } from "./interaction-entities";
 
 export interface LessonThreadCacheContext {
+  courseId: string;
+  lessonId: string;
+}
+
+export interface NoteCacheContext {
   courseId: string;
   lessonId: string;
 }
@@ -27,6 +40,195 @@ const lessonThreadQueryPrefix = (context: LessonThreadCacheContext) =>
 
 const replyQueryPrefix = (parentId: string) =>
   learningInteractionKeys.threadRepliesRoot(parentId);
+
+const noteQueryPrefix = () => learningInteractionKeys.notesRoot();
+
+function getNoteClientId(note: LearningNoteCacheItem): string {
+  return getClientEntityId(note);
+}
+
+function getNoteServerId(note: LearningNoteCacheItem): string | undefined {
+  return getServerEntityId(note);
+}
+
+function matchesNoteContext(
+  note: LearningNoteCacheItem,
+  context: NoteCacheContext,
+): boolean {
+  return note.courseId === context.courseId && note.lessonId === context.lessonId;
+}
+
+function matchesNoteQuery(
+  note: LearningNoteCacheItem,
+  filters: ListLearningNotesQuery | undefined,
+): boolean {
+  if (!filters) return true;
+  if (filters.courseId && note.courseId !== filters.courseId) return false;
+  if (filters.lessonId && note.lessonId !== filters.lessonId) return false;
+  if (filters.visibility && note.visibility !== filters.visibility) return false;
+  if (
+    filters.mine !== undefined &&
+    Boolean(filters.mine) !== Boolean(note.isOwn)
+  ) {
+    return false;
+  }
+  if (filters.query) {
+    const query = filters.query.toLowerCase();
+    const searchable = `${note.title ?? ""} ${note.plainText} ${note.content}`.toLowerCase();
+    if (!searchable.includes(query)) return false;
+  }
+  if (filters.tag && !note.tags.includes(filters.tag)) return false;
+  if (filters.cursor) return false;
+  return true;
+}
+
+function getNoteFilters(queryKey: readonly unknown[]): ListLearningNotesQuery | undefined {
+  const filters = queryKey[2];
+  return filters && typeof filters === "object"
+    ? (filters as ListLearningNotesQuery)
+    : undefined;
+}
+
+function forEachNoteCache(
+  queryClient: QueryClient,
+  updater: (
+    data: LearningNotesCacheResponse,
+    filters: ListLearningNotesQuery | undefined,
+  ) => LearningNotesCacheResponse,
+): boolean {
+  let changed = false;
+  for (const [queryKey, data] of queryClient.getQueriesData<LearningNotesCacheResponse>({
+    queryKey: noteQueryPrefix(),
+  })) {
+    if (!data) continue;
+    const next = updater(data, getNoteFilters(queryKey));
+    if (next === data) continue;
+    queryClient.setQueryData(queryKey, next);
+    changed = true;
+  }
+  return changed;
+}
+
+function addToCanonicalNoteCache(
+  queryClient: QueryClient,
+  context: NoteCacheContext,
+  note: LearningNoteCacheItem,
+): void {
+  queryClient.setQueryData<LearningNotesCacheResponse>(
+    learningInteractionKeys.notes({
+      courseId: context.courseId,
+      lessonId: context.lessonId,
+      limit: 50,
+    }),
+    (old) => {
+      if (old?.notes.some((candidate) => getNoteClientId(candidate) === getNoteClientId(note))) {
+        return old;
+      }
+      return {
+        ...(old ?? { nextCursor: null }),
+        notes: [note, ...(old?.notes ?? [])],
+        totalCount:
+          old?.totalCount === undefined ? old?.totalCount : old.totalCount + 1,
+      };
+    },
+  );
+}
+
+export function insertOptimisticNoteInCaches(
+  queryClient: QueryClient,
+  context: NoteCacheContext,
+  note: LearningNoteEntity,
+): void {
+  const changedExistingCache = forEachNoteCache(queryClient, (old, filters) => {
+    if (!matchesNoteContext(note, context) || !matchesNoteQuery(note, filters)) {
+      return old;
+    }
+    if (old.notes.some((candidate) => getNoteClientId(candidate) === note.clientId)) {
+      return old;
+    }
+    return {
+      ...old,
+      notes: [note, ...old.notes],
+      totalCount:
+        old.totalCount === undefined ? old.totalCount : old.totalCount + 1,
+    };
+  });
+
+  if (!changedExistingCache) addToCanonicalNoteCache(queryClient, context, note);
+}
+
+export function reconcileOptimisticNoteInCaches(
+  queryClient: QueryClient,
+  context: NoteCacheContext,
+  clientId: string,
+  serverNote: LearningNote,
+  localSequence: number,
+): void {
+  const confirmedNote: LearningNoteEntity = {
+    ...serverNote,
+    id: clientId,
+    clientId,
+    serverId: serverNote.id,
+    creationStatus: "confirmed",
+    localSequence,
+  };
+  let reconciled = false;
+
+  forEachNoteCache(queryClient, (old, filters) => {
+    if (!matchesNoteContext(serverNote, context)) {
+      return old;
+    }
+    const existingIndex = old.notes.findIndex(
+      (note) =>
+        getNoteClientId(note) === clientId ||
+        getNoteServerId(note) === serverNote.id,
+    );
+    if (existingIndex < 0) {
+      return old;
+    }
+    if (!matchesNoteQuery(serverNote, filters)) {
+      const notes = old.notes.filter((_note, index) => index !== existingIndex);
+      reconciled = true;
+      return {
+        ...old,
+        notes,
+        totalCount:
+          old.totalCount === undefined
+            ? old.totalCount
+            : Math.max(0, old.totalCount - 1),
+      };
+    }
+    const notes = [...old.notes];
+    notes[existingIndex] = confirmedNote;
+    reconciled = true;
+    return { ...old, notes };
+  });
+
+  if (!reconciled) addToCanonicalNoteCache(queryClient, context, confirmedNote);
+}
+
+export function removeOptimisticNoteFromCaches(
+  queryClient: QueryClient,
+  context: NoteCacheContext,
+  clientId: string,
+): void {
+  forEachNoteCache(queryClient, (old) => {
+    const notes = old.notes.filter(
+      (note) =>
+        !(
+          matchesNoteContext(note, context) &&
+          getNoteClientId(note) === clientId
+        ),
+    );
+    if (notes.length === old.notes.length) return old;
+    return {
+      ...old,
+      notes,
+      totalCount:
+        old.totalCount === undefined ? old.totalCount : Math.max(0, old.totalCount - 1),
+    };
+  });
+}
 
 function getReplyClientId(reply: LearningReplyCacheItem): string {
   return getClientEntityId(reply);

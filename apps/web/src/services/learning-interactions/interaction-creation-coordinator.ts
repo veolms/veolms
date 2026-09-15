@@ -1,7 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type {
+  CreateLearningNoteRequest,
   CreateLearningReplyRequest,
   CreateLearningThreadRequest,
+  LearningNote,
   LearningReply,
   LearningThread,
   LearningThreadAttachmentSummary,
@@ -10,6 +12,8 @@ import { authStore } from "../../store/auth.store";
 import {
   createOptimisticLearningThread,
   createOptimisticLearningReply,
+  createOptimisticLearningNote,
+  type LearningNoteEntity,
   type LearningReplyEntity,
   type LearningThreadEntity,
   type OptimisticThreadContext,
@@ -24,6 +28,10 @@ import {
   reconcileOptimisticReplyInCaches,
   removeOptimisticReplyFromCaches,
   updateReplyCountInThreadCaches,
+  insertOptimisticNoteInCaches,
+  reconcileOptimisticNoteInCaches,
+  removeOptimisticNoteFromCaches,
+  type NoteCacheContext,
   type LessonThreadCacheContext,
 } from "./creation-cache-updaters";
 import { desiredStateCoordinator } from "./desired-state-coordinator";
@@ -80,6 +88,33 @@ export interface BeginReplyCreationArgs {
   onFailure?: () => void;
 }
 
+export interface NoteCreationRecord {
+  readonly clientId: string;
+  readonly payload: CreateLearningNoteRequest;
+  readonly context: NoteCacheContext;
+  readonly optimisticNote: LearningNoteEntity;
+  readonly authGeneration: number;
+  readonly userId?: string;
+  readonly localSequence: number;
+  readonly status: "pending" | "confirmed" | "failed";
+  readonly serverId?: string;
+  readonly serverNote?: LearningNote;
+  readonly serverNoteEntity?: LearningNoteEntity;
+  readonly dispatch: (
+    payload: CreateLearningNoteRequest,
+  ) => Promise<LearningNote>;
+  readonly onFailure?: () => void;
+}
+
+export interface BeginNoteCreationArgs {
+  queryClient: QueryClient;
+  context: NoteCacheContext;
+  payload: CreateLearningNoteRequest;
+  attachments?: LearningNoteEntity["attachments"];
+  dispatch: NoteCreationRecord["dispatch"];
+  onFailure?: () => void;
+}
+
 function freezeThreadPayload(
   payload: CreateLearningThreadRequest,
 ): CreateLearningThreadRequest {
@@ -104,11 +139,129 @@ function freezeReplyPayload(
   }) as unknown as CreateLearningReplyRequest;
 }
 
+function freezeNotePayload(
+  payload: CreateLearningNoteRequest,
+): CreateLearningNoteRequest {
+  return Object.freeze({
+    ...payload,
+    ...(payload.attachmentIds
+      ? { attachmentIds: Object.freeze([...payload.attachmentIds]) }
+      : {}),
+    ...(payload.tags ? { tags: Object.freeze([...payload.tags]) } : {}),
+  }) as unknown as CreateLearningNoteRequest;
+}
+
 export class InteractionCreationCoordinator {
   private readonly threadRecords = new Map<string, ThreadCreationRecord>();
   private readonly replyRecords = new Map<string, ReplyCreationRecord>();
+  private readonly noteRecords = new Map<string, NoteCreationRecord>();
   private readonly threadResolutions = new Map<string, ThreadResolution>();
   private replySequence = 0;
+  private noteSequence = 0;
+
+  beginNoteCreation({
+    queryClient,
+    context,
+    payload,
+    attachments,
+    dispatch,
+    onFailure,
+  }: BeginNoteCreationArgs): NoteCreationRecord {
+    const currentUser = authStore.getState().user;
+    const immutablePayload = freezeNotePayload(payload);
+    const localSequence = ++this.noteSequence;
+    const optimisticNote = createOptimisticLearningNote(immutablePayload, {
+      localSequence,
+      attachments,
+      userId: currentUser?.id,
+      displayName: currentUser?.displayName,
+      username: currentUser?.username,
+      avatarUrl: currentUser?.avatarDataUrl,
+    });
+    const record: NoteCreationRecord = {
+      clientId: optimisticNote.clientId,
+      payload: immutablePayload,
+      context: { ...context },
+      optimisticNote,
+      authGeneration: authStore.getWriteGeneration(),
+      userId: currentUser?.id,
+      localSequence,
+      status: "pending",
+      dispatch,
+      onFailure,
+    };
+
+    this.noteRecords.set(record.clientId, record);
+    insertOptimisticNoteInCaches(
+      queryClient,
+      record.context,
+      record.optimisticNote,
+    );
+    return record;
+  }
+
+  getActiveNoteRecords(
+    query?: { courseId?: string; lessonId?: string },
+  ): NoteCreationRecord[] {
+    return [...this.noteRecords.values()]
+      .filter(
+        (record) =>
+          record.status !== "failed" &&
+          this.isCurrentAuth(record) &&
+          (!query?.courseId || record.context.courseId === query.courseId) &&
+          (!query?.lessonId || record.context.lessonId === query.lessonId),
+      )
+      .sort((left, right) => left.localSequence - right.localSequence);
+  }
+
+  confirmNote(
+    queryClient: QueryClient,
+    clientId: string,
+    serverNote: LearningNote,
+  ): boolean {
+    const record = this.noteRecords.get(clientId);
+    if (!record || record.status !== "pending") return false;
+    if (!this.isCurrentAuth(record)) {
+      this.noteRecords.delete(clientId);
+      return false;
+    }
+
+    const serverNoteEntity: LearningNoteEntity = {
+      ...serverNote,
+      id: clientId,
+      clientId,
+      serverId: serverNote.id,
+      creationStatus: "confirmed",
+      localSequence: record.localSequence,
+    };
+    this.noteRecords.set(clientId, {
+      ...record,
+      status: "confirmed",
+      serverId: serverNote.id,
+      serverNote,
+      serverNoteEntity,
+    });
+    reconcileOptimisticNoteInCaches(
+      queryClient,
+      record.context,
+      clientId,
+      serverNote,
+      record.localSequence,
+    );
+    desiredStateCoordinator.resolvePendingNote(clientId, serverNote);
+    return true;
+  }
+
+  failNote(queryClient: QueryClient, clientId: string): boolean {
+    const record = this.noteRecords.get(clientId);
+    if (!record || record.status !== "pending") return false;
+    this.noteRecords.delete(clientId);
+    if (!this.isCurrentAuth(record)) return false;
+    desiredStateCoordinator.failPendingNote(clientId);
+    removeOptimisticNoteFromCaches(queryClient, record.context, clientId);
+    record.onFailure?.();
+    return true;
+  }
 
   beginThreadCreation({
     queryClient,
@@ -483,12 +636,13 @@ export class InteractionCreationCoordinator {
   reset(): void {
     this.threadRecords.clear();
     this.replyRecords.clear();
+    this.noteRecords.clear();
     this.threadResolutions.clear();
   }
 
   private isCurrentAuth(
     record: Pick<
-      ThreadCreationRecord | ReplyCreationRecord,
+      ThreadCreationRecord | ReplyCreationRecord | NoteCreationRecord,
       "authGeneration" | "userId"
     >,
   ): boolean {

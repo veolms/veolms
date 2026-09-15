@@ -17,6 +17,7 @@ import type {
   LearningUploadResponse,
   LearningReply,
   LearningThread,
+  LearningNote,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { learningInteractionKeys } from "./learning-interactions.keys";
@@ -107,6 +108,11 @@ export function useDeleteThread() {
 type CreateReplyMutationInput = CreateLearningReplyRequest & {
   /** Internal transport override; never included in the API payload. */
   __serverThreadId?: string;
+};
+
+type CreateNoteMutationInput = CreateLearningNoteRequest & {
+  /** Local-only metadata used for the optimistic cache entity. */
+  __attachments?: LearningNote["attachments"];
 };
 
 export function useCreateReply(threadId?: string) {
@@ -235,12 +241,40 @@ export function useLockThread(defaultThreadId?: string) {
 
 export function useCreateNote() {
   const queryClient = useQueryClient();
-  return useMutation<any, ApiError, CreateLearningNoteRequest>({
-    mutationFn: (payload) => learningInteractionsService.createNote(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.notesRoot(),
+  return useMutation<
+    LearningNote,
+    ApiError,
+    CreateNoteMutationInput,
+    { clientId: string }
+  >({
+    mutationFn: ({ __attachments: _attachments, ...payload }) =>
+      learningInteractionsService.createNote(payload),
+    onMutate: (payload) => {
+      const { __attachments, ...notePayload } = payload;
+      const record = interactionCreationCoordinator.beginNoteCreation({
+        queryClient,
+        context: {
+          courseId: notePayload.courseId,
+          lessonId: notePayload.lessonId,
+        },
+        payload: notePayload,
+        attachments: __attachments,
+        dispatch: (notePayload) =>
+          learningInteractionsService.createNote(notePayload),
       });
+      return { clientId: record.clientId };
+    },
+    onSuccess: (serverNote, _payload, context) => {
+      interactionCreationCoordinator.confirmNote(
+        queryClient,
+        context.clientId,
+        serverNote,
+      );
+    },
+    onError: (_error, _payload, context) => {
+      if (context) {
+        interactionCreationCoordinator.failNote(queryClient, context.clientId);
+      }
     },
   });
 }

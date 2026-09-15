@@ -22,11 +22,16 @@ import {
   isClientEntityId,
   getServerEntityId,
   type LearningReplyCacheItem,
+  type LearningNoteCacheItem,
+  type LearningNotesCacheResponse,
   type LearningRepliesCacheResponse,
   type LearningThreadCacheResponse,
   type LearningThreadEntity,
 } from "./interaction-entities";
-import type { ReplyCreationRecord } from "./interaction-creation-coordinator";
+import type {
+  NoteCreationRecord,
+  ReplyCreationRecord,
+} from "./interaction-creation-coordinator";
 
 function getReplySequence(reply: LearningReplyCacheItem): number {
   return "localSequence" in reply
@@ -121,6 +126,98 @@ function projectReplyLocalState(
     };
   }
   return next;
+}
+
+function projectNoteLocalState(
+  note: LearningNoteCacheItem,
+): LearningNoteCacheItem {
+  const clientId = getClientEntityId(note);
+  const serverId = getServerEntityId(note);
+  const desiredLiked = desiredStateCoordinator.getLikeProjection(
+    "note",
+    clientId,
+    serverId,
+  );
+
+  if (desiredLiked === undefined || Boolean(note.isLiked) === desiredLiked) {
+    return note;
+  }
+
+  return {
+    ...note,
+    isLiked: desiredLiked,
+    likesCount: calculateNextLikesCount(
+      note.likesCount ?? 0,
+      note.isLiked,
+      desiredLiked,
+    ),
+  };
+}
+
+function noteMatchesQuery(
+  note: LearningNoteCacheItem,
+  query?: ListLearningNotesQuery,
+): boolean {
+  if (!query) return true;
+  if (query.courseId && query.courseId !== note.courseId) return false;
+  if (query.lessonId && query.lessonId !== note.lessonId) return false;
+  if (query.visibility && query.visibility !== note.visibility) return false;
+  if (
+    query.mine !== undefined &&
+    Boolean(query.mine) !== Boolean(note.isOwn)
+  ) {
+    return false;
+  }
+  if (query.query) {
+    const needle = query.query.toLowerCase();
+    const searchable = `${note.title ?? ""} ${note.plainText} ${note.content}`.toLowerCase();
+    if (!searchable.includes(needle)) return false;
+  }
+  if (query.tag && !note.tags.includes(query.tag)) return false;
+  if (query.cursor) return false;
+  return true;
+}
+
+export function mergeNotesWithCreationRecords(
+  response: LearningNotesListResponse,
+  query: ListLearningNotesQuery | undefined,
+  records: readonly NoteCreationRecord[],
+): LearningNotesCacheResponse {
+  const notes: LearningNoteCacheItem[] = [...response.notes];
+  let addedLocalNotes = 0;
+
+  for (const record of records) {
+    const localNote =
+      record.status === "confirmed" &&
+      record.serverNote &&
+      record.serverNoteEntity
+        ? record.serverNoteEntity
+        : record.optimisticNote;
+    if (!noteMatchesQuery(localNote, query)) continue;
+
+    const existingIndex = notes.findIndex(
+      (note) =>
+        getClientEntityId(note) === record.clientId ||
+        (record.serverId !== undefined &&
+          getServerEntityId(note) === record.serverId),
+    );
+
+    if (existingIndex >= 0) {
+      notes[existingIndex] = localNote;
+    } else {
+      notes.push(localNote);
+      addedLocalNotes += 1;
+    }
+  }
+
+  return {
+    ...response,
+    notes: notes.map(projectNoteLocalState),
+    totalCount:
+      response.totalCount === undefined
+        ? response.totalCount
+        : response.totalCount + addedLocalNotes,
+  };
 }
 
 export function mergeRepliesWithCreationRecords(
@@ -288,9 +385,16 @@ export function useUserNotes(
   query?: ListLearningNotesQuery,
   options?: { enabled?: boolean },
 ) {
-  return useQuery<LearningNotesListResponse, ApiError>({
+  return useQuery<LearningNotesCacheResponse, ApiError>({
     queryKey: learningInteractionKeys.notes(query),
-    queryFn: () => learningInteractionsService.listNotes(query),
+    queryFn: async () => {
+      const response = await learningInteractionsService.listNotes(query);
+      return mergeNotesWithCreationRecords(
+        response,
+        query,
+        interactionCreationCoordinator.getActiveNoteRecords(query),
+      );
+    },
     enabled: options?.enabled ?? true,
   });
 }

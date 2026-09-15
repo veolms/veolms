@@ -54,7 +54,7 @@ export function adaptLearningNoteToComment(
       : "/assets/sofia-avatar-160.webp");
 
   return {
-    id: note.id,
+    id: getClientEntityId(note),
     clientId: getClientEntityId(note),
     serverId: getServerEntityId(note),
     creationStatus: isPendingClientEntity(note) ? "pending" : "confirmed",
