@@ -366,7 +366,9 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
     fireEvent.mouseDown(likeButton);
     fireEvent.pointerUp(likeButton);
     fireEvent.click(likeButton);
-    expect(mockInteractions.desiredStateCoordinator.setLiked).toHaveBeenCalled();
+    expect(
+      mockInteractions.desiredStateCoordinator.setLiked,
+    ).toHaveBeenCalled();
 
     expect(createThreadMutateAsync).toHaveBeenCalledWith({
       courseId: "course-1",
@@ -519,7 +521,9 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
     expect(
       await screen.findByRole("button", { name: "Open discussion composer" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Open discussion composer" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open discussion composer" }),
+    );
     const editor = await screen.findByRole("textbox", {
       name: "Write a comment",
     });
@@ -602,9 +606,10 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
       ).toBeInTheDocument(),
     );
     expect(screen.queryByTestId("attachment-composer-preview")).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Q&As" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Q&As" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     expect(
       screen.getByRole("button", { name: "Sort discussions: Top" }),
     ).toBeInTheDocument();
@@ -650,7 +655,9 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
     expect(
       await screen.findByRole("button", { name: "Open discussion composer" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Open discussion composer" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open discussion composer" }),
+    );
     const editor = await screen.findByRole("textbox", {
       name: "Write a comment",
     });
@@ -720,7 +727,9 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
     expect(
       await screen.findByRole("button", { name: "Open discussion composer" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Open discussion composer" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open discussion composer" }),
+    );
     const editor = await screen.findByRole("textbox", {
       name: "Write a comment",
     });
@@ -737,7 +746,9 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
 
     fireEvent.click(nextButton);
     fireEvent.click(screen.getByRole("button", { name: "Post comment" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open discussion composer" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open discussion composer" }),
+    );
     const editorAfterB = await screen.findByRole("textbox", {
       name: "Write a comment",
     });
@@ -776,7 +787,10 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
   it("4. accepts a thread edit locally before PATCH settles", async () => {
     let resolveUpdate: ((value: unknown) => void) | undefined;
     updateThreadMutateAsync.mockImplementationOnce(
-      () => new Promise((resolve) => { resolveUpdate = resolve; }),
+      () =>
+        new Promise((resolve) => {
+          resolveUpdate = resolve;
+        }),
     );
     render(
       <Discussion
@@ -858,6 +872,13 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
 
   it("6. deletion: 10s undo cancels before DELETE; commit calls deleteThreadMutation", async () => {
     vi.useFakeTimers();
+    let resolveDelete: (() => void) | undefined;
+    deleteThreadMutateAsync.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveDelete = resolve;
+        }),
+    );
 
     render(
       <Discussion
@@ -902,6 +923,15 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
 
     // Now DELETE mutation is called
     expect(deleteThreadMutateAsync).toHaveBeenCalledWith("thread-qa-1");
+    // The pending transport must not make the Q&A visible again.
+    expect(
+      screen.queryByText("How does error boundary isolation work?"),
+    ).not.toBeInTheDocument();
+
+    await act(async () => resolveDelete?.());
+    expect(
+      screen.queryByText("How does error boundary isolation work?"),
+    ).not.toBeInTheDocument();
 
     vi.useRealTimers();
   });
@@ -1048,9 +1078,7 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
     );
     expect(
       mockInteractions.desiredStateCoordinator.setLiked,
-    ).not.toHaveBeenCalledWith(
-      expect.objectContaining({ targetId: clientId }),
-    );
+    ).not.toHaveBeenCalledWith(expect.objectContaining({ targetId: clientId }));
     expect(window.location.search).not.toContain(clientId);
   });
 });

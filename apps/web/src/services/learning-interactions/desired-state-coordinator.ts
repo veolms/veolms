@@ -1,5 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { LearningNote, LearningReply, LearningThread } from "@veolms/contracts";
+import type {
+  LearningNote,
+  LearningReply,
+  LearningThread,
+} from "@veolms/contracts";
 import { queryClient as defaultQueryClient } from "../../lib/query-client";
 import { learningInteractionsService } from "./learning-interactions.service";
 import {
@@ -173,6 +177,57 @@ export class DesiredStateCoordinator {
     return this.generation;
   }
 
+  /** Drops local interaction intent for an entity that was deleted. */
+  clearEntity(
+    targetType: "thread" | "reply" | "note",
+    clientId: string,
+    serverId?: string,
+    threadId?: string,
+  ): void {
+    for (const [key, state] of this.entries) {
+      if (
+        state.targetType !== targetType ||
+        (state.targetId !== clientId &&
+          state.targetId !== serverId &&
+          state.serverId !== serverId)
+      ) {
+        continue;
+      }
+      this.cancelLikeState(state);
+      this.entries.delete(key);
+    }
+
+    if (targetType === "thread") {
+      for (const [key, state] of this.booleanEntries) {
+        if (
+          state.threadId !== clientId &&
+          state.threadId !== serverId &&
+          state.serverId !== serverId
+        ) {
+          continue;
+        }
+        this.cancelBooleanState(state);
+        this.booleanEntries.delete(key);
+      }
+      for (const [key, state] of this.acceptAnswerEntries) {
+        if (state.threadId === clientId || state.threadId === serverId) {
+          this.cancelAcceptedAnswerState(state);
+          this.acceptAnswerEntries.delete(key);
+        }
+      }
+    }
+
+    if (targetType === "reply" && threadId) {
+      const accepted = this.acceptAnswerEntries.get(
+        this.acceptAnswerKey(threadId),
+      );
+      if (accepted) {
+        this.cancelAcceptedAnswerState(accepted);
+        this.acceptAnswerEntries.delete(this.acceptAnswerKey(threadId));
+      }
+    }
+  }
+
   /**
    * Resets coordinator state on logout or account switch.
    * Increments generation so any late-settling responses from the previous
@@ -230,6 +285,45 @@ export class DesiredStateCoordinator {
     this.acceptAnswerEntries.clear();
     this.replyResolutions.clear();
     this.noteResolutions.clear();
+  }
+
+  private cancelLikeState(entry: EntityLikeState): void {
+    if (entry.dispatchTimer !== null) clearTimeout(entry.dispatchTimer);
+    if (entry.abortController) {
+      try {
+        entry.abortController.abort();
+      } catch {
+        // ignore abort errors
+      }
+    }
+    entry.dispatchTimer = null;
+    entry.abortController = null;
+  }
+
+  private cancelBooleanState(entry: ThreadBooleanState): void {
+    if (entry.dispatchTimer !== null) clearTimeout(entry.dispatchTimer);
+    if (entry.abortController) {
+      try {
+        entry.abortController.abort();
+      } catch {
+        // ignore abort errors
+      }
+    }
+    entry.dispatchTimer = null;
+    entry.abortController = null;
+  }
+
+  private cancelAcceptedAnswerState(entry: ThreadAcceptedAnswerState): void {
+    if (entry.dispatchTimer !== null) clearTimeout(entry.dispatchTimer);
+    if (entry.abortController) {
+      try {
+        entry.abortController.abort();
+      } catch {
+        // ignore abort errors
+      }
+    }
+    entry.dispatchTimer = null;
+    entry.abortController = null;
   }
 
   /**
@@ -460,6 +554,29 @@ export class DesiredStateCoordinator {
     this.booleanEntries.delete(key);
   }
 
+  private isLikeStateCurrent(state: EntityLikeState): boolean {
+    return (
+      this.entries.get(this.likeKey(state.targetType, state.targetId)) === state
+    );
+  }
+
+  private isBooleanStateCurrent(state: ThreadBooleanState): boolean {
+    return (
+      this.booleanEntries.get(
+        this.booleanKey(state.targetType, state.threadId),
+      ) === state
+    );
+  }
+
+  private isAcceptedAnswerStateCurrent(
+    state: ThreadAcceptedAnswerState,
+  ): boolean {
+    return (
+      this.acceptAnswerEntries.get(this.acceptAnswerKey(state.threadId)) ===
+      state
+    );
+  }
+
   // ==========================================
   // LIKES (Thread, Reply, Note)
   // ==========================================
@@ -597,7 +714,8 @@ export class DesiredStateCoordinator {
     state: EntityLikeState,
     capturedGen: number,
   ): void {
-    if (this.generation !== capturedGen) return;
+    if (this.generation !== capturedGen || !this.isLikeStateCurrent(state))
+      return;
     if (!state.serverId) return;
     if (state.inFlightState !== null) return;
     if (state.desiredState === state.serverBaseline) return;
@@ -615,7 +733,8 @@ export class DesiredStateCoordinator {
         targetId: state.serverId,
       })
       .then((response) => {
-        if (this.generation !== capturedGen) return;
+        if (this.generation !== capturedGen || !this.isLikeStateCurrent(state))
+          return;
 
         state.abortController = null;
         state.inFlightState = null;
@@ -629,7 +748,8 @@ export class DesiredStateCoordinator {
         }
       })
       .catch((error) => {
-        if (this.generation !== capturedGen) return;
+        if (this.generation !== capturedGen || !this.isLikeStateCurrent(state))
+          return;
         if (controller.signal.aborted) return;
 
         state.abortController = null;
@@ -865,7 +985,8 @@ export class DesiredStateCoordinator {
     state: ThreadBooleanState,
     capturedGen: number,
   ): void {
-    if (this.generation !== capturedGen) return;
+    if (this.generation !== capturedGen || !this.isBooleanStateCurrent(state))
+      return;
     if (!state.serverId) return;
 
     // Never allow parallel requests for the same thread
@@ -895,7 +1016,11 @@ export class DesiredStateCoordinator {
 
     apiCall
       .then((response) => {
-        if (this.generation !== capturedGen) return;
+        if (
+          this.generation !== capturedGen ||
+          !this.isBooleanStateCurrent(state)
+        )
+          return;
 
         state.abortController = null;
         state.inFlightState = null;
@@ -940,7 +1065,11 @@ export class DesiredStateCoordinator {
         }
       })
       .catch((error) => {
-        if (this.generation !== capturedGen) return;
+        if (
+          this.generation !== capturedGen ||
+          !this.isBooleanStateCurrent(state)
+        )
+          return;
         if (controller.signal.aborted) return;
 
         state.abortController = null;
@@ -1081,7 +1210,12 @@ export class DesiredStateCoordinator {
     state: ThreadAcceptedAnswerState,
     capturedGen: number,
   ): void {
-    if (this.generation !== capturedGen) return;
+    if (
+      this.generation !== capturedGen ||
+      !this.isAcceptedAnswerStateCurrent(state)
+    ) {
+      return;
+    }
 
     // Never allow parallel accept/unaccept requests for the same thread
     if (state.inFlightTargetReplyId !== null) return;
@@ -1119,7 +1253,12 @@ export class DesiredStateCoordinator {
     learningInteractionsService
       .acceptReply(targetReplyId, { accepted: targetAccepted })
       .then((response) => {
-        if (this.generation !== capturedGen) return;
+        if (
+          this.generation !== capturedGen ||
+          !this.isAcceptedAnswerStateCurrent(state)
+        ) {
+          return;
+        }
 
         state.abortController = null;
         state.inFlightTargetReplyId = null;
@@ -1152,7 +1291,12 @@ export class DesiredStateCoordinator {
         }
       })
       .catch((error) => {
-        if (this.generation !== capturedGen) return;
+        if (
+          this.generation !== capturedGen ||
+          !this.isAcceptedAnswerStateCurrent(state)
+        ) {
+          return;
+        }
         if (controller.signal.aborted) return;
 
         state.abortController = null;

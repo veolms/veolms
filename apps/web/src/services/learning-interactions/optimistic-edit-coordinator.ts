@@ -47,9 +47,10 @@ export function getOptimisticEditFields(
   response: unknown,
   fallback: OptimisticEditFields,
 ): OptimisticEditFields {
-  const entity = response && typeof response === "object"
-    ? (response as Record<string, unknown>)
-    : {};
+  const entity =
+    response && typeof response === "object"
+      ? (response as Record<string, unknown>)
+      : {};
   const content =
     typeof entity.content === "string" ? entity.content : fallback.content;
   return {
@@ -98,7 +99,10 @@ export class OptimisticEditCoordinator {
     return record;
   }
 
-  fail(kind: OptimisticEditKind, clientId: string): OptimisticEditRecord | undefined {
+  fail(
+    kind: OptimisticEditKind,
+    clientId: string,
+  ): OptimisticEditRecord | undefined {
     const record = this.get(kind, clientId);
     if (!record || !isCurrentGeneration(record)) return undefined;
     this.records.delete(editKey(kind, clientId));
@@ -110,6 +114,11 @@ export class OptimisticEditCoordinator {
     if (record?.status === "confirmed") {
       this.records.delete(editKey(kind, clientId));
     }
+  }
+
+  /** Removes a record once its entity has been permanently deleted. */
+  discard(kind: OptimisticEditKind, clientId: string): void {
+    this.records.delete(editKey(kind, clientId));
   }
 
   get(

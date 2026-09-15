@@ -37,6 +37,7 @@ import {
   learningInteractionKeys,
   desiredStateCoordinator,
   interactionCreationCoordinator,
+  optimisticDeletionCoordinator,
 } from "../learning-interactions";
 
 function persistAuthenticatedSession(
@@ -75,6 +76,7 @@ function persistAuthenticatedSession(
   authStore.setUser(data.user);
   desiredStateCoordinator.reset();
   interactionCreationCoordinator.reset();
+  optimisticDeletionCoordinator.reset();
   queryClient.removeQueries({ queryKey: learningSpaceKeys.all });
   queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
   queryClient.setQueryData(authKeys.me(), currentUser);
@@ -289,6 +291,7 @@ export function useLogout() {
       authStore.clearAuth();
       desiredStateCoordinator.reset();
       interactionCreationCoordinator.reset();
+      optimisticDeletionCoordinator.reset();
       clearCoursePlayerSessions();
       queryClient.setQueryData(authKeys.me(), null);
       queryClient.removeQueries({ queryKey: authKeys.me() });
@@ -310,6 +313,7 @@ export function useDeactivateAccount() {
       authStore.clearAuth();
       desiredStateCoordinator.reset();
       interactionCreationCoordinator.reset();
+      optimisticDeletionCoordinator.reset();
       clearCoursePlayerSessions();
 
       // A deactivated account must not leave protected data in the client

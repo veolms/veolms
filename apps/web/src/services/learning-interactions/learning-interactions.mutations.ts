@@ -159,12 +159,9 @@ export function useUpdateThread(threadId?: string) {
       return learningInteractionsService.updateThread(threadId, variables);
     },
     onMutate: (variables) => {
-      if (!("payload" in variables) || !variables.__optimistic) return undefined;
-      return beginOptimisticEdit(
-        queryClient,
-        "thread",
-        variables.__optimistic,
-      );
+      if (!("payload" in variables) || !variables.__optimistic)
+        return undefined;
+      return beginOptimisticEdit(queryClient, "thread", variables.__optimistic);
     },
     onSuccess: (data, _variables, context) => {
       if (context) confirmOptimisticEdit(queryClient, data, context);
@@ -176,15 +173,9 @@ export function useUpdateThread(threadId?: string) {
 }
 
 export function useDeleteThread() {
-  const queryClient = useQueryClient();
   return useMutation<any, ApiError, string>({
     mutationFn: (threadId) =>
       learningInteractionsService.deleteThread(threadId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.all,
-      });
-    },
   });
 }
 
@@ -229,11 +220,7 @@ export function useUpdateReply(threadId?: string) {
       learningInteractionsService.updateReply(replyId, payload),
     onMutate: (variables) => {
       if (!variables.__optimistic) return undefined;
-      return beginOptimisticEdit(
-        queryClient,
-        "reply",
-        variables.__optimistic,
-      );
+      return beginOptimisticEdit(queryClient, "reply", variables.__optimistic);
     },
     onSuccess: (data, _variables, context) => {
       if (context) confirmOptimisticEdit(queryClient, data, context);
@@ -245,18 +232,8 @@ export function useUpdateReply(threadId?: string) {
 }
 
 export function useDeleteReply(threadId?: string) {
-  const queryClient = useQueryClient();
   return useMutation<any, ApiError, string>({
     mutationFn: (replyId) => learningInteractionsService.deleteReply(replyId),
-    onSuccess: () => {
-      if (!threadId) return;
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.threadRepliesRoot(threadId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.all,
-      });
-    },
   });
 }
 
@@ -401,12 +378,9 @@ export function useUpdateNote(noteId?: string) {
       return learningInteractionsService.updateNote(noteId, variables);
     },
     onMutate: (variables) => {
-      if (!("payload" in variables) || !variables.__optimistic) return undefined;
-      return beginOptimisticEdit(
-        queryClient,
-        "note",
-        variables.__optimistic,
-      );
+      if (!("payload" in variables) || !variables.__optimistic)
+        return undefined;
+      return beginOptimisticEdit(queryClient, "note", variables.__optimistic);
     },
     onSuccess: (data, _variables, context) => {
       if (context) confirmOptimisticEdit(queryClient, data, context);
@@ -418,14 +392,8 @@ export function useUpdateNote(noteId?: string) {
 }
 
 export function useDeleteNote() {
-  const queryClient = useQueryClient();
   return useMutation<any, ApiError, string>({
     mutationFn: (noteId) => learningInteractionsService.deleteNote(noteId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.notesRoot(),
-      });
-    },
   });
 }
 

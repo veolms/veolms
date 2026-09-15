@@ -19,6 +19,10 @@ import { calculateNextLikesCount } from "./cache-updaters";
 import { applyOptimisticEditFields } from "./edit-cache-updaters";
 import { optimisticEditCoordinator } from "./optimistic-edit-coordinator";
 import {
+  optimisticDeletionCoordinator,
+  useOptimisticDeletionRevision,
+} from "./optimistic-deletion-coordinator";
+import {
   toLearningThreadEntity,
   getClientEntityId,
   isClientEntityId,
@@ -64,7 +68,9 @@ function entityMatchesEditFields(
   );
 }
 
-export function projectThreadLocalState(thread: LearningThreadEntity): LearningThreadEntity {
+export function projectThreadLocalState(
+  thread: LearningThreadEntity,
+): LearningThreadEntity {
   thread = projectThreadEditState(thread);
   const clientId = getClientEntityId(thread);
   const serverId = getServerEntityId(thread);
@@ -98,6 +104,18 @@ export function projectThreadLocalState(thread: LearningThreadEntity): LearningT
       ),
     };
   }
+  const replyDeletion =
+    optimisticDeletionCoordinator.projectThreadReplyState(next);
+  if (
+    replyDeletion &&
+    (next.repliesCount !== replyDeletion.repliesCount ||
+      next.acceptedAnswerId !== replyDeletion.acceptedAnswerId)
+  ) {
+    next = {
+      ...next,
+      ...replyDeletion,
+    };
+  }
   return next;
 }
 
@@ -115,8 +133,13 @@ function projectThreadEditState(
   }
   return {
     ...applyOptimisticEditFields(
-    thread as unknown as { id: string | number; content?: string; plainText?: string; visibility?: string },
-    fields,
+      thread as unknown as {
+        id: string | number;
+        content?: string;
+        plainText?: string;
+        visibility?: string;
+      },
+      fields,
     ),
     id: record.clientId,
     clientId: record.clientId,
@@ -132,7 +155,8 @@ export function projectReplyLocalState(
   reply = projectReplyEditState(reply);
   const clientId = getClientEntityId(reply);
   const serverId = getServerEntityId(reply);
-  const acceptedState = desiredStateCoordinator.getAcceptedAnswerState(threadId);
+  const acceptedState =
+    desiredStateCoordinator.getAcceptedAnswerState(threadId);
   const desiredLiked = desiredStateCoordinator.getLikeProjection(
     "reply",
     clientId,
@@ -173,15 +197,17 @@ function projectReplyEditState(
   const record = optimisticEditCoordinator.findForEntity("reply", reply);
   if (!record) return reply;
   const fields = record.authoritative ?? record.optimistic;
-  if (
-    record.status === "confirmed" &&
-    entityMatchesEditFields(reply, fields)
-  ) {
+  if (record.status === "confirmed" && entityMatchesEditFields(reply, fields)) {
     optimisticEditCoordinator.acknowledge("reply", record.clientId);
   }
   return {
     ...applyOptimisticEditFields(
-      reply as unknown as { id: string | number; content?: string; plainText?: string; visibility?: string },
+      reply as unknown as {
+        id: string | number;
+        content?: string;
+        plainText?: string;
+        visibility?: string;
+      },
       fields,
     ),
     id: record.clientId,
@@ -224,15 +250,17 @@ function projectNoteEditState(
   const record = optimisticEditCoordinator.findForEntity("note", note);
   if (!record) return note;
   const fields = record.authoritative ?? record.optimistic;
-  if (
-    record.status === "confirmed" &&
-    entityMatchesEditFields(note, fields)
-  ) {
+  if (record.status === "confirmed" && entityMatchesEditFields(note, fields)) {
     optimisticEditCoordinator.acknowledge("note", record.clientId);
   }
   return {
     ...applyOptimisticEditFields(
-      note as unknown as { id: string | number; content?: string; plainText?: string; visibility?: string },
+      note as unknown as {
+        id: string | number;
+        content?: string;
+        plainText?: string;
+        visibility?: string;
+      },
       fields,
     ),
     id: record.clientId,
@@ -250,15 +278,13 @@ function noteMatchesQuery(
   if (query.courseId && query.courseId !== note.courseId) return false;
   if (query.lessonId && query.lessonId !== note.lessonId) return false;
   if (query.visibility && query.visibility !== note.visibility) return false;
-  if (
-    query.mine !== undefined &&
-    Boolean(query.mine) !== Boolean(note.isOwn)
-  ) {
+  if (query.mine !== undefined && Boolean(query.mine) !== Boolean(note.isOwn)) {
     return false;
   }
   if (query.query) {
     const needle = query.query.toLowerCase();
-    const searchable = `${note.title ?? ""} ${note.plainText} ${note.content}`.toLowerCase();
+    const searchable =
+      `${note.title ?? ""} ${note.plainText} ${note.content}`.toLowerCase();
     if (!searchable.includes(needle)) return false;
   }
   if (query.tag && !note.tags.includes(query.tag)) return false;
@@ -372,7 +398,7 @@ export function useLessonThreads(
   query?: ListLearningThreadsQuery,
   options?: { enabled?: boolean },
 ) {
-  return useQuery<LearningThreadCacheResponse, ApiError>({
+  const result = useQuery<LearningThreadCacheResponse, ApiError>({
     queryKey: learningInteractionKeys.lessonThreads(courseId, lessonId, query),
     queryFn: async () => {
       const response = await learningInteractionsService.listLessonThreads(
@@ -390,13 +416,23 @@ export function useLessonThreads(
     enabled: options?.enabled ?? Boolean(courseId && lessonId),
     staleTime: 30 * 1000,
   });
+  useOptimisticDeletionRevision();
+  return {
+    ...result,
+    data: result.data
+      ? {
+          ...result.data,
+          threads: result.data.threads.map(projectThreadLocalState),
+        }
+      : result.data,
+  };
 }
 
 export function useHubThreads(
   query?: ListLearningThreadsQuery,
   options?: { enabled?: boolean },
 ) {
-  return useQuery<LearningThreadCacheResponse, ApiError>({
+  const result = useQuery<LearningThreadCacheResponse, ApiError>({
     queryKey: learningInteractionKeys.hubThreads(query),
     queryFn: async () => {
       const response = await learningInteractionsService.listHubThreads(query);
@@ -410,6 +446,16 @@ export function useHubThreads(
     enabled: options?.enabled ?? true,
     staleTime: 30 * 1000,
   });
+  useOptimisticDeletionRevision();
+  return {
+    ...result,
+    data: result.data
+      ? {
+          ...result.data,
+          threads: result.data.threads.map(projectThreadLocalState),
+        }
+      : result.data,
+  };
 }
 
 export function useThreadDetails(
@@ -419,14 +465,16 @@ export function useThreadDetails(
   const isPendingClientId =
     isClientEntityId(threadId) ||
     interactionCreationCoordinator.hasPendingClientId(threadId);
-  return useQuery<LearningThreadEntity, ApiError>({
+  const result = useQuery<LearningThreadEntity, ApiError>({
     queryKey: learningInteractionKeys.threadDetails(threadId ?? ""),
     queryFn: async () => {
       if (!threadId || isPendingClientId) {
         throw new Error("A confirmed server thread ID is required.");
       }
       return projectThreadLocalState(
-        toLearningThreadEntity(await learningInteractionsService.getThread(threadId)),
+        toLearningThreadEntity(
+          await learningInteractionsService.getThread(threadId),
+        ),
       );
     },
     enabled:
@@ -434,6 +482,15 @@ export function useThreadDetails(
       Boolean(threadId) &&
       !isPendingClientId,
   });
+  useOptimisticDeletionRevision();
+  const data = result.data ? projectThreadLocalState(result.data) : result.data;
+  return {
+    ...result,
+    data:
+      data && optimisticDeletionCoordinator.isTombstoned("thread", data)
+        ? undefined
+        : data,
+  };
 }
 
 export function useThreadReplies(
@@ -441,7 +498,7 @@ export function useThreadReplies(
   query?: ListLearningRepliesQuery,
   options?: { enabled?: boolean },
 ) {
-  return useQuery<LearningRepliesCacheResponse, ApiError>({
+  const result = useQuery<LearningRepliesCacheResponse, ApiError>({
     queryKey: learningInteractionKeys.threadReplies(threadId ?? "", query),
     queryFn: async () => {
       if (
@@ -467,13 +524,32 @@ export function useThreadReplies(
       !isClientEntityId(threadId) &&
       !interactionCreationCoordinator.hasPendingClientId(threadId),
   });
+  useOptimisticDeletionRevision();
+  if (!result.data) return result;
+  const replies = result.data.replies.map((reply) =>
+    projectReplyLocalState(reply, threadId ?? ""),
+  );
+  const hiddenCount = replies.filter((reply) =>
+    optimisticDeletionCoordinator.isTombstoned("reply", reply),
+  ).length;
+  return {
+    ...result,
+    data: {
+      ...result.data,
+      replies,
+      totalCount:
+        result.data.totalCount === undefined
+          ? result.data.totalCount
+          : Math.max(0, result.data.totalCount - hiddenCount),
+    },
+  };
 }
 
 export function useUserNotes(
   query?: ListLearningNotesQuery,
   options?: { enabled?: boolean },
 ) {
-  return useQuery<LearningNotesCacheResponse, ApiError>({
+  const result = useQuery<LearningNotesCacheResponse, ApiError>({
     queryKey: learningInteractionKeys.notes(query),
     queryFn: async () => {
       const response = await learningInteractionsService.listNotes(query);
@@ -485,6 +561,16 @@ export function useUserNotes(
     },
     enabled: options?.enabled ?? true,
   });
+  useOptimisticDeletionRevision();
+  return {
+    ...result,
+    data: result.data
+      ? {
+          ...result.data,
+          notes: result.data.notes.map(projectNoteLocalState),
+        }
+      : result.data,
+  };
 }
 
 export function useUserAutocomplete(

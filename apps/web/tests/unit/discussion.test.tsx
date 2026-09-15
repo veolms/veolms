@@ -15,6 +15,7 @@ import {
 } from "../../src/learning/Discussion.tsx";
 import { LessonDescription } from "../../src/learning/LessonDescription.tsx";
 import { getDiscussionFeedCountLabel } from "../../src/learning/discussionFeed";
+import { optimisticDeletionCoordinator } from "../../src/services/learning-interactions/optimistic-deletion-coordinator";
 
 const uploadAttachment = vi.hoisted(() =>
   vi.fn(async (file: File) => ({
@@ -218,8 +219,16 @@ vi.mock("../../src/services/learning-interactions", () => ({
     mutateAsync: vi.fn(),
     isPending: false,
   }),
-  useThreadDetails: () => ({ data: undefined, isLoading: false, isError: false }),
-  useThreadReplies: () => ({ data: { replies: [] }, isLoading: false, isError: false }),
+  useThreadDetails: () => ({
+    data: undefined,
+    isLoading: false,
+    isError: false,
+  }),
+  useThreadReplies: () => ({
+    data: { replies: [] },
+    isLoading: false,
+    isError: false,
+  }),
   useCreateReply: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateReply: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteReply: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -617,7 +626,14 @@ describe("CommentCard", () => {
           isOwn: true,
         }}
         onLike={vi.fn()}
-        onDelete={onDelete}
+        onDelete={() => {
+          optimisticDeletionCoordinator.begin({
+            kind: "thread",
+            clientId: "12",
+            serverId: "12",
+            commit: async () => onDelete(),
+          });
+        }}
       />,
     );
 
@@ -1141,7 +1157,9 @@ describe("Discussion", () => {
     });
 
     try {
-      render(<Discussion persistenceKey="discussion-mobile-thread-swipe-test" />);
+      render(
+        <Discussion persistenceKey="discussion-mobile-thread-swipe-test" />,
+      );
       const rohitComment = screen
         .getByRole("document", { name: "Comment by Rohit Sharma" })
         .closest("article");
@@ -1317,8 +1335,9 @@ describe("Discussion", () => {
           entry.getAttribute("aria-label"),
       );
 
-    const count = screen.getByText((_, element) =>
-      element?.textContent === getDiscussionFeedCountLabel("all", 4),
+    const count = screen.getByText(
+      (_, element) =>
+        element?.textContent === getDiscussionFeedCountLabel("all", 4),
     );
     const sortTrigger = screen.getByRole("button", {
       name: "Sort discussions: Newest",
@@ -1348,22 +1367,25 @@ describe("Discussion", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Notes" }));
     expect(
-      screen.getByText((_, element) =>
-        element?.textContent === getDiscussionFeedCountLabel("note", 1),
+      screen.getByText(
+        (_, element) =>
+          element?.textContent === getDiscussionFeedCountLabel("note", 1),
       ),
     ).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Comments" }));
     expect(
-      screen.getByText((_, element) =>
-        element?.textContent === getDiscussionFeedCountLabel("comment", 1),
+      screen.getByText(
+        (_, element) =>
+          element?.textContent === getDiscussionFeedCountLabel("comment", 1),
       ),
     ).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Q&As" }));
     expect(
-      screen.getByText((_, element) =>
-        element?.textContent === getDiscussionFeedCountLabel("question", 2),
+      screen.getByText(
+        (_, element) =>
+          element?.textContent === getDiscussionFeedCountLabel("question", 2),
       ),
     ).toBeVisible();
 
@@ -1379,8 +1401,9 @@ describe("Discussion", () => {
       "Ashi Singh",
     ]);
     expect(
-      screen.getByText((_, element) =>
-        element?.textContent === getDiscussionFeedCountLabel("all", 4),
+      screen.getByText(
+        (_, element) =>
+          element?.textContent === getDiscussionFeedCountLabel("all", 4),
       ),
     ).toBeVisible();
 
@@ -1390,8 +1413,9 @@ describe("Discussion", () => {
     fireEvent.click(screen.getByRole("option", { name: "Mine" }));
     expect(visibleAuthors()).toEqual(["Ashi Singh"]);
     expect(
-      screen.getByText((_, element) =>
-        element?.textContent === getDiscussionFeedCountLabel("all", 1),
+      screen.getByText(
+        (_, element) =>
+          element?.textContent === getDiscussionFeedCountLabel("all", 1),
       ),
     ).toBeVisible();
   });
@@ -1446,7 +1470,9 @@ describe("Discussion", () => {
         />,
       );
       const discussion = container.querySelector(".learning-discussion");
-      const description = discussion?.querySelector("[data-lesson-description]");
+      const description = discussion?.querySelector(
+        "[data-lesson-description]",
+      );
       const composer = discussion?.querySelector(
         "[data-compact-comment-composer]",
       );
@@ -1491,7 +1517,9 @@ describe("Discussion", () => {
         />,
       );
       const discussion = container.querySelector(".learning-discussion");
-      const description = discussion?.querySelector("[data-lesson-description]");
+      const description = discussion?.querySelector(
+        "[data-lesson-description]",
+      );
       const composerHost = discussion?.querySelector(
         "[data-comment-composer-container]",
       );
@@ -2160,7 +2188,6 @@ describe("Discussion", () => {
       window.matchMedia = originalMatchMedia;
     }
   });
-
 });
 
 const sampleLessonMarkdown = `## Description
@@ -2230,9 +2257,7 @@ describe("LessonDescription", () => {
       <LessonDescription isLoading={false} description={undefined} />,
     );
     expect(container.firstChild).toBeNull();
-    expect(
-      screen.queryByText("Description"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Description")).not.toBeInTheDocument();
     expect(
       screen.queryByText("No description provided for this lesson."),
     ).not.toBeInTheDocument();
@@ -2242,9 +2267,7 @@ describe("LessonDescription", () => {
       <LessonDescription isLoading={false} description={null} />,
     );
     expect(containerNull.firstChild).toBeNull();
-    expect(
-      screen.queryByText("Description"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Description")).not.toBeInTheDocument();
     expect(
       screen.queryByText("No description provided for this lesson."),
     ).not.toBeInTheDocument();
@@ -2255,9 +2278,7 @@ describe("LessonDescription", () => {
       <LessonDescription isLoading={false} description="" />,
     );
     expect(container.firstChild).toBeNull();
-    expect(
-      screen.queryByText("Description"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Description")).not.toBeInTheDocument();
     expect(
       screen.queryByText("No description provided for this lesson."),
     ).not.toBeInTheDocument();
@@ -2268,9 +2289,7 @@ describe("LessonDescription", () => {
       <LessonDescription isLoading={false} description="   " />,
     );
     expect(container.firstChild).toBeNull();
-    expect(
-      screen.queryByText("Description"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Description")).not.toBeInTheDocument();
     expect(
       screen.queryByText("No description provided for this lesson."),
     ).not.toBeInTheDocument();
@@ -2280,9 +2299,7 @@ describe("LessonDescription", () => {
       <LessonDescription isLoading={false} description={"   \n\t  "} />,
     );
     expect(containerEscaped.firstChild).toBeNull();
-    expect(
-      screen.queryByText("Description"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Description")).not.toBeInTheDocument();
     expect(
       screen.queryByText("No description provided for this lesson."),
     ).not.toBeInTheDocument();
@@ -2318,7 +2335,9 @@ describe("LessonDescription", () => {
     expect(
       screen.queryByRole("heading", { name: "Try this in code" }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Copy" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Copy" }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(description);
 
@@ -2350,7 +2369,9 @@ describe("LessonDescription", () => {
     expect(
       screen.queryByRole("heading", { level: 1, name: "Description" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Try this in code" })).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Try this in code" }),
+    ).toBeVisible();
     expect(screen.getByText("javascript")).toBeVisible();
     expect(description.querySelector("blockquote")).toBeTruthy();
     expect(
@@ -2397,10 +2418,11 @@ describe("LessonDescription", () => {
       }),
     );
 
-    expect(screen.getByRole("button", { name: "Show more of the lesson description" })).toHaveAttribute(
-      "data-expanded",
-      "false",
-    );
+    expect(
+      screen.getByRole("button", {
+        name: "Show more of the lesson description",
+      }),
+    ).toHaveAttribute("data-expanded", "false");
     expect(
       screen.queryByRole("heading", { name: "Try this in code" }),
     ).not.toBeInTheDocument();
@@ -2443,10 +2465,7 @@ describe("LessonDescription", () => {
     const description = screen.getByRole("button", {
       name: "Show more of the lesson description",
     });
-    const focusSpy = vi.spyOn(
-      HTMLButtonElement.prototype,
-      "focus",
-    );
+    const focusSpy = vi.spyOn(HTMLButtonElement.prototype, "focus");
 
     fireEvent.click(description);
 

@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach } from "vitest";
 import { cleanup } from "@testing-library/react";
+import { optimisticDeletionCoordinator } from "../../src/services/learning-interactions/optimistic-deletion-coordinator";
 
 function createStorageMock(): Storage {
   const store = new Map<string, string>();
@@ -19,16 +20,33 @@ function createStorageMock(): Storage {
 try {
   if (!window.localStorage || typeof window.localStorage.clear !== "function") {
     const mock = createStorageMock();
-    Object.defineProperty(window, "localStorage", { value: mock, writable: true, configurable: true });
-    Object.defineProperty(globalThis, "localStorage", { value: mock, writable: true, configurable: true });
+    Object.defineProperty(window, "localStorage", {
+      value: mock,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(globalThis, "localStorage", {
+      value: mock,
+      writable: true,
+      configurable: true,
+    });
   }
 } catch {
   const mock = createStorageMock();
-  Object.defineProperty(window, "localStorage", { value: mock, writable: true, configurable: true });
-  Object.defineProperty(globalThis, "localStorage", { value: mock, writable: true, configurable: true });
+  Object.defineProperty(window, "localStorage", {
+    value: mock,
+    writable: true,
+    configurable: true,
+  });
+  Object.defineProperty(globalThis, "localStorage", {
+    value: mock,
+    writable: true,
+    configurable: true,
+  });
 }
 
 beforeEach(() => {
+  optimisticDeletionCoordinator.reset();
   try {
     window.localStorage?.clear?.();
   } catch {
@@ -43,6 +61,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  optimisticDeletionCoordinator.reset();
 });
 
 Object.defineProperty(window, "matchMedia", {

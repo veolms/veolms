@@ -1,49 +1,4 @@
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
-import React, { useEffect, useRef, useState } from "react";
-
-export const UNDO_DELETE_TIMEOUT_MS = 10_000;
-
-export function useUndoableDeletion(onCommit: () => void | Promise<void>) {
-  const commitRef = useRef(onCommit);
-  const [deadline, setDeadline] = useState<number | null>(null);
-  const [seconds, setSeconds] = useState(10);
-
-  useEffect(() => {
-    commitRef.current = onCommit;
-  }, [onCommit]);
-
-  useEffect(() => {
-    if (deadline === null) return;
-
-    const updateSeconds = () => {
-      setSeconds(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
-    };
-    updateSeconds();
-    const interval = window.setInterval(updateSeconds, 250);
-    const timeout = window.setTimeout(
-      () => {
-        setDeadline(null);
-        void commitRef.current();
-      },
-      Math.max(0, deadline - Date.now()),
-    );
-
-    return () => {
-      window.clearInterval(interval);
-      window.clearTimeout(timeout);
-    };
-  }, [deadline]);
-
-  return {
-    pending: deadline !== null,
-    seconds,
-    begin: () => {
-      setSeconds(10);
-      setDeadline(Date.now() + UNDO_DELETE_TIMEOUT_MS);
-    },
-    undo: () => setDeadline(null),
-  };
-}
 
 export interface UndoDeleteButtonProps {
   name: string;

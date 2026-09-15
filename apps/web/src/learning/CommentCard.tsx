@@ -30,7 +30,7 @@ import {
 } from "./discussion-editor/types";
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { DiscussionEditor } from "./discussion-editor/DiscussionEditor";
-import { useUndoableDeletion, UndoDeleteButton } from "./useUndoableDeletion";
+import { UndoDeleteButton } from "./useUndoableDeletion";
 import { QueryClientContext } from "@tanstack/react-query";
 import {
   useDeleteReply,
@@ -38,6 +38,11 @@ import {
   useUpdateReply,
   desiredStateCoordinator,
 } from "../services/learning-interactions";
+import {
+  optimisticDeletionCoordinator,
+  useOptimisticDeletion,
+} from "../services/learning-interactions/optimistic-deletion-coordinator";
+import { optimisticEditCoordinator } from "../services/learning-interactions/optimistic-edit-coordinator";
 import { adaptLearningReplyToCommentReply } from "./learning-replies.adapter";
 import { useCurrentUser } from "../services/auth";
 import {
@@ -108,13 +113,14 @@ interface CommentCardProps {
   onEdit?: (comment: Comment) => void;
   onDelete?: (id: string | number) => void;
   onEditFailure?: () => void;
+  onDeleteFailure?: (message: string) => void;
   onReport?: (
     target:
       | {
-        targetType: "thread" | "reply";
-        targetId: string | number;
-        authorName?: string;
-        serverId?: string;
+          targetType: "thread" | "reply";
+          targetId: string | number;
+          authorName?: string;
+          serverId?: string;
         }
       | (string | number),
   ) => void;
@@ -149,6 +155,7 @@ export function CommentCard({
   onEdit = () => undefined,
   onDelete = () => undefined,
   onEditFailure = () => undefined,
+  onDeleteFailure = () => undefined,
   onReport = () => undefined,
   onToggleAcceptReply,
   onToggleLockThread,
@@ -172,8 +179,6 @@ export function CommentCard({
   const [localReplies, setLocalReplies] = useState<CommentReply[]>(
     comment.thread ?? [],
   );
-  const deletion = useUndoableDeletion(() => onDelete(comment.id));
-
   const entryKind =
     comment.entryKind ?? (comment.isQuestion ? "question" : "comment");
   const isNote = entryKind === "note";
@@ -183,6 +188,15 @@ export function CommentCard({
 
   const clientId = getClientEntityId(comment);
   const serverId = getServerEntityId(comment);
+  const deletion = useOptimisticDeletion(
+    isNote ? "note" : "thread",
+    clientId,
+    serverId,
+  );
+  const isEditing = optimisticEditCoordinator.isEditing(
+    isNote ? "note" : "thread",
+    clientId,
+  );
   const isBackendEntity = Boolean(isBackendMode && serverId);
   const threadId = serverId;
   const { data: authUser } = useCurrentUser();
@@ -332,13 +346,28 @@ export function CommentCard({
         (candidate) => getClientEntityId(candidate) === String(replyId),
       );
       const serverReplyId = reply ? getServerEntityId(reply) : undefined;
-      if (!serverReplyId) return false;
-      try {
-        await deleteReplyMutation.mutateAsync(serverReplyId);
-        return true;
-      } catch {
+      const replyClientId = reply ? getClientEntityId(reply) : undefined;
+      if (
+        !serverReplyId ||
+        !replyClientId ||
+        optimisticEditCoordinator.isEditing("reply", replyClientId)
+      ) {
         return false;
       }
+      return Boolean(
+        optimisticDeletionCoordinator.begin({
+          kind: "reply",
+          clientId: replyClientId,
+          serverId: serverReplyId,
+          parentClientId: clientId,
+          parentServerId: serverId,
+          parentRepliesCount: replyCount,
+          queryClient,
+          commit: () => deleteReplyMutation.mutateAsync(serverReplyId),
+          onFailure: () =>
+            onDeleteFailure("Couldn't delete this reply. Please try again."),
+        }),
+      );
     } else if (isBackendMode) {
       return false;
     } else {
@@ -385,12 +414,16 @@ export function CommentCard({
     }
   };
 
+  if (deletion.phase === "deleting" || deletion.phase === "deleted") {
+    return null;
+  }
+
   return (
     <article
       id={`discussion-entry-${clientId}`}
       data-discussion-entry={entryKind}
-      data-deletion-pending={deletion.pending || undefined}
-      className={`relative -mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4 ${hasReplies ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${deletion.pending ? "min-h-19" : ""}`}
+      data-deletion-pending={deletion.hidden || undefined}
+      className={`relative -mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4 ${hasReplies ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${deletion.hidden ? "min-h-19" : ""}`}
       onClick={(event) => {
         if (!hasReplies) return;
         const target = event.target;
@@ -407,8 +440,8 @@ export function CommentCard({
       }}
     >
       <div
-        inert={deletion.pending ? true : undefined}
-        className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${deletion.pending ? "pointer-events-none -translate-y-1 grid-rows-[0fr] opacity-0" : "translate-y-0 grid-rows-[1fr] opacity-100"}`}
+        inert={deletion.hidden ? true : undefined}
+        className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${deletion.hidden ? "pointer-events-none -translate-y-1 grid-rows-[0fr] opacity-0" : "translate-y-0 grid-rows-[1fr] opacity-100"}`}
       >
         <div className="min-h-0 overflow-hidden">
           <div className="relative flex gap-3 sm:gap-3.5">
@@ -521,7 +554,10 @@ export function CommentCard({
                   name={comment.name}
                   kind={entryKind}
                   isOwn={Boolean(comment.isOwn)}
-                  canEdit={!isBackendMode || Boolean(serverId)}
+                  canEdit={!isBackendMode || (Boolean(serverId) && !isEditing)}
+                  canDelete={
+                    !isBackendMode || (Boolean(serverId) && !isEditing)
+                  }
                   onEdit={() => onEdit(comment)}
                   onShare={() =>
                     serverId
@@ -533,7 +569,9 @@ export function CommentCard({
                         )
                       : undefined
                   }
-                  onDelete={deletion.begin}
+                  onDelete={() => {
+                    void onDelete(comment.id);
+                  }}
                   onReport={() =>
                     onReport?.({
                       targetType: "thread",
@@ -847,10 +885,6 @@ function ReplyCard({
     reply.content ?? createDiscussionDraft(reply.text),
   );
   const [editError, setEditError] = useState("");
-  const deletion = useUndoableDeletion(() => {
-    void onDelete(reply.id);
-  });
-
   const [localLiked, setLocalLiked] = useState(reply.liked ?? false);
   const isReplyLiked = isBackendMode ? Boolean(reply.liked) : localLiked;
   const replyLikesCount = isBackendMode
@@ -858,6 +892,10 @@ function ReplyCard({
     : reply.likes + (localLiked ? 1 : 0);
   const canAcceptReply =
     Boolean(getServerEntityId(reply)) && reply.creationStatus !== "pending";
+  const replyClientId = getClientEntityId(reply);
+  const replyServerId = getServerEntityId(reply);
+  const deletion = useOptimisticDeletion("reply", replyClientId, replyServerId);
+  const isEditing = optimisticEditCoordinator.isEditing("reply", replyClientId);
 
   const saveEdit = async () => {
     if (!hasDiscussionDraftContent(editDraft)) return;
@@ -870,15 +908,19 @@ function ReplyCard({
     }
   };
 
+  if (deletion.phase === "deleting" || deletion.phase === "deleted") {
+    return null;
+  }
+
   return (
     <article
       id={`discussion-entry-${reply.id}`}
-      data-deletion-pending={deletion.pending || undefined}
-      className={`relative pl-8 sm:pl-14 ${deletion.pending ? "min-h-9" : ""}`}
+      data-deletion-pending={deletion.hidden || undefined}
+      className={`relative pl-8 sm:pl-14 ${deletion.hidden ? "min-h-9" : ""}`}
     >
       <div
-        inert={deletion.pending ? true : undefined}
-        className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${deletion.pending ? "pointer-events-none -translate-y-1 grid-rows-[0fr] opacity-0" : "translate-y-0 grid-rows-[1fr] opacity-100"}`}
+        inert={deletion.hidden ? true : undefined}
+        className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${deletion.hidden ? "pointer-events-none -translate-y-1 grid-rows-[0fr] opacity-0" : "translate-y-0 grid-rows-[1fr] opacity-100"}`}
       >
         <div className="min-h-0 overflow-hidden">
           <div className="relative flex gap-3">
@@ -927,7 +969,9 @@ function ReplyCard({
                   kind="reply"
                   isOwn={Boolean(reply.isOwn)}
                   canEdit={!isBackendMode || Boolean(getServerEntityId(reply))}
-                  canAcceptAnswer={isQuestion && canAcceptAnswer && canAcceptReply}
+                  canAcceptAnswer={
+                    isQuestion && canAcceptAnswer && canAcceptReply
+                  }
                   isAccepted={Boolean(reply.isAccepted)}
                   onToggleAccept={
                     isQuestion && canAcceptAnswer && onToggleAccept
@@ -955,7 +999,12 @@ function ReplyCard({
                       },
                     )
                   }
-                  onDelete={deletion.begin}
+                  canDelete={
+                    !isBackendMode || (Boolean(replyServerId) && !isEditing)
+                  }
+                  onDelete={() => {
+                    void onDelete(reply.id);
+                  }}
                   onReport={onReport}
                   className="absolute -top-1 -right-1 z-20 shrink-0"
                 />
@@ -1162,6 +1211,7 @@ interface CommentActionMenuProps {
   kind: DiscussionEntryKind | "reply";
   isOwn: boolean;
   canEdit?: boolean;
+  canDelete?: boolean;
   canLock?: boolean;
   isLocked?: boolean;
   onToggleLock?: () => void;
@@ -1184,6 +1234,7 @@ export function CommentActionMenu({
   kind,
   isOwn,
   canEdit = true,
+  canDelete = true,
   canLock = false,
   isLocked = false,
   onToggleLock,
@@ -1232,12 +1283,14 @@ export function CommentActionMenu({
               />
             )}
             <MenuDivider />
-            <MenuAction
-              Icon={Trash}
-              label="Delete note"
-              destructive
-              onClick={onDelete}
-            />
+            {canDelete && (
+              <MenuAction
+                Icon={Trash}
+                label="Delete note"
+                destructive
+                onClick={onDelete}
+              />
+            )}
           </>
         ) : (
           <>
@@ -1297,12 +1350,14 @@ export function CommentActionMenu({
             />
           )}
           <MenuDivider />
-          <MenuAction
-            Icon={Trash}
-            label={`Delete ${actionLabel}`}
-            destructive
-            onClick={onDelete}
-          />
+          {canDelete && (
+            <MenuAction
+              Icon={Trash}
+              label={`Delete ${actionLabel}`}
+              destructive
+              onClick={onDelete}
+            />
+          )}
         </>
       ) : (
         <>

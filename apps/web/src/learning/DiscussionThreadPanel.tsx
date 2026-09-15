@@ -46,6 +46,11 @@ import {
   useUpdateReply,
   desiredStateCoordinator,
 } from "../services/learning-interactions";
+import {
+  optimisticDeletionCoordinator,
+  useOptimisticDeletion,
+} from "../services/learning-interactions/optimistic-deletion-coordinator";
+import { optimisticEditCoordinator } from "../services/learning-interactions/optimistic-edit-coordinator";
 import { interactionCreationCoordinator } from "../services/learning-interactions/interaction-creation-coordinator";
 import type { LearningThreadAttachmentSummary } from "@veolms/contracts";
 import {
@@ -53,7 +58,7 @@ import {
   getServerEntityId,
 } from "../services/learning-interactions/interaction-entities";
 import { adaptLearningReplyToCommentReply } from "./learning-replies.adapter";
-import { useUndoableDeletion, UndoDeleteButton } from "./useUndoableDeletion";
+import { UndoDeleteButton } from "./useUndoableDeletion";
 import {
   DiscussionAttachmentsList,
   AttachmentComposerPreview,
@@ -141,6 +146,7 @@ interface DiscussionThreadPanelProps {
   ) => Promise<boolean> | void;
   onReplyCreateError?: () => void;
   onReplyEditError?: () => void;
+  onReplyDeleteError?: () => void;
   courseId?: string;
 }
 
@@ -168,6 +174,7 @@ export function DiscussionThreadPanel({
   onToggleFollow,
   onReplyCreateError,
   onReplyEditError,
+  onReplyDeleteError,
   courseId,
 }: DiscussionThreadPanelProps) {
   const isPhone = useThreadPanelPhoneLayout();
@@ -699,6 +706,7 @@ export function DiscussionThreadPanel({
                   onToggleFollow={onToggleFollow}
                   onReplyCreateError={onReplyCreateError}
                   onReplyEditError={onReplyEditError}
+                  onReplyDeleteError={onReplyDeleteError}
                   courseId={courseId}
                 />
               </SwiperSlide>
@@ -760,6 +768,7 @@ interface ThreadSlideProps {
   ) => Promise<boolean> | void;
   onReplyCreateError?: () => void;
   onReplyEditError?: () => void;
+  onReplyDeleteError?: () => void;
   courseId?: string;
 }
 
@@ -786,6 +795,7 @@ function ThreadSlide({
   onToggleFollow,
   onReplyCreateError,
   onReplyEditError,
+  onReplyDeleteError,
   courseId,
 }: ThreadSlideProps) {
   const isQuestion =
@@ -924,13 +934,27 @@ function ThreadSlide({
         (candidate) => getClientEntityId(candidate) === String(replyId),
       );
       const serverReplyId = reply ? getServerEntityId(reply) : undefined;
-      if (!serverReplyId) return false;
-      try {
-        await deleteReplyMutation.mutateAsync(serverReplyId);
-        return true;
-      } catch {
+      const replyClientId = reply ? getClientEntityId(reply) : undefined;
+      if (
+        !serverReplyId ||
+        !replyClientId ||
+        optimisticEditCoordinator.isEditing("reply", replyClientId)
+      ) {
         return false;
       }
+      return Boolean(
+        optimisticDeletionCoordinator.begin({
+          kind: "reply",
+          clientId: replyClientId,
+          serverId: serverReplyId,
+          parentClientId: clientId,
+          parentServerId: serverId,
+          parentRepliesCount: repliesData?.totalCount ?? entry.replies,
+          queryClient,
+          commit: () => deleteReplyMutation.mutateAsync(serverReplyId),
+          onFailure: () => onReplyDeleteError?.(),
+        }),
+      );
     } else {
       onDeleteReply(entry.id, replyId);
       return true;
@@ -978,6 +1002,7 @@ function ThreadSlide({
       <div className="learning-comment-formatting-scrollport min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
         <ThreadRootEntry
           entry={entry}
+          isBackendMode={isBackendMode}
           canLock={canLock}
           onToggleLock={() => onToggleLockThread?.(entry.id, !entry.isLocked)}
           onToggleBookmark={onToggleBookmark}
@@ -1046,7 +1071,7 @@ function ThreadSlide({
                 onEdit={handleEditReply}
                 onDelete={handleDeleteReply}
                 onLikeReply={handleLikeReply}
-                    onReport={onReport}
+                onReport={onReport}
                 courseId={courseId}
               />
             ))
@@ -1094,6 +1119,7 @@ function ThreadSlide({
 
 function ThreadRootEntry({
   entry,
+  isBackendMode = false,
   canLock = false,
   onToggleLock,
   onToggleBookmark,
@@ -1105,6 +1131,7 @@ function ThreadRootEntry({
   onReport,
 }: {
   entry: Comment;
+  isBackendMode?: boolean;
   canLock?: boolean;
   onToggleLock?: () => void;
   onToggleBookmark?: (
@@ -1124,6 +1151,8 @@ function ThreadRootEntry({
   const isEntryLiked = Boolean(entry.liked);
   const isNote = entry.entryKind === "note" || (entry as any).kind === "note";
   const serverId = getServerEntityId(entry);
+  const clientId = getClientEntityId(entry);
+  const isEditing = optimisticEditCoordinator.isEditing("thread", clientId);
 
   const replyCount = Math.max(entry.replies ?? 0, entry.thread?.length ?? 0);
 
@@ -1197,6 +1226,8 @@ function ThreadRootEntry({
                 entry.entryKind ?? (entry.isQuestion ? "question" : "comment")
               }
               isOwn={Boolean(entry.isOwn)}
+              canEdit={!isBackendMode || (Boolean(serverId) && !isEditing)}
+              canDelete={!isBackendMode || (Boolean(serverId) && !isEditing)}
               canLock={canLock}
               isLocked={Boolean(entry.isLocked)}
               onToggleLock={onToggleLock}
@@ -1343,14 +1374,10 @@ function ThreadReplyEntry({
   );
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState("");
-  const [deleteError, setDeleteError] = useState("");
-
-  const deletion = useUndoableDeletion(async () => {
-    const success = await onDelete(reply.id);
-    if (!success) {
-      setDeleteError("Failed to delete reply. Please try again.");
-    }
-  });
+  const replyClientId = getClientEntityId(reply);
+  const replyServerId = getServerEntityId(reply);
+  const deletion = useOptimisticDeletion("reply", replyClientId, replyServerId);
+  const isEditing = optimisticEditCoordinator.isEditing("reply", replyClientId);
 
   const saveEdit = async () => {
     if (!hasDiscussionDraftContent(editDraft) || isUpdating) return;
@@ -1370,15 +1397,19 @@ function ThreadReplyEntry({
     }
   };
 
+  if (deletion.phase === "deleting" || deletion.phase === "deleted") {
+    return null;
+  }
+
   return (
     <article
       data-thread-reply-entry
-      data-deletion-pending={deletion.pending || undefined}
-      className={`relative px-3 py-2.5 sm:px-8 ${deletion.pending ? "min-h-9" : ""}`}
+      data-deletion-pending={deletion.hidden || undefined}
+      className={`relative px-3 py-2.5 sm:px-8 ${deletion.hidden ? "min-h-9" : ""}`}
     >
       <div
-        inert={deletion.pending ? true : undefined}
-        className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${deletion.pending ? "pointer-events-none -translate-y-1 grid-rows-[0fr] opacity-0" : "translate-y-0 grid-rows-[1fr] opacity-100"}`}
+        inert={deletion.hidden ? true : undefined}
+        className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${deletion.hidden ? "pointer-events-none -translate-y-1 grid-rows-[0fr] opacity-0" : "translate-y-0 grid-rows-[1fr] opacity-100"}`}
       >
         <div className="min-h-0 overflow-hidden">
           <div className="flex gap-3.5">
@@ -1418,7 +1449,12 @@ function ThreadReplyEntry({
                   name={reply.name}
                   kind="reply"
                   isOwn={Boolean(reply.isOwn)}
-                  canEdit={!isBackendMode || Boolean(getServerEntityId(reply))}
+                  canEdit={
+                    !isBackendMode || (Boolean(replyServerId) && !isEditing)
+                  }
+                  canDelete={
+                    !isBackendMode || (Boolean(replyServerId) && !isEditing)
+                  }
                   canAcceptAnswer={
                     isQuestion && canAcceptAnswer && canAcceptReply
                   }
@@ -1449,7 +1485,9 @@ function ThreadReplyEntry({
                       },
                     )
                   }
-                  onDelete={deletion.begin}
+                  onDelete={() => {
+                    void onDelete(reply.id);
+                  }}
                   onReport={() =>
                     onReport({
                       targetType: "reply",
@@ -1494,11 +1532,6 @@ function ThreadReplyEntry({
               )}
               {reply.attachments && reply.attachments.length > 0 && (
                 <DiscussionAttachmentsList attachments={reply.attachments} />
-              )}
-              {deleteError && (
-                <p role="alert" className="mt-1 text-xs text-red-500">
-                  {deleteError}
-                </p>
               )}
               <div className="mt-1.5 flex min-h-9 items-center gap-4 text-xs text-(--muted) sm:text-sm">
                 <button

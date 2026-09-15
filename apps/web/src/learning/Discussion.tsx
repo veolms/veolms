@@ -67,6 +67,7 @@ import {
   useUserNotes,
 } from "../services/learning-interactions";
 import { optimisticEditCoordinator } from "../services/learning-interactions/optimistic-edit-coordinator";
+import { optimisticDeletionCoordinator } from "../services/learning-interactions/optimistic-deletion-coordinator";
 import {
   getClientEntityId,
   getServerEntityId,
@@ -581,10 +582,6 @@ function DiscussionInner({
     threadsData?.threads,
   ]);
 
-  const [optimisticallyHiddenIds, setOptimisticallyHiddenIds] = useState<
-    Set<string | number>
-  >(new Set());
-
   const storageBase = `veolms-learning-${persistenceKey}-discussion`;
   const [draft, setDraft] = useSessionStorageState<DiscussionDraft>(
     `${storageBase}-markdown-draft-v1`,
@@ -678,20 +675,10 @@ function DiscussionInner({
 
   const combinedEntries = useMemo<Comment[]>(() => {
     if (isBackendMode) {
-      const all = [...backendNotes, ...backendThreads];
-      if (optimisticallyHiddenIds.size === 0) return all;
-      return all.filter(
-        (entry) => !optimisticallyHiddenIds.has(getClientEntityId(entry)),
-      );
+      return [...backendNotes, ...backendThreads];
     }
     return [...backendNotes, ...entries];
-  }, [
-    backendNotes,
-    backendThreads,
-    entries,
-    isBackendMode,
-    optimisticallyHiddenIds,
-  ]);
+  }, [backendNotes, backendThreads, entries, isBackendMode]);
 
   const filteredEntries = useMemo(
     () =>
@@ -724,9 +711,7 @@ function DiscussionInner({
       directThreadComment,
     );
     const nextList = list.map((entry) =>
-      entry === previousEntry
-        ? mergedEntry
-        : entry,
+      entry === previousEntry ? mergedEntry : entry,
     );
     return nextList;
   }, [combinedEntries, directThreadComment]);
@@ -941,14 +926,14 @@ function DiscussionInner({
       }
 
       const notePayload = {
-          courseId,
-          lessonId,
-          content: activeDraft.markdown,
-          visibility: activeVisibility,
-          attachmentIds:
-            composerAttachments.length > 0
-              ? composerAttachments.map((a) => a.id)
-              : undefined,
+        courseId,
+        lessonId,
+        content: activeDraft.markdown,
+        visibility: activeVisibility,
+        attachmentIds:
+          composerAttachments.length > 0
+            ? composerAttachments.map((a) => a.id)
+            : undefined,
         __attachments:
           composerAttachments.length > 0
             ? composerAttachments.map(toOptimisticAttachmentSummary)
@@ -990,9 +975,7 @@ function DiscussionInner({
         const thread = combinedEntries.find(
           (entry) => getClientEntityId(entry) === String(editingEntry.id),
         );
-        const threadServerId = thread
-          ? getServerEntityId(thread)
-          : undefined;
+        const threadServerId = thread ? getServerEntityId(thread) : undefined;
         if (!threadServerId) {
           setNotice("This discussion entry is still being posted.");
           return false;
@@ -1221,7 +1204,9 @@ function DiscussionInner({
       return;
     }
     const editKind = entry.entryKind === "note" ? "note" : "thread";
-    if (optimisticEditCoordinator.isEditing(editKind, getClientEntityId(entry))) {
+    if (
+      optimisticEditCoordinator.isEditing(editKind, getClientEntityId(entry))
+    ) {
       setNotice("This discussion entry is already being updated.");
       return;
     }
@@ -1236,44 +1221,57 @@ function DiscussionInner({
     setNotice("");
   };
 
-  const deleteEntry = async (id: string | number) => {
+  const deleteEntry = (id: string | number) => {
     const entry = combinedEntries.find(
       (candidate) => getClientEntityId(candidate) === String(id),
     );
     const serverId = entry ? getServerEntityId(entry) : undefined;
-    if (isBackendMode && !serverId) return;
+    if (isBackendMode && !serverId) {
+      setNotice("This discussion entry is still being posted.");
+      return;
+    }
     const isBackendNote = entry?.entryKind === "note";
     const clientId = entry ? getClientEntityId(entry) : String(id);
-    setOptimisticallyHiddenIds((prev) => new Set(prev).add(clientId));
-
-    if (isBackendNote) {
-      try {
-        await deleteNoteMutation.mutateAsync(serverId!);
-        setEditingEntry((current) => (current?.id === id ? null : current));
-        setNotice("");
-      } catch (error) {
-        setOptimisticallyHiddenIds((prev) => {
-          const next = new Set(prev);
-          next.delete(clientId);
-          return next;
-        });
-        setNotice("Failed to delete note. Please try again.");
-      }
+    const deletionKind = isBackendNote ? "note" : "thread";
+    if (
+      isBackendMode &&
+      optimisticEditCoordinator.isEditing(deletionKind, clientId)
+    ) {
+      setNotice("This discussion entry is already being updated.");
       return;
     }
 
     if (isBackendMode) {
-      try {
-        await deleteThreadMutation.mutateAsync(serverId!);
-        setEditingEntry((current) => (current?.id === id ? null : current));
-        setNotice("");
-      } catch (error) {
-        setOptimisticallyHiddenIds((prev) => {
-          const next = new Set(prev);
-          next.delete(clientId);
+      const transaction = optimisticDeletionCoordinator.begin({
+        kind: deletionKind,
+        clientId,
+        serverId: serverId!,
+        queryClient,
+        commit: () =>
+          isBackendNote
+            ? deleteNoteMutation.mutateAsync(serverId!)
+            : deleteThreadMutation.mutateAsync(serverId!),
+        onFailure: () =>
+          setNotice(
+            isBackendNote
+              ? "Couldn't delete this note. Please try again."
+              : entry?.entryKind === "question"
+                ? "Couldn't delete this question. Please try again."
+                : "Couldn't delete this comment. Please try again.",
+          ),
+      });
+      if (!transaction) return;
+      setEditingEntry((current) => (current?.id === id ? null : current));
+      setNotice("");
+      if (!isBackendNote && openThread?.id === clientId) {
+        suppressThreadUrlSyncRef.current = true;
+        setOpenThread(null);
+        setSearchParams((prev) => {
+          if (!prev.has("thread")) return prev;
+          const next = new URLSearchParams(prev);
+          next.delete("thread");
           return next;
         });
-        setNotice("Failed to delete discussion entry. Please try again.");
       }
       return;
     }
@@ -1690,6 +1688,7 @@ function DiscussionInner({
         onReplyEditFailure={() =>
           setNotice("Failed to update reply. Please try again.")
         }
+        onDeleteFailure={setNotice}
         courseId={courseId}
       />
       <DiscussionThreadPanel
@@ -1756,6 +1755,9 @@ function DiscussionInner({
         }
         onReplyEditError={() =>
           setNotice("Failed to update reply. Please try again.")
+        }
+        onReplyDeleteError={() =>
+          setNotice("Couldn't delete this reply. Please try again.")
         }
       />
       <DiscussionReportDialog
@@ -1878,6 +1880,7 @@ interface ThreadSurfaceProps {
     following: boolean,
   ) => Promise<boolean> | void;
   onReplyEditFailure?: () => void;
+  onDeleteFailure?: (message: string) => void;
   courseId?: string;
 }
 
@@ -1931,6 +1934,7 @@ function ThreadSurface({
   onToggleBookmark,
   onToggleFollow,
   onReplyEditFailure,
+  onDeleteFailure,
   courseId,
 }: ThreadSurfaceProps) {
   const isPhone = usePhoneComposerLayout();
@@ -2303,6 +2307,7 @@ function ThreadSurface({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onEditFailure={onReplyEditFailure}
+                onDeleteFailure={onDeleteFailure}
                 onReport={onReport}
                 onOpenThread={onOpenThread}
                 isBackendMode={isBackendMode}
