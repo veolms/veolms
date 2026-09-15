@@ -89,6 +89,42 @@ const CURRENT_USER = {
 
 const EMPTY_MOBILE_COMPOSER_DRAFT = createEmptyDiscussionDraft();
 
+function getThreadIdentityValues(entry: Comment): string[] {
+  return Array.from(
+    new Set(
+      [
+        entry.clientId,
+        entry.serverId,
+        String(entry.id),
+        getServerEntityId(entry),
+      ].filter((value): value is string => Boolean(value)),
+    ),
+  );
+}
+
+export function threadEntriesShareIdentity(
+  first: Comment,
+  second: Comment,
+): boolean {
+  const secondIdentityValues = new Set(getThreadIdentityValues(second));
+  return getThreadIdentityValues(first).some((value) =>
+    secondIdentityValues.has(value),
+  );
+}
+
+export function mergeDirectThreadCommentIdentity(
+  existing: Comment,
+  incoming: Comment,
+): Comment {
+  const clientId = getClientEntityId(existing);
+  return {
+    ...incoming,
+    id: clientId,
+    clientId,
+    serverId: getServerEntityId(incoming) ?? getServerEntityId(existing),
+  };
+}
+
 const initialEntries: Comment[] = [
   {
     id: 4,
@@ -664,18 +700,22 @@ function DiscussionInner({
         ).values(),
       );
     }
-    const exists = list.some(
-      (entry) =>
-        getServerEntityId(entry) === getServerEntityId(directThreadComment),
+    const previousEntry = list.find((entry) =>
+      threadEntriesShareIdentity(entry, directThreadComment),
     );
-    if (!exists) {
+    if (!previousEntry) {
       return [directThreadComment, ...list];
     }
-    return list.map((entry) =>
-      getServerEntityId(entry) === getServerEntityId(directThreadComment)
-        ? directThreadComment
+    const mergedEntry = mergeDirectThreadCommentIdentity(
+      previousEntry,
+      directThreadComment,
+    );
+    const nextList = list.map((entry) =>
+      entry === previousEntry
+        ? mergedEntry
         : entry,
     );
+    return nextList;
   }, [combinedEntries, directThreadComment]);
 
   const lastHandledErrorThreadRef = useRef<string | null>(null);

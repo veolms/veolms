@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
+import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Discussion } from "../../src/learning/Discussion";
 import type { LearningReply, LearningThread } from "@veolms/contracts";
@@ -235,6 +236,11 @@ describe("Learning Discussion Q&A Specific Actions (Phase 3 Integration)", () =>
       isLoading: false,
       isError: false,
       refetch: vi.fn(),
+    });
+    mockInteractions.useThreadDetails.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: false,
     });
 
     mockInteractions.useThreadReplies.mockImplementation((threadId: string) => {
@@ -673,5 +679,106 @@ describe("Learning Discussion Q&A Specific Actions (Phase 3 Integration)", () =>
     });
     fireEvent.click(moreActionsBtn);
     expect(screen.queryByRole("menuitem", { name: /Lock Q&A/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps a fresh reconciled Q&A parent identity for ThreadPanel Accept", async () => {
+    const stableClientThreadId = "client-thread-fresh";
+    const serverThreadId = "server-thread-fresh";
+    const stableClientReplyId = "client-reply-fresh";
+    const serverReplyId = "server-reply-fresh";
+    const reconciledThread = {
+      ...mockQuestionThread,
+      id: serverThreadId,
+      clientId: stableClientThreadId,
+      serverId: serverThreadId,
+      creationStatus: "confirmed" as const,
+    } as any;
+    const directServerThread = {
+      ...mockQuestionThread,
+      id: serverThreadId,
+    };
+    const reconciledReply = {
+      ...mockQaReplies[0],
+      id: serverReplyId,
+      threadId: serverThreadId,
+      clientId: stableClientReplyId,
+      serverId: serverReplyId,
+      creationStatus: "confirmed" as const,
+    } as any;
+
+    mockInteractions.useLessonThreads.mockReturnValue({
+      data: { threads: [reconciledThread], nextCursor: null },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    mockInteractions.useThreadReplies.mockReturnValue({
+      data: { replies: [reconciledReply], nextCursor: null, totalCount: 1 },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    mockInteractions.useThreadDetails.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: false,
+    });
+
+    const { rerender } = render(
+      <MemoryRouter initialEntries={[`/learning?thread=${serverThreadId}`]}>
+        <Discussion
+          persistenceKey="test-fresh-thread-panel-accept"
+          courseId="course-1"
+          lessonId="lesson-1"
+          interactionCapabilities={{
+            allowComments: true,
+            allowQa: true,
+            allowNotes: true,
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    const panel = await screen.findByRole("dialog", {
+      name: "Discussion thread",
+    });
+
+    mockInteractions.useThreadDetails.mockReturnValue({
+      data: directServerThread as any,
+      isLoading: false,
+      isError: false,
+    });
+    rerender(
+      <MemoryRouter initialEntries={[`/learning?thread=${serverThreadId}`]}>
+        <Discussion
+          persistenceKey="test-fresh-thread-panel-accept"
+          courseId="course-1"
+          lessonId="lesson-1"
+          interactionCapabilities={{
+            allowComments: true,
+            allowQa: true,
+            allowNotes: true,
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("dialog", { name: "Discussion thread" })).toBe(
+      panel,
+    );
+    const acceptButton = await within(panel).findByTestId(
+      `accept-reply-btn-${stableClientReplyId}`,
+    );
+
+    fireEvent.click(acceptButton);
+
+    expect(
+      mockInteractions.desiredStateCoordinator.setAcceptedAnswer,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: serverThreadId,
+        desiredAcceptedReplyId: serverReplyId,
+      }),
+    );
   });
 });
