@@ -353,6 +353,43 @@ describe("ProfileSettings mobile visibility confirmation", () => {
     expect(screen.getAllByText("Verified")).toHaveLength(2);
   });
 
+  it("shows error and keeps profile signed in when mobile verification code is invalid", async () => {
+    authMocks.useCurrentUser.mockReturnValue({
+      data: { ...profileUser, phoneNo: null, mobileVerified: false },
+      isFetched: true,
+    });
+    authMocks.verifyPhoneNumber.mockRejectedValue(
+      new Error(
+        "Verification code is invalid, expired, or revoked due to excessive attempts.",
+      ),
+    );
+    renderWithQueryClient(<ProfileSettings role="student" />);
+
+    const mobileNumber = screen.getByLabelText("Mobile number");
+    fireEvent.change(mobileNumber, {
+      target: { value: "+91 98765 43210" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Verify now" }));
+
+    await screen.findByLabelText("Verification code");
+    fireEvent.change(screen.getByLabelText("Verification code"), {
+      target: { value: "000000" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Verify OTP" }));
+
+    await waitFor(() => expect(authMocks.verifyPhoneNumber).toHaveBeenCalled());
+    expect(
+      await screen.findAllByText(
+        "Verification code is invalid, expired, or revoked due to excessive attempts.",
+      ),
+    ).not.toHaveLength(0);
+    expect(
+      screen.queryByText("Sign in to edit your profile."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Display name")).not.toBeDisabled();
+    expect(screen.getByLabelText("Username")).not.toBeDisabled();
+  });
+
   it("verifies an unverified email address with the received OTP", async () => {
     authMocks.useCurrentUser.mockReturnValue({
       data: { ...profileUser, emailVerified: false },

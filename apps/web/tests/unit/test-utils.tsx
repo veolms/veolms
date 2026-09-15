@@ -29,12 +29,15 @@ export function renderWithAppProviders(
 ) {
   const queryClient = createTestQueryClient();
 
+  const Wrapper = ({ children }: { children: ReactNode }) => (
+    <MemoryRouter initialEntries={initialEntries}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </MemoryRouter>
+  );
+
   return {
     queryClient,
-    ...render(
-      <MemoryRouter initialEntries={initialEntries}>
-        <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
-      </MemoryRouter>,
-    ),
+    ...render(ui, { wrapper: Wrapper }),
   };
 }
+

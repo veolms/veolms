@@ -1,6 +1,6 @@
 export type MfaSetupView = "login" | "done" | "verify" | "enroll";
 
-const MFA_MANDATORY_ROLES = new Set(["admin"]);
+const MFA_MANDATORY_ROLES = new Set(["admin", "instructor"]);
 
 export interface MfaGateUser {
   mfaVerified: boolean;

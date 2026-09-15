@@ -16,6 +16,7 @@ import type { Icon } from "@phosphor-icons/react";
 import type { SidebarPreferences } from "../settings/settingsPreferences";
 
 import { ChatTeardropDotsIcon as ChatTeardropDots } from "@phosphor-icons/react/ChatTeardropDots";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 
 export interface NavigationItemMetadata {
   id: string;
@@ -40,7 +41,6 @@ export type NavigationItemWithMetadata = NavigationItem;
 
 const requiredNavigationLabels = new Set([
   "Courses",
-  "Learning Space",
   "Settings",
 ]);
 
@@ -51,16 +51,6 @@ const publicNavigation: readonly NavigationItem[] = [
     {
       id: "default-courses",
       routeLink: "/courses",
-      parentId: null,
-      source: "default",
-    },
-  ],
-  [
-    "Learning Space",
-    BookOpen,
-    {
-      id: "default-learning-space",
-      routeLink: "/learning-space",
       parentId: null,
       source: "default",
     },
@@ -83,6 +73,7 @@ const menuIcons: Record<string, Icon> = {
   ChartBar,
   ChatCircleDots,
   ChatTeardropDots,
+  CheckCircle,
   EnvelopeSimple,
   GearSix,
   GraduationCap,
@@ -99,10 +90,7 @@ const getMenuIcon = (iconName: string | null): Icon =>
 
 /**
  * Converts the server's effective RBAC menu tree to the shell's flat
- * navigation shape. Learning Space remains a special shell control because it
- * owns transient course-player sessions; its database children are still
- * exposed as ordinary navigation items. The resolver adds the special control
- * back alongside any missing core defaults.
+ * navigation shape.
  */
 export function getNavigationItemsFromMenus(
   menus: readonly AuthMenuNode[] | null | undefined,
@@ -114,23 +102,30 @@ export function getNavigationItemsFromMenus(
 
   const visit = (nodes: readonly AuthMenuNode[]) => {
     for (const menu of nodes) {
-      if (menu.label !== "Learning Space") {
-        // The current shell is label-oriented for drag/drop and preference
-        // persistence. Keep the first effective entry when an admin receives
-        // both student and instructor variants of the same menu label.
-        if (!seenLabels.has(menu.label)) {
-          seenLabels.add(menu.label);
-          items.push([
-            menu.label,
-            getMenuIcon(menu.icon),
-            {
-              id: menu.id,
-              routeLink: menu.routeLink,
-              parentId: menu.parentId,
-              source: "server",
-            },
-          ]);
-        }
+      if (
+        menu.label === "Learning Space" ||
+        menu.routeLink === "/learning-space" ||
+        menu.id === "00000000-0000-4000-9000-000000000009"
+      ) {
+        if (menu.children?.length) visit(menu.children);
+        continue;
+      }
+
+      // The current shell is label-oriented for drag/drop and preference
+      // persistence. Keep the first effective entry when an admin receives
+      // both student and instructor variants of the same menu label.
+      if (!seenLabels.has(menu.label)) {
+        seenLabels.add(menu.label);
+        items.push([
+          menu.label,
+          getMenuIcon(menu.icon),
+          {
+            id: menu.id,
+            routeLink: menu.routeLink,
+            parentId: menu.parentId,
+            source: "server",
+          },
+        ]);
       }
 
       if (menu.children?.length) visit(menu.children);
@@ -139,16 +134,6 @@ export function getNavigationItemsFromMenus(
 
   visit(menus);
   return items;
-}
-
-function addMissingDefaultNavigationItems(
-  serverItems: readonly DynamicNavigationItem[],
-): NavigationItemWithMetadata[] {
-  const labels = new Set(serverItems.map(([label]) => label));
-  return [
-    ...serverItems,
-    ...publicNavigation.filter(([label]) => !labels.has(label)),
-  ];
 }
 
 export function hasNavigationMenu(
@@ -167,12 +152,9 @@ export function getPublicNavigationItems(): readonly NavigationItem[] {
 }
 
 /**
- * Sidebar items for the current session: role menus from `/auth/me` when the
- * backend returns any, otherwise the public Courses, Learning Space, and
- * Settings defaults.
- * Guests, empty `menus: []`, and menus that flatten to nothing all use the
- * same fallback so the sidebar never renders blank. The fallback includes the
- * special Learning Space control alongside Courses and Settings.
+ * Sidebar items for the current session. The navigation endpoint is the sole
+ * source of truth for effective menus and RBAC visibility; `/auth/me` only
+ * supplies identity/session data.
  */
 export function resolveShellNavigation(
   menus: readonly AuthMenuNode[] | null | undefined,
@@ -181,15 +163,7 @@ export function resolveShellNavigation(
   isDefault: boolean;
 } {
   const serverItems = getNavigationItemsFromMenus(menus);
-  const result =
-    serverItems.length > 0
-      ? {
-          items: addMissingDefaultNavigationItems(serverItems),
-          isDefault: false,
-        }
-      : { items: getPublicNavigationItems(), isDefault: true };
-
-  return result;
+  return { items: serverItems, isDefault: false };
 }
 
 const navigationTones: Record<string, string> = {
@@ -201,7 +175,6 @@ const navigationTones: Record<string, string> = {
   Reviews: "#f1be4b",
   "My Quiz": "#47d4d0",
   Discussions: "#58a8ff",
-  "Learning Space": "#329ca6",
   Analytics: "#f09c4e",
   Orders: "#d68eea",
   "Order History": "#d68eea",
@@ -235,6 +208,16 @@ export function getNavigationPreferenceStorageKey(
   return userId
     ? `veolms-navigation-${preference}-${userId}-${role}`
     : `veolms-navigation-${preference}-${role}`;
+}
+
+export function getNavigationMenuSignature(
+  navigationItems: readonly NavigationItemWithMetadata[],
+): string {
+  return navigationItems
+    .map(([label, , metadata]) =>
+      [metadata?.id ?? label, label, metadata?.routeLink ?? ""].join(":"),
+    )
+    .join("|");
 }
 
 export function getInitialNavigationOrder(
@@ -278,12 +261,25 @@ export function getInitialNavigationVisibility(
   if (typeof window === "undefined") return defaultVisibility;
 
   try {
-    const parsedVisibility: unknown = JSON.parse(
-      localStorage.getItem(
-        getNavigationPreferenceStorageKey("visibility", role, userId),
-      ) || "null",
+    const visibilityKey = getNavigationPreferenceStorageKey(
+      "visibility",
+      role,
+      userId,
     );
-    if (!Array.isArray(parsedVisibility)) return defaultVisibility;
+    const menuSignatureKey = `${visibilityKey}-menu-signature`;
+    const menuSignature = getNavigationMenuSignature(navigationItems);
+    const parsedVisibility: unknown = JSON.parse(
+      localStorage.getItem(visibilityKey) || "null",
+    );
+    const previousMenuSignature = localStorage.getItem(menuSignatureKey);
+    const menuSetChanged = previousMenuSignature !== menuSignature;
+    localStorage.setItem(menuSignatureKey, menuSignature);
+    if (!Array.isArray(parsedVisibility) || menuSetChanged) {
+      // Reset once when the effective server menu set changes. This prevents
+      // stale localStorage from hiding newly permissioned backend menus.
+      localStorage.setItem(visibilityKey, JSON.stringify(defaultVisibility));
+      return defaultVisibility;
+    }
 
     const normalizedVisibility = parsedVisibility.filter(
       (label): label is string =>

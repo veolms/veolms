@@ -143,20 +143,10 @@ export const MENUS = {
     isBoth: false,
   },
 
-  // Student Nested Learning Space Parent & Children
-  learningSpace: {
-    id: "00000000-0000-4000-9000-000000000011",
-    parentId: null,
-    label: "Learning Space",
-    routeLink: "/learning-space",
-    icon: "GraduationCap",
-    expanded: true,
-    checkList: null,
-    isBoth: false,
-  },
+  // Student Menus
   myCourses: {
     id: "00000000-0000-4000-9000-000000000012",
-    parentId: "00000000-0000-4000-9000-000000000011",
+    parentId: null,
     label: "My Courses",
     routeLink: "/my-courses",
     icon: "GraduationCap",
@@ -166,7 +156,7 @@ export const MENUS = {
   },
   wishlist: {
     id: "00000000-0000-4000-9000-000000000013",
-    parentId: "00000000-0000-4000-9000-000000000011",
+    parentId: null,
     label: "Wishlist",
     routeLink: "/wishlist",
     icon: "Heart",
@@ -176,7 +166,7 @@ export const MENUS = {
   },
   orderHistory: {
     id: "00000000-0000-4000-9000-000000000014",
-    parentId: "00000000-0000-4000-9000-000000000011",
+    parentId: null,
     label: "Order History",
     routeLink: "/order-history",
     icon: "Tote",
@@ -249,25 +239,19 @@ export const PERMISSION_ASSIGNMENTS: Record<string, readonly RolePermissionRule[
     { roleId: ROLES.student.id, canCreate: false, canRead: true, canUpdate: true, canDelete: true },
   ],
 
-  // 11. Learning Space (Parent) -> Admin & Student
-  [MENUS.learningSpace.id]: [
-    { roleId: ROLES.admin.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
-    { roleId: ROLES.student.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
-  ],
-
-  // 12. My Courses (Child) -> Admin & Student
+  // 11. My Courses -> Admin & Student
   [MENUS.myCourses.id]: [
     { roleId: ROLES.admin.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
     { roleId: ROLES.student.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
   ],
 
-  // 13. Wishlist (Child) -> Admin & Student
+  // 12. Wishlist -> Admin & Student
   [MENUS.wishlist.id]: [
     { roleId: ROLES.admin.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
     { roleId: ROLES.student.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
   ],
 
-  // 14. Order History (Child) -> Admin & Student
+  // 13. Order History -> Admin & Student
   [MENUS.orderHistory.id]: [
     { roleId: ROLES.admin.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
     { roleId: ROLES.student.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },

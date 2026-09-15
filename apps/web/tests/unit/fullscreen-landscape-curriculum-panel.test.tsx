@@ -61,7 +61,7 @@ describe("FullscreenLandscapeCurriculumPanel", () => {
     });
     expect(
       (gestureClaim.mock.calls[0]?.[0] as CustomEvent | undefined)?.detail,
-    ).toEqual({ owner: "learning-space", pointerId: 4 });
+    ).toEqual({ owner: "curriculum", pointerId: 4 });
     fireEvent.pointerMove(separator, {
       clientX: 950,
       pointerId: 4,

@@ -91,7 +91,9 @@ const otpRoutes: RoutePlugin = async (app, options) => {
             "Mobile number verified successfully.",
             authMessageResponseSchema,
           ),
-          400: errorResponse("Validation error or missing parameters."),
+          400: errorResponse(
+            "Validation error, missing parameters, or invalid verification code.",
+          ),
           401: errorResponse("Verification code is invalid or expired."),
           404: errorResponse("User account was not found."),
           409: errorResponse("Phone number is already in use."),
@@ -141,7 +143,9 @@ const otpRoutes: RoutePlugin = async (app, options) => {
             "Email address verified successfully.",
             authMessageResponseSchema,
           ),
-          400: errorResponse("No email address is available to verify."),
+          400: errorResponse(
+            "No email address is available to verify, or invalid verification code.",
+          ),
           401: errorResponse("Verification code is invalid or expired."),
           404: errorResponse("User account was not found."),
         },

@@ -36,18 +36,18 @@ export function getPublicPreviewLessonNumbers(
       .flatMap((section) =>
         (section.lessons ?? []).slice().sort((a, b) => a.position - b.position),
       ) ?? [];
-  const playableLessons = lessons.filter(
-    (lesson) => lesson.contentType === "video" && lesson.isPublished,
-  );
 
-  const previewLessonNumbers = playableLessons
-    .map((lesson, index) => (lesson.isPreview ? index + 1 : null))
+  const previewLessonNumbers = lessons
+    .map((lesson, index) =>
+      lesson.isPublished && lesson.isPreview ? index + 1 : null,
+    )
     .filter((number): number is number => number !== null)
     .slice(0, PUBLIC_PREVIEW_LESSON_LIMIT);
 
   if (previewLessonNumbers.length > 0) return previewLessonNumbers;
 
-  return playableLessons
-    .slice(0, PUBLIC_PREVIEW_LESSON_LIMIT)
-    .map((_, index) => index + 1);
+  return lessons
+    .map((lesson, index) => (lesson.isPublished ? index + 1 : null))
+    .filter((number): number is number => number !== null)
+    .slice(0, PUBLIC_PREVIEW_LESSON_LIMIT);
 }

@@ -12,11 +12,6 @@ const courseQueries = vi.hoisted(() => ({
   mine: vi.fn(),
   published: vi.fn(),
 }));
-const learningSpaceMutations = vi.hoisted(() => ({
-  upsert: vi.fn(),
-  close: vi.fn(),
-}));
-
 vi.mock("../../src/courses/CourseCatalogue.js", () => ({
   CourseCatalogue: ({ activeSection }: { activeSection: string }) => {
     courseCatalogueRender(activeSection);
@@ -36,16 +31,6 @@ vi.mock("../../src/services/auth", async () => {
     useSignOut: () => ({ isPending: false, signOut: vi.fn() }),
   };
 });
-
-vi.mock("../../src/services/learning-space", () => ({
-  useLearningSpaceSessions: () => ({ data: undefined, isSuccess: false }),
-  useUpsertLearningSpaceSession: () => ({
-    mutate: learningSpaceMutations.upsert,
-  }),
-  useCloseLearningSpaceSession: () => ({
-    mutate: learningSpaceMutations.close,
-  }),
-}));
 
 vi.mock("../../src/services/navigation", () => ({
   useSidenav: () => ({ data: undefined }),
@@ -101,7 +86,7 @@ describe("CoursesPage route transitions", () => {
       <CoursesPage
         {...baseProps}
         page="learning"
-        section="Learning Space"
+        section="Courses"
         renderMain={() => <div data-testid="learning-surface" />}
       />,
     );
@@ -121,7 +106,7 @@ describe("CoursesPage route transitions", () => {
       <CoursesPage
         {...baseProps}
         page="learning"
-        section="Learning Space"
+        section="Courses"
         learningBackground={{ page: "courses", section: "Courses" }}
         renderMain={() => <div data-testid="learning-surface" />}
       />,
@@ -149,7 +134,7 @@ describe("CoursesPage route transitions", () => {
       <CoursesPage
         {...baseProps}
         page="learning"
-        section="Learning Space"
+        section="Courses"
         renderMain={() => <div data-testid="learning-surface" />}
       />,
     );
@@ -163,7 +148,6 @@ describe("CoursesPage route transitions", () => {
 
     expect(courseCatalogueRender).toHaveBeenCalled();
     expect(courseCatalogueRender.mock.calls[0]?.[0]).toBe("Courses");
-    expect(courseCatalogueRender).not.toHaveBeenCalledWith("Learning Space");
     expect(
       screen.getByRole("heading", { level: 1, name: "Courses" }),
     ).toBeInTheDocument();

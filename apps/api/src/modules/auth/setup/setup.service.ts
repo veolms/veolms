@@ -42,6 +42,10 @@ export function createSetupService({
     }
   }
 
+  async function getAcademy() {
+    return await academyRepository.findAcademy(database);
+  }
+
   function assertValidSetupSession(
     signedCookie: { valid: boolean; value?: string | null } | undefined,
   ): void {
@@ -175,6 +179,7 @@ export function createSetupService({
   }
 
   return {
+    getAcademy,
     assertSetupOpen,
     assertValidSetupSession,
     verifySetupToken,
