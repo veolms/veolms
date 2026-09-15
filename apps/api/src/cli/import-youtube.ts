@@ -2341,8 +2341,9 @@ ${bold("Examples:")}
 
       if (thumbData) {
         const thumbStat = await fsp.stat(thumbData.filePath);
-        thumbnailMediaId = crypto.randomUUID();
-        const storageKey = `public/thumbnails/${thumbnailMediaId}/original.jpg`;
+        const uploadedThumbnailMediaId = crypto.randomUUID();
+        thumbnailMediaId = uploadedThumbnailMediaId;
+        const storageKey = `public/thumbnails/${uploadedThumbnailMediaId}/original.jpg`;
 
         await services.storage.uploadFile(
           storageKey,
@@ -2350,21 +2351,30 @@ ${bold("Examples:")}
           thumbData.mimeType,
         );
 
-        await mediaRepo.insertMediaAsset(database, {
-          id: thumbnailMediaId,
-          owner_id: instructor.id,
-          type: "image",
-          storage_provider: "s3",
-          storage_key: storageKey,
-          original_filename: "playlist_thumbnail.jpg",
-          mime_type: thumbData.mimeType,
-          size_bytes: thumbStat.size,
-          status: "uploaded",
-        });
-        await enqueueImageJob(database, {
-          id: crypto.randomUUID(),
-          media_id: thumbnailMediaId,
-        });
+        try {
+          await database.transaction().execute(async (trx) => {
+            await mediaRepo.insertMediaAsset(trx, {
+              id: uploadedThumbnailMediaId,
+              owner_id: instructor.id,
+              type: "image",
+              storage_provider: "s3",
+              storage_key: storageKey,
+              original_filename: "playlist_thumbnail.jpg",
+              mime_type: thumbData.mimeType,
+              size_bytes: thumbStat.size,
+              status: "uploaded",
+            });
+            await enqueueImageJob(trx, {
+              id: crypto.randomUUID(),
+              media_id: uploadedThumbnailMediaId,
+            });
+          });
+        } catch (error) {
+          await services.storage
+            .deleteObject(storageKey)
+            .catch(() => undefined);
+          throw error;
+        }
 
         console.log(
           `${green("✓")} Thumbnail uploaded (Media ID: ${dim(thumbnailMediaId)})`,

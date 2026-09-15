@@ -92,6 +92,32 @@ function resolveThumbnailPrefix(
   return `${visibilityPrefix}thumbnails/${thumbnailMediaId}`;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getPersistedThumbnailKey(
+  metadata: unknown,
+  variant: "full" | number,
+): string | null {
+  if (!isRecord(metadata)) return null;
+
+  if (variant === "full") {
+    const full = metadata.full;
+    if (!isRecord(full) || typeof full.key !== "string") return null;
+    return full.key.trim() || null;
+  }
+
+  if (!Array.isArray(metadata.variants)) return null;
+  const matchingVariant = metadata.variants.find(
+    (item) => isRecord(item) && item.width === variant,
+  );
+  if (!isRecord(matchingVariant) || typeof matchingVariant.key !== "string") {
+    return null;
+  }
+  return matchingVariant.key.trim() || null;
+}
+
 function resolvePublicThumbnailUrls(
   services: AppServices,
   metadata: unknown,
@@ -107,6 +133,10 @@ function resolvePublicThumbnailUrls(
   const fallbackUrl = thumbnailMediaId
     ? services.storage.getPublicObjectUrl(`${thumbnailPrefix}/full.webp`)
     : null;
+  const persistedFullKey = getPersistedThumbnailKey(metadata, "full");
+  const thumbnailUrl = persistedFullKey
+    ? (services.storage.getPublicObjectUrl(persistedFullKey) ?? fallbackUrl)
+    : fallbackUrl;
   const fallbackVariants = resolveFallbackThumbnailVariants(
     services,
     thumbnailMediaId,
@@ -118,7 +148,7 @@ function resolvePublicThumbnailUrls(
     metadata === null ||
     Array.isArray(metadata)
   ) {
-    return { thumbnailUrl: fallbackUrl, thumbnailSrcSet: fallbackVariants };
+    return { thumbnailUrl, thumbnailSrcSet: fallbackVariants };
   }
 
   const record = metadata as Record<string, unknown>;
@@ -135,17 +165,18 @@ function resolvePublicThumbnailUrls(
         if (typeof item.width !== "number" || typeof item.height !== "number") {
           return [];
         }
-        const url = thumbnailPrefix
-          ? services.storage.getPublicObjectUrl(
-              `${thumbnailPrefix}/${item.width}.webp`,
-            )
+        const persistedKey = getPersistedThumbnailKey(metadata, item.width);
+        const derivedKey = thumbnailPrefix
+          ? `${thumbnailPrefix}/${item.width}.webp`
           : null;
+        const key = persistedKey ?? derivedKey;
+        const url = key ? services.storage.getPublicObjectUrl(key) : null;
         return url ? [{ url, width: item.width, height: item.height }] : [];
       })
     : [];
 
   return {
-    thumbnailUrl: fallbackUrl,
+    thumbnailUrl,
     thumbnailSrcSet: variants.length > 0 ? variants : fallbackVariants,
   };
 }

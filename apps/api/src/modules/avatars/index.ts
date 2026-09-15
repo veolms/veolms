@@ -7,6 +7,7 @@ export {
   avatarSrcSetFromUrl,
   detectImageContentType,
   isStoredAvatarUrl,
+  removeAvatarVariants,
   removeOtherAvatarOriginals,
   removeAvatar,
   storeAvatarBuffer,

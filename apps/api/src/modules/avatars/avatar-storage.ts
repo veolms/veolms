@@ -61,6 +61,16 @@ export async function removeOtherAvatarOriginals(
   );
 }
 
+/** Removes stable CDN variants before a replacement can be served. */
+export async function removeAvatarVariants(
+  storage: S3StorageService,
+  userId: string,
+): Promise<void> {
+  await storage.deleteObjects(
+    AVATAR_IMAGE_WIDTHS.map((width) => avatarVariantKey(userId, width)),
+  );
+}
+
 const AVATAR_VARIANT_URL_PATTERN =
   /^(.*\/public\/avatars\/[A-Za-z0-9_-]{1,200})\/(?:45|96|160)\.webp([?#].*)?$/u;
 
@@ -103,6 +113,7 @@ export async function storeAvatarBuffer(
 ): Promise<string> {
   const originalKey = avatarOriginalKey(userId, contentType);
   await storage.putObject(originalKey, data, contentType, data.length);
+  await removeAvatarVariants(storage, userId);
   await removeOtherAvatarOriginals(storage, userId, contentType);
 
   const avatarUrl = avatarCdnUrl(storage, userId);

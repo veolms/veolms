@@ -51,10 +51,11 @@ const AVATAR_CONTENT_TYPE_BY_EXTENSION: Record<
 export function resolveAvatarUploadContentType(
   file: Pick<File, "name" | "type">,
 ): AvatarUploadContentType | null {
-  const parsedType = avatarUploadContentTypeSchema.safeParse(
-    file.type.trim().toLowerCase(),
-  );
-  if (parsedType.success) return parsedType.data;
+  const declaredType = file.type.trim().toLowerCase();
+  if (declaredType) {
+    const parsedType = avatarUploadContentTypeSchema.safeParse(declaredType);
+    return parsedType.success ? parsedType.data : null;
+  }
 
   const extension = file.name.split(".").pop()?.trim().toLowerCase() ?? "";
   return AVATAR_CONTENT_TYPE_BY_EXTENSION[extension] ?? null;

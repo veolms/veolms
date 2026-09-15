@@ -9,7 +9,10 @@ import {
   it,
   vi,
 } from "vitest";
-import { AVATAR_STYLES } from "@veolms/contracts";
+import {
+  AVATAR_STYLES,
+  avatarUploadContentTypeSchema,
+} from "@veolms/contracts";
 import { ProfileSettings } from "../../src/settings/ProfileSettings.tsx";
 import { autosyncManager, getAutosyncDraftKey } from "../../src/lib/autosync";
 import { renderWithQueryClient } from "./test-utils.tsx";
@@ -71,6 +74,14 @@ const profileUser = {
   mfaMandatory: false,
 };
 
+const AVATAR_CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
+  gif: "image/gif",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+};
+
 beforeAll(() => {
   Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
     configurable: true,
@@ -101,8 +112,18 @@ describe("ProfileSettings mobile visibility confirmation", () => {
     );
     authMocks.authService.uploadAvatarPhoto.mockReset();
     authMocks.resolveAvatarUploadContentType.mockReset();
-    authMocks.resolveAvatarUploadContentType.mockImplementation((file: File) =>
-      file.type.startsWith("image/") ? file.type : null,
+    authMocks.resolveAvatarUploadContentType.mockImplementation(
+      (file: File) => {
+        const declaredType = file.type.trim().toLowerCase();
+        if (declaredType) {
+          const parsedType =
+            avatarUploadContentTypeSchema.safeParse(declaredType);
+          return parsedType.success ? parsedType.data : null;
+        }
+        const extension =
+          file.name.split(".").pop()?.trim().toLowerCase() ?? "";
+        return AVATAR_CONTENT_TYPE_BY_EXTENSION[extension] ?? null;
+      },
     );
     authMocks.sendEmailVerification.mockReset();
     authMocks.sendPhoneVerification.mockReset();

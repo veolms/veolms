@@ -53,6 +53,11 @@ export interface DownloadObjectOptions {
   signal?: AbortSignal;
 }
 
+export interface GetObjectOptions {
+  /** Optional inclusive HTTP byte range, for example `bytes=0-31`. */
+  range?: string;
+}
+
 export interface StorageUploadItem {
   localFilePath: string;
   key: string;
@@ -434,10 +439,11 @@ export class S3StorageService {
         )
         .then(
           () => undefined,
-          () => {
-            // Ignored if permissions don't allow or if provider does not
-            // support it. Clear the cache so a future call can retry.
+          (error) => {
+            // Clear the cache so a future call can retry, but do not expose a
+            // presigned URL while the bucket is known not to support CORS.
             this.bucketCorsEnsured = null;
+            throw error;
           },
         );
     }
@@ -494,7 +500,10 @@ export class S3StorageService {
   /**
    * Streams an object for authenticated API serving. Returns null on 404.
    */
-  async getObject(key: string): Promise<{
+  async getObject(
+    key: string,
+    options?: GetObjectOptions,
+  ): Promise<{
     body: Readable;
     contentType?: string;
     contentLength?: number;
@@ -504,6 +513,7 @@ export class S3StorageService {
         new GetObjectCommand({
           Bucket: this.bucket,
           Key: key,
+          Range: options?.range,
         }),
       );
       const body = response.Body as Readable | undefined;

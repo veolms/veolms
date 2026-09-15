@@ -28,13 +28,36 @@ import {
   AVATAR_UPLOAD_MAX_BYTES,
   avatarCdnUrl,
   avatarOriginalKey,
+  detectImageContentType,
   isStoredAvatarUrl,
+  removeAvatarVariants,
   removeOtherAvatarOriginals,
   removeAvatar,
   storeAvatarBuffer,
   storeAvatarFromUrl,
 } from "../../avatars/index.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
+
+const AVATAR_VALIDATION_RANGE = "bytes=0-31";
+
+async function readObjectPrefix(
+  body: AsyncIterable<Uint8Array>,
+  maxBytes: number,
+): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let remaining = maxBytes;
+
+  for await (const chunk of body) {
+    if (remaining <= 0) break;
+    const bytes = Buffer.from(chunk).subarray(0, remaining);
+    if (bytes.length > 0) {
+      chunks.push(bytes);
+      remaining -= bytes.length;
+    }
+  }
+
+  return Buffer.concat(chunks);
+}
 
 export interface AuthServiceOptions {
   database: Kysely<Database>;
@@ -781,13 +804,12 @@ export function createAuthService({
   ) {
     validateAvatarUpload(input);
     const avatarStorage = requireAvatarStorage();
+    await avatarStorage.ensureBucketCors();
     const uploadUrl = await avatarStorage.getPresignedPutUrl(
       avatarOriginalKey(userId, input.contentType),
       input.contentType,
       input.fileSize,
     );
-
-    void avatarStorage.ensureBucketCors().catch(() => {});
 
     return { uploadUrl };
   }
@@ -802,8 +824,12 @@ export function createAuthService({
 
     return withAvatarLock(userId, async () => {
       const storageKey = avatarOriginalKey(userId, input.contentType);
+      const discardUploadedAvatar = async (): Promise<void> => {
+        await avatarStorage.deleteObject(storageKey).catch(() => undefined);
+      };
       const metadata = await avatarStorage.headObject(storageKey);
       if (!metadata) {
+        await discardUploadedAvatar();
         throw new AppError(
           400,
           "FILE_NOT_FOUND",
@@ -815,6 +841,7 @@ export function createAuthService({
         metadata.contentLength !== undefined &&
         metadata.contentLength !== input.fileSize
       ) {
+        await discardUploadedAvatar();
         throw new AppError(
           400,
           "FILE_SIZE_MISMATCH",
@@ -826,11 +853,39 @@ export function createAuthService({
         metadata.contentType !== undefined &&
         metadata.contentType !== input.contentType
       ) {
+        await discardUploadedAvatar();
         throw new AppError(
           400,
           "INVALID_AVATAR_FILE",
           "Uploaded avatar content type does not match the presigned upload.",
         );
+      }
+
+      try {
+        const object = await avatarStorage.getObject(storageKey, {
+          range: AVATAR_VALIDATION_RANGE,
+        });
+        if (!object) {
+          throw new AppError(
+            400,
+            "FILE_NOT_FOUND",
+            "File could not be found in storage.",
+          );
+        }
+
+        const detectedType = detectImageContentType(
+          await readObjectPrefix(object.body, 32),
+        );
+        if (detectedType !== input.contentType) {
+          throw new AppError(
+            400,
+            "INVALID_AVATAR_FILE",
+            "Uploaded avatar bytes do not match the selected image type.",
+          );
+        }
+      } catch (error) {
+        await discardUploadedAvatar();
+        throw error;
       }
 
       const avatarDataUrl = avatarCdnUrl(avatarStorage, userId);
@@ -842,6 +897,7 @@ export function createAuthService({
         );
       }
 
+      await removeAvatarVariants(avatarStorage, userId);
       await removeOtherAvatarOriginals(
         avatarStorage,
         userId,

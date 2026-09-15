@@ -75,6 +75,32 @@ function resolveImageThumbnailPrefix(
   return `${visibilityPrefix}thumbnails/${mediaId}`;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getPersistedImageVariantKey(
+  metadata: unknown,
+  variant: "full" | number,
+): string | null {
+  if (!isRecord(metadata)) return null;
+
+  if (variant === "full") {
+    const full = metadata.full;
+    if (!isRecord(full) || typeof full.key !== "string") return null;
+    return full.key.trim() || null;
+  }
+
+  if (!Array.isArray(metadata.variants)) return null;
+  const matchingVariant = metadata.variants.find(
+    (item) => isRecord(item) && item.width === variant,
+  );
+  if (!isRecord(matchingVariant) || typeof matchingVariant.key !== "string") {
+    return null;
+  }
+  return matchingVariant.key.trim() || null;
+}
+
 function isSafeHlsPath(path: string): boolean {
   const segments = path.split("/");
   return (
@@ -138,7 +164,7 @@ export function createMediaService({
       payload.fileSize,
     );
 
-    void services.storage.ensureBucketCors().catch(() => {});
+    await services.storage.ensureBucketCors();
 
     await mediaRepo.insertMediaAsset(database, {
       id: mediaId,
@@ -985,10 +1011,11 @@ export function createMediaService({
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
     }
 
-    const fullKey =
-      media.type === "image" && media.status === "ready"
-        ? `${resolveImageThumbnailPrefix(media.storage_key, media.id)}/full.webp`
-        : media.storage_key;
+    const isReadyImage = media.type === "image" && media.status === "ready";
+    const fullKey = isReadyImage
+      ? (getPersistedImageVariantKey(media.metadata, "full") ??
+        `${resolveImageThumbnailPrefix(media.storage_key, media.id)}/full.webp`)
+      : media.storage_key;
     const file = await services.storage.getObject(fullKey);
     if (!file) {
       throw new AppError(
@@ -999,10 +1026,9 @@ export function createMediaService({
     }
     return {
       stream: file.body,
-      contentType:
-        fullKey === media.storage_key
-          ? media.mime_type || file.contentType || "application/octet-stream"
-          : "image/webp",
+      contentType: isReadyImage
+        ? "image/webp"
+        : media.mime_type || file.contentType || "application/octet-stream",
       contentLength:
         file.contentLength ??
         (media.size_bytes ? Number(media.size_bytes) : undefined),
@@ -1028,10 +1054,7 @@ export function createMediaService({
     if (!isPublic && media.owner_id !== requestingUserId && !isAdmin)
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
     const variants =
-      typeof media.metadata === "object" &&
-      media.metadata !== null &&
-      "variants" in media.metadata &&
-      Array.isArray(media.metadata.variants)
+      isRecord(media.metadata) && Array.isArray(media.metadata.variants)
         ? media.metadata.variants
         : [];
     const variant = variants.find(
@@ -1043,7 +1066,9 @@ export function createMediaService({
     );
     if (!variant)
       throw new AppError(404, "MEDIA_NOT_FOUND", "Image variant not found.");
-    const variantKey = `${resolveImageThumbnailPrefix(media.storage_key, media.id)}/${width}.webp`;
+    const variantKey =
+      getPersistedImageVariantKey(media.metadata, width) ??
+      `${resolveImageThumbnailPrefix(media.storage_key, media.id)}/${width}.webp`;
     const file = await services.storage.getObject(variantKey);
     if (!file)
       throw new AppError(
