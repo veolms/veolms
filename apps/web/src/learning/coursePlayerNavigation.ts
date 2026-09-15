@@ -1,4 +1,3 @@
-import type { LearningSpaceSession } from "@veolms/contracts";
 import { getLessonSlug, resolveLessonIdentifier } from "./courseContent";
 
 export type CoursePlayerOrigin = "home" | "courses" | "wishlist";
@@ -184,9 +183,9 @@ const parseCoursePlayerSessionCandidate = (
       !origin ||
       !pathOrigin ||
       pathOrigin !== origin ||
-      pathUrl.searchParams.size > 2 ||
+      pathUrl.searchParams.size > 3 ||
       [...pathUrl.searchParams.keys()].some(
-        (key) => key !== "from" && key !== "returnTo",
+        (key) => key !== "from" && key !== "returnTo" && key !== "view",
       )
     )
       return null;
@@ -362,6 +361,7 @@ export function getCoursePlayerPath(
   origin: CoursePlayerOrigin | LegacyCoursePlayerOrigin,
   lessonIdentifier: string | number = 1,
   returnPath?: string,
+  view?: "video" | "quiz",
 ): string {
   const normalizedOrigin =
     normalizeCoursePlayerOrigin(origin) ?? DEFAULT_COURSE_PLAYER_ORIGIN;
@@ -374,6 +374,7 @@ export function getCoursePlayerPath(
   const search = new URLSearchParams({ from: normalizedOrigin });
   if (normalizedReturnPath !== fallbackReturnPath)
     search.set("returnTo", normalizedReturnPath);
+  if (view === "quiz") search.set("view", "quiz");
   return `/learn/${encodeURIComponent(courseId)}/${getLessonSlug(lessonId)}?${search.toString()}`;
 }
 
@@ -407,35 +408,6 @@ export function getOpenCoursePlayerSessions(
   return readCoursePlayerSessionState(storage).sessions;
 }
 
-/**
- * Adapts the server's canonical UUID-based session to the existing player
- * route model, which intentionally uses readable course slugs and numeric
- * lesson positions in the URL.
- */
-export function mapLearningSpaceSessionToCoursePlayerSession(
-  session: LearningSpaceSession,
-): CoursePlayerSession {
-  const lessonId = session.lessonNumber ?? 1;
-  const updatedAt = Date.parse(session.updatedAt);
-  const returnPath =
-    session.returnPath || getCoursePlayerParentPath(session.origin);
-  return {
-    courseId: session.courseSlug,
-    lessonId,
-    origin: session.origin,
-    path: getCoursePlayerPath(
-      session.courseSlug,
-      session.origin,
-      lessonId,
-      returnPath,
-    ),
-    returnPath,
-    updatedAt: Number.isFinite(updatedAt) ? updatedAt : Date.now(),
-    courseTitle: session.courseTitle,
-    lessonTitle: session.lessonTitle,
-  };
-}
-
 export function getMostRecentCoursePlayerSession(
   sessions: readonly CoursePlayerSession[] = getOpenCoursePlayerSessions(),
 ): CoursePlayerSession | null {
@@ -461,7 +433,7 @@ export function getCoursePlayerSession(
 
 /**
  * Re-key a legacy UUID session after its canonical public slug is known.
- * This prevents one course from appearing twice in the learning-space list.
+ * This prevents one course from appearing twice in the session list.
  */
 export function migrateCoursePlayerSessionKey(
   previousCourseId: string,

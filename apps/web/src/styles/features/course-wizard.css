@@ -200,6 +200,23 @@ body[data-modal-open="true"] .course-wizard-mobile-action-bar {
   }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Course Wizard - Focus Mode (Full Screen / Maximize Editor)
+   Hides top header, step tabs, and bottom action bars to give full viewport space
+   to curriculum, lessons, and quiz building.
+   ───────────────────────────────────────────────────────────────────────────── */
+[data-course-wizard][data-focus-mode="true"] > header,
+[data-course-wizard][data-focus-mode="true"] > .course-wizard-steps-nav,
+[data-course-wizard][data-focus-mode="true"] > .course-wizard-sticky-bottom-bar,
+[data-course-wizard][data-focus-mode="true"] > .course-wizard-mobile-action-bar {
+  display: none !important;
+}
+
+[data-course-wizard][data-focus-mode="true"] > .course-wizard-tab-content {
+  padding-top: 14px !important;
+  padding-bottom: 28px !important;
+}
+
 .course-wizard-sticky-bottom-bar {
   --wizard-tab-nav-bleed: var(--application-page-inline-gutter, 25px);
   position: sticky !important;

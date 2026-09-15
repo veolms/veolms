@@ -6,6 +6,7 @@ import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { useEffect, useState } from "react";
 import type { CourseRole } from "../courses/catalogue";
+import { getRoleDisplayName } from "./workspaceRole";
 
 const FALLBACK_AVATAR_CLASS =
   "shell-profile-avatar shell-profile-avatar--fallback";
@@ -50,6 +51,7 @@ export function ShellProfileAvatar({
 interface ProfileMenuProps {
   role: CourseRole;
   allowedRoles: readonly CourseRole[];
+  userRoles?: readonly string[] | null;
   sidebarHidden?: boolean;
   includeSidebarControl?: boolean;
   id?: string;
@@ -63,6 +65,7 @@ interface ProfileMenuProps {
 export function ProfileMenu({
   role,
   allowedRoles,
+  userRoles,
   sidebarHidden = false,
   includeSidebarControl = true,
   id,
@@ -79,6 +82,7 @@ export function ProfileMenu({
   const canPreviewAsStudent = allowedRoles.includes("student");
   const canPreviewAsCreator = allowedRoles.includes("creator");
   const canSwitchWorkspace = canPreviewAsStudent && canPreviewAsCreator;
+  const authoringRoleLabel = getRoleDisplayName("creator", userRoles);
 
   return (
     <div
@@ -108,7 +112,7 @@ export function ProfileMenu({
             onClick={() => selectRole("creator")}
           >
             <Users size={18} />
-            <span>Creator</span>
+            <span>{authoringRoleLabel}</span>
             {role === "creator" && (
               <Check className="profile-menu__check" size={16} weight="bold" />
             )}

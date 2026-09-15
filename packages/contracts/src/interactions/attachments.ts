@@ -8,7 +8,7 @@ export const attachmentKindSchema = z.enum([
 ]);
 export type AttachmentKind = z.infer<typeof attachmentKindSchema>;
 
-export const attachmentTargetTypeSchema = z.enum(["thread", "reply"]);
+export const attachmentTargetTypeSchema = z.enum(["thread", "reply", "note"]);
 export type AttachmentTargetType = z.infer<typeof attachmentTargetTypeSchema>;
 
 export const attachmentStatusSchema = z.enum([

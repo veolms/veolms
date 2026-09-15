@@ -42,6 +42,7 @@ export interface Course {
   duration: string;
   students: number;
   thumbnail: string;
+  thumbnailSrcSet?: readonly { url: string; width: number; height: number }[];
   lifecycleStatus: CourseLifecycleStatus;
   pricing?: CoursePricing;
   certificateAvailable?: boolean;

@@ -15,8 +15,12 @@ export interface IncludesServiceOptions {
 }
 
 export function createIncludesService({ database }: IncludesServiceOptions) {
-  function getCourseAndVerifyOwner(courseId: string, creatorId: string) {
-    return verifyCourseOwner(database, courseId, creatorId);
+  function getCourseAndVerifyOwner(
+    courseId: string,
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    return verifyCourseOwner(database, courseId, creatorId, userRoles);
   }
 
   function formatInclude(row: {
@@ -43,8 +47,9 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     courseId: string,
     creatorId: string,
     payload: CreateCourseIncludeRequest,
+    userRoles?: readonly string[],
   ): Promise<CourseIncludeItem> {
-    await getCourseAndVerifyOwner(courseId, creatorId);
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     let position = payload.position;
     if (position === undefined) {
@@ -102,8 +107,9 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     includeId: string,
     creatorId: string,
     payload: UpdateCourseIncludeRequest,
+    userRoles?: readonly string[],
   ): Promise<CourseIncludeItem> {
-    await getCourseAndVerifyOwner(courseId, creatorId);
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const existing = await includesRepo.findIncludeById(
       database,
@@ -134,8 +140,9 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     courseId: string,
     includeId: string,
     creatorId: string,
+    userRoles?: readonly string[],
   ): Promise<{ success: boolean }> {
-    await getCourseAndVerifyOwner(courseId, creatorId);
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const existing = await includesRepo.findIncludeById(
       database,
@@ -154,8 +161,9 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     courseId: string,
     creatorId: string,
     orderedIds: string[],
+    userRoles?: readonly string[],
   ): Promise<{ success: boolean }> {
-    await getCourseAndVerifyOwner(courseId, creatorId);
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const currentItems = await includesRepo.findIncludesByCourseId(
       database,

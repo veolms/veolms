@@ -12,7 +12,7 @@ export function createLifecycleController({
     const { id } = request.params;
     const creatorId = request.user!.id;
 
-    return await service.validateCourse(id, creatorId);
+    return await service.validateCourse(id, creatorId, request.user?.roles);
   }
 
   async function publishCourse(
@@ -20,7 +20,7 @@ export function createLifecycleController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.publishCourse(id, creatorId);
+    return await service.publishCourse(id, creatorId, request.user?.roles);
   }
 
   async function unpublishCourse(
@@ -28,7 +28,7 @@ export function createLifecycleController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.unpublishCourse(id, creatorId);
+    return await service.unpublishCourse(id, creatorId, request.user?.roles);
   }
 
   async function previewCourseDraft(
@@ -36,7 +36,7 @@ export function createLifecycleController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.previewCourseDraft(id, creatorId);
+    return await service.previewCourseDraft(id, creatorId, request.user?.roles);
   }
 
   return {

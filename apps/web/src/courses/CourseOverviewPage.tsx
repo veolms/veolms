@@ -15,6 +15,7 @@ import {
   Heart,
   Play,
   PlayCircle,
+  Question,
   ShoppingBag,
   Stack,
   Tag,
@@ -65,7 +66,8 @@ async function loadRazorpay() {
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Unable to load payment checkout."));
+    script.onerror = () =>
+      reject(new Error("Unable to load payment checkout."));
     document.head.appendChild(script);
   });
 }
@@ -204,7 +206,8 @@ function CurriculumSectionItem({
     (total, lesson) => total + parseDurationLabel(lesson[2]),
     0,
   );
-  const durationLabel = durationSeconds > 0 ? formatDuration(durationSeconds) : "";
+  const durationLabel =
+    durationSeconds > 0 ? formatDuration(durationSeconds) : "";
 
   return (
     <div
@@ -258,6 +261,7 @@ function CurriculumSectionItem({
               section.lessons.map(
                 ([number, title, duration, status, isPreview, contentType]) => {
                   const isDoc = contentType === "document";
+                  const isQuiz = contentType === "quiz";
                   return (
                     <div
                       className="group/lesson flex items-center gap-3 min-h-11.5 px-4.5 py-1.5 text-(--text-secondary) text-[0.85rem] cursor-pointer transition-colors duration-140 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
@@ -270,6 +274,8 @@ function CurriculumSectionItem({
                       >
                         {isDoc ? (
                           <FileText size={16} weight="regular" />
+                        ) : isQuiz ? (
+                          <Question size={16} weight="regular" />
                         ) : (
                           <PlayCircle size={16} weight="regular" />
                         )}
@@ -396,7 +402,10 @@ function CourseHeroSection({
   const displayPrice = appliedCoupon
     ? appliedCoupon.totalAmount === 0
       ? "Free"
-      : formatPriceWithCurrency(appliedCoupon.totalAmount, appliedCoupon.currency)
+      : formatPriceWithCurrency(
+          appliedCoupon.totalAmount,
+          appliedCoupon.currency,
+        )
     : basePrice;
   const originalPrice = pricing?.originalPrice;
   const discount = pricing?.discount;
@@ -501,7 +510,9 @@ function CourseHeroSection({
 
       if (!order.gateway) {
         setIsPaymentBusy(false);
-        onNavigatePage?.(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+        onNavigatePage?.(
+          `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
+        );
         return;
       }
 
@@ -534,7 +545,9 @@ function CourseHeroSection({
               gatewaySignature: response.razorpay_signature,
             });
             setIsPaymentBusy(false);
-            onNavigatePage?.(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+            onNavigatePage?.(
+              `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
+            );
           } catch (error) {
             setPaymentError(
               error instanceof Error
@@ -578,16 +591,23 @@ function CourseHeroSection({
 
   if (isCreatorNormal) {
     // 1. Creator viewing their course normally:
-    // Show only "Continue Learning". Clicking it opens the existing Learning Space.
+    // Show only "Continue Learning". Clicking it opens the course player.
     // Do not show Pay Now or Apply Coupon.
     ctaLabel = "Continue Learning";
     ctaIcon = (
-      <Play size="1.15em" weight="fill" className="shrink-0" aria-hidden="true" />
+      <Play
+        size="1.15em"
+        weight="fill"
+        className="shrink-0"
+        aria-hidden="true"
+      />
     );
     ctaDisabled = false;
     ctaOnClick = () => {
       if (onNavigatePage) {
-        onNavigatePage(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+        onNavigatePage(
+          `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
+        );
       }
     };
   } else if (isPreview) {
@@ -619,23 +639,34 @@ function CourseHeroSection({
     ctaOnClick = undefined; // Preview actions stay non-functional.
   } else {
     // 3. Student / Learner:
-    // Free course: show "Free" and "Continue Learning", which opens existing Learning Space.
+    // Free course: show "Free" and "Continue Learning", which opens the course player.
     // Paid course: show price, "Apply coupon", and "Pay Now" which triggers direct checkout.
     if (isFree) {
       ctaLabel = "Continue Learning";
       ctaIcon = (
-        <Play size="1.15em" weight="fill" className="shrink-0" aria-hidden="true" />
+        <Play
+          size="1.15em"
+          weight="fill"
+          className="shrink-0"
+          aria-hidden="true"
+        />
       );
       ctaDisabled = false;
       ctaOnClick = () => {
         if (onNavigatePage) {
-          onNavigatePage(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+          onNavigatePage(
+            `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
+          );
         }
       };
     } else {
       ctaLabel = isPaymentBusy ? "Processing…" : "Pay Now";
       ctaIcon = isPaymentBusy ? (
-        <CircleNotch size="1.15em" className="animate-spin shrink-0" aria-hidden="true" />
+        <CircleNotch
+          size="1.15em"
+          className="animate-spin shrink-0"
+          aria-hidden="true"
+        />
       ) : (
         <ShoppingBag
           size="1.15em"
@@ -785,7 +816,9 @@ function CourseHeroSection({
                   aria-pressed={wishlisted}
                   disabled={isPreview}
                   onClick={onToggleWishlist}
-                  title={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
+                  title={
+                    wishlisted ? "Remove from wishlist" : "Add to wishlist"
+                  }
                 >
                   <Heart
                     size={20}
@@ -810,7 +843,10 @@ function CourseHeroSection({
                     {appliedCoupon.code}
                   </span>
                   <span className="text-xs text-(--muted) whitespace-nowrap">
-                    applied {appliedCoupon.discountLabel ? `(${appliedCoupon.discountLabel})` : ""}
+                    applied{" "}
+                    {appliedCoupon.discountLabel
+                      ? `(${appliedCoupon.discountLabel})`
+                      : ""}
                   </span>
                 </div>
                 <button
@@ -1040,7 +1076,8 @@ function CourseAboutCard({ description }: CourseAboutCardProps) {
               ref={contentRef}
               className="cov-prose text-[0.88rem] leading-[1.65] overflow-hidden transition-[max-height] duration-300 ease-in-out"
               style={{
-                maxHeight: needsClamp && !expanded ? collapsedMaxHeight : "9999px",
+                maxHeight:
+                  needsClamp && !expanded ? collapsedMaxHeight : "9999px",
               }}
             >
               <DiscussionMarkdown
@@ -1138,7 +1175,8 @@ function CourseCurriculumCard({
           </h2>
           <p className="m-0 mt-0.5 text-(--muted) text-[0.82rem]">
             {course.sections} Section{course.sections === 1 ? "" : "s"} &bull;{" "}
-            {course.lectures} Lesson{course.lectures === 1 ? "" : "s"} &bull; {course.duration}
+            {course.lectures} Lesson{course.lectures === 1 ? "" : "s"} &bull;{" "}
+            {course.duration}
           </p>
         </div>
         <div className="flex items-center shrink-0 pt-1">
@@ -1147,16 +1185,28 @@ function CourseCurriculumCard({
             className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface)_92%,var(--text))] text-(--muted) cursor-pointer"
             onClick={allSectionsExpanded ? onCollapseAll : onExpandAll}
             aria-label={
-              allSectionsExpanded ? "Collapse all sections" : "Expand all sections"
+              allSectionsExpanded
+                ? "Collapse all sections"
+                : "Expand all sections"
             }
             title={
-              allSectionsExpanded ? "Collapse all sections" : "Expand all sections"
+              allSectionsExpanded
+                ? "Collapse all sections"
+                : "Expand all sections"
             }
           >
             {allSectionsExpanded ? (
-              <ArrowsInLineVertical size={17} weight="bold" aria-hidden="true" />
+              <ArrowsInLineVertical
+                size={17}
+                weight="bold"
+                aria-hidden="true"
+              />
             ) : (
-              <ArrowsOutLineVertical size={17} weight="bold" aria-hidden="true" />
+              <ArrowsOutLineVertical
+                size={17}
+                weight="bold"
+                aria-hidden="true"
+              />
             )}
           </button>
         </div>
@@ -1253,9 +1303,7 @@ export function adaptCourseOverviewResponse(
   );
   const resolvedDuration = formatDuration(resolvedDurationSeconds);
 
-  const resolvedThumbnail = c.thumbnailMediaId
-    ? `/api/v1/media/${c.thumbnailMediaId}`
-    : "";
+  const resolvedThumbnail = c.thumbnailUrl || "";
 
   const adaptedCourse: Course = {
     id: c.id,
@@ -1271,6 +1319,7 @@ export function adaptCourseOverviewResponse(
     duration: resolvedDuration,
     students: 0,
     thumbnail: resolvedThumbnail,
+    thumbnailSrcSet: c.thumbnailSrcSet,
     lifecycleStatus: (c.status === "published"
       ? "published"
       : "draft") as CourseLifecycleStatus,
@@ -1390,9 +1439,8 @@ export function adaptPreviewDataToOverview(
     enrolled: false,
     duration: formatDuration(totalDurationSeconds),
     students: 0,
-    thumbnail: c.thumbnailMediaId
-      ? `/api/v1/media/${c.thumbnailMediaId}`
-      : "",
+    thumbnail: c.thumbnailUrl || "",
+    thumbnailSrcSet: c.thumbnailSrcSet,
     lifecycleStatus: (c.status === "published"
       ? "published"
       : "draft") as CourseLifecycleStatus,

@@ -11,6 +11,10 @@ import type {
   CourseLifecycleStatus,
   CoursePricing,
 } from "./catalogue";
+import {
+  getCourseThumbnailCdnSrcSet,
+  getCourseThumbnailCdnUrl,
+} from "./courseMedia";
 
 export function formatDuration(seconds: number): string {
   if (!seconds || seconds <= 0) return "0h 0m";
@@ -92,9 +96,9 @@ export function adaptCourseSummaryToCatalogueCourse(
 
   const validCategory: CourseCategory =
     summary.categoryName === "Design" ||
-      summary.categoryName === "Development" ||
-      summary.categoryName === "Database" ||
-      summary.categoryName === "Cloud"
+    summary.categoryName === "Development" ||
+    summary.categoryName === "Database" ||
+    summary.categoryName === "Cloud"
       ? summary.categoryName
       : "Development";
 
@@ -103,15 +107,20 @@ export function adaptCourseSummaryToCatalogueCourse(
       ? enrolled
       : typeof enrolled === "number" || !enrolled
         ? false
-        : enrolled.has(summary.id) || (summary.slug ? enrolled.has(summary.slug) : false);
+        : enrolled.has(summary.id) ||
+          (summary.slug ? enrolled.has(summary.slug) : false);
 
   const validProgressMap =
-    progressMap && typeof (progressMap as ReadonlyMap<string, number | null>).get === "function"
+    progressMap &&
+    typeof (progressMap as ReadonlyMap<string, number | null>).get ===
+      "function"
       ? (progressMap as ReadonlyMap<string, number | null>)
       : null;
 
   const courseProgress = validProgressMap
-    ? (validProgressMap.get(summary.id) ?? (summary.slug ? validProgressMap.get(summary.slug) : null) ?? null)
+    ? (validProgressMap.get(summary.id) ??
+      (summary.slug ? validProgressMap.get(summary.slug) : null) ??
+      null)
     : null;
 
   return {
@@ -128,6 +137,7 @@ export function adaptCourseSummaryToCatalogueCourse(
     duration: formatDuration(summary.totalDurationSeconds),
     students: 0,
     thumbnail: summary.thumbnailUrl || "",
+    thumbnailSrcSet: summary.thumbnailSrcSet,
     lifecycleStatus: "published",
     pricing: formatCoursePricing(summary.pricing),
     certificateAvailable: summary.certificateEnabled,
@@ -144,14 +154,15 @@ export function adaptApiCourseToCatalogueCourse(
   enrolled?: ReadonlySet<string> | boolean | number,
   progressMap?: ReadonlyMap<string, number | null> | unknown,
 ): Course {
-  const thumbnail = apiCourse.thumbnailMediaId
-    ? `/api/v1/media/${apiCourse.thumbnailMediaId}`
-    : "";
+  const thumbnail =
+    apiCourse.thumbnailUrl ||
+    getCourseThumbnailCdnUrl(apiCourse.thumbnailMediaId) ||
+    "";
 
   const validStatus: CourseLifecycleStatus =
     apiCourse.status === "published" ||
-      apiCourse.status === "draft" ||
-      apiCourse.status === "archived"
+    apiCourse.status === "draft" ||
+    apiCourse.status === "archived"
       ? apiCourse.status
       : "draft";
 
@@ -160,15 +171,20 @@ export function adaptApiCourseToCatalogueCourse(
       ? enrolled
       : typeof enrolled === "number" || !enrolled
         ? false
-        : enrolled.has(apiCourse.id) || (apiCourse.slug ? enrolled.has(apiCourse.slug) : false);
+        : enrolled.has(apiCourse.id) ||
+          (apiCourse.slug ? enrolled.has(apiCourse.slug) : false);
 
   const validProgressMap =
-    progressMap && typeof (progressMap as ReadonlyMap<string, number | null>).get === "function"
+    progressMap &&
+    typeof (progressMap as ReadonlyMap<string, number | null>).get ===
+      "function"
       ? (progressMap as ReadonlyMap<string, number | null>)
       : null;
 
   const courseProgress = validProgressMap
-    ? (validProgressMap.get(apiCourse.id) ?? (apiCourse.slug ? validProgressMap.get(apiCourse.slug) : null) ?? null)
+    ? (validProgressMap.get(apiCourse.id) ??
+      (apiCourse.slug ? validProgressMap.get(apiCourse.slug) : null) ??
+      null)
     : null;
 
   return {
@@ -178,7 +194,7 @@ export function adaptApiCourseToCatalogueCourse(
     description: apiCourse.shortDescription || apiCourse.description || "",
     level:
       apiCourse.difficulty === "advanced" ||
-        apiCourse.difficulty === "intermediate"
+      apiCourse.difficulty === "intermediate"
         ? "Intermediate"
         : "Beginner",
     category: "Development",
@@ -189,9 +205,13 @@ export function adaptApiCourseToCatalogueCourse(
     duration: formatDuration(apiCourse.totalDurationSeconds ?? 0),
     students: 0,
     thumbnail,
+    thumbnailSrcSet:
+      apiCourse.thumbnailSrcSet ||
+      getCourseThumbnailCdnSrcSet(apiCourse.thumbnailMediaId),
     lifecycleStatus: validStatus,
     createdAt: apiCourse.createdAt,
     updatedAt: apiCourse.updatedAt,
+    creatorId: apiCourse.creatorId,
     isApi: true,
   };
 }
@@ -205,8 +225,8 @@ export function adaptDeletedCourseToCatalogueCourse(
 ): Course {
   const validStatus: CourseLifecycleStatus =
     deletedCourse.status === "published" ||
-      deletedCourse.status === "draft" ||
-      deletedCourse.status === "archived"
+    deletedCourse.status === "draft" ||
+    deletedCourse.status === "archived"
       ? deletedCourse.status
       : "draft";
 
@@ -227,6 +247,7 @@ export function adaptDeletedCourseToCatalogueCourse(
     lifecycleStatus: validStatus,
     deletedAt: deletedCourse.deletedAt,
     purgeAt: deletedCourse.purgeAt,
+    creatorId: deletedCourse.creatorId,
     isApi: true,
   };
 }

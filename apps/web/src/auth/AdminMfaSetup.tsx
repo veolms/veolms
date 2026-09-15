@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AuthBrandMark } from "./AuthBrandPanel.tsx";
 import { MFA_CONFIG } from "./mfa.config.ts";
 import { OtpCodeInput } from "./OtpCodeInput.tsx";
@@ -7,6 +8,7 @@ import { Icon } from "../icons/Icon.tsx";
 import { AUTH_CARD_HEADING_ID, validateOtpCode } from "./authFlow.ts";
 import { isPasskeySupported, startPasskeyRegistration } from "./webauthn.ts";
 import {
+  authKeys,
   useSetupTotp,
   useEnableTotp,
   usePasskeyRegisterOptions,
@@ -28,6 +30,8 @@ const STEP_LABELS = {
   passkeyPending: "Continue with passkey",
 } as const;
 
+import { downloadBackupCodesTxt } from "./backupCodes.ts";
+
 interface BackupCodesScreenProps {
   codes: string[];
   onContinue: () => void;
@@ -35,6 +39,7 @@ interface BackupCodesScreenProps {
 
 function BackupCodesScreen({ codes, onContinue }: BackupCodesScreenProps) {
   const [copied, setCopied] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
 
   const copyAll = async () => {
     try {
@@ -44,6 +49,12 @@ function BackupCodesScreen({ codes, onContinue }: BackupCodesScreenProps) {
     } catch {
       /* clipboard write error */
     }
+  };
+
+  const handleDownload = () => {
+    downloadBackupCodesTxt(codes);
+    setDownloaded(true);
+    setTimeout(() => setDownloaded(false), 2500);
   };
 
   return (
@@ -66,14 +77,25 @@ function BackupCodesScreen({ codes, onContinue }: BackupCodesScreenProps) {
           ))}
         </ul>
 
-        <button
-          className="auth-mfa-setup__copy-button"
-          onClick={copyAll}
-          type="button"
-        >
-          <Icon aria-hidden name="copy" size={16} />
-          {copied ? "Copied!" : "Copy all codes"}
-        </button>
+        <div className="auth-mfa-setup__backup-actions">
+          <button
+            className="auth-mfa-setup__copy-button"
+            onClick={copyAll}
+            type="button"
+          >
+            <Icon aria-hidden name="copy" size={16} />
+            {copied ? "Copied!" : "Copy all codes"}
+          </button>
+
+          <button
+            className="auth-mfa-setup__copy-button"
+            onClick={handleDownload}
+            type="button"
+          >
+            <Icon aria-hidden name="download" size={16} />
+            {downloaded ? "Downloaded!" : "Download .txt"}
+          </button>
+        </div>
 
         <button
           className="auth-form__submit"
@@ -101,6 +123,7 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [codeError, setCodeError] = useState<string | null>(null);
 
+  const queryClient = useQueryClient();
   const setupTotpMutation = useSetupTotp();
   const enableTotpMutation = useEnableTotp();
   const passkeyOptionsMutation = usePasskeyRegisterOptions();
@@ -114,6 +137,8 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
       const serverOptions = await passkeyOptionsMutation.mutateAsync();
       const credential = await startPasskeyRegistration(serverOptions);
       await passkeyVerifyMutation.mutateAsync(credential);
+      await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+      await queryClient.invalidateQueries({ queryKey: authKeys.sessions() });
       onDone();
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
@@ -171,13 +196,24 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
     }
   };
 
+  const handleBackupCodesContinue = async () => {
+    await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+    await queryClient.invalidateQueries({ queryKey: authKeys.sessions() });
+    onDone();
+  };
+
   if (screen === "backupCodes") {
-    return <BackupCodesScreen codes={backupCodes} onContinue={onDone} />;
+    return (
+      <BackupCodesScreen
+        codes={backupCodes}
+        onContinue={handleBackupCodesContinue}
+      />
+    );
   }
 
   if (screen === "passkeyPending") {
     return (
-      <div className="auth-mfa-setup">
+      <div className="auth-mfa-setup auth-two-factor">
         <AuthBrandMark />
         <h1 className="auth-card__heading" id={AUTH_CARD_HEADING_ID}>
           {STEP_LABELS.passkeyPending}
@@ -195,6 +231,14 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
               Waiting for passkey confirmation…
             </p>
           </div>
+
+          <button
+            className="auth-two-factor__alternate"
+            onClick={() => setScreen("chooseMethod")}
+            type="button"
+          >
+            ← Cancel
+          </button>
         </div>
       </div>
     );
@@ -325,7 +369,7 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
   }
 
   return (
-    <div className="auth-mfa-setup">
+    <div className="auth-mfa-setup auth-two-factor">
       <AuthBrandMark />
       <h1 className="auth-card__heading" id={AUTH_CARD_HEADING_ID}>
         {STEP_LABELS.chooseMethod}
@@ -337,35 +381,40 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
 
       <div className="auth-card__form-slot">
         {MFA_CONFIG.ALLOW_PASSKEY && passkeySupported && (
-          <div className="auth-two-factor__panel">
-            <div className="auth-two-factor__panel-body">
-              <p className="auth-two-factor__badge">
-                <Icon
-                  aria-hidden
-                  emphasis="fill"
-                  name="recommended"
-                  size={11}
-                />
-                Recommended
-              </p>
+          <div className="auth-two-factor__passkey">
+            <div className="auth-two-factor__panel">
+              <div className="auth-two-factor__panel-body">
+                <p className="auth-two-factor__badge">
+                  <Icon
+                    aria-hidden
+                    emphasis="fill"
+                    name="recommended"
+                    size={11}
+                  />
+                  Recommended
+                </p>
 
-              <div className="auth-two-factor__intro">
-                <span className="auth-two-factor__mark">
-                  <Icon aria-hidden name="passkey" size={22} />
-                </span>
+                <div className="auth-two-factor__intro">
+                  <span className="auth-two-factor__mark">
+                    <Icon aria-hidden name="passkey" size={22} />
+                  </span>
 
-                <div className="auth-two-factor__copy">
-                  <p className="auth-two-factor__title">Register a passkey</p>
-                  <p className="auth-two-factor__body">
-                    Use your device fingerprint, face, or PIN. No code to type —
-                    secure and phishing-resistant.
-                  </p>
+                  <div className="auth-two-factor__copy">
+                    <p className="auth-two-factor__title">Register a passkey</p>
+                    <p className="auth-two-factor__body">
+                      Use your device fingerprint, face, or PIN. No code to type —
+                      secure and phishing-resistant.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
 
             <button
-              aria-busy={passkeyOptionsMutation.isPending}
+              aria-busy={
+                passkeyOptionsMutation.isPending ||
+                passkeyVerifyMutation.isPending
+              }
               className="auth-form__submit"
               disabled={
                 passkeyOptionsMutation.isPending ||
@@ -373,11 +422,11 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
               }
               onClick={handleSetupPasskey}
               type="button"
-              style={{ margin: "0 14px 14px" }}
             >
               <span className="auth-form__submit-label">
-                {passkeyOptionsMutation.isPending
-                  ? "Preparing…"
+                {passkeyOptionsMutation.isPending ||
+                passkeyVerifyMutation.isPending
+                  ? "Setting up passkey…"
                   : "Set up passkey"}
               </span>
               <Icon aria-hidden emphasis="bold" name="arrowRight" size={18} />
@@ -386,26 +435,28 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
         )}
 
         {MFA_CONFIG.ALLOW_TOTP && (
-          <button
-            aria-busy={setupTotpMutation.isPending}
-            className="auth-form__submit"
-            disabled={setupTotpMutation.isPending}
-            onClick={handleSetupTotp}
-            style={{
-              background: "var(--surface)",
-              color: "var(--text)",
-              border: "1px solid var(--auth-line)",
-              boxShadow: "none",
-            }}
-            type="button"
-          >
-            <span className="auth-form__submit-label">
+          <>
+            {MFA_CONFIG.ALLOW_PASSKEY && passkeySupported && (
+              <div className="auth-social__divider" aria-hidden="true">
+                <span>or</span>
+              </div>
+            )}
+
+            <button
+              aria-busy={setupTotpMutation.isPending}
+              className="auth-secondary-btn"
+              disabled={setupTotpMutation.isPending}
+              onClick={handleSetupTotp}
+              type="button"
+            >
               <Icon aria-hidden name="authenticator" size={18} />
-              {setupTotpMutation.isPending
-                ? "Loading…"
-                : "Use authenticator app"}
-            </span>
-          </button>
+              <span>
+                {setupTotpMutation.isPending
+                  ? "Loading…"
+                  : "Use authenticator app"}
+              </span>
+            </button>
+          </>
         )}
       </div>
     </div>

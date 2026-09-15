@@ -227,4 +227,39 @@ describe("verifying with an authenticator app", () => {
       expect(position).toHaveValue(expected[index]);
     });
   });
+
+  it("allows switching to backup code mode and entering an 8-digit backup code", () => {
+    const { onCodeChange, onSubmit } = renderAuthenticator();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Use a backup code instead" }),
+    );
+
+    expect(screen.getByText("Backup recovery code")).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("8-digit backup code"),
+    ).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText("8-digit backup code");
+    fireEvent.change(input, { target: { value: "12345678" } });
+
+    expect(onCodeChange).toHaveBeenCalledWith("12345678");
+    expect(onSubmit).toHaveBeenCalledWith("12345678");
+  });
+
+  it("validates that backup code requires 8 digits", () => {
+    const { onSubmit } = renderAuthenticator({ code: "1234" });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Use a backup code instead" }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Verify & Continue" }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Please enter an 8-digit backup code.",
+    );
+  });
 });
+

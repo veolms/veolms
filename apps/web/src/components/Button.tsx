@@ -23,7 +23,7 @@ export function Button({
       type={type}
       data-control-radius-action
       data-button-motion={motion}
-      className={`inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-(--accent) px-4 text-sm font-semibold text-(--on-accent) shadow-[0_7px_18px_color-mix(in_srgb,var(--accent-shadow)_48%,transparent)] hover:bg-(--accent-hover) hover:shadow-[0_9px_22px_color-mix(in_srgb,var(--accent-shadow)_58%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) disabled:pointer-events-none disabled:opacity-55 ${motionClasses[motion]} ${className}`}
+      className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-(--accent) px-4 text-sm font-semibold text-(--on-accent) shadow-[0_7px_18px_color-mix(in_srgb,var(--accent-shadow)_48%,transparent)] hover:bg-(--accent-hover) hover:shadow-[0_9px_22px_color-mix(in_srgb,var(--accent-shadow)_58%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) disabled:pointer-events-none disabled:opacity-55 ${motionClasses[motion]} ${className}`}
     />
   );
 }

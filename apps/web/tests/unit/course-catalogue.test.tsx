@@ -145,9 +145,10 @@ describe("CourseCatalogue", () => {
   });
 
   it("navigates to course edit page when edit course action is selected", async () => {
-    const target = sampleCourse;
+    const target = { ...sampleCourse, creatorId: "creator-1" };
     const { onNavigatePage } = renderCatalogue({
       role: "creator",
+      currentUserId: "creator-1",
       visibleCourses: [target],
       courseMenu: target.id,
     });
@@ -196,10 +197,12 @@ describe("CourseCatalogue", () => {
       students: 10,
       thumbnail: "/test.webp",
       lifecycleStatus: "published",
+      creatorId: "creator-1",
     };
     const onDeleteCourse = vi.fn().mockResolvedValue(undefined);
     renderCatalogue({
       role: "creator",
+      currentUserId: "creator-1",
       visibleCourses: [target],
       courseMenu: target.id,
       onDeleteCourse,

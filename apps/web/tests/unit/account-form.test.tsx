@@ -90,6 +90,56 @@ describe("the account card", () => {
   });
 });
 
+describe("the avatar preview", () => {
+  it("shows a placeholder icon before any name is entered", () => {
+    const { container } = renderForm();
+
+    expect(container.querySelector("img")).not.toBeInTheDocument();
+  });
+
+  it("previews the exact default avatar the account will get, seeded by the trimmed name", () => {
+    const { container } = renderForm({ name: "  Ada Lovelace  " });
+
+    const preview = container.querySelector(
+      ".auth-account-form__avatar-circle img",
+    );
+    expect(preview).toHaveAttribute(
+      "src",
+      expect.stringContaining(
+        `seed=${encodeURIComponent("Ada Lovelace")}`,
+      ),
+    );
+  });
+
+  it("updates live as the name is edited", () => {
+    const { container, rerender } = renderForm({ name: "Ada" });
+
+    let preview = container.querySelector(
+      ".auth-account-form__avatar-circle img",
+    );
+    expect(preview).toHaveAttribute(
+      "src",
+      expect.stringContaining(`seed=${encodeURIComponent("Ada")}`),
+    );
+
+    rerender(
+      <AccountForm
+        identifier={emailIdentifier}
+        name="Ada Lovelace"
+        onNameChange={vi.fn()}
+        onSubmit={vi.fn()}
+        status="idle"
+      />,
+    );
+
+    preview = container.querySelector(".auth-account-form__avatar-circle img");
+    expect(preview).toHaveAttribute(
+      "src",
+      expect.stringContaining(`seed=${encodeURIComponent("Ada Lovelace")}`),
+    );
+  });
+});
+
 describe("naming the account", () => {
   it("passes each keystroke up to the caller", () => {
     const { onNameChange } = renderForm();

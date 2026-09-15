@@ -10,7 +10,6 @@ import RegisterRoute, {
 } from "../../src/routes/register.tsx";
 import {
   AuthBrandMark,
-  AuthBrandPanel,
 } from "../../src/auth/AuthBrandPanel.tsx";
 import {
   getDefaultLoginMethod,
@@ -154,18 +153,18 @@ describe("auth layout", () => {
     return renderWithQueryClient(<RouterProvider router={router} />);
   };
 
-  it("frames the routed screen beside the brand panel", async () => {
+  it("frames the routed screen inside the auth card", async () => {
     const { container } = renderLayout();
 
     const routedScreen = await screen.findByText("routed auth screen");
     expect(container.querySelector(".auth-page__form-column")).toContainElement(
       routedScreen,
     );
-    expect(container.querySelector(".auth-page__brand-column")).not.toBeNull();
-    expect(container.querySelector(".auth-brand-panel")).not.toBeNull();
+    expect(container.querySelector(".auth-page__brand-column")).toBeNull();
+    expect(container.querySelector(".auth-brand-panel")).toBeNull();
   });
 
-  it("holds both columns inside one container", async () => {
+  it("holds the form column inside the centered container", async () => {
     const { container } = renderLayout();
 
     await screen.findByText("routed auth screen");
@@ -174,9 +173,7 @@ describe("auth layout", () => {
     expect(shared).toContainElement(
       container.querySelector(".auth-page__form-column"),
     );
-    expect(shared).toContainElement(
-      container.querySelector(".auth-page__brand-column"),
-    );
+    expect(container.querySelector(".auth-page__brand-column")).toBeNull();
   });
 
   it("closes the page with the academy copyright and the tagline", async () => {
@@ -189,7 +186,7 @@ describe("auth layout", () => {
     expect(footer).toHaveTextContent("Learn. Build. Grow.");
   });
 
-  it("keeps session loading inside the form column so the illustration cannot overlap it", async () => {
+  it("keeps session loading inside the form column", async () => {
     currentUserQuery.isPending = true;
     currentUserQuery.isFetched = false;
 
@@ -201,7 +198,7 @@ describe("auth layout", () => {
     expect(formColumn).toContainElement(loading);
     expect(loading).not.toHaveClass("fixed");
     expect(screen.getByText("Loading your workspace")).toBeInTheDocument();
-    expect(container.querySelector(".auth-page__brand-column")).not.toBeNull();
+    expect(container.querySelector(".auth-page__brand-column")).toBeNull();
     expect(container.querySelector(".auth-page__footer")).not.toBeNull();
   });
 });
@@ -339,27 +336,5 @@ describe("auth brand mark", () => {
 
     expect(container.innerHTML).toContain('fill="currentColor"');
     expect(container.innerHTML).not.toContain('fill="black"');
-  });
-});
-
-describe("auth brand panel", () => {
-  it("is the illustration area alone, with no marketing copy of its own", () => {
-    const { container } = render(<AuthBrandPanel />);
-
-    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
-    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
-    expect(screen.queryByText(/all rights reserved/i)).not.toBeInTheDocument();
-    expect(container).not.toHaveTextContent(/\S/);
-  });
-
-  it("reserves the illustration area without announcing it to screen readers", () => {
-    const { container } = render(<AuthBrandPanel />);
-
-    const illustrationSlot = container.querySelector(
-      ".auth-brand-panel__illustration-slot",
-    );
-    expect(illustrationSlot).not.toBeNull();
-    expect(illustrationSlot).toHaveAttribute("aria-hidden", "true");
-    expect(illustrationSlot).toBeEmptyDOMElement();
   });
 });

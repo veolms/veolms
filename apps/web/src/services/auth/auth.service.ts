@@ -87,6 +87,14 @@ export const authService = {
     return api.post<{ backupCodes: string[] }>("/auth/totp/enable", payload);
   },
 
+  disableTotp: (): Promise<AuthMessageResponse> => {
+    return api.delete<AuthMessageResponse>("/auth/totp");
+  },
+
+  deletePasskeys: (): Promise<AuthMessageResponse> => {
+    return api.delete<AuthMessageResponse>("/auth/passkey");
+  },
+
   verifyMfaTotp: (payload: TotpVerifyRequest): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/totp/verify", payload);
   },
@@ -142,6 +150,12 @@ export const authService = {
     payload: ProfileUpdateRequest,
   ): Promise<UserProfileResponse> => {
     return api.patch<UserProfileResponse>("/auth/me", payload);
+  },
+
+  uploadAvatarPhoto: (file: File): Promise<UserProfileResponse> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api.post<UserProfileResponse>("/auth/me/avatar", formData);
   },
 
   logout: (): Promise<AuthMessageResponse> => {

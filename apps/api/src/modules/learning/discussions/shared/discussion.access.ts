@@ -1,8 +1,38 @@
-import type { DatabaseExecutor } from "@veolms/database";
+import type { Database, DatabaseExecutor } from "@veolms/database";
+import type { ExpressionBuilder } from "kysely";
 import { createAccessService } from "../../../access/index.ts";
 import { ADMIN_ROLE } from "../../../auth/index.ts";
 import { httpError } from "../../../../lib/errors.ts";
 import { DiscussionErrors } from "./discussion.errors.ts";
+
+// Kysely represents the `"courses as c"` + `"course_access_rules as ar"` +
+// `"course_pricing as p"` aliased join as its own entry on the DB generic,
+// not the bare table names.
+type CourseAccessAliasedDB = Database & {
+  c: Database["courses"];
+  ar: Database["course_access_rules"];
+  p: Database["course_pricing"];
+};
+
+// Single source of truth for "is this course open to anyone with course
+// access, without needing an explicit grant" — a published course that is
+// neither access-restricted nor paid. Shared by the single-course check in
+// `canAccessCourse` and the bulk listing in `listAccessibleCourseIds` so the
+// two can't drift apart.
+function isOpenCourseAccess(
+  eb: ExpressionBuilder<CourseAccessAliasedDB, "c" | "ar" | "p">,
+) {
+  return eb.and([
+    eb.or([
+      eb("ar.access_type", "is", null),
+      eb("ar.access_type", "!=", "restricted"),
+    ]),
+    eb.or([
+      eb("p.pricing_type", "is", null),
+      eb("p.pricing_type", "!=", "paid"),
+    ]),
+  ]);
+}
 
 export interface DiscussionActor {
   userId: string;
@@ -95,6 +125,26 @@ export function createDiscussionAccess(): DiscussionAccess {
   ): Promise<boolean> {
     if (isAdmin(actor)) return true;
     if (await isCourseCreator(db, actor.userId, courseId)) return true;
+
+    const course = await db
+      .selectFrom("courses as c")
+      .leftJoin("course_access_rules as ar", "ar.course_id", "c.id")
+      .leftJoin("course_pricing as p", "p.course_id", "c.id")
+      .select((eb) => [
+        "c.id",
+        "c.status",
+        isOpenCourseAccess(eb).as("isOpen"),
+      ])
+      .where("c.id", "=", courseId)
+      .where("c.deleted_at", "is", null)
+      .executeTakeFirst();
+
+    if (!course) return false;
+
+    if (course.status === "published" && course.isOpen) {
+      return true;
+    }
+
     return access.hasActiveAccess(db, actor.userId, courseId);
   }
 
@@ -211,6 +261,18 @@ export function createDiscussionAccess(): DiscussionAccess {
         .where("creator_id", "=", actor.userId)
         .execute();
       for (const course of created) ids.add(course.id);
+
+      const openCourses = await db
+        .selectFrom("courses as c")
+        .leftJoin("course_access_rules as ar", "ar.course_id", "c.id")
+        .leftJoin("course_pricing as p", "p.course_id", "c.id")
+        .select("c.id")
+        .where("c.status", "=", "published")
+        .where("c.deleted_at", "is", null)
+        .where((eb) => isOpenCourseAccess(eb))
+        .execute();
+
+      for (const course of openCourses) ids.add(course.id);
 
       return [...ids];
     },

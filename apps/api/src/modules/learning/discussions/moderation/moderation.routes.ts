@@ -16,6 +16,7 @@ import { errorResponse } from "../../../../lib/errors.ts";
 import { jsonResponse } from "../../../../lib/responses.ts";
 import type { RoutePlugin } from "../../../../lib/route-plugin.ts";
 import { createDiscussionPermissions } from "../shared/discussion.permissions.ts";
+import { createNotesRepository } from "../notes/notes.repository.ts";
 import { createRepliesRepository } from "../replies/replies.repository.ts";
 import { createThreadsRepository } from "../threads/threads.repository.ts";
 import { createModerationController } from "./moderation.controller.ts";
@@ -26,10 +27,12 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   const permissions = createDiscussionPermissions(options);
   const threadsRepo = createThreadsRepository();
   const repliesRepo = createRepliesRepository();
+  const notesRepo = createNotesRepository();
   const moderationRepo = createModerationRepository();
   const service = createModerationService({
     threadsRepo,
     repliesRepo,
+    notesRepo,
     moderationRepo,
   });
   const controller = createModerationController({
@@ -47,7 +50,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "createLearningReport",
         tags: ["Learning Moderation"],
-        summary: "Report an inappropriate comment, question, or reply",
+        summary: "Report an inappropriate comment, question, reply, or note",
         body: createReportRequestSchema,
         response: {
           201: jsonResponse(

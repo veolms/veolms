@@ -27,12 +27,19 @@ export function errorResponse(description: string) {
 export class AppError extends Error {
   readonly statusCode: number;
   readonly code: string;
+  readonly issues?: ValidationIssue[];
 
-  constructor(statusCode: number, code: string, message: string) {
+  constructor(
+    statusCode: number,
+    code: string,
+    message: string,
+    issues?: ValidationIssue[],
+  ) {
     super(message);
     this.name = "AppError";
     this.statusCode = statusCode;
     this.code = code;
+    this.issues = issues;
   }
 }
 
@@ -52,3 +59,4 @@ export function httpError(
     },
   };
 }
+

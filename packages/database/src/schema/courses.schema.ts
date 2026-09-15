@@ -2,18 +2,14 @@ import type { Generated } from "kysely";
 
 export type CourseStatus = "draft" | "published" | "archived";
 export type CourseDifficulty = "beginner" | "intermediate" | "advanced";
-export type LessonContentType = "video" | "document";
+export type LessonContentType = "video" | "document" | "quiz";
 export type AccessType = "everyone" | "restricted";
 export type AccessDurationType =
-  | "lifetime"
-  | "fixed_duration"
-  | "custom_expiration";
+  "lifetime" | "fixed_duration" | "custom_expiration";
 export type PricingType = "free" | "paid";
 export type CourseDeletionJobStatus = "scheduled" | "processing" | "failed";
 export type CourseDeletionStorageItemStatus =
-  | "scheduled"
-  | "processing"
-  | "failed";
+  "scheduled" | "processing" | "failed";
 export type CourseDeletionStorageDeleteMode = "object" | "prefix";
 
 export interface CourseTable {

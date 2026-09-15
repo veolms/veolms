@@ -20,6 +20,16 @@ const otpRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/auth/otp/send",
     {
+      // Unauthenticated, so the per-identifier checks in otp.service.ts are
+      // not enough on their own — an attacker can rotate identifiers from a
+      // single IP to bypass them. This caps sends per IP regardless of which
+      // identifier is being targeted.
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: "1 minute",
+        },
+      },
       schema: {
         operationId: "sendOtp",
         tags: ["Auth"],
@@ -81,7 +91,9 @@ const otpRoutes: RoutePlugin = async (app, options) => {
             "Mobile number verified successfully.",
             authMessageResponseSchema,
           ),
-          400: errorResponse("Validation error or missing parameters."),
+          400: errorResponse(
+            "Validation error, missing parameters, or invalid verification code.",
+          ),
           401: errorResponse("Verification code is invalid or expired."),
           404: errorResponse("User account was not found."),
           409: errorResponse("Phone number is already in use."),
@@ -131,7 +143,9 @@ const otpRoutes: RoutePlugin = async (app, options) => {
             "Email address verified successfully.",
             authMessageResponseSchema,
           ),
-          400: errorResponse("No email address is available to verify."),
+          400: errorResponse(
+            "No email address is available to verify, or invalid verification code.",
+          ),
           401: errorResponse("Verification code is invalid or expired."),
           404: errorResponse("User account was not found."),
         },

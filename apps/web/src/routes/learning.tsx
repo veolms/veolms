@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo } from "react";
 import {
   useLocation,
   useNavigate,
   useOutletContext,
   useParams,
 } from "react-router";
+import type { CourseLesson } from "@veolms/contracts";
 import type { Route } from "./+types/learning";
 import { LearningWorkspace } from "../learning/LearningWorkspace";
 import {
@@ -30,11 +31,11 @@ import {
 import { getRouteMeta } from "../routing/routeDescriptors";
 import { useCurrentUser } from "../services/auth";
 import { useCourseOverview, useCourses } from "../services/courses";
-import { useUpsertLearningSpaceSession } from "../services/learning-space";
 import { useAuthStore } from "../store/auth.store";
 import type { AcademyOutletContext } from "./academy-layout";
 import type { LearningMiniPlayerRequest } from "../learning/player/learningMiniPlayerTypes";
 import { getVideoPlaybackApiOrigin } from "../learning/videoPlaybackBootstrap";
+import { useMyQuizAssignments } from "../services/quizzes";
 
 export function meta({ location, params }: Route.MetaArgs) {
   const descriptors = Object.entries(
@@ -96,33 +97,62 @@ export default function LearningRoute() {
   const { data: authUser } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
   const activeUser = authUser || storeUser;
-  const { mutate: upsertLearningSpaceSession } = useUpsertLearningSpaceSession(
-    activeUser?.id,
-  );
-  const lastSyncedSessionRef = useRef<string | null>(null);
   const origin = getCoursePlayerOrigin(location.search);
   const routeReturnPath = getCoursePlayerReturnPath(location.search);
   const { data: courseOverview } = useCourseOverview(courseSlug, {
     enabled: Boolean(courseSlug),
   });
-  const apiCourseSlugForKey = getApiCourseSlugForLegacyKey(courseSlug);
   const { data: publishedCoursesData } = useCourses({
-    // Canonical API routes already resolve their session key from the
-    // overview response. Only legacy local keys need the catalogue lookup to
-    // discover their mapped API course.
-    enabled: Boolean(activeUser && apiCourseSlugForKey),
+    enabled: Boolean(activeUser),
   });
+  const apiCourseSlugForKey = getApiCourseSlugForLegacyKey(courseSlug);
   const apiCourse = publishedCoursesData?.courses.find(
     (course) =>
       course.id === courseSlug ||
       course.slug === courseSlug ||
       course.slug === apiCourseSlugForKey,
   );
+  const { data: myQuizAssignments, isLoading: myQuizAssignmentsLoading } =
+    useMyQuizAssignments({
+      enabled: Boolean(activeUser),
+    });
+  const searchParams = useMemo(
+    () => new URLSearchParams(location.search),
+    [location.search],
+  );
+  const targetLessonUuid = searchParams.get("lessonId");
+  const isQuizViewRequested = searchParams.get("view") === "quiz";
+
   const canonicalCourseSlug = courseOverview?.course.slug;
-  const lessonId = courseSlug
+
+  const allApiLessons = useMemo<CourseLesson[]>(() => {
+    if (!courseOverview?.sections) return [];
+    return courseOverview.sections
+      .slice()
+      .sort((left, right) => left.position - right.position)
+      .flatMap((section) =>
+        (section.lessons ?? [])
+          .slice()
+          .sort((left, right) => left.position - right.position),
+      );
+  }, [courseOverview]);
+
+  const resolvedFromUuid = useMemo(() => {
+    if (!targetLessonUuid || allApiLessons.length === 0) return null;
+    const idx = allApiLessons.findIndex((l: CourseLesson) => l.id === targetLessonUuid);
+    return idx >= 0 ? idx + 1 : null;
+  }, [targetLessonUuid, allApiLessons]);
+
+  const lessonId = resolvedFromUuid ?? (courseSlug
     ? (resolveLessonIdentifier(lectureSlug) ??
       getStoredCourseLessonId(courseSlug))
-    : 1;
+    : 1);
+  const apiLesson = allApiLessons[lessonId - 1];
+  const quizAssignment = myQuizAssignments?.assignments.find(
+    (assignment) =>
+      assignment.courseId === courseOverview?.course.id &&
+      assignment.lessonId === apiLesson?.id,
+  );
 
   useLayoutEffect(() => {
     if (!courseSlug) return;
@@ -152,49 +182,13 @@ export default function LearningRoute() {
     if (currentPath !== nextPath) {
       void navigate(nextPath, { replace: true });
     }
-
-    // Keep local playback working for demo/legacy routes, but only persist a
-    // session when the course key is known by the API. This prevents stale
-    // local IDs such as "backend-nodejs" from producing COURSE_NOT_FOUND.
-    // A legacy key is eligible for persistence only when the current API
-    // catalogue confirms its mapped course exists. If the API catalogue is
-    // empty, this route belongs to the local/dummy catalogue instead.
-    const resolvedApiCourseKey = apiCourse?.slug ?? canonicalCourseSlug;
-    if (courseSlug && activeUser && resolvedApiCourseKey) {
-      const session = getCoursePlayerSession(courseSlug);
-      const courseKey = resolvedApiCourseKey;
-      const syncKey = [
-        activeUser.id,
-        courseKey,
-        session?.lessonId ?? lessonId,
-        session?.origin ?? origin,
-        session?.returnPath ?? routeReturnPath,
-      ].join(":");
-      if (lastSyncedSessionRef.current !== syncKey) {
-        lastSyncedSessionRef.current = syncKey;
-        upsertLearningSpaceSession({
-          courseKey,
-          payload: {
-            lessonKey: String(session?.lessonId ?? lessonId),
-            origin: session?.origin ?? origin,
-            returnPath: session?.returnPath ?? routeReturnPath,
-          },
-        });
-      }
-    }
   }, [
-    activeUser,
-    apiCourse,
-    apiCourseSlugForKey,
-    canonicalCourseSlug,
     courseSlug,
     lessonId,
     location.pathname,
     location.search,
     navigate,
-    origin,
     routeReturnPath,
-    upsertLearningSpaceSession,
   ]);
 
   // Older saved sessions and shared links may still contain a course UUID.
@@ -213,11 +207,13 @@ export default function LearningRoute() {
       origin,
       lessonId,
       routeReturnPath,
+      isQuizViewRequested ? "quiz" : undefined,
     );
     void navigate(nextPath, { replace: true });
   }, [
     canonicalCourseSlug,
     courseSlug,
+    isQuizViewRequested,
     lessonId,
     navigate,
     origin,
@@ -225,13 +221,14 @@ export default function LearningRoute() {
   ]);
 
   const selectLesson = useCallback(
-    (nextLessonId: number) => {
+    (nextLessonId: number, view?: "video" | "quiz") => {
       if (!courseSlug) return;
       const path = getCoursePlayerPath(
         courseSlug,
         origin,
         nextLessonId,
         getCoursePlayerSession(courseSlug)?.returnPath || routeReturnPath,
+        view,
       );
       navigateTo(path, { exact: true });
     },
@@ -267,6 +264,7 @@ export default function LearningRoute() {
       courseSlug={courseSlug}
       userId={activeUser?.id}
       lessonId={lessonId}
+      initialLessonView={isQuizViewRequested ? "quiz" : "video"}
       mobileBottomNavigation={mobileBottomNavigation}
       mobileBottomNavigationHidden={mobileBottomNavigationHidden}
       onSelectLesson={selectLesson}
@@ -282,6 +280,9 @@ export default function LearningRoute() {
       persistentPlayerMounted={persistentPlayerMounted}
       registerPersistentPlayer={registerPersistentPlayer}
       onMinimizePlayer={minimizePlayer}
+      quizAssignment={quizAssignment ?? null}
+      quizAssignments={myQuizAssignments?.assignments ?? null}
+      quizAssignmentLoading={myQuizAssignmentsLoading}
     />
   );
 }
