@@ -61,16 +61,14 @@ const database = createDatabase(config.DATABASE_URL);
 try {
   await seedRolesAndPermissions(database);
 
-  // The rest of the development seed data belongs to one academy. Keeping a
-  // stable, idempotent tenant here also makes academy-scoped features such as
-  // quizzes usable immediately after the documented `pnpm db:seed` command.
+  // 1. Seed Academy
   await database
     .insertInto("academy")
     .values(DEFAULT_SEED_ACADEMY)
     .onConflict((conflict) => conflict.column("id").doNothing())
     .execute();
 
-  // Seed default creator user
+  // 2. Seed default user
   await database
     .insertInto("users")
     .values(DEFAULT_SEED_USER)
@@ -84,16 +82,30 @@ try {
     )
     .execute();
 
-  // Assign creator role to the default user
+  // 3. Seed Scoped Role Assignment (Platform Admin)
+  await database
+    .insertInto("role_assignments")
+    .values({
+      id: "00000000-0000-4000-8000-000000000001",
+      user_id: DEFAULT_SEED_USER.id,
+      role_id: "00000000-0000-4000-8000-000000000000", // Platform Admin
+      scope_type: "platform",
+      course_id: null,
+    })
+    .onConflict((conflict) => conflict.column("id").doNothing())
+    .execute();
+
+  // Assign legacy user_roles for compatibility
   await database
     .insertInto("user_roles")
     .values({
       user_id: DEFAULT_SEED_USER.id,
-      role_id: "00000000-0000-4000-8000-000000000001",
+      role_id: "00000000-0000-4000-8000-000000000000",
     })
     .onConflict((conflict) => conflict.doNothing())
     .execute();
 
+  // 4. Seed courses
   for (const course of courses) {
     await database
       .insertInto("courses")
@@ -115,7 +127,7 @@ try {
       .execute();
   }
 
-  console.info(`Seeded ${courses.length} published courses.`);
+  console.info(`Seeded ${courses.length} published courses with Platform Admin role assignment.`);
 } finally {
   await database.destroy();
 }

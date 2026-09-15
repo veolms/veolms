@@ -1142,6 +1142,90 @@ export function createCourseService({
     return courseRepo.findCourseById(database, courseId);
   }
 
+  function formatCourseDto(c: NonNullable<Awaited<ReturnType<typeof courseRepo.findCourseById>>>) {
+    return {
+      id: c.id,
+      slug: c.slug,
+      title: c.title,
+      shortDescription: c.short_description ?? null,
+      description: c.description ?? null,
+      difficulty: (c.difficulty as "beginner" | "intermediate" | "advanced" | null) ?? null,
+      status: c.status as "draft" | "published" | "archived",
+      creatorId: c.creator_id as string,
+      categoryId: c.category_id ?? null,
+      thumbnailMediaId: c.thumbnail_media_id ?? null,
+      trailerMediaId: c.trailer_media_id ?? null,
+      thumbnailUrl: c.thumbnail_url ?? null,
+      instructorAlias: c.instructor_alias ?? null,
+      version: c.version,
+      createdAt: c.created_at ? new Date(c.created_at).toISOString() : new Date().toISOString(),
+      updatedAt: c.updated_at ? new Date(c.updated_at).toISOString() : new Date().toISOString(),
+      publishedAt: c.published_at ? new Date(c.published_at).toISOString() : null,
+    };
+  }
+
+  async function updateCourseThumbnail(
+    courseId: string,
+    payload: { thumbnailUrl: string; thumbnailMediaId?: string | null },
+  ) {
+    const course = await courseRepo.findCourseById(database, courseId);
+    if (!course) {
+      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    }
+
+    await courseRepo.updateCourseDirect(database, courseId, {
+      thumbnail_url: payload.thumbnailUrl,
+      thumbnail_media_id: payload.thumbnailMediaId ?? null,
+    });
+
+    const updated = await courseRepo.findCourseById(database, courseId);
+    return formatCourseDto(updated!);
+  }
+
+  async function updateCourseDetails(
+    courseId: string,
+    payload: {
+      title?: string;
+      subtitle?: string | null;
+      description?: string | null;
+      language?: string;
+      level?: "beginner" | "intermediate" | "advanced" | "all_levels";
+      categoryId?: string | null;
+    },
+  ) {
+    const course = await courseRepo.findCourseById(database, courseId);
+    if (!course) {
+      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    }
+
+    const updates: Record<string, unknown> = {};
+    if (payload.title !== undefined) updates.title = payload.title;
+    if (payload.subtitle !== undefined) updates.short_description = payload.subtitle;
+    if (payload.description !== undefined) updates.description = payload.description;
+    if (payload.categoryId !== undefined) updates.category_id = payload.categoryId;
+    if (payload.level !== undefined && payload.level !== "all_levels") {
+      updates.difficulty = payload.level;
+    }
+
+    await courseRepo.updateCourseDirect(database, courseId, updates);
+    const updated = await courseRepo.findCourseById(database, courseId);
+    return formatCourseDto(updated!);
+  }
+
+  async function archiveCourse(courseId: string) {
+    const course = await courseRepo.findCourseById(database, courseId);
+    if (!course) {
+      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    }
+
+    await courseRepo.updateCourseDirect(database, courseId, {
+      status: "archived",
+    });
+
+    const updated = await courseRepo.findCourseById(database, courseId);
+    return formatCourseDto(updated!);
+  }
+
   return {
     getCourseAndVerifyOwner,
     createCourse,
@@ -1150,6 +1234,9 @@ export function createCourseService({
     getPublishedCourseBySlug,
     listAvailableCoursesByCreator,
     updateCourseBasics,
+    updateCourseThumbnail,
+    updateCourseDetails,
+    archiveCourse,
     getCourseEditorData,
     getCourseOverviewData,
     deleteCourse,

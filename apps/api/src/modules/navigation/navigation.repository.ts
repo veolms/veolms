@@ -21,14 +21,14 @@ export async function listUserPermissions(
 ): Promise<string[]> {
   const rows = await database
     .selectFrom("user_roles")
-    .innerJoin("permissions", "permissions.role_id", "user_roles.role_id")
-    .innerJoin("menus", "menus.id", "permissions.menu_id")
+    .innerJoin("menu_permissions", "menu_permissions.role_id", "user_roles.role_id")
+    .innerJoin("menus", "menus.id", "menu_permissions.menu_id")
     .select([
       "menus.route_link",
-      "permissions.can_create",
-      "permissions.can_read",
-      "permissions.can_update",
-      "permissions.can_delete",
+      "menu_permissions.can_create",
+      "menu_permissions.can_read",
+      "menu_permissions.can_update",
+      "menu_permissions.can_delete",
     ])
     .where("user_roles.user_id", "=", userId)
     .execute();
@@ -51,8 +51,8 @@ export async function listUserMenus(
 ): Promise<SidenavMenuNode[]> {
   const rows = await database
     .selectFrom("user_roles")
-    .innerJoin("permissions", "permissions.role_id", "user_roles.role_id")
-    .innerJoin("menus", "menus.id", "permissions.menu_id")
+    .innerJoin("menu_permissions", "menu_permissions.role_id", "user_roles.role_id")
+    .innerJoin("menus", "menus.id", "menu_permissions.menu_id")
     .select([
       "menus.id",
       "menus.parent_id",
@@ -62,10 +62,10 @@ export async function listUserMenus(
       "menus.expanded",
       "menus.check_list",
       "menus.is_both",
-      "permissions.can_create",
-      "permissions.can_read",
-      "permissions.can_update",
-      "permissions.can_delete",
+      "menu_permissions.can_create",
+      "menu_permissions.can_read",
+      "menu_permissions.can_update",
+      "menu_permissions.can_delete",
     ])
     .where("user_roles.user_id", "=", userId)
     .orderBy("menus.created_at", "asc")
@@ -89,8 +89,8 @@ export async function listPublicMenus(
   }
 
   const rows = await database
-    .selectFrom("permissions")
-    .innerJoin("menus", "menus.id", "permissions.menu_id")
+    .selectFrom("menu_permissions")
+    .innerJoin("menus", "menus.id", "menu_permissions.menu_id")
     .select([
       "menus.id",
       "menus.parent_id",
@@ -100,12 +100,12 @@ export async function listPublicMenus(
       "menus.expanded",
       "menus.check_list",
       "menus.is_both",
-      "permissions.can_create",
-      "permissions.can_read",
-      "permissions.can_update",
-      "permissions.can_delete",
+      "menu_permissions.can_create",
+      "menu_permissions.can_read",
+      "menu_permissions.can_update",
+      "menu_permissions.can_delete",
     ])
-    .where("permissions.role_id", "=", studentRole.id)
+    .where("menu_permissions.role_id", "=", studentRole.id)
     .orderBy("menus.created_at", "asc")
     .orderBy("menus.id", "asc")
     .execute();
