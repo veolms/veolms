@@ -783,6 +783,7 @@ export function CoursesPage({
   const shellProfileDisplayName =
     activeUser?.displayName?.trim() || "Your name";
   const shellProfileAvatarUrl = activeUser?.avatarDataUrl ?? null;
+  const shellProfileAvatarSrcSet = activeUser?.avatarSrcSet ?? [];
   const profileRef = useRef<HTMLDivElement>(null);
   const coursesAppRef = useRef<HTMLDivElement>(null);
   const appliedThemeRef = useRef<"light" | "dark" | null>(null);
@@ -3659,7 +3660,10 @@ export function CoursesPage({
                   aria-expanded={profileMenu}
                   onClick={() => setProfileMenu((current) => !current)}
                 >
-                  <ShellProfileAvatar avatarUrl={shellProfileAvatarUrl} />
+                  <ShellProfileAvatar
+                    avatarUrl={shellProfileAvatarUrl}
+                    avatarSrcSet={shellProfileAvatarSrcSet}
+                  />
                   <span>
                     <strong>{shellProfileDisplayName}</strong>
                     <small>
@@ -4155,7 +4159,10 @@ export function CoursesPage({
                   aria-label={`${shellProfileDisplayName}, ${getRoleDisplayName(role, userRoles)}. Open role menu`}
                   onClick={() => setProfileMenu((current) => !current)}
                 >
-                  <ShellProfileAvatar avatarUrl={shellProfileAvatarUrl} />
+                  <ShellProfileAvatar
+                    avatarUrl={shellProfileAvatarUrl}
+                    avatarSrcSet={shellProfileAvatarSrcSet}
+                  />
                   <span>
                     <strong>{shellProfileDisplayName}</strong>
                     <small>{getRoleDisplayName(role, userRoles)}</small>

@@ -4,11 +4,28 @@ import { ProfileMenu, ShellProfileAvatar } from "../../src/shell/ProfileMenu";
 
 describe("ShellProfileAvatar", () => {
   it("shows the avatar image when a photo is available", () => {
-    render(<ShellProfileAvatar avatarUrl="/assets/sofia-avatar-160.webp" />);
+    render(
+      <ShellProfileAvatar
+        avatarUrl="/cdn/public/avatars/user/160.webp"
+        avatarSrcSet={[
+          { url: "/cdn/public/avatars/user/45.webp", width: 45, height: 45 },
+          { url: "/cdn/public/avatars/user/96.webp", width: 96, height: 96 },
+          {
+            url: "/cdn/public/avatars/user/160.webp",
+            width: 160,
+            height: 160,
+          },
+        ]}
+      />,
+    );
 
     expect(document.querySelector(".shell-profile-avatar img")).toHaveAttribute(
       "src",
-      "/assets/sofia-avatar-160.webp",
+      "/cdn/public/avatars/user/160.webp",
+    );
+    expect(document.querySelector(".shell-profile-avatar img")).toHaveAttribute(
+      "srcset",
+      "/cdn/public/avatars/user/45.webp 45w, /cdn/public/avatars/user/96.webp 96w, /cdn/public/avatars/user/160.webp 160w",
     );
   });
 

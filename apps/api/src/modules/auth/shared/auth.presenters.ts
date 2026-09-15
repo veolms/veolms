@@ -1,4 +1,12 @@
 import type { MfaState, SessionUser } from "./auth.types.ts";
+import { avatarSrcSetFromUrl } from "../../avatars/index.ts";
+
+export function presentAvatar(avatarDataUrl: string | null) {
+  return {
+    avatarDataUrl,
+    avatarSrcSet: avatarSrcSetFromUrl(avatarDataUrl),
+  };
+}
 
 /**
  * Shapes the login/registration payload.
@@ -13,7 +21,7 @@ export function presentLogin(user: SessionUser, mfa: MfaState) {
       id: user.id,
       username: user.username,
       displayName: user.display_name,
-      avatarDataUrl: user.avatar_data_url,
+      ...presentAvatar(user.avatar_data_url),
       bio: user.bio,
       emailPublic: Boolean(
         user.email_public && user.email && user.email_verified_at,

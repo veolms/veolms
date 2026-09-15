@@ -143,6 +143,14 @@ export {
   type AuthMenuPermission,
 } from "../navigation.ts";
 
+export const avatarImageVariantSchema = z.strictObject({
+  url: z.string().min(1).max(3_000),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+});
+
+export type AvatarImageVariant = z.output<typeof avatarImageVariantSchema>;
+
 const profileFieldSchemas = {
   avatarDataUrl: z.string().max(3_000_000).nullable().optional(),
   bio: z.string().max(160).nullable().optional(),
@@ -156,6 +164,10 @@ const profileFieldSchemas = {
   websitePublic: z.boolean().optional(),
 };
 
+const avatarResponseFields = {
+  avatarSrcSet: z.array(avatarImageVariantSchema).default([]),
+};
+
 export const authUserSchema = z.object({
   id: z.uuid(),
   username: z.string().max(30),
@@ -165,6 +177,7 @@ export const authUserSchema = z.object({
   emailVerified: z.boolean().default(false),
   mobileVerified: z.boolean().default(false),
   roles: z.array(z.string().max(50)).default([]),
+  ...avatarResponseFields,
   ...profileFieldSchemas,
 });
 
@@ -177,6 +190,7 @@ export const userProfileResponseSchema = z.object({
   emailVerified: z.boolean(),
   mobileVerified: z.boolean(),
   roles: z.array(z.string().max(50)),
+  ...avatarResponseFields,
   ...profileFieldSchemas,
   mfaVerified: z.boolean(),
   totpEnabled: z.boolean(),

@@ -14,7 +14,7 @@ export function getCourseThumbnailCdnUrl(
   width: number | "full" = "full",
 ): string | undefined {
   if (!mediaId || !COURSE_MEDIA_CDN_BASE_URL) return undefined;
-  return `${COURSE_MEDIA_CDN_BASE_URL}/public/thumbnails/${encodeURIComponent(mediaId)}/processed/${width}.webp`;
+  return `${COURSE_MEDIA_CDN_BASE_URL}/public/thumbnails/${encodeURIComponent(mediaId)}/${width}.webp`;
 }
 
 export function getCourseThumbnailCdnSrcSet(

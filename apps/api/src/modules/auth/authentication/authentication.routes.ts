@@ -1,7 +1,9 @@
-import fastifyMultipart from "@fastify/multipart";
 import {
   authConfigResponseSchema,
   authMessageResponseSchema,
+  avatarUploadCompleteRequestSchema,
+  avatarUploadPresignRequestSchema,
+  avatarUploadPresignResponseSchema,
   currentUserResponseSchema,
   loginRequestSchema,
   loginResponseSchema,
@@ -13,15 +15,10 @@ import {
 import { errorResponse } from "../../../lib/errors.ts";
 import { jsonResponse } from "../../../lib/responses.ts";
 import type { RoutePlugin } from "../../../lib/route-plugin.ts";
-import { AVATAR_UPLOAD_MAX_BYTES } from "../../avatars/index.ts";
 import { createAuthContext } from "../shared/auth.context.ts";
 import { createAuthController } from "./authentication.controller.ts";
 
 const authenticationRoutes: RoutePlugin = async (app, options) => {
-  await app.register(fastifyMultipart, {
-    limits: { files: 1, fileSize: AVATAR_UPLOAD_MAX_BYTES },
-  });
-
   const context = createAuthContext(options);
   const controller = createAuthController(context);
   const { middleware } = context;
@@ -145,26 +142,53 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
   );
 
   app.post(
-    "/auth/me/avatar",
+    "/auth/me/avatar/presign",
     {
       schema: {
-        operationId: "uploadCurrentUserAvatar",
+        operationId: "presignCurrentUserAvatarUpload",
         tags: ["Auth"],
-        summary: "Upload a profile photo",
+        summary: "Obtain a pre-signed profile photo upload URL",
         description:
-          "Stores an image as the authenticated user's avatar in object storage.",
-        consumes: ["multipart/form-data"],
+          "Returns a direct-to-storage upload URL for the authenticated user's avatar original.",
+        body: avatarUploadPresignRequestSchema,
         response: {
-          200: jsonResponse("Avatar updated.", userProfileResponseSchema),
+          200: jsonResponse(
+            "Pre-signed avatar upload response.",
+            avatarUploadPresignResponseSchema,
+          ),
           400: errorResponse("A supported image file is required."),
           401: errorResponse("Authentication required."),
-          404: errorResponse("User account was not found."),
           413: errorResponse("The file is too large."),
+          503: errorResponse("Avatar storage is not configured."),
         },
       },
       preHandler: [middleware.authenticate, middleware.requireAuthenticated],
     },
-    controller.uploadAvatar,
+    controller.presignAvatarUpload,
+  );
+
+  app.post(
+    "/auth/me/avatar/complete",
+    {
+      schema: {
+        operationId: "completeCurrentUserAvatarUpload",
+        tags: ["Auth"],
+        summary: "Complete a profile photo upload",
+        description:
+          "Verifies the direct upload and persists the canonical 160px CDN avatar URL.",
+        body: avatarUploadCompleteRequestSchema,
+        response: {
+          200: jsonResponse("Avatar updated.", userProfileResponseSchema),
+          400: errorResponse("File not found, mismatched, or invalid."),
+          401: errorResponse("Authentication required."),
+          404: errorResponse("User account was not found."),
+          413: errorResponse("The file is too large."),
+          503: errorResponse("Avatar CDN delivery is not configured."),
+        },
+      },
+      preHandler: [middleware.authenticate, middleware.requireAuthenticated],
+    },
+    controller.completeAvatarUpload,
   );
 
   app.delete(

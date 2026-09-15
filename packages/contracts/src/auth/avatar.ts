@@ -1,3 +1,46 @@
+import { z } from "zod";
+
+const AVATAR_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
+
+export const avatarUploadContentTypeSchema = z.enum([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
+
+const avatarUploadFileSizeSchema = z
+  .number()
+  .int()
+  .positive()
+  .max(AVATAR_UPLOAD_MAX_BYTES);
+
+/** Shared request used by both the presign and upload-complete avatar calls. */
+export const avatarUploadPresignRequestSchema = z.strictObject({
+  contentType: avatarUploadContentTypeSchema,
+  fileSize: avatarUploadFileSizeSchema,
+});
+
+export const avatarUploadCompleteRequestSchema =
+  avatarUploadPresignRequestSchema;
+
+export const avatarUploadPresignResponseSchema = z.strictObject({
+  uploadUrl: z.url().max(20_000),
+});
+
+export type AvatarUploadContentType = z.infer<
+  typeof avatarUploadContentTypeSchema
+>;
+export type AvatarUploadPresignRequest = z.input<
+  typeof avatarUploadPresignRequestSchema
+>;
+export type AvatarUploadCompleteRequest = z.input<
+  typeof avatarUploadCompleteRequestSchema
+>;
+export type AvatarUploadPresignResponse = z.output<
+  typeof avatarUploadPresignResponseSchema
+>;
+
 /**
  * Helpers for DiceBear's public HTTP API
  * (https://www.dicebear.com/how-to-use/http-api/). No authentication is
