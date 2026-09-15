@@ -652,9 +652,9 @@ export function LearningWorkspace({
   );
 
   useEffect(() => {
-    if (initialLessonView && initialLessonView !== activeLessonView) {
-      setActiveLessonView(initialLessonView);
-    }
+    setActiveLessonView((currentView) =>
+      currentView === initialLessonView ? currentView : initialLessonView,
+    );
   }, [initialLessonView]);
 
   const getLessonUuid = useCallback(
@@ -672,14 +672,16 @@ export function LearningWorkspace({
       if (!uuid) {
         const les = curriculumLessonsById.get(lessonNumber);
         if (les && les[5] === "quiz") return true;
-        return lessonNumber === selectedLesson ? Boolean(quizAssignment) : false;
+        return lessonNumber === selectedLesson
+          ? Boolean(quizAssignment)
+          : false;
       }
       return Boolean(
         quizAssignments?.some((a) => a.lessonId === uuid) ||
-          courseQuizAssignments.data?.some((a) => a.lessonId === uuid) ||
-          (lessonNumber === selectedLesson &&
-            quizAssignment &&
-            (!quizAssignment.lessonId || quizAssignment.lessonId === uuid)),
+        courseQuizAssignments.data?.some((a) => a.lessonId === uuid) ||
+        (lessonNumber === selectedLesson &&
+          quizAssignment &&
+          (!quizAssignment.lessonId || quizAssignment.lessonId === uuid)),
       );
     },
     [
@@ -1179,11 +1181,20 @@ export function LearningWorkspace({
           : roundedProgress;
       setLocalLessonProgress((current) => {
         if (current[selectedLesson] === nextProgress) return current;
-        return { ...current, [selectedLesson]: nextProgress };
+        const updated = { ...current, [selectedLesson]: nextProgress };
+        try {
+          localStorage.setItem(
+            `veolms-learning-${coursePersistenceKey}-progress`,
+            JSON.stringify(updated),
+          );
+        } catch {
+          // Ignore storage write errors
+        }
+        return updated;
       });
       recordProgress(selectedLesson, nextProgress);
     },
-    [recordProgress, selectedLesson],
+    [coursePersistenceKey, recordProgress, selectedLesson],
   );
 
   const handleLessonEnded = useCallback(() => {
@@ -2378,7 +2389,11 @@ export function LearningWorkspace({
                         <span>Back to video</span>
                       </button>
                       <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
-                        <Exam size={14} className="text-(--accent)" weight="bold" />
+                        <Exam
+                          size={14}
+                          className="text-(--accent)"
+                          weight="bold"
+                        />
                         <span>Lesson {selectedLesson} Quiz</span>
                       </div>
                     </div>
@@ -2406,7 +2421,8 @@ export function LearningWorkspace({
                   Quiz Assessment Not Available
                 </h2>
                 <p className="mt-1.5 text-xs sm:text-sm text-(--muted) max-w-md mx-auto">
-                  This lesson does not currently have an active quiz assessment assigned.
+                  This lesson does not currently have an active quiz assessment
+                  assigned.
                 </p>
               </div>
             ) : registerPersistentPlayer ? (
@@ -2486,7 +2502,9 @@ export function LearningWorkspace({
                   >
                     <Exam size={14} weight="bold" className="text-(--accent)" />
                     <span>
-                      {activeLessonView === "quiz" ? "Back to video" : "Lesson Quiz"}
+                      {activeLessonView === "quiz"
+                        ? "Back to video"
+                        : "Lesson Quiz"}
                     </span>
                   </button>
                 ) : null}

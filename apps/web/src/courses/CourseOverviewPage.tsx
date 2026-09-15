@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 import { useParams } from "react-router";
 import {
@@ -41,6 +41,7 @@ import type { CourseSection } from "../learning/courseContent";
 import type { NavigateTo } from "../routing/navigation";
 import { useAuthStore } from "../store/auth.store";
 import { useCourseOverview } from "../services/courses";
+import { useEnrolledCourses, useEnrollFreeCourse } from "../services/enrollments";
 import {
   useCheckoutPreview,
   useCreateCheckoutOrder,
@@ -210,11 +211,10 @@ function CurriculumSectionItem({
 
   return (
     <div
-      className={`rounded-xl border bg-(--surface) shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow] duration-150 ${
-        isOpen
+      className={`rounded-xl border bg-(--surface) shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow] duration-150 ${isOpen
           ? "border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
           : "border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
-      }`}
+        }`}
       role="listitem"
     >
       <button
@@ -237,9 +237,8 @@ function CurriculumSectionItem({
           {durationLabel ? ` • ${durationLabel}` : ""}
         </span>
         <span
-          className={`shrink-0 text-(--muted) inline-flex items-center justify-center transition-transform duration-200 ease-out motion-reduce:transition-none ${
-            isOpen ? "rotate-180" : ""
-          }`}
+          className={`shrink-0 text-(--muted) inline-flex items-center justify-center transition-transform duration-200 ease-out motion-reduce:transition-none ${isOpen ? "rotate-180" : ""
+            }`}
           aria-hidden="true"
         >
           <CaretDown size={16} weight="bold" />
@@ -251,11 +250,10 @@ function CurriculumSectionItem({
         role="region"
         aria-labelledby={buttonId}
         aria-hidden={!isOpen}
-        className={`grid motion-reduce:transition-none ${
-          isOpen
+        className={`grid motion-reduce:transition-none ${isOpen
             ? "grid-rows-[1fr] opacity-100 visible transition-[grid-template-rows,opacity,visibility] duration-300 ease-in-out"
             : "grid-rows-[0fr] opacity-0 invisible transition-[grid-template-rows,opacity,visibility] duration-250 ease-[cubic-bezier(0,1,0,1)]"
-        }`}
+          }`}
       >
         <div className="overflow-hidden min-h-0">
           <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,var(--text))]">
@@ -413,7 +411,7 @@ function CourseHeroSection({
   const discount = pricing?.discount;
   const displayDiscount = appliedCoupon
     ? appliedCoupon.discountLabel ||
-      `${formatPriceWithCurrency(appliedCoupon.discountAmount, appliedCoupon.currency)} OFF`
+    `${formatPriceWithCurrency(appliedCoupon.discountAmount, appliedCoupon.currency)} OFF`
     : discount;
   const perksList = inclusions ?? [
     "Full lifetime access",
@@ -808,11 +806,10 @@ function CourseHeroSection({
 
                 <button
                   type="button"
-                  className={`inline-flex items-center justify-center w-9.5 h-9.5 shrink-0 rounded-full border border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] text-(--muted) cursor-pointer transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-[color-mix(in_srgb,var(--text)_32%,transparent)] hover:text-(--text) hover:bg-(--hover) hover:scale-[1.06] ${
-                    wishlisted
+                  className={`inline-flex items-center justify-center w-9.5 h-9.5 shrink-0 rounded-full border border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] text-(--muted) cursor-pointer transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-[color-mix(in_srgb,var(--text)_32%,transparent)] hover:text-(--text) hover:bg-(--hover) hover:scale-[1.06] ${wishlisted
                       ? "border-[#ec4899]! text-[#ec4899]! bg-[rgba(236,72,153,0.14)]!"
                       : ""
-                  }`}
+                    }`}
                   aria-label={
                     wishlisted ? "Remove from wishlist" : "Add to wishlist"
                   }
@@ -1296,8 +1293,8 @@ export function adaptCourseOverviewResponse(
   const showInstructor = overview.settings?.showInstructorName !== false;
   const resolvedInstructorName = showInstructor
     ? c.instructorAlias?.trim() ||
-      overview.creator?.displayName ||
-      defaultInstructorName
+    overview.creator?.displayName ||
+    defaultInstructorName
     : undefined;
 
   const resolvedDurationSeconds = resolveCourseDurationSeconds(
@@ -1353,11 +1350,11 @@ export function adaptCourseOverviewResponse(
 
   const finalPerks: string[] = Array.isArray(overview.includes)
     ? overview.includes
-        .slice()
-        .sort((a, b) => a.position - b.position)
-        .map((inc) => inc.text.trim())
-        .filter(Boolean)
-        .slice(0, 6)
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map((inc) => inc.text.trim())
+      .filter(Boolean)
+      .slice(0, 6)
     : [];
 
   let pricingProps: CourseOverviewPricingProps;
@@ -1474,11 +1471,11 @@ export function adaptPreviewDataToOverview(
 
   const finalPerks: string[] = Array.isArray(previewData.includes)
     ? previewData.includes
-        .slice()
-        .sort((a, b) => a.position - b.position)
-        .map((inc) => inc.text.trim())
-        .filter(Boolean)
-        .slice(0, 6)
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map((inc) => inc.text.trim())
+      .filter(Boolean)
+      .slice(0, 6)
     : [];
 
   let pricingProps: CourseOverviewPricingProps;
@@ -1611,10 +1608,10 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
   // If previewData is provided, adapt it cleanly from persisted server state
   const adaptedFromPreview = props.previewData
     ? adaptPreviewDataToOverview(
-        props.previewData,
-        serverCategories,
-        defaultInstructorName,
-      )
+      props.previewData,
+      serverCategories,
+      defaultInstructorName,
+    )
     : null;
 
   const adaptedFromOverview = apiOverview
@@ -1624,6 +1621,26 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
   const activeAdapted = adaptedFromPreview ?? adaptedFromOverview;
 
   const course = activeAdapted?.course ?? props.customCourse;
+
+  const { data: enrolledData } = useEnrolledCourses();
+
+  const isEnrolled = useMemo(() => {
+    if (!enrolledData?.courses) return false;
+    return enrolledData.courses.some(
+      (ec) =>
+        ec.courseId === course?.id ||
+        ec.courseSlug === courseSlug ||
+        (course?.slug && ec.courseSlug === course.slug),
+    );
+  }, [enrolledData?.courses, course?.id, course?.slug, courseSlug]);
+
+  const courseWithEnrollment = useMemo(() => {
+    if (!course) return undefined;
+    return {
+      ...course,
+      enrolled: isEnrolled || course.enrolled,
+    };
+  }, [course, isEnrolled]);
 
   if (
     isOverviewLoading &&
@@ -1636,7 +1653,7 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
     );
   }
 
-  if (!course) {
+  if (!courseWithEnrollment) {
     return (
       <div className="w-full max-w-275 mx-auto box-border text-(--text)">
         <div className="courses-empty">
@@ -1682,8 +1699,8 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
   return (
     <CourseOverviewContent
       {...props}
-      key={course.id}
-      course={course}
+      key={courseWithEnrollment.id}
+      course={courseWithEnrollment}
       courseSlug={courseSlug}
       defaultInstructorName={defaultInstructorName}
       adaptedFromPreview={activeAdapted}
@@ -1775,20 +1792,20 @@ function CourseOverviewContent({
     ? adaptedFromPreview.inclusions
     : customInclusions !== undefined
       ? Array.from(
-          new Set(customInclusions.map((s) => s.trim()).filter(Boolean)),
-        )
+        new Set(customInclusions.map((s) => s.trim()).filter(Boolean)),
+      )
       : customIncludes !== undefined
         ? Array.from(
-            new Set(
-              customIncludes
-                .map((inc) => inc.label.trim())
-                .filter(
-                  (label) =>
-                    !/^\d+\s+(sections|lectures)/i.test(label) &&
-                    !/on-demand content/i.test(label),
-                ),
-            ),
-          )
+          new Set(
+            customIncludes
+              .map((inc) => inc.label.trim())
+              .filter(
+                (label) =>
+                  !/^\d+\s+(sections|lectures)/i.test(label) &&
+                  !/on-demand content/i.test(label),
+              ),
+          ),
+        )
         : undefined;
 
   const [openSections, setOpenSections] = useState<Set<number>>(
@@ -1852,11 +1869,10 @@ function CourseOverviewContent({
   return (
     <div
       data-course-overview
-      className={`w-full max-w-275 mx-auto flex flex-col gap-6 box-border text-(--text) ${
-        isReadOnlyPreview
+      className={`w-full max-w-275 mx-auto flex flex-col gap-6 box-border text-(--text) ${isReadOnlyPreview
           ? "p-[36px_24px_48px] max-[900px]:p-[24px_16px_48px] max-[900px]:gap-4.5 max-[640px]:p-[16px_14px_40px] max-[640px]:gap-4"
           : "max-[900px]:gap-4.5 max-[640px]:gap-4"
-      }`}
+        }`}
     >
       {/* 1. Two-Column Hero Section with Info & Pricing on Left, Trailer on Right */}
       <CourseHeroSection
