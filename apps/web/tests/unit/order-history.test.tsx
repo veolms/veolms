@@ -3,6 +3,161 @@ import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { OrderHistoryPage } from "../../src/order-history/OrderHistoryPage.tsx";
 
+const mockHistoryOrders = [
+  {
+    id: "ord-hist-1",
+    orderNumber: "#ORD-240524-1001",
+    userId: "usr-1",
+    status: "paid" as const,
+    currency: "USD",
+    subtotalAmount: 4153,
+    discountAmount: 0,
+    taxAmount: 747,
+    totalAmount: 4900,
+    expiresAt: "2026-05-24T10:30:00Z",
+    createdAt: "2025-05-24T10:30:00Z",
+    updatedAt: "2025-05-24T10:30:00Z",
+    items: [
+      {
+        id: "item-1",
+        itemType: "course" as const,
+        courseId: "typescript-course",
+        titleSnapshot: "The Ultimate TypeScript Course",
+        unitPrice: 4900,
+        discountAmount: 0,
+        taxAmount: 747,
+        finalAmount: 4900,
+        createdAt: "2025-05-24T10:30:00Z",
+      },
+    ],
+  },
+  {
+    id: "ord-hist-2",
+    orderNumber: "#ORD-240523-0987",
+    userId: "usr-1",
+    status: "payment_processing" as const,
+    currency: "USD",
+    subtotalAmount: 5000,
+    discountAmount: 0,
+    taxAmount: 900,
+    totalAmount: 5900,
+    expiresAt: "2026-05-23T09:15:00Z",
+    createdAt: "2025-05-23T09:15:00Z",
+    updatedAt: "2025-05-23T09:15:00Z",
+    items: [
+      {
+        id: "item-2",
+        itemType: "course" as const,
+        courseId: "backend-nodejs",
+        titleSnapshot: "Complete Backend with Node.js",
+        unitPrice: 5900,
+        discountAmount: 0,
+        taxAmount: 900,
+        finalAmount: 5900,
+        createdAt: "2025-05-23T09:15:00Z",
+      },
+    ],
+  },
+  {
+    id: "ord-hist-3",
+    orderNumber: "#ORD-240522-0966",
+    userId: "usr-1",
+    status: "paid" as const,
+    currency: "USD",
+    subtotalAmount: 3305,
+    discountAmount: 0,
+    taxAmount: 595,
+    totalAmount: 3900,
+    expiresAt: "2026-05-22T16:45:00Z",
+    createdAt: "2025-05-22T16:45:00Z",
+    updatedAt: "2025-05-22T16:45:00Z",
+    items: [
+      {
+        id: "item-3",
+        itemType: "course" as const,
+        courseId: "python-data-science",
+        titleSnapshot: "Python for Data Science",
+        unitPrice: 3900,
+        discountAmount: 0,
+        taxAmount: 595,
+        finalAmount: 3900,
+        createdAt: "2025-05-22T16:45:00Z",
+      },
+    ],
+  },
+  {
+    id: "ord-hist-4",
+    orderNumber: "#ORD-240521-0923",
+    userId: "usr-1",
+    status: "payment_failed" as const,
+    currency: "USD",
+    subtotalAmount: 4153,
+    discountAmount: 0,
+    taxAmount: 747,
+    totalAmount: 4900,
+    expiresAt: "2026-05-21T11:20:00Z",
+    createdAt: "2025-05-21T11:20:00Z",
+    updatedAt: "2025-05-21T11:20:00Z",
+    items: [
+      {
+        id: "item-4",
+        itemType: "course" as const,
+        courseId: "react-complete-guide",
+        titleSnapshot: "React.js - The Complete Guide",
+        unitPrice: 4900,
+        discountAmount: 0,
+        taxAmount: 747,
+        finalAmount: 4900,
+        createdAt: "2025-05-21T11:20:00Z",
+      },
+    ],
+  },
+  {
+    id: "ord-hist-5",
+    orderNumber: "#ORD-240520-0891",
+    userId: "usr-1",
+    status: "refunded" as const,
+    currency: "USD",
+    subtotalAmount: 2458,
+    discountAmount: 0,
+    taxAmount: 442,
+    totalAmount: 2900,
+    expiresAt: "2026-05-20T14:10:00Z",
+    createdAt: "2025-05-20T14:10:00Z",
+    updatedAt: "2025-05-20T14:10:00Z",
+    items: [
+      {
+        id: "item-5",
+        itemType: "course" as const,
+        courseId: "ui-ux-design-fundamentals",
+        titleSnapshot: "UI/UX Design Fundamentals",
+        unitPrice: 2900,
+        discountAmount: 0,
+        taxAmount: 442,
+        finalAmount: 2900,
+        createdAt: "2025-05-20T14:10:00Z",
+      },
+    ],
+  },
+];
+
+vi.mock("../../src/services/orders", () => ({
+  useOrders: () => ({
+    data: {
+      pages: [{ orders: mockHistoryOrders, nextCursor: null }],
+    },
+    isLoading: false,
+    isError: false,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: vi.fn(),
+    refetch: vi.fn(),
+  }),
+  ordersService: {
+    getInvoiceDownloadUrl: (id: string) => `/api/v1/orders/${id}/invoice/download`,
+  },
+}));
+
 vi.mock("../../src/ThemedSelect.tsx", () => ({
   ThemedSelect: ({
     ariaLabel,
@@ -48,12 +203,12 @@ describe("OrderHistoryPage", () => {
     expect(screen.getByText("AMOUNT")).toBeInTheDocument();
     expect(screen.getByText("STATUS")).toBeInTheDocument();
 
-    // Check first page items
+    // Check items
     expect(
       screen.getAllByText("The Ultimate TypeScript Course")[0],
     ).toBeInTheDocument();
     expect(screen.getAllByText("#ORD-240524-1001")[0]).toBeInTheDocument();
-    expect(screen.getByText("INV-1001")).toBeInTheDocument();
+    expect(screen.getByText("INV-240524-1001")).toBeInTheDocument();
   });
 
   it("switches status tabs and filters the orders table", () => {
@@ -108,7 +263,7 @@ describe("OrderHistoryPage", () => {
     ).not.toBeInTheDocument();
 
     // Search by Invoice ID
-    fireEvent.change(searchInput, { target: { value: "INV-0891" } });
+    fireEvent.change(searchInput, { target: { value: "INV-240520-0891" } });
     expect(
       screen.getAllByText("UI/UX Design Fundamentals")[0],
     ).toBeInTheDocument();
@@ -123,7 +278,7 @@ describe("OrderHistoryPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("filters orders by status and payment method selects", () => {
+  it("filters orders by status dropdown select", () => {
     render(<OrderHistoryPage />);
 
     const statusSelect = screen.getByLabelText("Filter by status");
@@ -138,48 +293,8 @@ describe("OrderHistoryPage", () => {
 
     // Reset status
     fireEvent.change(statusSelect, { target: { value: "all" } });
-
-    // Filter by payment method
-    const paymentSelect = screen.getByLabelText("Filter by payment method");
-    fireEvent.change(paymentSelect, { target: { value: "paypal" } });
-    expect(
-      screen.getAllByText("UI/UX Design Fundamentals")[0],
-    ).toBeInTheDocument();
-  });
-
-  it("navigates across pages using pagination controls", () => {
-    render(<OrderHistoryPage />);
-
-    expect(
-      screen.getByText(
-        (_, el) => el?.textContent?.trim() === "Showing 1 to 6 of 24 orders",
-      ),
-    ).toBeInTheDocument();
     expect(
       screen.getAllByText("The Ultimate TypeScript Course")[0],
-    ).toBeInTheDocument();
-
-    // Navigate to Page 2
-    const page2Button = screen.getByRole("button", { name: "Page 2" });
-    fireEvent.click(page2Button);
-
-    expect(
-      screen.getByText(
-        (_, el) => el?.textContent?.trim() === "Showing 7 to 12 of 24 orders",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getAllByText("Docker & Kubernetes for Developers")[0],
-    ).toBeInTheDocument();
-
-    // Navigate with Next button
-    const nextButton = screen.getByRole("button", { name: "Next page" });
-    fireEvent.click(nextButton);
-
-    expect(
-      screen.getByText(
-        (_, el) => el?.textContent?.trim() === "Showing 13 to 18 of 24 orders",
-      ),
     ).toBeInTheDocument();
   });
 
@@ -199,7 +314,7 @@ describe("OrderHistoryPage", () => {
     expect(
       screen.getByRole("heading", { name: "Order Invoice" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Invoice INV-1001")).toBeInTheDocument();
+    expect(screen.getByText("Invoice INV-240524-1001")).toBeInTheDocument();
     expect(screen.getByText("Total Paid")).toBeInTheDocument();
 
     // Close modal

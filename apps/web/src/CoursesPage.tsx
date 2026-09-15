@@ -66,7 +66,6 @@ import { FloatingScrollbar } from "./shell/FloatingScrollbar";
 import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
 import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
-import { autosyncManager } from "./lib/autosync";
 import { useCurrentUser, useSignOut } from "./services/auth";
 import { useSidenav } from "./services/navigation";
 import { useAuthStore } from "./store/auth.store";
@@ -77,6 +76,7 @@ import {
   useMyCourses,
   useRestoreCourse,
 } from "./services/courses";
+import { useEnrolledCourses } from "./services/enrollments";
 import {
   adaptApiCourseToCatalogueCourse,
   adaptCourseSummaryToCatalogueCourse,
@@ -740,6 +740,9 @@ export function CoursesPage({
     useCourses({
       enabled: shouldQueryCourses && effectiveRole === "student",
     });
+  const { data: enrolledCoursesData } = useEnrolledCourses({
+    enabled: shouldLoadCourseSurface && effectiveRole === "student",
+  });
   const { data: myCoursesData, isPending: isMyCoursesPending } = useMyCourses({
     enabled:
       shouldQueryCourses &&
@@ -1624,8 +1627,59 @@ export function CoursesPage({
 
   const allCourses = useMemo(() => {
     if (effectiveRole !== "creator") {
-      return (publishedCoursesData?.courses || []).map(
-        adaptCourseSummaryToCatalogueCourse,
+      const enrolledSet = new Set<string>();
+      const progressMap = new Map<string, number | null>();
+      if (enrolledCoursesData?.courses) {
+        for (const ec of enrolledCoursesData.courses) {
+          enrolledSet.add(ec.courseId);
+          if (ec.courseSlug) enrolledSet.add(ec.courseSlug);
+          progressMap.set(ec.courseId, ec.progress);
+          if (ec.courseSlug) progressMap.set(ec.courseSlug, ec.progress);
+        }
+      }
+      if (typeof window !== "undefined") {
+        for (const ec of enrolledCoursesData?.courses || []) {
+          try {
+            const courseKey = encodeURIComponent(ec.courseSlug);
+            const detailedProgStr = localStorage.getItem(
+              `veolms-learning-${courseKey}-progress`,
+            );
+            const total = ec.totalLessons > 0 ? ec.totalLessons : 84;
+            if (detailedProgStr) {
+              const progMap = JSON.parse(detailedProgStr) as Record<
+                string,
+                number
+              >;
+              const vals = Object.values(progMap);
+              if (vals.length > 0) {
+                const sum = vals.reduce((a, b) => a + b, 0);
+                const calc = Math.min(100, Math.round(sum / total));
+                progressMap.set(ec.courseId, calc);
+                if (ec.courseSlug) progressMap.set(ec.courseSlug, calc);
+                continue;
+              }
+            }
+            const lastLessonStr = localStorage.getItem(
+              `veolms-last-lesson-${courseKey}`,
+            );
+            if (lastLessonStr) {
+              const lessonNum = parseInt(lastLessonStr, 10);
+              if (!isNaN(lessonNum) && lessonNum > 0) {
+                const calc = Math.min(
+                  100,
+                  Math.round((lessonNum / total) * 100),
+                );
+                progressMap.set(ec.courseId, calc);
+                if (ec.courseSlug) progressMap.set(ec.courseSlug, calc);
+              }
+            }
+          } catch {
+            // Ignore storage errors
+          }
+        }
+      }
+      return (publishedCoursesData?.courses || []).map((summary) =>
+        adaptCourseSummaryToCatalogueCourse(summary, enrolledSet, progressMap),
       );
     }
     if (enrollmentFilter === "bin") {
@@ -1638,6 +1692,7 @@ export function CoursesPage({
     deletedCoursesData?.courses,
     effectiveRole,
     enrollmentFilter,
+    enrolledCoursesData,
     myCoursesData?.courses,
     publishedCoursesData?.courses,
   ]);
@@ -4103,9 +4158,7 @@ export function CoursesPage({
                   <ShellProfileAvatar avatarUrl={shellProfileAvatarUrl} />
                   <span>
                     <strong>{shellProfileDisplayName}</strong>
-                    <small>
-                      {getRoleDisplayName(role, userRoles)}
-                    </small>
+                    <small>{getRoleDisplayName(role, userRoles)}</small>
                   </span>
                   <CaretDown size={17} aria-hidden="true" />
                 </button>
