@@ -45,6 +45,7 @@ interface EntityLikeState {
   serverId?: string;
   serverBaseline: boolean;
   desiredState: boolean;
+  intentRevision: number;
   inFlightState: boolean | null;
   abortController: AbortController | null;
   lessonContext?: { courseId: string; lessonId: string };
@@ -94,6 +95,7 @@ interface ThreadBooleanState {
   serverId?: string;
   serverBaseline: boolean;
   desiredState: boolean;
+  intentRevision: number;
   inFlightState: boolean | null;
   abortController: AbortController | null;
   lessonContext?: { courseId: string; lessonId: string };
@@ -349,6 +351,7 @@ export class DesiredStateCoordinator {
         serverId: pendingTarget ? undefined : targetId,
         serverBaseline: baseline,
         desiredState: desiredLiked,
+        intentRevision: 1,
         inFlightState: null,
         abortController: null,
         lessonContext,
@@ -360,6 +363,7 @@ export class DesiredStateCoordinator {
       this.entries.set(key, state);
     } else {
       state.desiredState = desiredLiked;
+      state.intentRevision += 1;
       state.queryClient = activeClient;
       if (lessonContext) state.lessonContext = lessonContext;
       if (threadId) state.threadId = threadId;
@@ -441,6 +445,7 @@ export class DesiredStateCoordinator {
     if (state.desiredState === state.serverBaseline) return;
 
     const targetState = state.desiredState;
+    const requestRevision = state.intentRevision;
     state.inFlightState = targetState;
 
     const controller = new AbortController();
@@ -472,9 +477,26 @@ export class DesiredStateCoordinator {
         state.abortController = null;
         state.inFlightState = null;
 
+        const hasNewerIntent = state.intentRevision !== requestRevision;
+        if (hasNewerIntent) {
+          // The failed request did not change the server baseline. Keep the
+          // latest optimistic intent and continue from that baseline.
+          this.applyLikeCacheUpdate(
+            state.targetType,
+            state.targetId,
+            state.desiredState,
+            state.queryClient,
+            state.lessonContext,
+            state.threadId,
+          );
+          if (state.desiredState !== state.serverBaseline) {
+            this.processLikeConvergence(state, capturedGen);
+          }
+          return;
+        }
+
         const rollbackLiked = state.serverBaseline;
         state.desiredState = rollbackLiked;
-
         this.applyLikeCacheUpdate(
           state.targetType,
           state.targetId,
@@ -607,6 +629,7 @@ export class DesiredStateCoordinator {
         serverId: pendingTarget ? undefined : threadId,
         serverBaseline: baseline,
         desiredState,
+        intentRevision: 1,
         inFlightState: null,
         abortController: null,
         lessonContext,
@@ -617,6 +640,7 @@ export class DesiredStateCoordinator {
       this.booleanEntries.set(key, state);
     } else {
       state.desiredState = desiredState;
+      state.intentRevision += 1;
       state.queryClient = activeClient;
       if (lessonContext) state.lessonContext = lessonContext;
       if (onFailure) state.onFailure = onFailure;
@@ -687,6 +711,7 @@ export class DesiredStateCoordinator {
     if (state.desiredState === state.serverBaseline) return;
 
     const targetState = state.desiredState;
+    const requestRevision = state.intentRevision;
     state.inFlightState = targetState;
 
     const controller = new AbortController();
@@ -756,10 +781,30 @@ export class DesiredStateCoordinator {
         state.abortController = null;
         state.inFlightState = null;
 
-        // Roll back desired state to the last known server baseline
+        const hasNewerIntent = state.intentRevision !== requestRevision;
+        const isRevisionAwareTarget =
+          state.targetType === "bookmark" || state.targetType === "follow";
+
+        if (isRevisionAwareTarget && hasNewerIntent) {
+          // The failed request did not change the server baseline. Keep the
+          // latest optimistic intent and continue from that baseline.
+          this.applyBooleanCacheUpdate(
+            state.targetType,
+            state.threadId,
+            state.desiredState,
+            state.queryClient,
+            state.lessonContext,
+          );
+          if (state.desiredState !== state.serverBaseline) {
+            this.processBooleanConvergence(state, capturedGen);
+          }
+          return;
+        }
+
+        // Roll back desired state to the last known server baseline. Lock
+        // retains its existing failure semantics in this phase.
         const rollbackValue = state.serverBaseline;
         state.desiredState = rollbackValue;
-
         this.applyBooleanCacheUpdate(
           state.targetType,
           state.threadId,

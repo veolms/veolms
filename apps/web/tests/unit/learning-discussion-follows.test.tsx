@@ -660,7 +660,7 @@ describe("Learning Space Thread Follow Functionality", () => {
     ).toBeInTheDocument();
   });
 
-  it("12. preserves previous state and displays notice if mutation fails", async () => {
+  it("12. preserves previous state silently if mutation fails", async () => {
     mockInteractions.desiredStateCoordinator.setFollowed.mockImplementation(
       ({ onFailure }: any) => {
         onFailure?.(new Error("Network connection lost"));
@@ -700,9 +700,7 @@ describe("Learning Space Thread Follow Functionality", () => {
       expect(screen.queryByTestId("thread-following-badge")).not.toBeInTheDocument();
     });
 
-    // Error notice is displayed to user
-    await waitFor(() => {
-      expect(screen.getByText("Network connection lost")).toBeInTheDocument();
-    });
+    // Low-importance interaction failures are silent.
+    expect(screen.queryByText("Network connection lost")).not.toBeInTheDocument();
   });
 });

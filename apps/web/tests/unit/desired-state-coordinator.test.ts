@@ -426,6 +426,107 @@ describe("DesiredStateCoordinator & Cache Updaters", () => {
       expect(cached?.threads[0]?.likesCount).toBe(0);
       expect(onFailure).toHaveBeenCalled();
     });
+
+    it("preserves the latest like intent when an older request fails", async () => {
+      let rejectFirstRequest: (error: Error) => void = () => undefined;
+      toggleLikeSpy.mockReset();
+      toggleLikeSpy
+        .mockImplementationOnce(
+          () =>
+            new Promise((_resolve, reject) => {
+              rejectFirstRequest = reject;
+            }),
+        )
+        .mockResolvedValueOnce({ liked: true, likesCount: 1 });
+
+      const threadKey = [
+        ...learningInteractionKeys.all,
+        "lesson-threads",
+        "c1",
+        "l1",
+      ];
+      queryClient.setQueryData<LearningThreadsListResponse>(threadKey, {
+        threads: [{ id: "thread-1", isLiked: false, likesCount: 0 } as any],
+        nextCursor: null,
+      });
+
+      coordinator.setLiked({
+        targetType: "thread",
+        targetId: "thread-1",
+        desiredLiked: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 0,
+      });
+      await Promise.resolve();
+
+      coordinator.setLiked({
+        targetType: "thread",
+        targetId: "thread-1",
+        desiredLiked: false,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 0,
+      });
+      coordinator.setLiked({
+        targetType: "thread",
+        targetId: "thread-1",
+        desiredLiked: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 0,
+      });
+
+      rejectFirstRequest(new Error("first request failed"));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(toggleLikeSpy).toHaveBeenCalledTimes(2);
+      expect(coordinator.getState("thread", "thread-1")?.desiredState).toBe(
+        true,
+      );
+      expect(
+        queryClient.getQueryData<LearningThreadsListResponse>(threadKey)
+          ?.threads[0]?.isLiked,
+      ).toBe(true);
+    });
+
+    it("does not dispatch a compensating like when a newer intent returns to baseline", async () => {
+      let rejectFirstRequest: (error: Error) => void = () => undefined;
+      toggleLikeSpy.mockReset();
+      toggleLikeSpy.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectFirstRequest = reject;
+          }),
+      );
+
+      coordinator.setLiked({
+        targetType: "thread",
+        targetId: "thread-1",
+        desiredLiked: true,
+        currentBaseline: false,
+        debounceMs: 0,
+      });
+      await Promise.resolve();
+      coordinator.setLiked({
+        targetType: "thread",
+        targetId: "thread-1",
+        desiredLiked: false,
+        currentBaseline: false,
+        debounceMs: 0,
+      });
+
+      rejectFirstRequest(new Error("first request failed"));
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(toggleLikeSpy).toHaveBeenCalledTimes(1);
+      expect(coordinator.getState("thread", "thread-1")?.desiredState).toBe(
+        false,
+      );
+    });
   });
 
   describe("4. Auth Reset & Late Response Protection", () => {
@@ -654,6 +755,51 @@ describe("DesiredStateCoordinator & Cache Updaters", () => {
       ).toBe(false);
       expect(failureReported).toBe(true);
     });
+
+    it("preserves the latest bookmark intent when an older request fails", async () => {
+      let rejectFirstRequest: (error: Error) => void = () => undefined;
+      const toggleBookmarkSpy = vi
+        .spyOn(learningInteractionsService, "toggleBookmark")
+        .mockReset()
+        .mockImplementationOnce(
+          () =>
+            new Promise((_resolve, reject) => {
+              rejectFirstRequest = reject;
+            }),
+        )
+        .mockResolvedValueOnce({ threadId: "thread-1", bookmarked: true });
+
+      coordinator.setBookmarked({
+        threadId: "thread-1",
+        desiredBookmarked: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 0,
+      });
+      await Promise.resolve();
+      coordinator.setBookmarked({
+        threadId: "thread-1",
+        desiredBookmarked: false,
+        currentBaseline: false,
+        debounceMs: 0,
+      });
+      coordinator.setBookmarked({
+        threadId: "thread-1",
+        desiredBookmarked: true,
+        currentBaseline: false,
+        debounceMs: 0,
+      });
+
+      rejectFirstRequest(new Error("first request failed"));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(toggleBookmarkSpy).toHaveBeenCalledTimes(2);
+      expect(coordinator.getBookmarkState("thread-1")?.desiredState).toBe(
+        true,
+      );
+    });
   });
 
   describe("7. Optimistic Follow Convergence", () => {
@@ -729,6 +875,49 @@ describe("DesiredStateCoordinator & Cache Updaters", () => {
       expect(
         queryClient.getQueryData<LearningThreadsListResponse>(threadKey)?.threads[0]?.isFollowing,
       ).toBe(false);
+    });
+
+    it("preserves the latest follow intent when an older request fails", async () => {
+      let rejectFirstRequest: (error: Error) => void = () => undefined;
+      const toggleFollowSpy = vi
+        .spyOn(learningInteractionsService, "toggleFollow")
+        .mockReset()
+        .mockImplementationOnce(
+          () =>
+            new Promise((_resolve, reject) => {
+              rejectFirstRequest = reject;
+            }),
+        )
+        .mockResolvedValueOnce({ threadId: "thread-1", following: true });
+
+      coordinator.setFollowed({
+        threadId: "thread-1",
+        desiredFollowed: true,
+        currentBaseline: false,
+        lessonContext: { courseId: "c1", lessonId: "l1" },
+        debounceMs: 0,
+      });
+      await Promise.resolve();
+      coordinator.setFollowed({
+        threadId: "thread-1",
+        desiredFollowed: false,
+        currentBaseline: false,
+        debounceMs: 0,
+      });
+      coordinator.setFollowed({
+        threadId: "thread-1",
+        desiredFollowed: true,
+        currentBaseline: false,
+        debounceMs: 0,
+      });
+
+      rejectFirstRequest(new Error("first request failed"));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(toggleFollowSpy).toHaveBeenCalledTimes(2);
+      expect(coordinator.getFollowState("thread-1")?.desiredState).toBe(true);
     });
   });
 

@@ -16,6 +16,7 @@ import {
   DrawerTitle,
 } from "../components/ui/drawer";
 import { ThemedSelect } from "../ThemedSelect";
+import { ToastNotification, type ToastMessage } from "../ToastNotification";
 import { CommentCard } from "./CommentCard";
 import type { Comment, CommentReply } from "./CommentCard";
 import { CommentComposer } from "./CommentComposer";
@@ -586,6 +587,9 @@ function DiscussionInner({
   );
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  const [creationToast, setCreationToast] = useState<ToastMessage | null>(
+    null,
+  );
   const activeDraft = editingEntry?.draft ?? draft;
   const activeEntryKind = editingEntry?.entryKind ?? entryKind;
   const activeVisibility = editingEntry?.visibility ?? visibility;
@@ -890,7 +894,13 @@ function DiscussionInner({
         setNotice("");
         return true;
       } catch (error) {
-        setNotice("Failed to post discussion entry. Please try again.");
+        setCreationToast({
+          message:
+            activeEntryKind === "question"
+              ? "Couldn't post your question. Please try again."
+              : "Couldn't post your comment. Please try again.",
+          type: "error",
+        });
         return false;
       }
     }
@@ -1245,9 +1255,6 @@ function DiscussionInner({
         lessonContext:
           courseId && lessonId ? { courseId, lessonId } : undefined,
         queryClient: queryClient ?? undefined,
-        onFailure: (err: any) => {
-          setNotice(err?.message || "Failed to update bookmark status.");
-        },
       });
       return bookmarked;
     } else {
@@ -1287,9 +1294,6 @@ function DiscussionInner({
         lessonContext:
           courseId && lessonId ? { courseId, lessonId } : undefined,
         queryClient: queryClient ?? undefined,
-        onFailure: (err: any) => {
-          setNotice(err?.message || "Failed to update follow status.");
-        },
       });
       return following;
     } else {
@@ -1381,6 +1385,11 @@ function DiscussionInner({
 
   return (
     <section className="learning-discussion" aria-label="Lesson discussion">
+      <ToastNotification
+        message={creationToast}
+        type="error"
+        onDismiss={() => setCreationToast(null)}
+      />
       <ThreadSurface
         lessonDescription={lessonDescription}
         isLessonDescriptionLoading={isLessonDescriptionLoading}

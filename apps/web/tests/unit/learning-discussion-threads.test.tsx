@@ -436,6 +436,48 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
     await act(async () => resolveRequest({}));
   });
 
+  it("shows a question-specific toast when Q&A creation fails", async () => {
+    createThreadMutateAsync.mockRejectedValueOnce(new Error("create failed"));
+    sessionStorage.setItem(
+      "veolms-learning-test-phase3b-create-qa-failure-discussion-markdown-draft-v1",
+      JSON.stringify({
+        format: "markdown",
+        markdown: "Question that fails",
+        plainText: "Question that fails",
+      }),
+    );
+
+    render(
+      <Discussion
+        persistenceKey="test-phase3b-create-qa-failure"
+        courseId="course-1"
+        lessonId="lesson-1"
+        interactionCapabilities={{
+          allowComments: false,
+          allowNotes: false,
+          allowQa: true,
+        }}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Open discussion composer" })[0]!,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Next: choose publishing options" }),
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Post Q&A" }));
+    });
+
+    expect(
+      await screen.findByText("Couldn't post your question. Please try again."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open discussion composer" }),
+    ).toBeInTheDocument();
+  });
+
   it("clears immediately and preserves newer composer input when creation fails", async () => {
     let rejectRequest: (error: Error) => void = () => undefined;
     createThreadMutateAsync.mockImplementation(
@@ -493,9 +535,9 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
 
     rejectRequest(new Error("create failed"));
     await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent(
-        "Failed to post discussion entry.",
-      ),
+      expect(
+        screen.getByText("Couldn't post your comment. Please try again."),
+      ).toBeInTheDocument(),
     );
     expect(EditorView.findFromDOM(editor)?.state.doc.toString()).toBe(
       "Newer composer input",
@@ -722,9 +764,9 @@ describe("Learning Discussion Threads (Phase 1 Integration)", () => {
     await act(async () => requests[0]?.resolve({}));
     await act(async () => requests[1]?.reject(new Error("B failed")));
     await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent(
-        "Failed to post discussion entry.",
-      ),
+      expect(
+        screen.getByText("Couldn't post your comment. Please try again."),
+      ).toBeInTheDocument(),
     );
     expect(
       screen.getByRole("button", { name: "Open discussion composer" }),

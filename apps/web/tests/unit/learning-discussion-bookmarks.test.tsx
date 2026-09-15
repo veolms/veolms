@@ -662,4 +662,31 @@ describe("Learning Space Thread Bookmark Functionality", () => {
       ).toBeInTheDocument();
     });
   });
+
+  it("keeps bookmark failure silent", async () => {
+    mockInteractions.desiredStateCoordinator.setBookmarked.mockImplementation(
+      ({ onFailure }: any) => {
+        onFailure?.(new Error("Network connection lost"));
+      },
+    );
+
+    render(
+      <Discussion
+        persistenceKey="test-bookmark-error-silent"
+        courseId="course-1"
+        lessonId="lesson-1"
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "More actions for Ashi Author",
+      }),
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitem", { name: "Bookmark" }));
+    });
+
+    expect(screen.queryByText("Network connection lost")).not.toBeInTheDocument();
+  });
 });
