@@ -2778,9 +2778,11 @@ export function CourseCreatePage({
   const [thumbnailMediaId, setThumbnailMediaId] = useState<
     string | null | undefined
   >(undefined);
+  // The upload state is kept for concurrency, rollback, and server-refresh
+  // protection. The selected file is shown immediately, so upload progress is
+  // intentionally not rendered in the course editor.
   const [thumbnailUploadStatus, setThumbnailUploadStatus] =
     useState<ThumbnailUploadStatus>("idle");
-  const [thumbnailUploadProgress, setThumbnailUploadProgress] = useState(0);
   const [thumbnailUploadError, setThumbnailUploadError] = useState<
     string | null
   >(null);
@@ -2858,7 +2860,6 @@ export function CourseCreatePage({
     thumbnailDirtyRef.current = true;
     setThumbnail(imageUrl);
     setThumbnailUploadError(null);
-    setThumbnailUploadProgress(0);
     setThumbnailUploadStatus("uploading");
 
     const requestIsActive = () =>
@@ -2898,9 +2899,7 @@ export function CourseCreatePage({
       await mediaService.uploadFileToPresignedUrl(
         presigned.uploadUrl,
         file,
-        ({ percent }) => {
-          if (requestIsActive()) setThumbnailUploadProgress(percent);
-        },
+        undefined,
         uploadAbortController.signal,
       );
 
@@ -2935,7 +2934,6 @@ export function CourseCreatePage({
       setThumbnailMediaId(presigned.mediaAssetId);
       setThumbnail(processedThumbnailUrl);
       thumbnailDirtyRef.current = false;
-      setThumbnailUploadProgress(100);
       setThumbnailUploadStatus("idle");
       setThumbnailUploadError(null);
 
@@ -9437,21 +9435,6 @@ export function CourseCreatePage({
                           </p>
                         </div>
                       )}
-                      {thumbnailUploadStatus !== "idle" &&
-                      thumbnailUploadStatus !== "error" ? (
-                        <p
-                          className="m-0 mt-2 text-(--accent) text-[0.75rem]"
-                          aria-live="polite"
-                        >
-                          {thumbnailUploadStatus === "uploading"
-                            ? `Uploading thumbnail… ${thumbnailUploadProgress}%`
-                            : thumbnailUploadStatus === "confirming"
-                              ? "Confirming thumbnail upload…"
-                              : thumbnailUploadStatus === "processing"
-                                ? "Processing thumbnail…"
-                              : "Saving thumbnail to this course…"}
-                        </p>
-                      ) : null}
                       {thumbnailUploadError ? (
                         <p
                           className="m-0 mt-2 text-red-400 text-[0.75rem]"
