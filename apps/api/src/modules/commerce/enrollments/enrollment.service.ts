@@ -21,11 +21,6 @@ export function createEnrollmentService({
     const rows = await database
       .selectFrom("enrollments as e")
       .innerJoin("courses as c", "c.id", "e.course_id")
-      .leftJoin("learning_space_sessions as lss", (join) =>
-        join
-          .onRef("lss.course_id", "=", "c.id")
-          .onRef("lss.user_id", "=", "e.user_id"),
-      )
       .select([
         "e.id as enrollment_id",
         "c.id as course_id",
@@ -36,9 +31,44 @@ export function createEnrollmentService({
         "e.status as enrollment_status",
         "e.source as enrollment_source",
         "e.access_expires_at",
-        "lss.lesson_number",
-        "lss.updated_at as last_accessed_at",
       ])
+      // Aggregate durable learner progress for the published lessons in this
+      // course. The old learning_space_sessions table was removed when
+      // progress moved to learning_progress.
+      .select((eb) =>
+        eb
+          .selectFrom("course_lessons as progress_lesson")
+          .leftJoin("learning_progress as lp", (join) =>
+            join
+              .onRef("lp.lesson_id", "=", "progress_lesson.id")
+              .onRef("lp.course_id", "=", "progress_lesson.course_id")
+              .on("lp.user_id", "=", userId),
+          )
+          .select(
+            sql<number>`coalesce(avg(coalesce(lp.progress_percent, 0)), 0)`.as(
+              "progress_percent",
+            ),
+          )
+          .whereRef("progress_lesson.course_id", "=", "c.id")
+          .where("progress_lesson.is_published", "=", true)
+          .where("progress_lesson.deleted_at", "is", null)
+          .as("progress_percent"),
+      )
+      .select((eb) =>
+        eb
+          .selectFrom("learning_progress as lp")
+          .innerJoin(
+            "course_lessons as progress_lesson",
+            "progress_lesson.id",
+            "lp.lesson_id",
+          )
+          .select((sub) => sub.fn.max("lp.updated_at").as("last_accessed_at"))
+          .whereRef("lp.course_id", "=", "c.id")
+          .where("lp.user_id", "=", userId)
+          .where("progress_lesson.is_published", "=", true)
+          .where("progress_lesson.deleted_at", "is", null)
+          .as("last_accessed_at"),
+      )
       // Subquery counts for sections
       .select((eb) =>
         eb
@@ -112,7 +142,7 @@ export function createEnrollmentService({
         enrollment_status: row.enrollment_status,
         enrollment_source: row.enrollment_source,
         access_expires_at: row.access_expires_at,
-        lesson_number: row.lesson_number,
+        progress_percent: row.progress_percent,
         last_accessed_at: row.last_accessed_at,
       }),
     );

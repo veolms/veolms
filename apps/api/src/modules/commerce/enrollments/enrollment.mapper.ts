@@ -14,7 +14,7 @@ interface EnrolledCourseRow {
   enrollment_status: string;
   enrollment_source: string;
   access_expires_at: Date | null;
-  lesson_number?: number | null;
+  progress_percent?: number | string | null;
   last_accessed_at?: Date | null;
 }
 
@@ -22,13 +22,11 @@ export function toEnrolledCourseContract(
   row: EnrolledCourseRow,
 ): EnrolledCourse {
   const totalLessons = Number(row.total_lessons) || 0;
-  let progress: number | null = null;
-  if (row.lesson_number != null && row.lesson_number > 0) {
-    const total = totalLessons > 0 ? totalLessons : 84;
-    progress = Math.min(100, Math.max(1, Math.round((row.lesson_number / total) * 100)));
-  } else {
-    progress = 0;
-  }
+  const progressValue = Number(row.progress_percent);
+  const progress =
+    row.progress_percent == null || !Number.isFinite(progressValue)
+      ? 0
+      : Math.min(100, Math.max(0, Math.round(progressValue)));
 
   return {
     enrollmentId: row.enrollment_id,
