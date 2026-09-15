@@ -652,10 +652,10 @@ export function LearningWorkspace({
   );
 
   useEffect(() => {
-    if (initialLessonView && initialLessonView !== activeLessonView) {
-      setActiveLessonView(initialLessonView);
-    }
-  }, [activeLessonView, initialLessonView]);
+    setActiveLessonView((currentView) =>
+      currentView === initialLessonView ? currentView : initialLessonView,
+    );
+  }, [initialLessonView]);
 
   const getLessonUuid = useCallback(
     (lessonNumber: number): string | undefined => {
