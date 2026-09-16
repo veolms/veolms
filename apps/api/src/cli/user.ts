@@ -121,14 +121,10 @@ async function main() {
         isAdministrator
           ? eb.or([
               eb("name", "=", ADMIN_ROLE),
-              eb("name", "=", "Administrator"),
-              eb("role_key", "=", ADMIN_ROLE),
               eb("id", "=", "00000000-0000-4000-8000-000000000000"),
             ])
           : eb.or([
               eb("name", "=", INSTRUCTOR_ROLE),
-              eb("name", "=", "Instructor"),
-              eb("role_key", "=", INSTRUCTOR_ROLE),
               eb("id", "=", "00000000-0000-4000-8000-000000000001"),
             ]),
       )
@@ -148,7 +144,6 @@ async function main() {
         .values({
           id: defaultRoleId,
           name: defaultRoleName,
-          role_key: defaultRoleName,
           description: defaultRoleDescription,
           is_system: true,
         })

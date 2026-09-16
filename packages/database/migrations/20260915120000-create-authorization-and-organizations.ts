@@ -40,15 +40,15 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     )
     .execute();
 
-  // 4. Extend roles table
+  // 4. Extend roles table (ensure is_system exists and drop role_key if present)
   await sql`
     DO $$
     BEGIN
-      IF NOT EXISTS (
+      IF EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_name = 'roles' AND column_name = 'role_key'
       ) THEN
-        ALTER TABLE roles ADD COLUMN role_key TEXT;
+        ALTER TABLE roles DROP COLUMN role_key;
       END IF;
 
       IF NOT EXISTS (
