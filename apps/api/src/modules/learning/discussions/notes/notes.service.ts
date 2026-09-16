@@ -24,6 +24,7 @@ import {
   type DiscussionActor,
 } from "../shared/discussion.access.ts";
 import { withWriteTransaction } from "../shared/discussion.mentions.ts";
+import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import type { NoteRow, NotesRepository } from "./notes.repository.ts";
 
 interface NoteAttachmentItem {
@@ -160,6 +161,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
         fileUrl: a.file_url,
         mimeType: a.mime_type,
         fileSize: Number(a.file_size || 0),
+        ...getAttachmentDimensionFields(a.metadata),
         metadata: a.metadata
           ? typeof a.metadata === "string"
             ? JSON.parse(a.metadata)

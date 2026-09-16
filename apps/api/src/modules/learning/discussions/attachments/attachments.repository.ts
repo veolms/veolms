@@ -5,6 +5,7 @@ import type {
   AttachmentTargetType,
   LearningAttachment,
 } from "@veolms/contracts";
+import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 
 export interface AttachmentsRepository {
   createAttachment(
@@ -89,6 +90,7 @@ export function createAttachmentsRepository(): AttachmentsRepository {
         mimeType: row.mime_type,
         fileSize: row.file_size,
         status: row.status as AttachmentStatus,
+        ...getAttachmentDimensionFields(row.metadata),
         metadata:
           typeof row.metadata === "string"
             ? JSON.parse(row.metadata)
@@ -122,6 +124,7 @@ export function createAttachmentsRepository(): AttachmentsRepository {
         mimeType: row.mime_type,
         fileSize: row.file_size,
         status: row.status as AttachmentStatus,
+        ...getAttachmentDimensionFields(row.metadata),
         metadata:
           typeof row.metadata === "string"
             ? JSON.parse(row.metadata)

@@ -8,6 +8,7 @@ import {
   type DiscussionAttachmentItem,
   formatFileSize,
   getAttachmentCategory,
+  getAttachmentAspectRatioStyle,
   getAttachmentVisualUrl,
 } from "./types";
 
@@ -85,6 +86,7 @@ export function DiscussionAttachmentsList({
                       setViewerAttachment(attachment);
                     }}
                     className="relative flex max-h-80 max-w-md cursor-zoom-in items-center justify-center overflow-hidden bg-black/5 disabled:cursor-default dark:bg-white/5"
+                    style={getAttachmentAspectRatioStyle(attachment)}
                     aria-label={`View image ${attachment.fileName}`}
                   >
                     {visualUrl ? (
@@ -110,7 +112,10 @@ export function DiscussionAttachmentsList({
                   data-attachment-type="video"
                   className="relative flex w-full max-w-md flex-col overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] shadow-xs"
                 >
-                  <div className="relative flex max-h-80 w-full items-center justify-center bg-black">
+                  <div
+                    className="relative flex max-h-80 w-full items-center justify-center bg-black"
+                    style={getAttachmentAspectRatioStyle(attachment)}
+                  >
                     {visualUrl ? (
                       <video
                         src={visualUrl}

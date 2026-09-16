@@ -1,5 +1,33 @@
 import { z } from "zod";
 
+export const MAX_DISCUSSION_ATTACHMENT_DIMENSION = 16_384;
+
+const optionalAttachmentDimensionSchema = z
+  .number()
+  .int()
+  .positive()
+  .max(MAX_DISCUSSION_ATTACHMENT_DIMENSION)
+  .nullable()
+  .optional();
+
+export const attachmentDimensionsSchema = z
+  .object({
+    width: optionalAttachmentDimensionSchema,
+    height: optionalAttachmentDimensionSchema,
+  })
+  .superRefine((value, context) => {
+    const hasWidth = value.width !== undefined && value.width !== null;
+    const hasHeight = value.height !== undefined && value.height !== null;
+    if (hasWidth !== hasHeight) {
+      context.addIssue({
+        code: "custom",
+        message: "Width and height must be supplied together.",
+        path: [hasWidth ? "height" : "width"],
+      });
+    }
+  });
+export type AttachmentDimensions = z.infer<typeof attachmentDimensionsSchema>;
+
 export const attachmentKindSchema = z.enum([
   "image",
   "screenshot",
@@ -31,17 +59,34 @@ export const learningAttachmentSchema = z.object({
   mimeType: z.string().min(1),
   fileSize: z.number().int().nonnegative(),
   status: attachmentStatusSchema,
+  width: optionalAttachmentDimensionSchema,
+  height: optionalAttachmentDimensionSchema,
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.string(),
 });
 export type LearningAttachment = z.infer<typeof learningAttachmentSchema>;
 
-export const initiateAttachmentUploadRequestSchema = z.object({
-  fileName: z.string().min(1).max(255),
-  mimeType: z.string().min(1).max(120),
-  fileSize: z.number().int().positive().max(50_000_000),
-  kind: attachmentKindSchema.optional(),
-});
+export const initiateAttachmentUploadRequestSchema = z
+  .object({
+    fileName: z.string().min(1).max(255),
+    mimeType: z.string().min(1).max(120),
+    fileSize: z.number().int().positive().max(50_000_000),
+    kind: attachmentKindSchema.optional(),
+    width: optionalAttachmentDimensionSchema,
+    height: optionalAttachmentDimensionSchema,
+  })
+  .superRefine((value, context) => {
+    const result = attachmentDimensionsSchema.safeParse(value);
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        context.addIssue({
+          code: "custom",
+          message: issue.message,
+          path: issue.path,
+        });
+      }
+    }
+  });
 export type InitiateAttachmentUploadRequest = z.infer<
   typeof initiateAttachmentUploadRequestSchema
 >;
@@ -75,6 +120,8 @@ export const learningUploadResponseSchema = z.object({
   mimeType: z.string().min(1),
   size: z.number().int().nonnegative(),
   status: attachmentStatusSchema,
+  width: optionalAttachmentDimensionSchema,
+  height: optionalAttachmentDimensionSchema,
 });
 export type LearningUploadResponse = z.infer<
   typeof learningUploadResponseSchema

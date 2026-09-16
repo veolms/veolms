@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import type { DatabaseExecutor } from "@veolms/database";
+import { attachmentDimensionsSchema } from "@veolms/contracts";
 import type {
   AttachmentKind,
   InitiateAttachmentUploadRequest,
@@ -18,6 +19,7 @@ import {
   type DiscussionUploadStore,
 } from "../../../discussion-uploads/index.ts";
 import { DISCUSSION_CONSTANTS } from "../shared/discussion.constants.ts";
+import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import type { AttachmentsRepository } from "./attachments.repository.ts";
 
 export interface AttachmentsService {
@@ -35,6 +37,8 @@ export interface AttachmentsService {
       filename: string;
       mimetype: string;
       data: Buffer;
+      width?: number;
+      height?: number;
     },
   ): Promise<LearningAttachment>;
 
@@ -51,6 +55,8 @@ export interface AttachmentsService {
       filename: string;
       mimetype: string;
       data: Buffer;
+      width?: number;
+      height?: number;
     },
   ): Promise<LearningUploadResponse>;
 
@@ -102,6 +108,41 @@ export function createAttachmentsService(
     return cleaned.startsWith(".") ? cleaned : ".bin";
   }
 
+  function validateDimensions(
+    mimetype: string,
+    dimensions: { width?: number | null; height?: number | null },
+  ): { width: number; height: number } | undefined {
+    const parsed = attachmentDimensionsSchema.safeParse(dimensions);
+    if (!parsed.success) {
+      throw httpError(
+        400,
+        "INVALID_ATTACHMENT_DIMENSIONS",
+        "Attachment width and height must be positive integer dimensions.",
+      );
+    }
+
+    if (parsed.data.width === undefined || parsed.data.width === null) {
+      return undefined;
+    }
+
+    if (!mimetype.startsWith("image/") && !mimetype.startsWith("video/")) {
+      throw httpError(
+        400,
+        "INVALID_ATTACHMENT_DIMENSIONS",
+        "Dimensions are supported only for image and video attachments.",
+      );
+    }
+
+    return { width: parsed.data.width, height: parsed.data.height! };
+  }
+
+  function mergeDimensions(
+    metadata: Record<string, unknown> | null | undefined,
+    dimensions: { width: number; height: number } | undefined,
+  ): Record<string, unknown> {
+    return { ...(metadata || {}), ...(dimensions || {}) };
+  }
+
   return {
     async initiateUpload(db, userId, input) {
       if (!isSupportedDiscussionUploadMimeType(input.mimeType)) {
@@ -120,6 +161,8 @@ export function createAttachmentsService(
         );
       }
 
+      const dimensions = validateDimensions(input.mimeType, input);
+
       const id = crypto.randomUUID();
       const ext = resolveExtension(input.fileName, input.mimeType);
       const storageKey = `discussion-uploads/${id}${ext}`;
@@ -136,7 +179,10 @@ export function createAttachmentsService(
         mimeType: input.mimeType,
         fileSize: input.fileSize,
         status: "uploading",
-        metadata: { initiatedAt: new Date().toISOString() },
+        metadata: {
+          initiatedAt: new Date().toISOString(),
+          ...dimensions,
+        },
       });
 
       return {
@@ -186,6 +232,16 @@ export function createAttachmentsService(
         );
       }
 
+      const dimensions = validateDimensions(file.mimetype, file);
+      const existingDimensions = getAttachmentDimensionFields(existing.metadata);
+      const persistedDimensions =
+        dimensions ||
+        (existingDimensions.width !== null && existingDimensions.height !== null
+          ? {
+              width: existingDimensions.width,
+              height: existingDimensions.height,
+            }
+          : undefined);
       const ext = resolveExtension(file.filename, file.mimetype);
       const sanitizedName = `${attachmentId}${ext}`;
       await uploadStore.putFromBuffer({
@@ -205,10 +261,15 @@ export function createAttachmentsService(
             mime_type: file.mimetype,
             file_size: file.data.length,
             status: "ready",
-            metadata: JSON.stringify({
-              ...(existing.metadata || {}),
-              uploadedAt: new Date().toISOString(),
-            }),
+            metadata: JSON.stringify(
+              mergeDimensions(
+                {
+                  ...(existing.metadata || {}),
+                  uploadedAt: new Date().toISOString(),
+                },
+                persistedDimensions,
+              ),
+            ),
           })
           .where("id", "=", attachmentId)
           .execute();
@@ -311,6 +372,8 @@ export function createAttachmentsService(
         );
       }
 
+      const dimensions = validateDimensions(file.mimetype, file);
+
       const id = crypto.randomUUID();
       const ext = resolveExtension(file.filename, file.mimetype);
       const sanitizedName = `${id}${ext}`;
@@ -336,7 +399,10 @@ export function createAttachmentsService(
           mimeType: file.mimetype,
           fileSize: file.data.length,
           status: "ready",
-          metadata: { uploadedAt: new Date().toISOString() },
+          metadata: {
+            uploadedAt: new Date().toISOString(),
+            ...dimensions,
+          },
         });
       } catch (error) {
         await uploadStore.remove(sanitizedName);
@@ -353,6 +419,8 @@ export function createAttachmentsService(
         mimeType: file.mimetype,
         size: file.data.length,
         status: "ready",
+        width: dimensions?.width ?? null,
+        height: dimensions?.height ?? null,
       };
     },
 

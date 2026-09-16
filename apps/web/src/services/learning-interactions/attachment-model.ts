@@ -6,6 +6,8 @@ export type AttachmentUploadState =
   | "confirmed"
   | "failed";
 
+const LOCAL_MEDIA_METADATA_TIMEOUT_MS = 250;
+
 export interface LocalComposerAttachment {
   /** Stable UI identity. This is never sent to the API. */
   id: string;
@@ -16,6 +18,8 @@ export interface LocalComposerAttachment {
   kind: LearningThreadAttachmentSummary["kind"];
   mediaType: "image" | "video" | "code" | "document";
   localPreviewUrl?: string;
+  width?: number;
+  height?: number;
 }
 
 /**
@@ -40,6 +44,8 @@ export type InteractionAttachmentPatch = Partial<
     | "mimeType"
     | "fileSize"
     | "kind"
+    | "width"
+    | "height"
     | "uploadState"
     | "uploadProgress"
   >
@@ -53,12 +59,19 @@ export function createClientEntityId(kind: "thread" | "reply" | "note"): string 
   return `client-${kind}-${randomUuid}`;
 }
 
-export function createLocalComposerAttachment(file: File): LocalComposerAttachment {
+export async function createLocalComposerAttachment(
+  file: File,
+): Promise<LocalComposerAttachment> {
   const mediaType = getAttachmentMediaType(file.type, file.name);
   const localPreviewUrl =
     (mediaType === "image" || mediaType === "video") && canCreateObjectUrl()
       ? URL.createObjectURL(file)
       : undefined;
+
+  const dimensions = await readLocalVisualDimensions(
+    mediaType,
+    localPreviewUrl,
+  );
 
   return {
     id: `client-attachment-${
@@ -73,6 +86,7 @@ export function createLocalComposerAttachment(file: File): LocalComposerAttachme
     kind: getAttachmentKind(file.type, file.name),
     mediaType,
     localPreviewUrl,
+    ...dimensions,
   };
 }
 
@@ -107,7 +121,75 @@ export function toInteractionAttachment(
     uploadState: "uploading",
     uploadProgress: 0,
     localPreviewUrl: attachment.localPreviewUrl,
+    width: attachment.width,
+    height: attachment.height,
   };
+}
+
+async function readLocalVisualDimensions(
+  mediaType: LocalComposerAttachment["mediaType"],
+  previewUrl: string | undefined,
+): Promise<{ width?: number; height?: number }> {
+  if (!previewUrl || (mediaType !== "image" && mediaType !== "video")) {
+    return {};
+  }
+
+  if (mediaType === "image" && typeof Image !== "undefined") {
+    return new Promise((resolve) => {
+      const image = new Image();
+      let settled = false;
+      let timeoutId: ReturnType<typeof setTimeout>;
+      const finish = (dimensions: { width?: number; height?: number }) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        image.onload = null;
+        image.onerror = null;
+        resolve(dimensions);
+      };
+      timeoutId = setTimeout(() => finish({}), LOCAL_MEDIA_METADATA_TIMEOUT_MS);
+      image.onload = () => {
+        finish({ width: image.naturalWidth, height: image.naturalHeight });
+      };
+      image.onerror = () => finish({});
+      image.src = previewUrl;
+      if (image.complete) {
+        finish(
+          image.naturalWidth > 0 && image.naturalHeight > 0
+            ? { width: image.naturalWidth, height: image.naturalHeight }
+            : {},
+        );
+      }
+    });
+  }
+
+  if (mediaType === "video" && typeof document !== "undefined") {
+    return new Promise((resolve) => {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      let settled = false;
+      let timeoutId: ReturnType<typeof setTimeout>;
+      const finish = (dimensions: { width?: number; height?: number }) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        video.onloadedmetadata = null;
+        video.onerror = null;
+        resolve(dimensions);
+      };
+      timeoutId = setTimeout(() => finish({}), LOCAL_MEDIA_METADATA_TIMEOUT_MS);
+      video.onloadedmetadata = () => {
+        finish({ width: video.videoWidth, height: video.videoHeight });
+      };
+      video.onerror = () => finish({});
+      video.src = previewUrl;
+      if (video.readyState >= 1) {
+        finish({ width: video.videoWidth, height: video.videoHeight });
+      }
+    });
+  }
+
+  return {};
 }
 
 export function mergeConfirmedInteractionAttachment(

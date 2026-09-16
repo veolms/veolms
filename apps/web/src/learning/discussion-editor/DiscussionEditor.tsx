@@ -91,7 +91,7 @@ export function DiscussionEditor({
           onAttachmentErrorRef.current?.(message);
           return { accepted: false, message };
         }
-        const result = selectDiscussionAttachment(file);
+        const result = await selectDiscussionAttachment(file);
         onAttachmentErrorRef.current?.(result.message);
         if (result.accepted && result.attachment) {
           onAttachmentSelectedRef.current?.(result.attachment);

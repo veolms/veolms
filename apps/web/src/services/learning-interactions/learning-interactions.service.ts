@@ -243,8 +243,10 @@ export const learningInteractionsService = {
   uploadAttachmentFile(
     attachmentId: string,
     file: File,
+    dimensions?: { width?: number; height?: number },
   ): Promise<LearningAttachment> {
     const formData = new FormData();
+    appendDimensions(formData, dimensions);
     formData.append("file", file, file.name);
     return api.post<LearningAttachment>(
       `/attachments/${attachmentId}/upload`,
@@ -261,8 +263,10 @@ export const learningInteractionsService = {
   uploadAttachmentDirect(
     file: File,
     onProgress?: (progress: AttachmentUploadProgress) => void,
+    dimensions?: { width?: number; height?: number },
   ): Promise<LearningUploadResponse> {
     const formData = new FormData();
+    appendDimensions(formData, dimensions);
     formData.append("file", file, file.name);
     return api.post<LearningUploadResponse>("/attachments/upload", formData, {
       onUploadProgress: (event) =>
@@ -396,3 +400,13 @@ export const learningInteractionsService = {
     );
   },
 };
+
+function appendDimensions(
+  formData: FormData,
+  dimensions?: { width?: number; height?: number },
+): void {
+  if (dimensions?.width !== undefined && dimensions.height !== undefined) {
+    formData.append("width", String(dimensions.width));
+    formData.append("height", String(dimensions.height));
+  }
+}

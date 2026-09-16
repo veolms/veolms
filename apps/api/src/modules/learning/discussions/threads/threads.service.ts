@@ -31,6 +31,7 @@ import {
   type DiscussionAccess,
   type DiscussionActor,
 } from "../shared/discussion.access.ts";
+import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import type {
   ThreadsRepository,
   ThreadRowWithAuthor,
@@ -159,6 +160,7 @@ export function createThreadsService(
         fileUrl: a.file_url,
         mimeType: a.mime_type,
         fileSize: Number(a.file_size || 0),
+        ...getAttachmentDimensionFields(a.metadata),
         metadata: a.metadata
           ? typeof a.metadata === "string"
             ? JSON.parse(a.metadata)

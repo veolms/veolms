@@ -28,6 +28,7 @@ export async function uploadInteractionAttachments(
               : {}),
           });
         },
+        { width: attachment.width, height: attachment.height },
       );
       onAttachmentChange(attachment.id, {
         serverId: uploaded.id,
@@ -36,6 +37,8 @@ export async function uploadInteractionAttachments(
         mimeType: uploaded.mimeType,
         fileSize: uploaded.size,
         kind: uploaded.kind,
+        width: uploaded.width ?? null,
+        height: uploaded.height ?? null,
         uploadState: "confirmed",
         uploadProgress: 1,
       });

@@ -1,7 +1,7 @@
 import {
   createLocalComposerAttachment,
   type LocalComposerAttachment,
-} from "../../services/learning-interactions";
+} from "../../services/learning-interactions/attachment-model";
 
 const MAX_ATTACHMENT_BYTES = 50_000_000;
 
@@ -69,16 +69,16 @@ export function getClipboardMediaFiles(
   return Array.from(clipboardData.files);
 }
 
-export function selectDiscussionAttachment(
+export async function selectDiscussionAttachment(
   file: File,
-): DiscussionAttachmentResult {
+): Promise<DiscussionAttachmentResult> {
   const validationMessage = validateAttachment(file);
   if (validationMessage) return { accepted: false, message: validationMessage };
 
   return {
     accepted: true,
     message: null,
-    attachment: createLocalComposerAttachment(file),
+    attachment: await createLocalComposerAttachment(file),
   };
 }
 

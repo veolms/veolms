@@ -13,6 +13,8 @@ export interface DiscussionAttachmentItem {
   mediaType?: "image" | "video" | "code" | "document";
   uploadState?: AttachmentUploadState;
   uploadProgress?: number;
+  width?: number | null;
+  height?: number | null;
   metadata?: unknown;
 }
 
@@ -29,7 +31,23 @@ export type AttachmentVisualItem = Pick<
   | "mediaType"
   | "uploadState"
   | "uploadProgress"
+  | "width"
+  | "height"
 >;
+
+export function getAttachmentAspectRatioStyle(
+  attachment: Pick<DiscussionAttachmentItem, "width" | "height">,
+): { aspectRatio: string } | undefined {
+  if (
+    !attachment.width ||
+    !attachment.height ||
+    !Number.isInteger(attachment.width) ||
+    !Number.isInteger(attachment.height)
+  ) {
+    return undefined;
+  }
+  return { aspectRatio: `${attachment.width} / ${attachment.height}` };
+}
 
 export function formatFileSize(bytes: number): string {
   if (!bytes || bytes <= 0) return "0 B";

@@ -13,6 +13,8 @@ import { createDiscussionEditorCommands } from "../../src/learning/discussion-ed
 import { createDiscussionDraft } from "../../src/learning/discussion-editor/types.ts";
 import { revokeLocalAttachmentPreview } from "../../src/services/learning-interactions/attachment-model.ts";
 import { learningInteractionsService } from "../../src/services/learning-interactions/learning-interactions.service.ts";
+import { api } from "../../src/lib/api-client.ts";
+import { initiateAttachmentUploadRequestSchema } from "@veolms/contracts";
 
 describe("discussion Markdown editor commands", () => {
   it.each([
@@ -310,17 +312,62 @@ interface Course {
 });
 
 describe("local discussion attachment selection", () => {
-  it("keeps an image local without changing editor content", () => {
+  it("allows visual uploads without dimensions", () => {
+    expect(
+      initiateAttachmentUploadRequestSchema.safeParse({
+        fileName: "diagram.png",
+        mimeType: "image/png",
+        fileSize: 100,
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each([
+    { width: 1920 },
+    { height: 1080 },
+    { width: 0, height: 1080 },
+    { width: -1, height: 1080 },
+    { width: 1920.5, height: 1080 },
+    { width: Number.NaN, height: 1080 },
+    { width: 16_385, height: 1080 },
+  ])("rejects malformed attachment dimensions: %j", (dimensions) => {
+    expect(
+      initiateAttachmentUploadRequestSchema.safeParse({
+        fileName: "diagram.png",
+        mimeType: "image/png",
+        fileSize: 100,
+        ...dimensions,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("sends extracted dimensions as multipart fields", async () => {
+    const postSpy = vi.spyOn(api, "post").mockResolvedValue({} as never);
     const file = new File(["image"], "diagram.png", { type: "image/png" });
-    const result = selectDiscussionAttachment(file);
+
+    await learningInteractionsService.uploadAttachmentDirect(
+      file,
+      undefined,
+      { width: 1920, height: 1080 },
+    );
+
+    const formData = postSpy.mock.calls[0]?.[1] as FormData;
+    expect(formData.get("file")).toMatchObject({ name: file.name, type: file.type });
+    expect(formData.get("width")).toBe("1920");
+    expect(formData.get("height")).toBe("1080");
+  });
+
+  it("keeps an image local without changing editor content", async () => {
+    const file = new File(["image"], "diagram.png", { type: "image/png" });
+    const result = await selectDiscussionAttachment(file);
 
     expect(result).toMatchObject({ accepted: true, message: null });
     expect(result.attachment?.file).toBe(file);
     expect(result.attachment?.fileName).toBe("diagram.png");
   });
 
-  it("rejects unsupported files before they enter local composer state", () => {
-    const result = selectDiscussionAttachment(
+  it("rejects unsupported files before they enter local composer state", async () => {
+    const result = await selectDiscussionAttachment(
       new File(["binary"], "payload.exe", {
         type: "application/octet-stream",
       }),
@@ -334,9 +381,9 @@ describe("local discussion attachment selection", () => {
     ["image", "diagram.png", "image/png"],
     ["video", "walkthrough.mp4", "video/mp4"],
     ["document", "outline.pdf", "application/pdf"],
-  ])("selects a %s without an upload request or generated Markdown", (_kind, name, type) => {
+  ])("selects a %s without an upload request or generated Markdown", async (_kind, name, type) => {
     const uploadSpy = vi.spyOn(learningInteractionsService, "uploadAttachmentDirect");
-    const result = selectDiscussionAttachment(new File(["local"], name, { type }));
+    const result = await selectDiscussionAttachment(new File(["local"], name, { type }));
 
     expect(result.accepted).toBe(true);
     expect(uploadSpy).not.toHaveBeenCalled();
@@ -344,12 +391,68 @@ describe("local discussion attachment selection", () => {
     expect(result.attachment?.file).toBeInstanceOf(File);
   });
 
-  it("creates and revokes local media previews without transport", () => {
+  it("extracts image dimensions while keeping one reusable local preview URL", async () => {
+    class MockImage {
+      naturalWidth = 1920;
+      naturalHeight = 1080;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(_value: string) {
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    vi.stubGlobal("Image", MockImage);
+    const createObjectURL = vi.fn(() => "blob:local-preview");
+    vi.stubGlobal("URL", {
+      createObjectURL,
+      revokeObjectURL: vi.fn(),
+    });
+
+    const result = await selectDiscussionAttachment(
+      new File(["image"], "preview.png", { type: "image/png" }),
+    );
+
+    expect(result.attachment).toMatchObject({
+      localPreviewUrl: "blob:local-preview",
+      width: 1920,
+      height: 1080,
+    });
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("extracts video dimensions from local metadata", async () => {
+    const video = document.createElement("video");
+    Object.defineProperties(video, {
+      readyState: { value: 1 },
+      videoWidth: { value: 1280 },
+      videoHeight: { value: 720 },
+    });
+    const createElementSpy = vi
+      .spyOn(document, "createElement")
+      .mockReturnValue(video);
+    const createObjectURL = vi.fn(() => "blob:video-preview");
+    vi.stubGlobal("URL", {
+      createObjectURL,
+      revokeObjectURL: vi.fn(),
+    });
+
+    const result = await selectDiscussionAttachment(
+      new File(["video"], "walkthrough.mp4", { type: "video/mp4" }),
+    );
+
+    expect(result.attachment).toMatchObject({ width: 1280, height: 720 });
+    expect(createElementSpy).toHaveBeenCalledWith("video");
+    createElementSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("creates and revokes local media previews without transport", async () => {
     const createObjectURL = vi.fn(() => "blob:local-preview");
     const revokeObjectURL = vi.fn();
     vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
 
-    const result = selectDiscussionAttachment(
+    const result = await selectDiscussionAttachment(
       new File(["image"], "preview.png", { type: "image/png" }),
     );
     expect(result.attachment?.localPreviewUrl).toBe("blob:local-preview");
