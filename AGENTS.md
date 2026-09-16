@@ -15,3 +15,10 @@ This repository is a monorepo containing the following packages and applications
 2. For frontend architecture, state management, API integrations, visual design, and component reuse, strictly adhere to `apps/web/AGENTS.md`.
 3. For backend architecture, layered service pattern, and database repositories, strictly adhere to `apps/api/AGENTS.md`.
 4. For fleet management, pluggable provider architecture, and lifecycle implementations, strictly adhere to `packages/fleet-types/AGENTS.md`.
+
+## Frontend unit-test policy
+
+For work under `apps/web`, do not create, restore, or update unit-test cases.
+Do not add unit-test runners, setup files, or unit-test-only dependencies. Keep
+browser-level E2E coverage separate and preserve existing Playwright E2E tests
+unless the task explicitly asks for changes to them.
