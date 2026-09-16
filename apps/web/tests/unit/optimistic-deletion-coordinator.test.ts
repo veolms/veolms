@@ -218,6 +218,31 @@ describe("OptimisticDeletionCoordinator", () => {
     ).toBeUndefined();
   });
 
+  it("recognizes an undoable reply for its stable parent identity", () => {
+    coordinator.begin({
+      kind: "reply",
+      clientId: "client-reply-a",
+      serverId: "server-reply-a",
+      parentClientId: "client-thread-a",
+      parentServerId: "server-thread-a",
+      commit: async () => undefined,
+      queryClient,
+    });
+
+    expect(
+      coordinator.hasUndoableReplyForParent(
+        "client-thread-a",
+        "server-thread-a",
+      ),
+    ).toBe(true);
+    expect(
+      coordinator.hasUndoableReplyForParent("other-thread", "server-thread-a"),
+    ).toBe(true);
+    expect(
+      coordinator.hasUndoableReplyForParent("other-thread", "other-server"),
+    ).toBe(false);
+  });
+
   it("cancels timers on reset so an unmounted or prior-account transaction cannot dispatch", async () => {
     const commit = begin("thread", "client-thread-a", "server-thread-a");
     coordinator.reset();

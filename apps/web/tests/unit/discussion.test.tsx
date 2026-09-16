@@ -12,6 +12,7 @@ import { hasCommentToolbarOverflow } from "../../src/learning/CommentFormattingT
 import {
   Discussion,
   getDiscussionComposerViewportGeometry,
+  getDiscussionVirtualFeedScrollMargin,
   shouldShowDiscussionEnd,
 } from "../../src/learning/Discussion.tsx";
 import { LessonDescription } from "../../src/learning/LessonDescription.tsx";
@@ -722,6 +723,56 @@ describe("Discussion pagination end state", () => {
         isThreadsLoading: false,
       }),
     ).toBe(true);
+  });
+});
+
+describe("Discussion root feed virtualization", () => {
+  it("computes the desktop feed offset in scrollport coordinates", () => {
+    const scrollport = document.createElement("main");
+    const feed = document.createElement("div");
+    Object.defineProperty(scrollport, "scrollTop", {
+      configurable: true,
+      value: 260,
+    });
+    vi.spyOn(scrollport, "getBoundingClientRect").mockReturnValue({
+      top: 100,
+    } as DOMRect);
+    vi.spyOn(feed, "getBoundingClientRect").mockReturnValue({
+      top: 410,
+    } as DOMRect);
+
+    expect(getDiscussionVirtualFeedScrollMargin(feed, scrollport)).toBe(570);
+  });
+
+  it("uses the document offset when the feed is window-scrolled", () => {
+    const feed = document.createElement("div");
+    vi.spyOn(feed, "getBoundingClientRect").mockReturnValue({
+      top: 410,
+    } as DOMRect);
+    vi.spyOn(window, "scrollY", "get").mockReturnValue(260);
+
+    expect(getDiscussionVirtualFeedScrollMargin(feed, null)).toBe(670);
+  });
+
+  it("renders root entries in measured virtual rows keyed by client identity", async () => {
+    render(<Discussion persistenceKey="discussion-virtual-feed-test" />);
+
+    const feed = await waitFor(() => {
+      const element = document.querySelector<HTMLElement>(
+        "[data-discussion-virtual-feed]",
+      );
+      if (!element) throw new Error("Expected the virtual discussion feed");
+      return element;
+    });
+
+    expect(feed).toHaveAttribute("data-entry-count", "3");
+    const rows = Array.from(feed.querySelectorAll<HTMLElement>("[data-index]"));
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.length).toBeLessThanOrEqual(3);
+    expect(rows.every((row) => row.style.position === "absolute")).toBe(true);
+    expect(rows.map((row) => row.dataset.clientId)).toEqual(
+      expect.arrayContaining(["4", "3", "1"]),
+    );
   });
 });
 

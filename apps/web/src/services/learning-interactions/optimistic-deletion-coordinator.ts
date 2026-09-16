@@ -159,6 +159,21 @@ export class OptimisticDeletionCoordinator {
     );
   }
 
+  hasUndoableReplyForParent(
+    parentClientId: string,
+    parentServerId?: string,
+  ): boolean {
+    this.pruneStaleGenerations();
+    return Array.from(this.records.values()).some(
+      (record) =>
+        record.kind === "reply" &&
+        record.phase === "undoable" &&
+        (record.parentClientId === parentClientId ||
+          (parentServerId !== undefined &&
+            record.parentServerId === parentServerId)),
+    );
+  }
+
   /**
    * Applies visible reply deletion to a parent thread without mutating its
    * server baseline. Once a fresh response reflects the lower count, the

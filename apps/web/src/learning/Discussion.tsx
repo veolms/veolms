@@ -7,6 +7,11 @@ import React, {
   useState,
 } from "react";
 import { QueryClientContext } from "@tanstack/react-query";
+import {
+  defaultRangeExtractor,
+  useVirtualizer,
+  useWindowVirtualizer,
+} from "@tanstack/react-virtual";
 import { useInRouterContext, useSearchParams } from "react-router";
 import { createPortal } from "react-dom";
 import {
@@ -70,7 +75,10 @@ import {
   type LocalComposerAttachment,
 } from "../services/learning-interactions/attachment-model";
 import { optimisticEditCoordinator } from "../services/learning-interactions/optimistic-edit-coordinator";
-import { optimisticDeletionCoordinator } from "../services/learning-interactions/optimistic-deletion-coordinator";
+import {
+  optimisticDeletionCoordinator,
+  useOptimisticDeletionRevision,
+} from "../services/learning-interactions/optimistic-deletion-coordinator";
 import {
   getClientEntityId,
   getServerEntityId,
@@ -89,6 +97,7 @@ import {
   adaptLearningThreadToComment,
   isCommentOrQaThread,
 } from "./learning-threads.adapter";
+import { getApplicationScrollElement } from "../shell/applicationScroll";
 
 const CURRENT_USER = {
   name: "Ashi Singh",
@@ -210,6 +219,8 @@ const initialEntries: Comment[] = [
 type ComposerMode = "collapsed" | "desktop" | "mobile";
 
 const DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT = 0.62;
+const DISCUSSION_VIRTUAL_OVERSCAN = 5;
+const DISCUSSION_VIRTUAL_ESTIMATE_SIZE = 240;
 
 export const getDiscussionComposerCollapsedSnapPoint = (
   viewportHeight: number,
@@ -2029,6 +2040,210 @@ export function shouldShowDiscussionEnd({
   return entryFilter === "note" ? !isNotesLoading : !isThreadsLoading;
 }
 
+type DiscussionVirtualizer = {
+  getTotalSize: () => number;
+  getVirtualItems: () => Array<{ index: number; start: number }>;
+  measureElement: (element: HTMLDivElement | null) => void;
+};
+
+type DiscussionVirtualFeedProps = {
+  entries: Comment[];
+  protectedEntryIndices: ReadonlySet<number>;
+  renderEntry: (entry: Comment) => React.ReactNode;
+  layoutKey?: string;
+};
+
+export function getDiscussionVirtualFeedScrollMargin(
+  feed: HTMLElement | null,
+  scrollport: HTMLElement | null,
+): number {
+  if (!feed || typeof window === "undefined") return 0;
+
+  const feedRect = feed.getBoundingClientRect();
+  if (scrollport) {
+    return (
+      feedRect.top -
+      scrollport.getBoundingClientRect().top +
+      scrollport.scrollTop
+    );
+  }
+
+  return feedRect.top + window.scrollY;
+}
+
+function useDiscussionRangeExtractor(
+  entries: Comment[],
+  protectedEntryIndices: ReadonlySet<number>,
+) {
+  return useCallback(
+    (range: Parameters<typeof defaultRangeExtractor>[0]) => {
+      const indices = new Set(defaultRangeExtractor(range));
+      protectedEntryIndices.forEach((index) => {
+        if (index >= 0 && index < entries.length) indices.add(index);
+      });
+      return Array.from(indices).sort((left, right) => left - right);
+    },
+    [entries.length, protectedEntryIndices],
+  );
+}
+
+function DiscussionVirtualFeedRows({
+  feedRef,
+  entries,
+  renderEntry,
+  scrollMargin = 0,
+  virtualizer,
+}: DiscussionVirtualFeedProps & {
+  feedRef?: React.Ref<HTMLDivElement>;
+  scrollMargin?: number;
+  virtualizer: DiscussionVirtualizer;
+}) {
+  const virtualItems = virtualizer.getVirtualItems();
+
+  return (
+    <div
+      data-discussion-virtual-feed
+      data-entry-count={entries.length}
+      ref={feedRef}
+      style={{ height: `${virtualizer.getTotalSize()}px` }}
+      className="relative w-full"
+    >
+      {virtualItems.map((virtualItem) => {
+        const entry = entries[virtualItem.index];
+        if (!entry) return null;
+        return (
+          <div
+            key={getClientEntityId(entry)}
+            data-index={virtualItem.index}
+            data-client-id={getClientEntityId(entry)}
+            ref={virtualizer.measureElement}
+            className={
+              virtualItem.index < entries.length - 1 ? "pb-1" : ""
+            }
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              transform: `translateY(${virtualItem.start - scrollMargin}px)`,
+            }}
+          >
+            {renderEntry(entry)}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function DiscussionScrollportVirtualFeed(
+  props: DiscussionVirtualFeedProps,
+) {
+  const rangeExtractor = useDiscussionRangeExtractor(
+    props.entries,
+    props.protectedEntryIndices,
+  );
+  const feedRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  const syncScrollMargin = useCallback(() => {
+    const nextScrollMargin = getDiscussionVirtualFeedScrollMargin(
+      feedRef.current,
+      getApplicationScrollElement(),
+    );
+    setScrollMargin((current) =>
+      Math.abs(current - nextScrollMargin) > 1 ? nextScrollMargin : current,
+    );
+  }, []);
+
+  useLayoutEffect(() => {
+    syncScrollMargin();
+    window.addEventListener("resize", syncScrollMargin);
+    return () => window.removeEventListener("resize", syncScrollMargin);
+  }, [props.entries.length, props.layoutKey, syncScrollMargin]);
+
+  const virtualizer = useVirtualizer({
+    count: props.entries.length,
+    getScrollElement: getApplicationScrollElement,
+    estimateSize: () => DISCUSSION_VIRTUAL_ESTIMATE_SIZE,
+    getItemKey: (index) => getClientEntityId(props.entries[index]!),
+    scrollMargin,
+    initialRect: { width: 1024, height: 768 },
+    overscan: DISCUSSION_VIRTUAL_OVERSCAN,
+    rangeExtractor,
+  });
+
+  return (
+    <DiscussionVirtualFeedRows
+      {...props}
+      feedRef={feedRef}
+      scrollMargin={scrollMargin}
+      virtualizer={{
+        ...virtualizer,
+        measureElement: (element) =>
+          virtualizer.measureElement(element),
+      }}
+    />
+  );
+}
+
+function DiscussionWindowVirtualFeed(props: DiscussionVirtualFeedProps) {
+  const rangeExtractor = useDiscussionRangeExtractor(
+    props.entries,
+    props.protectedEntryIndices,
+  );
+  const feedRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  useLayoutEffect(() => {
+    const syncWindowScrollMargin = () => {
+      const feed = feedRef.current;
+      if (!feed) return;
+      const nextMargin = getDiscussionVirtualFeedScrollMargin(feed, null);
+      setScrollMargin((current) =>
+        Math.abs(current - nextMargin) > 1 ? nextMargin : current,
+      );
+    };
+
+    syncWindowScrollMargin();
+    window.addEventListener("resize", syncWindowScrollMargin);
+    return () => window.removeEventListener("resize", syncWindowScrollMargin);
+  }, [props.entries.length, props.layoutKey]);
+
+  const virtualizer = useWindowVirtualizer({
+    count: props.entries.length,
+    estimateSize: () => DISCUSSION_VIRTUAL_ESTIMATE_SIZE,
+    getItemKey: (index) => getClientEntityId(props.entries[index]!),
+    scrollMargin,
+    initialRect: { width: 1024, height: 768 },
+    overscan: DISCUSSION_VIRTUAL_OVERSCAN,
+    rangeExtractor,
+  });
+
+  return (
+    <DiscussionVirtualFeedRows
+      {...props}
+      feedRef={feedRef}
+      scrollMargin={scrollMargin}
+      virtualizer={{
+        ...virtualizer,
+        measureElement: (element) => virtualizer.measureElement(element),
+      }}
+    />
+  );
+}
+
+function DiscussionVirtualFeed({
+  useWindowScroll,
+  ...props
+}: DiscussionVirtualFeedProps & { useWindowScroll: boolean }) {
+  return useWindowScroll ? (
+    <DiscussionWindowVirtualFeed {...props} />
+  ) : (
+    <DiscussionScrollportVirtualFeed {...props} />
+  );
+}
+
 function ThreadSurface({
   lessonDescription,
   isLessonDescriptionLoading = false,
@@ -2086,6 +2301,7 @@ function ThreadSurface({
   courseId,
 }: ThreadSurfaceProps) {
   const isPhone = usePhoneComposerLayout();
+  const deletionRevision = useOptimisticDeletionRevision();
   const composerHostRef = useRef<HTMLDivElement>(null);
   const feedSentinelRef = useRef<HTMLDivElement>(null);
   const compactComposerScrollHidden =
@@ -2273,6 +2489,76 @@ function ThreadSurface({
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, onLoadMore]);
 
+  const protectedEntryIndices = useMemo(() => {
+    const indices = new Set<number>();
+
+    entries.forEach((entry, index) => {
+      const clientId = getClientEntityId(entry);
+      const serverId = getServerEntityId(entry);
+      const deletionKind = entry.entryKind === "note" ? "note" : "thread";
+      const deletion = optimisticDeletionCoordinator.get(
+        deletionKind,
+        clientId,
+        serverId,
+      );
+      const isRootEditing =
+        editingEntryId !== null && String(editingEntryId) === clientId;
+      const hasUndoableChild =
+        deletionKind === "thread" &&
+        optimisticDeletionCoordinator.hasUndoableReplyForParent(
+          clientId,
+          serverId,
+        );
+
+      if (deletion?.phase === "undoable" || isRootEditing || hasUndoableChild) {
+        indices.add(index);
+      }
+    });
+
+    return indices;
+  }, [deletionRevision, editingEntryId, entries]);
+
+  const usesWindowScroll = isPhone || getApplicationScrollElement() === null;
+  const renderEntry = useCallback(
+    (entry: Comment) => (
+      <CommentCard
+        comment={entry}
+        onLike={onLike}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onEditFailure={onReplyEditFailure}
+        onDeleteFailure={onDeleteFailure}
+        onReport={onReport}
+        onOpenThread={onOpenThread}
+        isBackendMode={isBackendMode}
+        currentUserId={currentUserId}
+        userRole={userRole}
+        onToggleAcceptReply={onToggleAcceptReply}
+        onToggleLockThread={onToggleLockThread}
+        onToggleBookmark={onToggleBookmark}
+        onToggleFollow={onToggleFollow}
+        courseId={courseId}
+      />
+    ),
+    [
+      courseId,
+      currentUserId,
+      isBackendMode,
+      onDelete,
+      onDeleteFailure,
+      onEdit,
+      onLike,
+      onOpenThread,
+      onReplyEditFailure,
+      onReport,
+      onToggleAcceptReply,
+      onToggleBookmark,
+      onToggleFollow,
+      onToggleLockThread,
+      userRole,
+    ],
+  );
+
   if (isInteractionCapabilitiesLoading) {
     return (
       <div>
@@ -2412,7 +2698,8 @@ function ThreadSurface({
       </div>
 
       <div
-        className={`mt-2.5 flex flex-col gap-1 ${isPhone ? "pb-36" : "pb-4"}`}
+        className={`mt-2.5 ${isPhone ? "pb-36" : "pb-4"}`}
+        data-discussion-feed-list
       >
         {entryFilter === "note" && isNotesLoading ? (
           <div
@@ -2473,27 +2760,13 @@ function ThreadSurface({
           </div>
         ) : (
           <>
-            {entries.map((entry) => (
-              <CommentCard
-                key={getClientEntityId(entry)}
-                comment={entry}
-                onLike={onLike}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                onEditFailure={onReplyEditFailure}
-                onDeleteFailure={onDeleteFailure}
-                onReport={onReport}
-                onOpenThread={onOpenThread}
-                isBackendMode={isBackendMode}
-                currentUserId={currentUserId}
-                userRole={userRole}
-                onToggleAcceptReply={onToggleAcceptReply}
-                onToggleLockThread={onToggleLockThread}
-                onToggleBookmark={onToggleBookmark}
-                onToggleFollow={onToggleFollow}
-                courseId={courseId}
-              />
-            ))}
+            <DiscussionVirtualFeed
+              entries={entries}
+              protectedEntryIndices={protectedEntryIndices}
+              renderEntry={renderEntry}
+              layoutKey={`${composerMode}:${entryFilter}:${isLessonDescriptionLoading}`}
+              useWindowScroll={usesWindowScroll}
+            />
             {isBackendMode && hasNextPage && (
               <div ref={feedSentinelRef} className="h-1" aria-hidden="true" />
             )}
