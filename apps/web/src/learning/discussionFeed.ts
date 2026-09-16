@@ -22,29 +22,6 @@ export function isOwnDiscussionEntry(
   return Boolean(entry.isOwn) || entry.name === currentUserName;
 }
 
-export function getDiscussionFeedCountLabel(
-  filter: DiscussionEntryFilter,
-  count: number,
-): string {
-  const noun =
-    filter === "all"
-      ? count === 1
-        ? "Discussion"
-        : "Discussions"
-      : filter === "note"
-        ? count === 1
-          ? "Note"
-          : "Notes"
-        : filter === "question"
-          ? count === 1
-            ? "Q&A"
-            : "Q&As"
-          : count === 1
-            ? "Comment"
-            : "Comments";
-  return `${count}\u00A0\u00A0${noun}`;
-}
-
 export interface InteractionCapabilities {
   allowComments: boolean;
   allowNotes: boolean;

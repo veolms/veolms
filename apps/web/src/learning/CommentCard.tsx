@@ -610,7 +610,7 @@ export function CommentCard({
                         }
                       : undefined
                   }
-                  className="absolute -top-1 -right-1 z-20 shrink-0"
+                  className="absolute -top-1 right-0 z-20 shrink-0"
                 />
               </div>
 
@@ -1296,10 +1296,12 @@ export function CommentActionMenu({
     <CourseActionMenu
       open={open}
       onOpenChange={setOpen}
+      dismissOnScroll
       ariaLabel={`More actions for ${name}`}
       menuLabel={`${menuLabel} actions for ${name}`}
       className={className}
       triggerClassName="size-9"
+      triggerVisualClassName="size-7"
     >
       {isNote ? (
         isOwn ? (

@@ -157,6 +157,23 @@ describe("DiscussionAttachmentsList Component", () => {
     expect(img).toHaveAttribute("loading", "lazy");
     expect(img).toHaveAttribute("decoding", "async");
 
+    const imageSurface = screen.getByRole("button", {
+      name: "View image diagram.png",
+    });
+    expect(item).toHaveStyle({
+      width: "min(100%, 35.55555555555556rem)",
+    });
+    expect(imageSurface).toHaveStyle({ aspectRatio: "16 / 9" });
+    expect(screen.getByTestId("discussion-image-placeholder")).toBeVisible();
+    fireEvent.load(img);
+    expect(
+      screen.queryByTestId("discussion-image-placeholder"),
+    ).toBeNull();
+    expect(item).toHaveStyle({
+      width: "min(100%, 35.55555555555556rem)",
+    });
+    expect(imageSurface).toHaveStyle({ aspectRatio: "16 / 9" });
+
     expect(screen.getByText("diagram.png")).toBeInTheDocument();
     expect(screen.getByText("200 KB")).toBeInTheDocument();
 
@@ -169,6 +186,51 @@ describe("DiscussionAttachmentsList Component", () => {
     );
     expect(downloadLink).toHaveAttribute("download", "diagram.png");
   });
+
+  it.each([
+    ["portrait", 1080, 1920, "min(100%, 13.5rem)", "1080 / 1920"],
+    ["square", 1080, 1080, "min(100%, 20rem)", "1080 / 1080"],
+    [
+      "landscape",
+      1920,
+      1080,
+      "min(100%, 35.55555555555556rem)",
+      "1920 / 1080",
+    ],
+  ])(
+    "keeps %s image shell geometry stable before and after load",
+    (_label, width, height, boundedWidth, aspectRatio) => {
+      render(
+        <DiscussionAttachmentsList
+          attachments={[
+            {
+              ...sampleAttachments[0]!,
+              width,
+              height,
+            },
+          ]}
+        />,
+      );
+
+      const item = screen.getByTestId("discussion-attachment-item");
+      const imageSurface = screen.getByRole("button", {
+        name: "View image diagram.png",
+      });
+      const image = screen.getByRole("img", { name: "diagram.png" });
+
+      expect(item).toHaveStyle({ width: boundedWidth });
+      expect(imageSurface).toHaveStyle({ aspectRatio });
+      expect(screen.getByTestId("discussion-image-placeholder")).toBeVisible();
+
+      fireEvent.load(image);
+
+      expect(
+        screen.queryByTestId("discussion-image-placeholder"),
+      ).toBeNull();
+      expect(item).toHaveStyle({ width: boundedWidth });
+      expect(imageSurface).toHaveStyle({ aspectRatio });
+    },
+  );
 
   it("opens images in the in-app viewer rather than a new browser tab", () => {
     render(<DiscussionAttachmentsList attachments={[sampleAttachments[0]!]} />);

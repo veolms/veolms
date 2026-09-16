@@ -16,7 +16,6 @@ import {
   shouldShowDiscussionEnd,
 } from "../../src/learning/Discussion.tsx";
 import { LessonDescription } from "../../src/learning/LessonDescription.tsx";
-import { getDiscussionFeedCountLabel } from "../../src/learning/discussionFeed";
 import { optimisticDeletionCoordinator } from "../../src/services/learning-interactions/optimistic-deletion-coordinator";
 
 const uploadAttachment = vi.hoisted(() =>
@@ -408,7 +407,17 @@ describe("CommentCard", () => {
       within(commentMeta).getByRole("button", {
         name: "More actions for Alex Morgan",
       }).parentElement,
-    ).toHaveClass("absolute", "-right-1");
+    ).toHaveClass("absolute", "right-0");
+    expect(
+      within(commentMeta).getByRole("button", {
+        name: "More actions for Alex Morgan",
+      }).parentElement,
+    ).not.toHaveClass("-right-1");
+    expect(
+      within(commentMeta).getByRole("button", {
+        name: "More actions for Alex Morgan",
+      }).firstElementChild,
+    ).toHaveClass("size-7");
 
     expect(within(replyMeta).getByText("45 minutes ago")).toBeVisible();
     expect(
@@ -612,6 +621,62 @@ describe("CommentCard", () => {
     expect(
       within(otherMenu).queryByRole("menuitem", { name: "Delete comment" }),
     ).toBeNull();
+  });
+
+  it("dismisses an interaction action menu when the Learning Space surface scrolls", async () => {
+    const scrollport = document.createElement("main");
+    scrollport.id = "courses-main-scrollport";
+    document.body.append(scrollport);
+
+    try {
+      render(
+        <CommentCard
+          comment={{
+            id: 30,
+            name: "Alex Morgan",
+            time: "Just now",
+            avatar: "/alex.jpg",
+            text: "Dismiss this menu on scroll.",
+            likes: 0,
+          }}
+          onLike={vi.fn()}
+        />,
+      );
+
+      const trigger = screen.getByRole("button", {
+        name: "More actions for Alex Morgan",
+      });
+      fireEvent.click(trigger);
+      expect(
+        await screen.findByRole("menu", {
+          name: "Comment actions for Alex Morgan",
+        }),
+      ).toBeVisible();
+
+      fireEvent.scroll(scrollport);
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("menu", {
+            name: "Comment actions for Alex Morgan",
+          }),
+        ).toBeNull(),
+      );
+
+      fireEvent.click(trigger);
+      await screen.findByRole("menu", {
+        name: "Comment actions for Alex Morgan",
+      });
+      fireEvent.scroll(window);
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("menu", {
+            name: "Comment actions for Alex Morgan",
+          }),
+        ).toBeNull(),
+      );
+    } finally {
+      scrollport.remove();
+    }
   });
 
   it("hides an owned comment optimistically and restores it with Undo", async () => {
@@ -1428,7 +1493,7 @@ describe("Discussion", () => {
     }
   });
 
-  it("shows a tab count and sorts the feed with Newest, Top, and Mine", () => {
+  it("shows the Discussions label without a count and sorts the feed with Newest, Top, and Mine", () => {
     const { container } = render(
       <Discussion
         persistenceKey="discussion-feed-toolbar-test"
@@ -1445,10 +1510,6 @@ describe("Discussion", () => {
           entry.getAttribute("aria-label"),
       );
 
-    const count = screen.getByText(
-      (_, element) =>
-        element?.textContent === getDiscussionFeedCountLabel("all", 4),
-    );
     const sortTrigger = screen.getByRole("button", {
       name: "Sort discussions: Newest",
     });
@@ -1456,13 +1517,11 @@ describe("Discussion", () => {
     const separator = toolbar?.querySelector(
       "[data-discussion-feed-separator]",
     );
-    expect(count).toBeVisible();
-    expect(count).toHaveClass("text-lg", "leading-none");
-    expect(count).not.toHaveClass("text-xl", "text-[0.94rem]");
     expect(toolbar).toHaveClass("items-end");
     expect(toolbar).not.toHaveClass("justify-between", "gap-2");
+    expect(toolbar).toHaveTextContent("Discussions");
+    expect(toolbar).not.toHaveTextContent("4 Discussions");
     expect(separator).toHaveTextContent("·");
-    expect(separator?.textContent).toBe("\u00A0\u00A0·\u00A0\u00A0");
     expect(sortTrigger).toBeVisible();
     expect(sortTrigger).toHaveClass(
       "text-[13px]",
@@ -1472,32 +1531,12 @@ describe("Discussion", () => {
       "gap-1!",
     );
     expect(sortTrigger).not.toHaveClass("text-sm", "w-36!", "h-10!");
-    expect(separator?.previousElementSibling).toBe(count);
-    expect(sortTrigger.previousElementSibling).toBe(separator);
 
     fireEvent.click(screen.getByRole("button", { name: "Notes" }));
-    expect(
-      screen.getByText(
-        (_, element) =>
-          element?.textContent === getDiscussionFeedCountLabel("note", 1),
-      ),
-    ).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Comments" }));
-    expect(
-      screen.getByText(
-        (_, element) =>
-          element?.textContent === getDiscussionFeedCountLabel("comment", 1),
-      ),
-    ).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Q&As" }));
-    expect(
-      screen.getByText(
-        (_, element) =>
-          element?.textContent === getDiscussionFeedCountLabel("question", 2),
-      ),
-    ).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "All" }));
     fireEvent.click(
@@ -1510,24 +1549,11 @@ describe("Discussion", () => {
       "Vivek Nair",
       "Ashi Singh",
     ]);
-    expect(
-      screen.getByText(
-        (_, element) =>
-          element?.textContent === getDiscussionFeedCountLabel("all", 4),
-      ),
-    ).toBeVisible();
-
     fireEvent.click(
       screen.getByRole("button", { name: "Sort discussions: Top" }),
     );
     fireEvent.click(screen.getByRole("option", { name: "Mine" }));
     expect(visibleAuthors()).toEqual(["Ashi Singh"]);
-    expect(
-      screen.getByText(
-        (_, element) =>
-          element?.textContent === getDiscussionFeedCountLabel("all", 1),
-      ),
-    ).toBeVisible();
   });
 
   it("filters the unified feed by entry type", () => {

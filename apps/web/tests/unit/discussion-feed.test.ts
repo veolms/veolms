@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Comment } from "../../src/learning/CommentCard";
-import {
-  applyDiscussionFeed,
-  getDiscussionFeedCountLabel,
-} from "../../src/learning/discussionFeed";
+import { applyDiscussionFeed } from "../../src/learning/discussionFeed";
 
 const entries: Comment[] = [
   {
@@ -45,16 +42,6 @@ const entries: Comment[] = [
     isQuestion: true,
   },
 ];
-
-describe("getDiscussionFeedCountLabel", () => {
-  it("names the count after the selected discussion tab", () => {
-    expect(getDiscussionFeedCountLabel("all", 4)).toBe("4\u00A0\u00A0Discussions");
-    expect(getDiscussionFeedCountLabel("all", 1)).toBe("1\u00A0\u00A0Discussion");
-    expect(getDiscussionFeedCountLabel("note", 1)).toBe("1\u00A0\u00A0Note");
-    expect(getDiscussionFeedCountLabel("comment", 2)).toBe("2\u00A0\u00A0Comments");
-    expect(getDiscussionFeedCountLabel("question", 2)).toBe("2\u00A0\u00A0Q&As");
-  });
-});
 
 describe("applyDiscussionFeed", () => {
   it("keeps newest entries first by default", () => {

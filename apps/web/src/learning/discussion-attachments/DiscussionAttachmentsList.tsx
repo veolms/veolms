@@ -29,6 +29,9 @@ export function DiscussionAttachmentsList({
   const [activatedVideoIds, setActivatedVideoIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [loadedImageIds, setLoadedImageIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [failedVideoIds, setFailedVideoIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -82,12 +85,14 @@ export function DiscussionAttachmentsList({
             const geometryStyle = getAttachmentAspectRatioStyle(attachment);
 
             if (category === "image") {
+              const isImageLoaded = loadedImageIds.has(attachmentId);
               return (
                 <div
                   key={attachment.clientId ?? attachment.id}
                   data-testid="discussion-attachment-item"
                   data-attachment-type="image"
                   className="group relative flex max-w-full flex-col overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] shadow-xs transition-shadow hover:shadow-md"
+                  style={{ width: geometryStyle.width }}
                 >
                   <button
                     type="button"
@@ -96,17 +101,32 @@ export function DiscussionAttachmentsList({
                       viewerTriggerRef.current = event.currentTarget;
                       setViewerAttachment(attachment);
                     }}
-                    className="relative flex max-h-80 max-w-md cursor-zoom-in items-center justify-center overflow-hidden bg-black/5 disabled:cursor-default dark:bg-white/5"
+                    className="relative flex max-h-80 w-full cursor-zoom-in items-center justify-center overflow-hidden bg-black/5 disabled:cursor-default dark:bg-white/5"
                     style={{ aspectRatio: geometryStyle.aspectRatio }}
                     aria-label={`View image ${attachment.fileName}`}
                   >
+                    {!isImageLoaded && (
+                      <span
+                        aria-hidden="true"
+                        data-testid="discussion-image-placeholder"
+                        className="pointer-events-none absolute inset-0 animate-pulse bg-black/5 dark:bg-white/5"
+                      />
+                    )}
                     {visualUrl ? (
                       <img
                         src={visualUrl}
                         alt={attachment.fileName}
                         loading="lazy"
-                        className="block max-h-80 max-w-full object-contain"
+                        className={`relative block h-full w-full object-contain transition-opacity duration-150 ${
+                          isImageLoaded ? "opacity-100" : "opacity-0"
+                        }`}
                         decoding="async"
+                        onLoad={() =>
+                          setLoadedImageIds((current) => {
+                            if (current.has(attachmentId)) return current;
+                            return new Set(current).add(attachmentId);
+                          })
+                        }
                       />
                     ) : null}
                     <AttachmentUploadTreatment attachment={attachment} />

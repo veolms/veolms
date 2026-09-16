@@ -28,7 +28,6 @@ import { CommentComposer } from "./CommentComposer";
 import {
   applyDiscussionFeed,
   DISCUSSION_FEED_SORT_OPTIONS,
-  getDiscussionFeedCountLabel,
   type DiscussionEntryFilter,
   type DiscussionFeedSort,
   type InteractionCapabilities,
@@ -2675,11 +2674,8 @@ function ThreadSurface({
         className="mt-3.5 flex min-w-0 items-end max-[640px]:mt-2.5"
         data-discussion-feed-toolbar
       >
-        <p
-          className="min-w-0 truncate text-lg leading-none font-semibold tracking-[-0.02em] text-(--text)"
-          aria-live="polite"
-        >
-          {getDiscussionFeedCountLabel(entryFilter, entries.length)}
+        <p className="min-w-0 truncate text-lg leading-none font-semibold tracking-[-0.02em] text-(--text)">
+          Discussions
         </p>
         <span
           className="shrink-0 text-lg leading-none text-(--text-secondary)"
