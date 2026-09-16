@@ -24,7 +24,7 @@ export interface LessonResourceItem {
   mediaAssetId: string;
   mimeType?: string;
   sizeBytes?: number;
-  status?: "uploading" | "uploaded" | "ready" | "failed";
+  status?: "uploading" | "uploaded" | "processing" | "ready" | "failed";
 }
 
 interface LessonResourceManagerProps {
@@ -88,6 +88,7 @@ export function LessonResourceManager({
         contentType,
         fileSize: file.size,
         type: "document",
+        visibility: "protected",
       });
 
       await mediaService.uploadFileToPresignedUrl(

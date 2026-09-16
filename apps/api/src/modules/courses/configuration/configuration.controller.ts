@@ -19,7 +19,12 @@ export function createConfigurationController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.upsertCourseAccessRules(id, creatorId, request.body);
+    return await service.upsertCourseAccessRules(
+      id,
+      creatorId,
+      request.body,
+      request.user?.roles,
+    );
   }
 
   async function upsertCoursePricing(
@@ -30,7 +35,12 @@ export function createConfigurationController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.upsertCoursePricing(id, creatorId, request.body);
+    return await service.upsertCoursePricing(
+      id,
+      creatorId,
+      request.body,
+      request.user?.roles,
+    );
   }
 
   async function upsertCourseSettings(
@@ -41,7 +51,12 @@ export function createConfigurationController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.upsertCourseSettings(id, creatorId, request.body);
+    return await service.upsertCourseSettings(
+      id,
+      creatorId,
+      request.body,
+      request.user?.roles,
+    );
   }
 
   return {

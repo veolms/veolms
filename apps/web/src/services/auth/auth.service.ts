@@ -1,5 +1,8 @@
 import { api } from "../../lib/api-client";
 import type {
+  AvatarUploadContentType,
+  AvatarUploadPresignRequest,
+  AvatarUploadPresignResponse,
   AuthMessageResponse,
   CurrentUserResponse,
   EmailVerificationSendRequest,
@@ -22,6 +25,7 @@ import type {
   UserProfileResponse,
 } from "@veolms/contracts";
 import {
+  avatarUploadContentTypeSchema,
   passkeyAuthenticationOptionsResponseSchema,
   passkeyRegistrationOptionsResponseSchema,
   sessionResponseSchema,
@@ -30,6 +34,50 @@ import {
 export interface TotpSetupResponse {
   secret: string;
   uri: string;
+}
+
+const AVATAR_CONTENT_TYPE_BY_EXTENSION: Record<
+  string,
+  AvatarUploadContentType
+> = {
+  gif: "image/gif",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+};
+
+/** Handles browsers (especially mobile browsers) that leave File.type empty. */
+export function resolveAvatarUploadContentType(
+  file: Pick<File, "name" | "type">,
+): AvatarUploadContentType | null {
+  const declaredType = file.type.trim().toLowerCase();
+  if (declaredType) {
+    const parsedType = avatarUploadContentTypeSchema.safeParse(declaredType);
+    return parsedType.success ? parsedType.data : null;
+  }
+
+  const extension = file.name.split(".").pop()?.trim().toLowerCase() ?? "";
+  return AVATAR_CONTENT_TYPE_BY_EXTENSION[extension] ?? null;
+}
+
+async function uploadToPresignedAvatarUrl(
+  uploadUrl: string,
+  file: File,
+  contentType: AvatarUploadContentType,
+): Promise<void> {
+  const response = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": contentType },
+    body: file,
+    credentials: "omit",
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Storage upload failed with status ${response.status || "unknown"}.`,
+    );
+  }
 }
 
 export const authService = {
@@ -87,6 +135,14 @@ export const authService = {
     return api.post<{ backupCodes: string[] }>("/auth/totp/enable", payload);
   },
 
+  disableTotp: (): Promise<AuthMessageResponse> => {
+    return api.delete<AuthMessageResponse>("/auth/totp");
+  },
+
+  deletePasskeys: (): Promise<AuthMessageResponse> => {
+    return api.delete<AuthMessageResponse>("/auth/passkey");
+  },
+
   verifyMfaTotp: (payload: TotpVerifyRequest): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/totp/verify", payload);
   },
@@ -142,6 +198,29 @@ export const authService = {
     payload: ProfileUpdateRequest,
   ): Promise<UserProfileResponse> => {
     return api.patch<UserProfileResponse>("/auth/me", payload);
+  },
+
+  uploadAvatarPhoto: (file: File): Promise<UserProfileResponse> => {
+    const contentType = resolveAvatarUploadContentType(file);
+    if (!contentType) {
+      return Promise.reject(
+        new Error("Choose a JPEG, PNG, WebP, or GIF image."),
+      );
+    }
+
+    const payload: AvatarUploadPresignRequest = {
+      contentType,
+      fileSize: file.size,
+    };
+
+    return api
+      .post<AvatarUploadPresignResponse>("/auth/me/avatar/presign", payload)
+      .then(({ uploadUrl }) =>
+        uploadToPresignedAvatarUrl(uploadUrl, file, contentType),
+      )
+      .then(() =>
+        api.post<UserProfileResponse>("/auth/me/avatar/complete", payload),
+      );
   },
 
   logout: (): Promise<AuthMessageResponse> => {

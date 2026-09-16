@@ -16,6 +16,7 @@ import {
   isSupportedDiscussionUploadMimeType,
   DISCUSSION_DEFAULT_EXTENSION_FOR_MIME,
   isAllowedExtensionForMimeType,
+  discussionUploadStorageKey,
   type DiscussionUploadStore,
 } from "../../../discussion-uploads/index.ts";
 import { DISCUSSION_CONSTANTS } from "../shared/discussion.constants.ts";
@@ -165,7 +166,9 @@ export function createAttachmentsService(
 
       const id = crypto.randomUUID();
       const ext = resolveExtension(input.fileName, input.mimeType);
-      const storageKey = `discussion-uploads/${id}${ext}`;
+      const storageKey = discussionUploadStorageKey(
+        `${id}${ext}`,
+      );
       const kind =
         input.kind || getAttachmentKind(input.mimeType, input.fileName);
 
@@ -255,7 +258,7 @@ export function createAttachmentsService(
         await db
           .updateTable("learning_attachments")
           .set({
-            storage_key: `discussion-uploads/${sanitizedName}`,
+            storage_key: discussionUploadStorageKey(sanitizedName),
             file_name: file.filename,
             file_url: fileUrl,
             mime_type: file.mimetype,
@@ -377,7 +380,7 @@ export function createAttachmentsService(
       const id = crypto.randomUUID();
       const ext = resolveExtension(file.filename, file.mimetype);
       const sanitizedName = `${id}${ext}`;
-      const storageKey = `discussion-uploads/${sanitizedName}`;
+      const storageKey = discussionUploadStorageKey(sanitizedName);
       const kind = getAttachmentKind(file.mimetype, file.filename);
       const mediaType = getMediaType(kind, file.mimetype);
 

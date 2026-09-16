@@ -6,6 +6,7 @@ import {
   getNavigationDestination,
   getNavigationIconColor,
   getNavigationItemsFromMenus,
+  getNavigationMenuSignature,
   getNavigationPreferenceStorageKey,
   getOrderedNavigation,
   getPublicNavigationItems,
@@ -36,36 +37,19 @@ const dynamicMenus: AuthMenuNode[] = [
     },
   },
   {
-    id: "22222222-2222-4222-8222-222222222222",
+    id: "33333333-3333-4333-8333-333333333333",
     parentId: null,
-    label: "Learning Space",
-    routeLink: "/learning-space",
-    icon: null,
-    expanded: true,
+    label: "My Courses",
+    routeLink: "/my-courses",
+    icon: "BookOpen",
+    expanded: false,
     isBoth: false,
     permissions: {
       canCreate: false,
-      canRead: false,
+      canRead: true,
       canUpdate: false,
       canDelete: false,
     },
-    children: [
-      {
-        id: "33333333-3333-4333-8333-333333333333",
-        parentId: "22222222-2222-4222-8222-222222222222",
-        label: "My Courses",
-        routeLink: "/my-courses",
-        icon: "BookOpen",
-        expanded: false,
-        isBoth: false,
-        permissions: {
-          canCreate: false,
-          canRead: true,
-          canUpdate: false,
-          canDelete: false,
-        },
-      },
-    ],
   },
   {
     id: "55555555-5555-4555-8555-555555555555",
@@ -100,7 +84,6 @@ describe("server menu navigation adapter", () => {
       source: "server",
     });
     expect(getNavigationDestination(navigation[1]!)).toBe("/my-courses");
-    expect(hasNavigationMenu(dynamicMenus, "Learning Space")).toBe(true);
     expect(hasNavigationMenu(dynamicMenus, "My Courses")).toBe(true);
   });
 
@@ -109,28 +92,23 @@ describe("server menu navigation adapter", () => {
     expect(getNavigationItemsFromMenus(undefined)).toEqual([]);
   });
 
-  it("provides Courses, Learning Space, and Settings outside an authenticated menu payload", () => {
+  it("provides Courses and Settings outside an authenticated menu payload", () => {
     const navigation = getPublicNavigationItems();
     expect(labels(navigation)).toEqual([
       "Courses",
-      "Learning Space",
       "Settings",
     ]);
     expect(getNavigationDestination(navigation[0]!)).toBe("/courses");
-    expect(getNavigationDestination(navigation[1]!)).toBe("/learning-space");
-    expect(getNavigationDestination(navigation[2]!)).toBe("/settings");
+    expect(getNavigationDestination(navigation[1]!)).toBe("/settings");
   });
 
-  it("uses role menus when present and falls back to the default menu otherwise", () => {
+  it("uses the sidenav menu response as the complete menu source", () => {
     const withMenus = resolveShellNavigation(dynamicMenus);
     expect(withMenus.isDefault).toBe(false);
     expect(labels(withMenus.items)).toEqual([
       "Overview",
       "My Courses",
       "Notification",
-      "Courses",
-      "Learning Space",
-      "Settings",
     ]);
 
     const withCoreMenus = resolveShellNavigation([
@@ -150,34 +128,15 @@ describe("server menu navigation adapter", () => {
         icon: "GearSix",
       },
     ]);
-    expect(
-      labels(withCoreMenus.items)
-        .filter((label) =>
-          ["Courses", "Learning Space", "Settings"].includes(label),
-        )
-        .sort(),
-    ).toEqual(["Courses", "Learning Space", "Settings"]);
+    expect(labels(withCoreMenus.items)).toContain("Courses");
 
     const emptyMenus = resolveShellNavigation([]);
-    expect(emptyMenus.isDefault).toBe(true);
-    expect(labels(emptyMenus.items)).toEqual([
-      "Courses",
-      "Learning Space",
-      "Settings",
-    ]);
-    expect(getNavigationDestination(emptyMenus.items[0]!)).toBe("/courses");
-    expect(getNavigationDestination(emptyMenus.items[1]!)).toBe(
-      "/learning-space",
-    );
-    expect(getNavigationDestination(emptyMenus.items[2]!)).toBe("/settings");
+    expect(emptyMenus.isDefault).toBe(false);
+    expect(emptyMenus.items).toEqual([]);
 
     const guestMenus = resolveShellNavigation(undefined);
-    expect(guestMenus.isDefault).toBe(true);
-    expect(labels(guestMenus.items)).toEqual([
-      "Courses",
-      "Learning Space",
-      "Settings",
-    ]);
+    expect(guestMenus.isDefault).toBe(false);
+    expect(guestMenus.items).toEqual([]);
   });
 
   it("applies existing order and visibility preferences to server menus", () => {
@@ -189,6 +148,10 @@ describe("server menu navigation adapter", () => {
     localStorage.setItem(
       "veolms-navigation-visibility-student",
       JSON.stringify(["My Courses"]),
+    );
+    localStorage.setItem(
+      "veolms-navigation-visibility-student-menu-signature",
+      getNavigationMenuSignature(navigation),
     );
 
     expect(
@@ -243,11 +206,9 @@ describe("navigation preferences", () => {
     const navigation = resolveShellNavigation(dynamicMenus).items;
     localStorage.setItem("veolms-navigation-visibility-student", "[]");
 
-    expect(getInitialNavigationVisibility("student", navigation)).toEqual([
-      "Courses",
-      "Learning Space",
-      "Settings",
-    ]);
+    expect(getInitialNavigationVisibility("student", navigation)).toEqual(
+      labels(navigation),
+    );
   });
 
   it("falls back to the supplied menu list when storage is invalid", () => {
@@ -256,7 +217,6 @@ describe("navigation preferences", () => {
 
     expect(getInitialNavigationOrder("student", navigation)).toEqual([
       "Courses",
-      "Learning Space",
       "Settings",
     ]);
   });
@@ -268,7 +228,7 @@ describe("navigation preferences", () => {
 
     expect(
       getInitialNavigationOrder("student", getPublicNavigationItems()),
-    ).toEqual(["Courses", "Learning Space", "Settings"]);
+    ).toEqual(["Courses", "Settings"]);
   });
 
   it("scopes saved preferences to the authenticated account", () => {
@@ -306,9 +266,6 @@ describe("navigation display and icon color helpers", () => {
       "/courses",
     );
     expect(getNavigationDestination(getPublicNavigationItems()[1]!)).toBe(
-      "/learning-space",
-    );
-    expect(getNavigationDestination(getPublicNavigationItems()[2]!)).toBe(
       "/settings",
     );
   });

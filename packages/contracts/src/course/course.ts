@@ -15,6 +15,7 @@ export interface CourseSummary {
   shortDescription: string;
   difficulty?: "beginner" | "intermediate" | "advanced" | null;
   thumbnailUrl?: string | null;
+  thumbnailSrcSet?: readonly { url: string; width: number; height: number }[];
   instructorName?: string | null;
   categoryName?: string | null;
   totalSections: number;
@@ -57,6 +58,7 @@ const courseSummaryObjectSchema = z.strictObject({
     .nullable()
     .optional(),
   thumbnailUrl: z.string().nullable().optional(),
+  thumbnailSrcSet: z.array(z.object({ url: z.string(), width: z.number().int().positive(), height: z.number().int().positive() })).optional(),
   instructorName: z.string().nullable().optional(),
   categoryName: z.string().nullable().optional(),
   totalSections: z.number().int().nonnegative().default(0),
@@ -306,7 +308,7 @@ export const courseLessonSchema = z.object({
   sectionId: z.uuid(),
   title: z.string().min(1),
   description: z.string().nullable().optional(),
-  contentType: z.enum(["video", "document"]),
+  contentType: z.enum(["video", "document", "quiz"]),
   contentMediaId: z.uuid().nullable().optional(),
   durationSeconds: z.number().int().nonnegative().optional(),
   position: z.number().int().nonnegative(),
@@ -339,13 +341,13 @@ export const reorderSectionsRequestSchema = z.object({
 export const createCourseLessonRequestSchema = z.object({
   title: z.string().min(1).max(255),
   description: z.string().max(1500).nullable().optional(),
-  contentType: z.enum(["video", "document"]),
+  contentType: z.enum(["video", "document", "quiz"]),
 });
 
 export const updateCourseLessonRequestSchema = z.object({
   title: z.string().min(1).max(255).optional(),
   description: z.string().max(1500).nullable().optional(),
-  contentType: z.enum(["video", "document"]).optional(),
+  contentType: z.enum(["video", "document", "quiz"]).optional(),
   contentMediaId: z.uuid().nullable().optional(),
   isPreview: z.boolean().optional(),
   isPublished: z.boolean().optional(),
@@ -393,7 +395,18 @@ export const courseSchema = z.object({
   creatorId: z.uuid().nullable(),
   categoryId: z.uuid().nullable().optional(),
   thumbnailMediaId: z.uuid().nullable().optional(),
+  thumbnailUrl: z.string().nullable().optional(),
+  thumbnailSrcSet: z
+    .array(
+      z.object({
+        url: z.string(),
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+      }),
+    )
+    .optional(),
   trailerMediaId: z.uuid().nullable().optional(),
+  trailerUrl: z.string().nullable().optional(),
   instructorAlias: z.string().max(120).nullable().optional(),
   version: z.number().int(),
   createdAt: z.string(),

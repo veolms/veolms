@@ -15,8 +15,8 @@ import {
   getCoursePlayerReturnPath,
   getCoursePlayerSession,
   getCoursePlayerThread,
+  getCoursePlayerView,
   getOpenCoursePlayerSessions,
-  mapLearningSpaceSessionToCoursePlayerSession,
   getPendingCourseCommentDraft,
   getStoredCourseLessonId,
   migrateCoursePlayerSessionKey,
@@ -38,33 +38,6 @@ beforeEach(() => {
 });
 
 describe("course player navigation", () => {
-  it("maps canonical server sessions back to readable player routes", () => {
-    const session = mapLearningSpaceSessionToCoursePlayerSession({
-      id: "11111111-1111-4111-8111-111111111111",
-      courseId: "22222222-2222-4222-8222-222222222222",
-      courseSlug: "backend-nodejs",
-      courseTitle: "Complete Backend with Node.js",
-      lessonId: "33333333-3333-4333-8333-333333333333",
-      lessonNumber: 2,
-      lessonTitle: "Modules and Packages",
-      origin: "courses",
-      returnPath: "/courses",
-      createdAt: "2026-09-01T10:00:00.000Z",
-      updatedAt: "2026-09-01T10:05:00.000Z",
-    });
-
-    expect(session).toMatchObject({
-      courseId: "backend-nodejs",
-      courseTitle: "Complete Backend with Node.js",
-      lessonId: 2,
-      lessonTitle: "Modules and Packages",
-      returnPath: "/courses",
-      updatedAt: Date.parse("2026-09-01T10:05:00.000Z"),
-    });
-    expect(session.path).toContain("/learn/backend-nodejs/");
-    expect(session.path).toContain("from=courses");
-  });
-
   it("builds backward-compatible learning URLs and decorates exact launch sources", () => {
     expect(getCoursePlayerLaunchPath("typescript/course", "/courses", 1)).toBe(
       "/learn/typescript%2Fcourse/lecture-1?from=courses",
@@ -653,7 +626,7 @@ describe("course player navigation", () => {
         "courses",
         2,
         "/courses/the-ultimate-no/overview",
-        "thr-789",
+        { threadId: "thr-789" },
       );
       expect(path).toBe(
         "/learn/the-ultimate-no/lecture-2?from=courses&returnTo=%2Fcourses%2Fthe-ultimate-no%2Foverview&thread=thr-789",
@@ -671,6 +644,29 @@ describe("course player navigation", () => {
       const session = getCoursePlayerSession("the-ultimate-no");
       expect(session?.path).toBe(
         "/learn/the-ultimate-no/lecture-1?from=courses&thread=thr-abc",
+      );
+    });
+
+    it("preserves quiz view alongside a server thread in canonical paths and sessions", () => {
+      const path = getCoursePlayerPath(
+        "the-ultimate-no",
+        "courses",
+        2,
+        "/courses/the-ultimate-no/overview",
+        { threadId: "thr-quiz", view: "quiz" },
+      );
+      expect(path).toBe(
+        "/learn/the-ultimate-no/lecture-2?from=courses&returnTo=%2Fcourses%2Fthe-ultimate-no%2Foverview&thread=thr-quiz&view=quiz",
+      );
+      expect(getCoursePlayerView("?view=quiz")).toBe("quiz");
+
+      const sessionPath = upsertCoursePlayerSessionFromRoute(
+        "the-ultimate-no",
+        "?from=courses&thread=thr-quiz&view=quiz",
+        2,
+      );
+      expect(sessionPath).toBe(
+        "/learn/the-ultimate-no/lecture-2?from=courses&thread=thr-quiz&view=quiz",
       );
     });
   });

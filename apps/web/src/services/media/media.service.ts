@@ -1,5 +1,5 @@
 import type {
-  MediaAssetStatus,
+  MediaUploadCompleteResponse,
   PresignMediaRequest,
   PresignMediaResponse,
 } from "@veolms/contracts";
@@ -29,11 +29,14 @@ export const mediaService = {
   },
 
   presignVideoUpload(
-    payload: Omit<PresignMediaRequest, "type">,
+    payload: Omit<PresignMediaRequest, "type" | "visibility"> & {
+      visibility?: PresignMediaRequest["visibility"];
+    },
   ): Promise<PresignMediaResponse> {
     return requestPresignedMediaUpload({
       ...payload,
       type: "video",
+      visibility: payload.visibility ?? "protected",
     });
   },
 
@@ -126,8 +129,8 @@ export const mediaService = {
     });
   },
 
-  confirmUpload(mediaAssetId: string): Promise<{ status: MediaAssetStatus }> {
-    return api.post<{ status: MediaAssetStatus }>(
+  confirmUpload(mediaAssetId: string): Promise<MediaUploadCompleteResponse> {
+    return api.post<MediaUploadCompleteResponse>(
       `/media/${mediaAssetId}/upload-complete`,
     );
   },

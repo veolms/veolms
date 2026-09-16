@@ -61,6 +61,21 @@ export async function replaceTotpCredential(
     .execute();
 }
 
+export async function deleteTotpCredential(
+  database: Executor,
+  userId: string,
+): Promise<void> {
+  await database
+    .deleteFrom("user_totp_credentials")
+    .where("user_id", "=", userId)
+    .execute();
+
+  await database
+    .deleteFrom("mfa_backup_codes")
+    .where("user_id", "=", userId)
+    .execute();
+}
+
 export async function advanceTotpStep(
   database: Executor,
   userId: string,
@@ -166,6 +181,16 @@ export async function countUserPasskeys(
     .executeTakeFirst();
 
   return Number(row?.count ?? 0);
+}
+
+export async function deleteAllUserPasskeys(
+  database: Executor,
+  userId: string,
+): Promise<void> {
+  await database
+    .deleteFrom("passkeys")
+    .where("user_id", "=", userId)
+    .execute();
 }
 
 export function findUserPasskey(

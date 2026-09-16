@@ -38,15 +38,6 @@ export interface UserTable {
   updated_at: Generated<Date>;
 }
 
-export interface RoleTable {
-  id: string;
-  name: string;
-  description: string | null;
-  last_permission_update: Generated<Date>;
-  created_at: Generated<Date>;
-  updated_at: Generated<Date>;
-}
-
 export interface UserRoleTable {
   user_id: string;
   role_id: string;
@@ -66,7 +57,7 @@ export interface MenuTable {
   updated_at: Generated<Date>;
 }
 
-export interface PermissionTable {
+export interface MenuPermissionTable {
   id: string;
   role_id: string;
   menu_id: string;

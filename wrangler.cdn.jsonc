@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "veolms-cdn",
+  "main": "scripts/cdn-worker.js",
+  "compatibility_date": "2024-11-01",
+  "workers_dev": true,
+  "r2_buckets": [
+    {
+      "binding": "MEDIA_BUCKET",
+      "bucket_name": "procodrr-media",
+    },
+  ],
+  "vars": {
+    "CDN_URL": "/cdn",
+    "CDN_PUBLIC_FOLDERS": "public,thumbnails,course-hls,course-videos",
+    "CDN_PRIVATE_FOLDERS": "protected,media,transcoded",
+    "AVATAR_IMAGE_WIDTHS": "45,96,160",
+  },
+}

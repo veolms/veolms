@@ -21,7 +21,10 @@ export type NotificationTemplateKey =
   | "moderation.content_moderated"
   | "moderation.user_suspended"
   | "moderation.user_unsuspended"
-  | "moderation.report_resolved";
+  | "moderation.report_resolved"
+  | "quiz.attempt_passed"
+  | "quiz.attempt_failed_final"
+  | "quiz.assigned";
 
 export type NotificationTemplateData = Record<
   string,

@@ -216,7 +216,7 @@ export function FullscreenLandscapeCurriculumPanel({
       session.handle.setPointerCapture?.(session.pointerId);
       setMotionMode("dragging");
       claimPointerGesture({
-        owner: "learning-space",
+        owner: "curriculum",
         pointerId: session.pointerId,
       });
     }
@@ -273,7 +273,7 @@ export function FullscreenLandscapeCurriculumPanel({
     event.preventDefault();
     event.stopPropagation();
     claimPointerGesture({
-      owner: "learning-space",
+      owner: "curriculum",
       pointerId: event.pointerId,
     });
     clearMotionTimer();

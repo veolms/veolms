@@ -32,6 +32,7 @@ export function createCurriculumController({
       id,
       creatorId,
       title,
+      request.user?.roles,
     );
     reply.code(201);
     return section;
@@ -52,6 +53,7 @@ export function createCurriculumController({
       sectionId,
       creatorId,
       title,
+      request.user?.roles,
     );
   }
 
@@ -61,7 +63,12 @@ export function createCurriculumController({
     const { id, sectionId } = request.params;
     const creatorId = request.user!.id;
 
-    return await service.deleteCourseSection(id, sectionId, creatorId);
+    return await service.deleteCourseSection(
+      id,
+      sectionId,
+      creatorId,
+      request.user?.roles,
+    );
   }
 
   async function reorderCourseSections(
@@ -79,6 +86,7 @@ export function createCurriculumController({
       creatorId,
       orderedSectionIds,
       version,
+      request.user?.roles,
     );
   }
 
@@ -99,6 +107,7 @@ export function createCurriculumController({
       sectionId,
       creatorId,
       request.body,
+      request.user?.roles,
     );
     reply.code(201);
     return lesson;
@@ -120,6 +129,7 @@ export function createCurriculumController({
       creatorId,
       request.body,
       request.log,
+      request.user?.roles,
     );
 
     if (result.accepted) {
@@ -139,7 +149,12 @@ export function createCurriculumController({
     const { id, lessonId } = request.params;
     const creatorId = request.user!.id;
 
-    return await service.deleteCourseLesson(id, lessonId, creatorId);
+    return await service.deleteCourseLesson(
+      id,
+      lessonId,
+      creatorId,
+      request.user?.roles,
+    );
   }
 
   async function reorderSectionLessons(
@@ -158,6 +173,7 @@ export function createCurriculumController({
       creatorId,
       orderedLessonIds,
       version,
+      request.user?.roles,
     );
   }
 
@@ -178,6 +194,7 @@ export function createCurriculumController({
       lessonId,
       creatorId,
       request.body,
+      request.user?.roles,
     );
     reply.code(201);
     return resource;
@@ -189,7 +206,12 @@ export function createCurriculumController({
     const { id, resourceId } = request.params;
     const creatorId = request.user!.id;
 
-    return await service.removeLessonResource(id, resourceId, creatorId);
+    return await service.removeLessonResource(
+      id,
+      resourceId,
+      creatorId,
+      request.user?.roles,
+    );
   }
 
   return {

@@ -1,0 +1,77 @@
+import { z } from "zod";
+
+const AVATAR_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
+
+export const avatarUploadContentTypeSchema = z.enum([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
+
+const avatarUploadFileSizeSchema = z
+  .number()
+  .int()
+  .positive()
+  .max(AVATAR_UPLOAD_MAX_BYTES);
+
+/** Shared request used by both the presign and upload-complete avatar calls. */
+export const avatarUploadPresignRequestSchema = z.strictObject({
+  contentType: avatarUploadContentTypeSchema,
+  fileSize: avatarUploadFileSizeSchema,
+});
+
+export const avatarUploadCompleteRequestSchema =
+  avatarUploadPresignRequestSchema;
+
+export const avatarUploadPresignResponseSchema = z.strictObject({
+  uploadUrl: z.url().max(20_000),
+});
+
+export type AvatarUploadContentType = z.infer<
+  typeof avatarUploadContentTypeSchema
+>;
+export type AvatarUploadPresignRequest = z.input<
+  typeof avatarUploadPresignRequestSchema
+>;
+export type AvatarUploadCompleteRequest = z.input<
+  typeof avatarUploadCompleteRequestSchema
+>;
+export type AvatarUploadPresignResponse = z.output<
+  typeof avatarUploadPresignResponseSchema
+>;
+
+/**
+ * Helpers for DiceBear's public HTTP API
+ * (https://www.dicebear.com/how-to-use/http-api/). No authentication is
+ * required, so both the browser (style picker previews) and the server
+ * (default avatar generated at signup) call the same endpoint shape.
+ */
+export const DICEBEAR_BASE_URL = "https://api.dicebear.com/10.x";
+
+/**
+ * Small curated subset of DiceBear's styles, good enough for a profile
+ * picture picker without listing every style the API supports.
+ */
+export const AVATAR_STYLES = [
+  "lorelei",
+  "notionists",
+  "adventurer",
+  "micah",
+  "bottts",
+  "pixel-art",
+] as const;
+
+export type AvatarStyle = (typeof AVATAR_STYLES)[number];
+
+/** Style used for the deterministic avatar generated automatically at signup. */
+export const DEFAULT_AVATAR_STYLE: AvatarStyle = AVATAR_STYLES[0];
+
+/**
+ * Builds the SVG endpoint URL for a given style + seed. The seed is
+ * URL-encoded since it may contain characters DiceBear doesn't expect
+ * (e.g. a shuffled seed like "<userId>-3").
+ */
+export function buildDicebearSvgUrl(style: AvatarStyle, seed: string): string {
+  return `${DICEBEAR_BASE_URL}/${style}/svg?seed=${encodeURIComponent(seed)}`;
+}

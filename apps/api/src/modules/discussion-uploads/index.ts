@@ -1,6 +1,7 @@
 export {
   createDiscussionUploadStore,
   discussionUploadPublicUrl,
+  discussionUploadStorageKey,
   isSafeDiscussionUploadFileName,
   isSupportedDiscussionUploadMimeType,
   isAllowedExtensionForMimeType,

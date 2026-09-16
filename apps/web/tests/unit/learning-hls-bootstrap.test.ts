@@ -113,17 +113,11 @@ describe("learning HLS bootstrap", () => {
   });
 
   it("resolves playback API URLs without duplicating prefixes", () => {
-    expect(
-      resolveVideoPlaybackApiUrl(
-        "/media/11111111-1111-1111-1111-111111111111/hls/master.m3u8",
-      ),
-    ).toBe("/api/v1/media/11111111-1111-1111-1111-111111111111/hls/master.m3u8");
+    const mediaPath = "/media/11111111-1111-1111-1111-111111111111/hls/master.m3u8";
+    const expected = resolveVideoPlaybackApiUrl(mediaPath);
 
-    expect(
-      resolveVideoPlaybackApiUrl(
-        "/api/v1/media/11111111-1111-1111-1111-111111111111/hls/master.m3u8",
-      ),
-    ).toBe("/api/v1/media/11111111-1111-1111-1111-111111111111/hls/master.m3u8");
+    expect(resolveVideoPlaybackApiUrl(mediaPath)).toBe(expected);
+    expect(resolveVideoPlaybackApiUrl(expected)).toBe(expected);
 
     expect(
       resolveVideoPlaybackApiUrl(

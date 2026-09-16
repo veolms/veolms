@@ -111,7 +111,56 @@ pnpm build:web -- --first-section
 pnpm --filter @veolms/web preview -- --first-section
 ```
 
-React Router writes the deployable client-only application to `apps/web/build/client`. `VITE_COURSE_MEDIA_BASE_URL` is optional; when it is unset, course media uses relative `/course-videos/...` URLs.
+React Router writes the deployable client-only application to `apps/web/build/client`. `VITE_CDN_URL` is the browser-facing CDN value and accepts either a full CDN/Worker domain (for example `https://media.veolms.org`) or a same-origin path such as `/cdn`. `CDN_URL` is the corresponding API/Worker value; keep both values equal. The Vite development server uses `VITE_CDN_URL` (falling back to `CDN_URL`) to provide the `/cdn/*` proxy when it is an absolute URL. With `/cdn` in deployment, the host must route `/cdn/*` to the Worker; media bytes never pass through the API.
+
+## Direct media CDN Worker
+
+The Cloudflare Worker lives in the single source file
+`scripts/cdn-worker.js`. `wrangler.cdn.jsonc` is the deployment configuration
+that binds the private R2 bucket to `env.MEDIA_BUCKET`.
+
+Set `CDN_SIGNING_SECRET` to the same value in the API environment and Worker
+secret, then deploy with:
+
+```bash
+pnpm dlx wrangler@4 secret put CDN_SIGNING_SECRET --config wrangler.cdn.jsonc
+pnpm dlx wrangler@4 deploy --dry-run --config wrangler.cdn.jsonc
+pnpm dlx wrangler@4 deploy --config wrangler.cdn.jsonc
+```
+
+Keep the R2 bucket private. Configure the Worker route as `/cdn/*` when
+`CDN_URL=/cdn`, or attach a custom domain and set `CDN_URL` to that full
+domain. `.m3u8` files are public, while non-manifest objects in
+`CDN_PUBLIC_FOLDERS` are served without a token and
+`CDN_PRIVATE_FOLDERS` require the short-lived `veo_token` issued by the API.
+`CDN_TOKEN_TTL_SECONDS` controls normal protected-media URLs and
+`CDN_HLS_TOKEN_TTL_SECONDS` controls protected HLS segment URLs.
+New direct uploads use `public/...` or `protected/...` keys. Course thumbnail
+assets use a flat per-asset layout:
+
+```text
+public/thumbnails/<mediaId>/original.<extension>
+public/thumbnails/<mediaId>/full.webp
+public/thumbnails/<mediaId>/<width>.webp
+```
+
+Protected thumbnails use the same layout below `protected/`. Existing legacy
+`thumbnails/...`, `media/...`, and `transcoded/...` keys remain supported by
+the Worker defaults. Newly generated HLS output uses
+`public/transcoded/<mediaId>/` or `protected/transcoded/<mediaId>/`; the
+manifest is `master.m3u8` inside that prefix.
+Profile avatars use CDN-served flat per-user keys:
+
+```text
+public/avatars/<userId>/original.<extension>
+public/avatars/<userId>/<width>.webp
+```
+
+The API stores the 160px CDN URL and returns the 45px, 96px, and 160px source
+set. The CDN/image-transform Worker creates missing WebP variants. Manual
+avatar uploads use `POST /auth/me/avatar/presign`, a browser `PUT` to the
+returned storage URL, and `POST /auth/me/avatar/complete`. Authenticated
+discussion attachments use `protected/discussion-uploads/<fileName>`.
 
 ## Development UI deployment
 
@@ -124,7 +173,8 @@ The workflow uses the GitHub `development` environment and exchanges GitHub's OI
 - `AWS_REGION`
 - `AWS_S3_BUCKET`
 - `AWS_CLOUDFRONT_DISTRIBUTION_ID`
-- `VITE_COURSE_MEDIA_BASE_URL` (optional)
+- `VITE_CDN_URL` (optional; use a full CDN domain or `/cdn` when the host routes `/cdn/*` to the Worker)
+- `CDN_URL` remains the API/Worker setting and is used as a build fallback when `VITE_CDN_URL` is not configured.
 
 Do not add long-lived AWS access keys as GitHub secrets. Restrict the role's trust policy to the repository's immutable `development` environment subject, `repo:veolms@301170291/veolms@1320067532:environment:development`. Its permissions should be limited to listing the deployment bucket, putting and deleting objects in that bucket, and creating and reading invalidations for the development CloudFront distribution.
 

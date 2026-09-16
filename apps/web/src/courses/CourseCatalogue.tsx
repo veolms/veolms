@@ -38,6 +38,7 @@ export interface CourseCatalogueProps {
   onNavigatePage: (destination: string) => void;
   onResetCatalogue: () => void;
   isAdmin?: boolean;
+  currentUserId?: string;
   isLoading?: boolean;
   onDeleteCourse?: (course: Course) => Promise<void> | void;
   onRestoreCourse?: (course: Course) => Promise<void> | void;
@@ -48,6 +49,7 @@ export function CourseCatalogue({
   activeSection,
   role,
   isAdmin = false,
+  currentUserId,
   isLoading = false,
   wishlisted,
   enrollmentFilter,
@@ -132,6 +134,8 @@ export function CourseCatalogue({
       key={course.id}
       course={course}
       role={role}
+      isAdmin={isAdmin}
+      currentUserId={currentUserId}
       wishlisted={wishlisted.has(course.id)}
       onWishlist={onWishlist}
       onOpen={(selected) =>

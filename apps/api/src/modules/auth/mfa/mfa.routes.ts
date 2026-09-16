@@ -66,6 +66,54 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
     controller.enableTotp,
   );
 
+  app.delete(
+    "/auth/totp",
+    {
+      schema: {
+        operationId: "disableTotp",
+        tags: ["Auth"],
+        summary: "Disable TOTP Authenticator",
+        description:
+          "Removes TOTP authenticator credentials and associated backup recovery codes.",
+        response: {
+          200: jsonResponse(
+            "TOTP disabled successfully.",
+            authMessageResponseSchema,
+          ),
+          400: errorResponse("Cannot disable mandatory MFA."),
+          401: errorResponse("Unauthorized."),
+          403: errorResponse("Step-up MFA required."),
+        },
+      },
+      preHandler: context.authenticated,
+    },
+    controller.disableTotp,
+  );
+
+  app.delete(
+    "/auth/passkey",
+    {
+      schema: {
+        operationId: "deletePasskeys",
+        tags: ["Auth"],
+        summary: "Delete All Passkeys",
+        description:
+          "Removes all registered WebAuthn passkey credentials for the user.",
+        response: {
+          200: jsonResponse(
+            "Passkeys removed successfully.",
+            authMessageResponseSchema,
+          ),
+          400: errorResponse("Cannot disable mandatory MFA."),
+          401: errorResponse("Unauthorized."),
+          403: errorResponse("Step-up MFA required."),
+        },
+      },
+      preHandler: context.authenticated,
+    },
+    controller.deletePasskeys,
+  );
+
   app.post(
     "/auth/totp/verify",
     {

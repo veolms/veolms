@@ -7,10 +7,9 @@ export const LEARNING_HLS_MIME_TYPE = "application/x-mpegurl";
 // response do not keep replaying the previous CORS failure.
 export const LEARNING_HLS_CACHE_VERSION = "cors-v2";
 
-// Shaka's NetworkingEngine.setScheme("/api/...", "https") concatenates the
-// scheme and path into "https:/api/..." (one slash). URL parsing then treats
-// "api" as the hostname, so the player fetches /v1/media/... on the page
-// origin instead of /api/v1/media/....
+// Shaka's NetworkingEngine can hand a same-origin path to a scheme resolver as
+// a malformed one-slash URL. Repair that shape before applying CDN queries so
+// the player never drops the configured media path prefix.
 const SHAKA_MALFORMED_SCHEME_PREFIX = /^(https?:)\/(?!\/)/i;
 
 export function getLearningMediaOrigin(): string | null {
@@ -91,7 +90,12 @@ function appendHlsCacheQuery(uri: string, origin: string | null): string {
 export function appendLearningHlsCacheVersion(
   request: VideoNetworkRequest,
 ): void {
-  if (request.type !== "manifest" && request.type !== "segment") return;
+  if (
+    request.type !== "manifest" &&
+    request.type !== "segment" &&
+    request.type !== "text"
+  )
+    return;
   const origin = getLearningMediaOrigin();
 
   request.uris = request.uris.map((uri) =>
@@ -101,14 +105,69 @@ export function appendLearningHlsCacheVersion(
 
 export function createLearningHlsRequestFilter(options?: {
   protectedPlayback?: boolean;
+  segmentToken?: string;
+  segmentTokenExpiresAt?: number;
+  refreshSegmentToken?: () => Promise<{
+    token: string;
+    expiresAt?: number;
+  } | null>;
 }) {
-  if (!options?.protectedPlayback) {
+  if (!options?.segmentToken && !options?.refreshSegmentToken) {
     return appendLearningHlsCacheVersion;
   }
-  return (request: VideoNetworkRequest): void => {
+  let currentToken = options.segmentToken;
+  let currentTokenExpiresAt = options.segmentTokenExpiresAt;
+  let refreshInFlight:
+    Promise<{ token: string; expiresAt?: number } | null> | undefined;
+
+  return async (request: VideoNetworkRequest): Promise<void> => {
     appendLearningHlsCacheVersion(request);
-    request.allowCrossSiteCredentials = true;
+    if (request.type !== "segment" && request.type !== "text") return;
+
+    const refreshBefore = Math.floor(Date.now() / 1000) + 30;
+    if (
+      options.refreshSegmentToken &&
+      (!currentToken ||
+        (currentTokenExpiresAt !== undefined &&
+          currentTokenExpiresAt <= refreshBefore))
+    ) {
+      refreshInFlight ??= options.refreshSegmentToken();
+      try {
+        const refreshed = await refreshInFlight;
+        if (refreshed) {
+          currentToken = refreshed.token;
+          currentTokenExpiresAt = refreshed.expiresAt;
+        }
+      } finally {
+        refreshInFlight = undefined;
+      }
+    }
+
+    if (!currentToken) return;
+    request.uris = request.uris.map((uri) =>
+      appendLearningHlsQueryParameter(uri, "veo_token", currentToken!),
+    );
   };
+}
+
+function appendLearningHlsQueryParameter(
+  uri: string,
+  key: string,
+  value: string,
+): string {
+  const hashIndex = uri.indexOf("#");
+  const hash = hashIndex === -1 ? "" : uri.slice(hashIndex);
+  const withoutHash = hashIndex === -1 ? uri : uri.slice(0, hashIndex);
+  const origin = getLearningMediaOrigin();
+  try {
+    if (!origin && !/^https?:\/\//i.test(withoutHash)) throw new Error();
+    const parsed = origin ? new URL(withoutHash, origin) : new URL(withoutHash);
+    parsed.searchParams.set(key, value);
+    return `${parsed.toString()}${hash}`;
+  } catch {
+    const separator = withoutHash.includes("?") ? "&" : "?";
+    return `${withoutHash}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}${hash}`;
+  }
 }
 
 export const LEARNING_HLS_STREAMING = {

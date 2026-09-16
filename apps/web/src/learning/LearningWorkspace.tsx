@@ -14,7 +14,10 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import type { VideoPlaybackBootstrap } from "@veolms/contracts";
+import type {
+  MyQuizAssignment,
+  VideoPlaybackBootstrap,
+} from "@veolms/contracts";
 import {
   DRAWER_SWIPE_THROUGH_VIEWPORT_CLASS,
   claimPointerGesture,
@@ -69,9 +72,16 @@ import {
   getPublicPreviewLessonNumbers,
 } from "./coursePlayerAccess";
 import { useAuthStore } from "../store/auth.store";
+import { QuizAttemptPanel } from "../quizzes/QuizAttemptPanel";
 import { useCourseOverview } from "../services/courses";
+import { useCourseQuizAssignments } from "../services/quizzes/quizzes.queries";
+import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { adaptCourseOverviewToCurriculum } from "./courseCurriculumAdapter";
-import { getVideoPlaybackBootstrap } from "./videoPlaybackBootstrap";
+import {
+  getVideoPlaybackBootstrap,
+  refreshVideoPlaybackToken,
+} from "./videoPlaybackBootstrap";
 import {
   Discussion,
   PrerenderedMobileCommentComposer,
@@ -174,7 +184,6 @@ const CURRICULUM_SWIPE_EXCLUSION_SELECTOR = [
 const LESSON_DRAWER_REVEAL_EXCLUSION_SELECTOR = [
   ".learning-curriculum__resize-rail",
   ".elastic-scroller",
-  "[data-learning-space-panel]",
   "input",
   "textarea",
   "select",
@@ -183,6 +192,18 @@ const LESSON_DRAWER_REVEAL_EXCLUSION_SELECTOR = [
   "[data-player-control]",
   "[data-player-menu]",
 ].join(",");
+
+const safeResumeVideo = (video: HTMLVideoElement | null) => {
+  if (!video || !video.paused) return;
+  try {
+    const playResult = video.play?.();
+    if (playResult && typeof playResult.catch === "function") {
+      playResult.catch(() => undefined);
+    }
+  } catch {
+    // Ignore environments where play() is unsupported (e.g. JSDOM) or rejected by browser policies
+  }
+};
 
 const isCurriculumSwipeExcludedTarget = (
   target: EventTarget | null,
@@ -215,9 +236,10 @@ interface LearningWorkspaceProps {
   courseSlug: string | undefined;
   userId?: string;
   lessonId: number;
+  initialLessonView?: "video" | "quiz";
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden?: boolean;
-  onSelectLesson: (lessonId: number) => void;
+  onSelectLesson: (lessonId: number, view?: "video" | "quiz") => void;
   onOpenCourseOverview: () => void;
   onMinimizePlayer?: (request: LearningMiniPlayerRequest) => void;
   onMinimizeGestureChange?: (state: LessonPlayerMinimizeGestureState) => void;
@@ -227,6 +249,9 @@ interface LearningWorkspaceProps {
   persistentPlayerReturnPath?: string;
   persistentPlayerMounted?: boolean;
   registerPersistentPlayer?: RegisterPersistentLearningPlayer;
+  quizAssignment?: MyQuizAssignment | null;
+  quizAssignments?: readonly MyQuizAssignment[] | null;
+  quizAssignmentLoading?: boolean;
 }
 
 interface CurriculumResize {
@@ -289,6 +314,7 @@ export function LearningWorkspace({
   courseSlug,
   userId,
   lessonId,
+  initialLessonView = "video",
   mobileBottomNavigation,
   mobileBottomNavigationHidden = false,
   onSelectLesson,
@@ -301,6 +327,9 @@ export function LearningWorkspace({
   persistentPlayerReturnPath,
   persistentPlayerMounted = false,
   registerPersistentPlayer,
+  quizAssignment = null,
+  quizAssignments = null,
+  quizAssignmentLoading = false,
 }: LearningWorkspaceProps) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isApiRoute = Boolean(courseSlug);
@@ -367,8 +396,13 @@ export function LearningWorkspace({
     if (isCourseOverviewError) {
       return courseSlug || "";
     }
-    return isApiRoute ? (courseSlug || "") : getCourseTitle(courseSlug);
-  }, [courseOverview?.course.title, courseSlug, isApiRoute, isCourseOverviewError]);
+    return isApiRoute ? courseSlug || "" : getCourseTitle(courseSlug);
+  }, [
+    courseOverview?.course.title,
+    courseSlug,
+    isApiRoute,
+    isCourseOverviewError,
+  ]);
   const coursePersistenceKey = encodeURIComponent(courseSlug || "default");
   const discussionPersistenceKey = `${coursePersistenceKey}-lesson-${selectedLesson}`;
   const [lessonDrawer, setLessonDrawer] = useState(false);
@@ -462,10 +496,7 @@ export function LearningWorkspace({
     root.dataset.learningCurriculumState = shellState.curriculumCollapsed
       ? "collapsed"
       : "expanded";
-    root.style.setProperty(
-      "--learning-curriculum-width",
-      `${rootWidth}px`,
-    );
+    root.style.setProperty("--learning-curriculum-width", `${rootWidth}px`);
     root.style.setProperty(
       "--learning-curriculum-expanded-width",
       `${shellState.curriculumWidth}px`,
@@ -574,7 +605,7 @@ export function LearningWorkspace({
   useEffect(
     () =>
       subscribeToPointerGestureClaims(({ owner, pointerId }) => {
-        if (owner !== "learning-space") return;
+        if (owner !== "curriculum") return;
         if (curriculumScreenSwipeRef.current?.pointerId === pointerId) {
           curriculumScreenSwipeRef.current = null;
         }
@@ -634,6 +665,189 @@ export function LearningWorkspace({
     curriculumLessonsById.get(selectedLesson) ||
     firstCurriculumLesson ||
     fallbackEmptyLesson;
+  const courseQuizAssignments = useCourseQuizAssignments(
+    courseOverview?.course.id,
+  );
+  const [activeLessonView, setActiveLessonView] = useState<"video" | "quiz">(
+    initialLessonView,
+  );
+
+  useEffect(() => {
+    setActiveLessonView((currentView) =>
+      currentView === initialLessonView ? currentView : initialLessonView,
+    );
+  }, [initialLessonView]);
+
+  const getLessonUuid = useCallback(
+    (lessonNumber: number): string | undefined => {
+      const les = curriculumLessonsById.get(lessonNumber);
+      if (les && les[6]) return les[6];
+      return adaptedCurriculum?.lessonsByNumber.get(lessonNumber)?.id;
+    },
+    [curriculumLessonsById, adaptedCurriculum],
+  );
+
+  const hasLessonQuiz = useCallback(
+    (lessonNumber: number): boolean => {
+      const uuid = getLessonUuid(lessonNumber);
+      if (!uuid) {
+        const les = curriculumLessonsById.get(lessonNumber);
+        if (les && les[5] === "quiz") return true;
+        return lessonNumber === selectedLesson
+          ? Boolean(quizAssignment)
+          : false;
+      }
+      return Boolean(
+        quizAssignments?.some((a) => a.lessonId === uuid) ||
+        courseQuizAssignments.data?.some((a) => a.lessonId === uuid) ||
+        (lessonNumber === selectedLesson &&
+          quizAssignment &&
+          (!quizAssignment.lessonId || quizAssignment.lessonId === uuid)),
+      );
+    },
+    [
+      curriculumLessonsById,
+      getLessonUuid,
+      selectedLesson,
+      quizAssignment,
+      quizAssignments,
+      courseQuizAssignments.data,
+    ],
+  );
+
+  const isLessonQuizActive = useCallback(
+    (lessonNumber: number): boolean => {
+      return lessonNumber === selectedLesson && activeLessonView === "quiz";
+    },
+    [selectedLesson, activeLessonView],
+  );
+
+  const currentLessonUuid = getLessonUuid(selectedLesson);
+  const currentQuizAssignment = useMemo(() => {
+    if (currentLessonUuid && quizAssignments) {
+      const found = quizAssignments.find(
+        (a) => a.lessonId === currentLessonUuid,
+      );
+      if (found) return found;
+    }
+    if (currentLessonUuid && courseQuizAssignments.data) {
+      const foundCourse = courseQuizAssignments.data.find(
+        (a) => a.lessonId === currentLessonUuid,
+      );
+      if (foundCourse) {
+        return {
+          id: foundCourse.id,
+          quizId: foundCourse.quizId,
+          quizVersionId: foundCourse.quizVersionId,
+          courseId: foundCourse.courseId,
+          lessonId: foundCourse.lessonId,
+          quizTitle: foundCourse.quizTitle,
+          lessonTitle: currentLesson[1],
+          courseTitle: courseOverview?.course.title ?? "Course",
+          required: foundCourse.required,
+          passPercentage: foundCourse.passPercentage,
+          maxAttempts: foundCourse.maxAttempts,
+          timeLimitSeconds: foundCourse.timeLimitSeconds,
+          shuffleQuestions: foundCourse.shuffleQuestions,
+          shuffleOptions: foundCourse.shuffleOptions,
+          feedbackMode: foundCourse.feedbackMode,
+          availableFrom: foundCourse.availableFrom,
+          availableUntil: foundCourse.availableUntil,
+          activeAttemptId: null,
+          attemptCount: 0,
+          latestAttemptStatus: null,
+          latestScore: null,
+          bestScore: null,
+          latestPassed: null,
+        };
+      }
+    }
+    if (
+      quizAssignment &&
+      (!currentLessonUuid || quizAssignment.lessonId === currentLessonUuid)
+    ) {
+      return quizAssignment;
+    }
+    return null;
+  }, [
+    currentLessonUuid,
+    quizAssignments,
+    courseQuizAssignments.data,
+    quizAssignment,
+    currentLesson,
+    courseOverview?.course.title,
+  ]);
+
+  const isDedicatedQuizLesson = currentLesson[5] === "quiz";
+  const hasQuizContent =
+    Boolean(currentQuizAssignment) ||
+    (isDedicatedQuizLesson && !currentLessonUuid);
+  const showingQuiz = activeLessonView === "quiz";
+  const isQuizLesson = showingQuiz;
+
+  useLayoutEffect(() => {
+    const main = playerWrapRef.current?.closest<HTMLElement>(".courses-main");
+    if (!main) return;
+    if (showingQuiz) {
+      main.setAttribute("data-learning-quiz-active", "true");
+      const video = document.querySelector<HTMLVideoElement>("video");
+      if (video && !video.paused) {
+        video.pause();
+      }
+    } else {
+      main.removeAttribute("data-learning-quiz-active");
+      if (autoPlayOnLessonChange) {
+        const video = document.querySelector<HTMLVideoElement>("video");
+        safeResumeVideo(video);
+      }
+    }
+    return () => {
+      main.removeAttribute("data-learning-quiz-active");
+    };
+  }, [autoPlayOnLessonChange, showingQuiz]);
+
+  useEffect(() => {
+    if (!showingQuiz) return;
+
+    const pauseAllMedia = () => {
+      if (typeof document === "undefined") return;
+      const mediaElements =
+        document.querySelectorAll<HTMLMediaElement>("video, audio");
+      for (const el of mediaElements) {
+        if (!el.paused && typeof el.pause === "function") {
+          try {
+            el.pause();
+          } catch {
+            // ignore error
+          }
+        }
+      }
+    };
+
+    pauseAllMedia();
+
+    const handlePlayCapture = (event: Event) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLMediaElement &&
+        typeof target.pause === "function"
+      ) {
+        try {
+          target.pause();
+        } catch {
+          // ignore error
+        }
+      }
+    };
+
+    window.addEventListener("play", handlePlayCapture, true);
+    window.addEventListener("playing", handlePlayCapture, true);
+
+    return () => {
+      window.removeEventListener("play", handlePlayCapture, true);
+      window.removeEventListener("playing", handlePlayCapture, true);
+    };
+  }, [showingQuiz]);
   const publicPlaybackBootstrap = useMemo(
     () =>
       courseSlug
@@ -647,6 +861,15 @@ export function LearningWorkspace({
   const protectedPlayback = Boolean(courseSlug && !publicPlaybackBootstrap);
   const [playbackBootstrap, setPlaybackBootstrap] =
     useState<VideoPlaybackBootstrap | null>(null);
+  const refreshPlaybackToken = useCallback(async () => {
+    if (!courseSlug) {
+      throw new Error("A course is required to refresh playback access.");
+    }
+    return refreshVideoPlaybackToken({
+      courseSlug,
+      lessonNumber: selectedLesson,
+    });
+  }, [courseSlug, selectedLesson]);
 
   useEffect(() => {
     if (!courseSlug || publicPlaybackBootstrap) {
@@ -689,15 +912,13 @@ export function LearningWorkspace({
         : undefined,
     [adaptedCurriculum],
   );
-  const {
-    lessonProgress: persistedLessonProgress,
-    recordProgress,
-  } = useLearningProgress({
-    courseKey: courseOverview?.course.slug,
-    userId,
-    lessonIdsByNumber,
-    enabled: Boolean(courseOverview?.course.slug),
-  });
+  const { lessonProgress: persistedLessonProgress, recordProgress } =
+    useLearningProgress({
+      courseKey: courseOverview?.course.slug,
+      userId,
+      lessonIdsByNumber,
+      enabled: Boolean(courseOverview?.course.slug),
+    });
   const lessonProgress = useMemo(() => {
     if (Object.keys(localLessonProgress).length === 0) {
       return persistedLessonProgress;
@@ -720,9 +941,7 @@ export function LearningWorkspace({
       : undefined;
   const courseThumbnail = useMemo(() => {
     if (courseOverview) {
-      return courseOverview.course.thumbnailMediaId
-        ? `/api/v1/media/${courseOverview.course.thumbnailMediaId}`
-        : undefined;
+      return courseOverview.course.thumbnailUrl || undefined;
     }
     if (isCourseOverviewError) {
       return undefined;
@@ -879,15 +1098,87 @@ export function LearningWorkspace({
     [phoneLessonDrawer],
   );
 
+  const resumeLessonVideoPlayback = useCallback(() => {
+    setActiveLessonView("video");
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("view")) {
+        url.searchParams.delete("view");
+        window.history.replaceState(
+          null,
+          "",
+          `${url.pathname}${url.search}${url.hash}`,
+        );
+      }
+    }
+    setAutoPlayOnLessonChange(true);
+    requestAnimationFrame(() => {
+      const video = document.querySelector<HTMLVideoElement>("video");
+      safeResumeVideo(video);
+    });
+  }, []);
+
   const selectLesson = useCallback(
-    (lessonNumber: number) => {
+    (lessonNumber: number, view?: "video" | "quiz") => {
+      const targetLesson = curriculumLessonsById.get(lessonNumber);
+      const isTargetDedicatedQuiz = targetLesson?.[5] === "quiz";
+      const targetHasQuiz = hasLessonQuiz(lessonNumber);
+
+      if (
+        view === "quiz" ||
+        (view === undefined && isTargetDedicatedQuiz && targetHasQuiz)
+      ) {
+        setActiveLessonView("quiz");
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href);
+          url.searchParams.set("view", "quiz");
+          window.history.replaceState(
+            null,
+            "",
+            `${url.pathname}${url.search}${url.hash}`,
+          );
+        }
+      } else {
+        resumeLessonVideoPlayback();
+      }
       if (lessonNumber === selectedLesson) return;
       pendingLessonSelectionRef.current = lessonNumber;
-      setAutoPlayOnLessonChange(true);
       setSelectedLesson(lessonNumber);
-      onSelectLesson(lessonNumber);
+      if (view !== undefined) {
+        onSelectLesson(lessonNumber, view);
+      } else {
+        onSelectLesson(lessonNumber);
+      }
     },
-    [onSelectLesson, selectedLesson],
+    [
+      curriculumLessonsById,
+      hasLessonQuiz,
+      onSelectLesson,
+      resumeLessonVideoPlayback,
+      selectedLesson,
+    ],
+  );
+
+  const handleOpenLessonQuiz = useCallback(
+    (lessonNumber: number) => {
+      setActiveLessonView("quiz");
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.set("view", "quiz");
+        window.history.replaceState(
+          null,
+          "",
+          `${url.pathname}${url.search}${url.hash}`,
+        );
+      }
+      if (lessonNumber !== selectedLesson) {
+        selectLesson(lessonNumber, "quiz");
+      }
+      if (phoneLessonDrawer && lessonDrawer) {
+        setLessonDrawer(false);
+      }
+    },
+    [lessonDrawer, phoneLessonDrawer, selectLesson, selectedLesson],
   );
 
   const updateAutoplayEnabled = useCallback((enabled: boolean) => {
@@ -913,11 +1204,20 @@ export function LearningWorkspace({
           : roundedProgress;
       setLocalLessonProgress((current) => {
         if (current[selectedLesson] === nextProgress) return current;
-        return { ...current, [selectedLesson]: nextProgress };
+        const updated = { ...current, [selectedLesson]: nextProgress };
+        try {
+          localStorage.setItem(
+            `veolms-learning-${coursePersistenceKey}-progress`,
+            JSON.stringify(updated),
+          );
+        } catch {
+          // Ignore storage write errors
+        }
+        return updated;
       });
       recordProgress(selectedLesson, nextProgress);
     },
-    [recordProgress, selectedLesson],
+    [coursePersistenceKey, recordProgress, selectedLesson],
   );
 
   const handleLessonEnded = useCallback(() => {
@@ -1884,6 +2184,9 @@ export function LearningWorkspace({
           courseThumbnail={courseThumbnail}
           focusRequest={fullscreenCurriculumFocusRequest}
           persistenceKey={coursePersistenceKey}
+          hasLessonQuiz={hasLessonQuiz}
+          isLessonQuizActive={isLessonQuizActive}
+          onOpenLessonQuiz={handleOpenLessonQuiz}
         />
       </FullscreenLandscapeCurriculumPanel>
     ),
@@ -1901,12 +2204,16 @@ export function LearningWorkspace({
       onOpenCourseOverview,
       selectLesson,
       selectedLesson,
+      hasLessonQuiz,
+      isLessonQuizActive,
+      handleOpenLessonQuiz,
     ],
   );
   const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
     () => ({
       media: getCourseVideoForLesson(currentLesson[0]),
       playbackBootstrap,
+      refreshPlaybackToken,
       protectedPlayback,
       lessonTitle: currentLesson[1],
       courseTitle,
@@ -1914,8 +2221,9 @@ export function LearningWorkspace({
       totalLessons: lessonSequence.length,
       theaterMode,
       onTheaterToggle: toggleTheaterMode,
-      autoPlayOnMediaChange: autoPlayOnLessonChange,
+      autoPlayOnMediaChange: showingQuiz ? false : autoPlayOnLessonChange,
       autoplayEnabled,
+      playbackSuspended: showingQuiz,
       canGoNext: nextLessonId !== undefined,
       canGoPrevious: previousLessonId !== undefined,
       nextLessonInfo,
@@ -1969,11 +2277,13 @@ export function LearningWorkspace({
       onMinimizePlayer,
       playbackBootstrap,
       protectedPlayback,
+      refreshPlaybackToken,
       playerCourseLessonsOpen,
       playerCourseLessonsSecondPressHold,
       playerCourseLessonsSidePanel,
       previousLessonId,
       selectedLesson,
+      showingQuiz,
       theaterMode,
       toggleLessonDrawerFromPlayer,
       toggleTheaterMode,
@@ -2056,6 +2366,7 @@ export function LearningWorkspace({
       <main
         ref={mainRef}
         data-learning-motion-surface=""
+        data-learning-quiz-active={showingQuiz ? "true" : undefined}
         className={`learning-workspace__main ${curriculumCollapsed ? "is-curriculum-collapsed" : ""}`}
         inert={lessonDrawer ? true : undefined}
         aria-hidden={lessonDrawer || undefined}
@@ -2066,7 +2377,78 @@ export function LearningWorkspace({
             className="learning-workspace__player-wrap"
             data-learning-player-motion-target=""
           >
-            {registerPersistentPlayer ? (
+            {showingQuiz ? (
+              <div className="w-full max-w-4xl mx-auto p-3 sm:p-5 md:p-6 lg:p-7">
+                {currentQuizAssignment ? (
+                  <QuizAttemptPanel
+                    key={`${currentQuizAssignment.id}-${currentLessonUuid ?? selectedLesson}`}
+                    assignmentId={currentQuizAssignment.id}
+                    activeAttemptId={currentQuizAssignment.activeAttemptId}
+                    maxAttempts={currentQuizAssignment.maxAttempts}
+                    onBackToVideo={resumeLessonVideoPlayback}
+                    onPassed={() => updateSelectedLessonProgress(100)}
+                    lessonBadge={`Lesson ${selectedLesson} Quiz`}
+                    onContinueCourse={
+                      nextLessonId === undefined
+                        ? undefined
+                        : () => {
+                            resumeLessonVideoPlayback();
+                            onSelectLesson(nextLessonId);
+                          }
+                    }
+                  />
+                ) : (
+                  <section
+                    className="mx-auto w-full max-w-3xl rounded-[16px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-6 text-(--text)"
+                    style={{ boxShadow: "var(--card-shadow)" }}
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-4">
+                      <button
+                        type="button"
+                        onClick={resumeLessonVideoPlayback}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95"
+                      >
+                        <ArrowLeft size={14} weight="bold" />
+                        <span>Back to video</span>
+                      </button>
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
+                        <Exam
+                          size={14}
+                          className="text-(--accent)"
+                          weight="bold"
+                        />
+                        <span>Lesson {selectedLesson} Quiz</span>
+                      </div>
+                    </div>
+                    <p
+                      role={
+                        quizAssignmentLoading || courseQuizAssignments.isLoading
+                          ? "status"
+                          : "alert"
+                      }
+                      className="text-sm sm:text-base text-(--muted)"
+                    >
+                      {quizAssignmentLoading || courseQuizAssignments.isLoading
+                        ? "Loading Quiz assignment..."
+                        : "This Quiz is not currently assigned to your course access."}
+                    </p>
+                  </section>
+                )}
+              </div>
+            ) : isDedicatedQuizLesson && !hasLessonQuiz(selectedLesson) ? (
+              <div className="w-full max-w-4xl mx-auto p-8 sm:p-12 text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
+                  <Exam size={28} weight="duotone" />
+                </div>
+                <h2 className="text-base font-semibold text-(--text)">
+                  Quiz Assessment Not Available
+                </h2>
+                <p className="mt-1.5 text-xs sm:text-sm text-(--muted) max-w-md mx-auto">
+                  This lesson does not currently have an active quiz assessment
+                  assigned.
+                </p>
+              </div>
+            ) : registerPersistentPlayer ? (
               <div
                 className="pointer-events-none relative z-10 aspect-video w-full overflow-visible bg-black"
                 aria-hidden="true"
@@ -2105,7 +2487,7 @@ export function LearningWorkspace({
                     }
               }
             >
-              <header>
+              <header className="learning-workspace__lesson-header">
                 <button
                   id="learning-course-content-trigger"
                   ref={lessonTriggerRef}
@@ -2119,6 +2501,36 @@ export function LearningWorkspace({
                     <h1 id="learning-lesson-title">{currentLesson[1]}</h1>
                   </div>
                 </button>
+                {hasLessonQuiz(selectedLesson) ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (activeLessonView === "quiz") {
+                        resumeLessonVideoPlayback();
+                      } else {
+                        handleOpenLessonQuiz(selectedLesson);
+                      }
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-(--card-compact-shadow) shrink-0 ${
+                      activeLessonView === "quiz"
+                        ? "border border-(--accent) bg-[color-mix(in_srgb,var(--accent)_15%,var(--surface))] text-(--accent)"
+                        : "border border-[color-mix(in_srgb,var(--text)_15%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] text-(--text) hover:border-(--accent) hover:text-(--accent)"
+                    }`}
+                    aria-label={`Open quiz for lesson ${selectedLesson}: ${currentLesson[1]}`}
+                    title={
+                      activeLessonView === "quiz"
+                        ? "Return to video lesson"
+                        : "Open lesson quiz"
+                    }
+                  >
+                    <Exam size={14} weight="bold" className="text-(--accent)" />
+                    <span>
+                      {activeLessonView === "quiz"
+                        ? "Back to video"
+                        : "Lesson Quiz"}
+                    </span>
+                  </button>
+                ) : null}
               </header>
               <Discussion
                 key={discussionPersistenceKey}
@@ -2141,63 +2553,66 @@ export function LearningWorkspace({
           <div
             className={`learning-workspace__curriculum-column ${curriculumCollapsed ? "is-collapsed" : ""}`}
           >
-          <div
-            className="learning-curriculum__resize-rail"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize course curriculum"
-            aria-keyshortcuts="Alt+C"
-            title={`Resize course content | ${curriculumShortcutLabel}`}
-            aria-valuemin={CURRICULUM_MIN_WIDTH}
-            aria-valuemax={CURRICULUM_MAX_WIDTH}
-            aria-valuenow={
-              curriculumCollapsed
-                ? undefined
-                : Math.round(curriculumAccessibleWidth)
-            }
-            aria-valuetext={
-              curriculumCollapsed
-                ? "Course curriculum collapsed"
+            <div
+              className="learning-curriculum__resize-rail"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize course curriculum"
+              aria-keyshortcuts="Alt+C"
+              title={`Resize course content | ${curriculumShortcutLabel}`}
+              aria-valuemin={CURRICULUM_MIN_WIDTH}
+              aria-valuemax={CURRICULUM_MAX_WIDTH}
+              aria-valuenow={
+                curriculumCollapsed
+                  ? undefined
+                  : Math.round(curriculumAccessibleWidth)
+              }
+              aria-valuetext={
+                curriculumCollapsed
+                  ? "Course curriculum collapsed"
                   : `${Math.round(curriculumAccessibleWidth)} pixels wide${
-                    curriculumResizing &&
-                    (curriculumResizePreviewWidth ??
-                      (curriculumCollapsed
-                        ? CURRICULUM_COLLAPSED_WIDTH
-                        : curriculumWidth)) < CURRICULUM_MIN_WIDTH
-                      ? ", sliding closed"
-                      : ""
-                  }`
-            }
-            tabIndex={0}
-            onKeyDown={handleCurriculumResizeKeyDown}
-            onDoubleClick={toggleCurriculumFromResizeRail}
-            onPointerDown={startCurriculumResize}
-            onPointerMove={moveCurriculumResize}
-            onPointerUp={endCurriculumResize}
-            onPointerCancel={(event) => endCurriculumResize(event, true)}
-          />
-          <div
-            id="learning-course-content"
-            className="learning-curriculum__viewport"
-          >
-            <Curriculum
-              sections={curriculumSections}
-              lessonsById={curriculumLessonsById}
-              scrollportRef={curriculumScrollportRef}
-              scrollportId="learning-course-curriculum-scrollport"
-              selectedLesson={selectedLesson}
-              lessonProgress={lessonProgress}
-              onSelectLesson={selectLesson}
-              isLessonAvailable={isLessonAvailable}
-              onOpenCourseOverview={onOpenCourseOverview}
-              courseTitle={courseTitle}
-              courseThumbnail={courseThumbnail}
-              focusRequest={curriculumFocusRequest}
-              persistenceKey={coursePersistenceKey}
-              isLoading={isApiRoute && isCourseOverviewLoading}
+                      curriculumResizing &&
+                      (curriculumResizePreviewWidth ??
+                        (curriculumCollapsed
+                          ? CURRICULUM_COLLAPSED_WIDTH
+                          : curriculumWidth)) < CURRICULUM_MIN_WIDTH
+                        ? ", sliding closed"
+                        : ""
+                    }`
+              }
+              tabIndex={0}
+              onKeyDown={handleCurriculumResizeKeyDown}
+              onDoubleClick={toggleCurriculumFromResizeRail}
+              onPointerDown={startCurriculumResize}
+              onPointerMove={moveCurriculumResize}
+              onPointerUp={endCurriculumResize}
+              onPointerCancel={(event) => endCurriculumResize(event, true)}
             />
+            <div
+              id="learning-course-content"
+              className="learning-curriculum__viewport"
+            >
+              <Curriculum
+                sections={curriculumSections}
+                lessonsById={curriculumLessonsById}
+                scrollportRef={curriculumScrollportRef}
+                scrollportId="learning-course-curriculum-scrollport"
+                selectedLesson={selectedLesson}
+                lessonProgress={lessonProgress}
+                onSelectLesson={selectLesson}
+                isLessonAvailable={isLessonAvailable}
+                onOpenCourseOverview={onOpenCourseOverview}
+                courseTitle={courseTitle}
+                courseThumbnail={courseThumbnail}
+                focusRequest={curriculumFocusRequest}
+                persistenceKey={coursePersistenceKey}
+                isLoading={isApiRoute && isCourseOverviewLoading}
+                hasLessonQuiz={hasLessonQuiz}
+                isLessonQuizActive={isLessonQuizActive}
+                onOpenLessonQuiz={handleOpenLessonQuiz}
+              />
+            </div>
           </div>
-        </div>
         </div>
       </main>
 
@@ -2357,6 +2772,9 @@ export function LearningWorkspace({
               drawerHeroControlProps={
                 phoneLessonDrawer ? lessonDrawerHeroControlProps : undefined
               }
+              hasLessonQuiz={hasLessonQuiz}
+              isLessonQuizActive={isLessonQuizActive}
+              onOpenLessonQuiz={handleOpenLessonQuiz}
             />
           </div>
         </DrawerContent>

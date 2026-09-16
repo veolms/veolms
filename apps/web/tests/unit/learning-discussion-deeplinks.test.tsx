@@ -250,7 +250,7 @@ describe("Learning Space Discussion Deep-Linking", () => {
         "courses",
         1,
         "/courses/the-ultimate-no/overview",
-        "thr-deep-link",
+        { threadId: "thr-deep-link" },
       );
       expect(path).toBe(
         "/learn/the-ultimate-no/lecture-1?from=courses&returnTo=%2Fcourses%2Fthe-ultimate-no%2Foverview&thread=thr-deep-link",

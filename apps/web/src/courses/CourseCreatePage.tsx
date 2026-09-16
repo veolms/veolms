@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
 import { LessonVideoUpload } from "./lesson-video-upload/LessonVideoUpload";
+import { QuizAuthoringPanel } from "../quizzes/QuizAuthoringPanel";
 import {
   LessonResourceManager,
   toLessonResourceItem,
@@ -28,6 +29,8 @@ import {
   Check,
   CheckCircle,
   CircleNotch,
+  CornersIn,
+  CornersOut,
   Clock,
   DotsSixVertical,
   DownloadSimple,
@@ -66,6 +69,7 @@ import {
 } from "../keyboardShortcuts";
 import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
+import { useCourseQuizAssignments } from "../services/quizzes/quizzes.queries";
 import {
   coursesService,
   useCategories,
@@ -96,6 +100,10 @@ import {
   usePublishCourse,
   useUnpublishCourse,
 } from "../services/courses";
+import {
+  getCourseThumbnailCdnUrl,
+  waitForCourseThumbnailCdnUrl,
+} from "./courseMedia";
 import { useIsMutating } from "@tanstack/react-query";
 import type {
   Category,
@@ -116,10 +124,7 @@ import type {
 } from "./CourseOverviewPage";
 import type { Course, CourseLevel, CourseCategory } from "./catalogue";
 import type { CourseSection, Lesson } from "../learning/courseContent";
-import {
-  formatDuration,
-  resolveCourseDurationSeconds,
-} from "./courseAdapter";
+import { formatDuration, resolveCourseDurationSeconds } from "./courseAdapter";
 import { mediaService } from "../services/media";
 
 const EMPTY_CATEGORIES: Category[] = [];
@@ -156,6 +161,7 @@ type ThumbnailUploadStatus =
   | "idle"
   | "uploading"
   | "confirming"
+  | "processing"
   | "saving"
   | "error";
 
@@ -199,6 +205,19 @@ export const normalizeBasicsState = (
       ? Boolean(raw.showInstructorName)
       : true,
 });
+
+function getThumbnailUploadErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+  return "Thumbnail upload failed. Please try again.";
+}
 
 export const isBasicsMetaEqual = (
   a: BasicsFormState,
@@ -923,7 +942,7 @@ export const checkIsCurriculumDirty = (
       id: string;
       title: string;
       description?: string;
-      contentType: "video" | "document";
+      contentType: "video" | "document" | "quiz";
       contentMediaId?: string | null;
       durationSeconds?: number;
       isPublished?: boolean;
@@ -932,7 +951,7 @@ export const checkIsCurriculumDirty = (
       initialState?: {
         title: string;
         description: string;
-        contentType: "video" | "document";
+        contentType: "video" | "document" | "quiz";
         contentMediaId?: string | null;
         isPublished?: boolean;
         isPreview?: boolean;
@@ -1185,7 +1204,7 @@ const sectionGhostHtml = (
 const lessonGhostHtml = (
   title: string,
   index: number,
-  contentType: "video" | "document",
+  contentType: "video" | "document" | "quiz",
 ) => {
   const isVideo = contentType === "video";
   return `
@@ -1307,7 +1326,7 @@ export interface BuildLocalPreviewParams {
       id: string;
       title: string;
       description?: string | null;
-      contentType: "video" | "document";
+      contentType: "video" | "document" | "quiz";
       contentMediaId?: string | null;
       durationSeconds?: number;
       isPreview?: boolean;
@@ -2472,9 +2491,36 @@ export function CourseCreatePage({
   const [slideDirection, setSlideDirection] = useState<"right" | "left">(
     "right",
   );
+  // Tracks which wizard tabs have been mounted. Starts with only the initial
+  // tab so the first tab renders instantly; others are added progressively in
+  // the background (via requestIdleCallback) or on-demand when the user
+  // navigates to them.
+  const [mountedTabs, setMountedTabs] = useState<Set<CourseWizardStepId>>(
+    () => new Set<CourseWizardStepId>([initialStep]),
+  );
 
   const tabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
   const stepsNavRef = useRef<HTMLElement | null>(null);
+  const [isCurriculumFocusMode, setIsCurriculumFocusMode] = useState(false);
+
+  // Automatically reset focus mode if navigating away from curriculum step
+  useEffect(() => {
+    if (activeStep !== "curriculum") {
+      setIsCurriculumFocusMode(false);
+    }
+  }, [activeStep]);
+
+  // Allow pressing Escape key to exit focus mode
+  useEffect(() => {
+    if (!isCurriculumFocusMode) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsCurriculumFocusMode(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isCurriculumFocusMode]);
   const navigateToStepRef = useRef<
     (destination: CourseWizardStepId) => Promise<void>
   >((async () => {}) as any);
@@ -2591,6 +2637,50 @@ export function CourseCreatePage({
     }
   }, [activeStep]);
 
+  // Progressively mount the remaining wizard tabs in the background so they
+  // are ready when the user navigates to them without delaying the first render.
+  useEffect(() => {
+    const remaining = WIZARD_STEP_IDS.filter(
+      (id) => !mountedTabs.has(id),
+    );
+    if (remaining.length === 0) return;
+
+    const handles: number[] = [];
+    const mountNext = (ids: CourseWizardStepId[]) => {
+      if (ids.length === 0) return;
+      const [next, ...rest] = ids;
+      const schedule =
+        typeof requestIdleCallback === "function"
+          ? requestIdleCallback
+          : (cb: () => void) => setTimeout(cb, 16) as unknown as number;
+      const cancel =
+        typeof cancelIdleCallback === "function"
+          ? cancelIdleCallback
+          : clearTimeout;
+      const handle = schedule(() => {
+        setMountedTabs((prev) => {
+          if (prev.has(next!)) return prev;
+          const next_ = new Set(prev);
+          next_.add(next!);
+          return next_;
+        });
+        mountNext(rest);
+      });
+      handles.push(handle as number);
+    };
+    mountNext(remaining as CourseWizardStepId[]);
+
+    return () => {
+      const cancel =
+        typeof cancelIdleCallback === "function"
+          ? cancelIdleCallback
+          : clearTimeout;
+      handles.forEach((h) => cancel(h));
+    };
+    // Only run once on mount — remaining is derived from the initial mountedTabs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const navigateWizardTab = (event: KeyboardEvent) => {
       if (
@@ -2695,9 +2785,11 @@ export function CourseCreatePage({
   const [thumbnailMediaId, setThumbnailMediaId] = useState<
     string | null | undefined
   >(undefined);
+  // The upload state is kept for concurrency, rollback, and server-refresh
+  // protection. The selected file is shown immediately, so upload progress is
+  // intentionally not rendered in the course editor.
   const [thumbnailUploadStatus, setThumbnailUploadStatus] =
     useState<ThumbnailUploadStatus>("idle");
-  const [thumbnailUploadProgress, setThumbnailUploadProgress] = useState(0);
   const [thumbnailUploadError, setThumbnailUploadError] = useState<
     string | null
   >(null);
@@ -2715,6 +2807,7 @@ export function CourseCreatePage({
   const isThumbnailBusy =
     thumbnailUploadStatus === "uploading" ||
     thumbnailUploadStatus === "confirming" ||
+    thumbnailUploadStatus === "processing" ||
     thumbnailUploadStatus === "saving";
 
   useEffect(() => {
@@ -2774,7 +2867,6 @@ export function CourseCreatePage({
     thumbnailDirtyRef.current = true;
     setThumbnail(imageUrl);
     setThumbnailUploadError(null);
-    setThumbnailUploadProgress(0);
     setThumbnailUploadStatus("uploading");
 
     const requestIsActive = () =>
@@ -2806,6 +2898,7 @@ export function CourseCreatePage({
         contentType: file.type,
         fileSize: file.size,
         type: "image",
+        visibility: "public",
       });
 
       if (!requestIsActive()) return;
@@ -2813,15 +2906,21 @@ export function CourseCreatePage({
       await mediaService.uploadFileToPresignedUrl(
         presigned.uploadUrl,
         file,
-        ({ percent }) => {
-          if (requestIsActive()) setThumbnailUploadProgress(percent);
-        },
+        undefined,
         uploadAbortController.signal,
       );
 
       if (!requestIsActive()) return;
       setThumbnailUploadStatus("confirming");
-      await mediaService.confirmUpload(presigned.mediaAssetId);
+      const confirmation = await mediaService.confirmUpload(presigned.mediaAssetId);
+
+      if (!requestIsActive()) return;
+      setThumbnailUploadStatus("processing");
+      const processedThumbnailUrl = await waitForCourseThumbnailCdnUrl(
+        presigned.mediaAssetId,
+        { signal: uploadAbortController.signal },
+      );
+
 
       if (!requestIsActive()) return;
       setThumbnailUploadStatus("saving");
@@ -2840,9 +2939,8 @@ export function CourseCreatePage({
       courseVersionRef.current = updated.version;
       thumbnailMediaIdRef.current = presigned.mediaAssetId;
       setThumbnailMediaId(presigned.mediaAssetId);
-      setThumbnail(`/api/v1/media/${presigned.mediaAssetId}`);
+      setThumbnail(processedThumbnailUrl);
       thumbnailDirtyRef.current = false;
-      setThumbnailUploadProgress(100);
       setThumbnailUploadStatus("idle");
       setThumbnailUploadError(null);
 
@@ -2858,15 +2956,9 @@ export function CourseCreatePage({
 
       restorePreviousThumbnail();
       setThumbnailUploadStatus("error");
-      setThumbnailUploadError(
-        error instanceof Error
-          ? error.message
-          : "Thumbnail upload failed. Please try again.",
-      );
+      setThumbnailUploadError(getThumbnailUploadErrorMessage(error));
     } finally {
-      if (
-        thumbnailUploadAbortControllerRef.current === uploadAbortController
-      ) {
+      if (thumbnailUploadAbortControllerRef.current === uploadAbortController) {
         thumbnailUploadAbortControllerRef.current = null;
       }
     }
@@ -3242,6 +3334,15 @@ export function CourseCreatePage({
   } = useCourseValidation(currentCourseId, {
     enabled: activeStep === "publish",
   });
+  const { data: courseQuizAssignments = [] } =
+    useCourseQuizAssignments(currentCourseId);
+  const lessonsWithQuizzes = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of courseQuizAssignments) {
+      if (a.lessonId) set.add(a.lessonId);
+    }
+    return set;
+  }, [courseQuizAssignments]);
   const createCourseMutation = useCreateCourse();
   const updateBasicsMutation = useUpdateCourseBasics();
   const createSectionMutation = useCreateSection();
@@ -3459,7 +3560,7 @@ export function CourseCreatePage({
   interface LessonSnapshot {
     title: string;
     description: string;
-    contentType: "video" | "document";
+    contentType: "video" | "document" | "quiz";
     contentMediaId?: string | null;
     isPublished?: boolean;
     isPreview?: boolean;
@@ -3470,9 +3571,9 @@ export function CourseCreatePage({
     title: string;
     isEditingTitle?: boolean;
     contentTypeSelected?: boolean;
-    pendingContentType?: "video" | "document";
+    pendingContentType?: "video" | "document" | "quiz";
     description: string;
-    contentType: "video" | "document";
+    contentType: "video" | "document" | "quiz";
     contentMediaId?: string | null;
     durationSeconds?: number;
     isExpanded: boolean;
@@ -4486,11 +4587,7 @@ export function CourseCreatePage({
         }
         thumbnailMediaIdRef.current = confirmedThumbnailMediaId;
         setThumbnailMediaId(confirmedThumbnailMediaId);
-        setThumbnail(
-          confirmedThumbnailMediaId
-            ? `/api/v1/media/${confirmedThumbnailMediaId}`
-            : null,
-        );
+        setThumbnail(getCourseThumbnailCdnUrl(confirmedThumbnailMediaId) ?? null);
       }
 
       const isBasicsSavingActive =
@@ -6587,10 +6684,7 @@ export function CourseCreatePage({
     );
   };
 
-  const handleLessonTitleBlur = async (
-    sectionId: string,
-    lessonId: string,
-  ) => {
+  const handleLessonTitleBlur = async (sectionId: string, lessonId: string) => {
     await handleLessonFieldBlur(sectionId, lessonId);
     setSections((prev) =>
       prev.map((section) =>
@@ -6681,10 +6775,7 @@ export function CourseCreatePage({
     // The media stream is the source of truth for the terminal state. Once it
     // reports completion, refresh the derived editor/preview data so
     // duration and readiness are reflected everywhere without polling.
-    await Promise.allSettled([
-      refetchEditor(),
-      refetchPreview(),
-    ]);
+    await Promise.allSettled([refetchEditor(), refetchPreview()]);
   };
 
   const saveAllDirtyLessons = async (
@@ -7558,9 +7649,7 @@ export function CourseCreatePage({
       area: "pricing",
       label: "Pricing",
       summary:
-        pricing.pricingType === "free"
-          ? "Free"
-          : `₹${pricing.sellingPrice}`,
+        pricing.pricingType === "free" ? "Free" : `₹${pricing.sellingPrice}`,
     },
     {
       area: "extras",
@@ -8621,6 +8710,16 @@ export function CourseCreatePage({
       await flushPricingPersistence();
     }
 
+    // Eagerly mark destination as mounted so its content renders before the
+    // swipe animation begins — covers the case where background loading
+    // hasn't reached this tab yet.
+    setMountedTabs((prev) => {
+      if (prev.has(destination)) return prev;
+      const next = new Set(prev);
+      next.add(destination);
+      return next;
+    });
+
     if (!isStepDirty(activeStep)) {
       setActiveStep(destination);
       return;
@@ -8886,7 +8985,24 @@ export function CourseCreatePage({
     <div
       className="relative flex w-full flex-1 flex-col min-h-full p-0 text-[--text] box-border"
       data-course-wizard
+      data-focus-mode={isCurriculumFocusMode ? "true" : undefined}
     >
+      {/* Floating Exit Focus Button */}
+      {isCurriculumFocusMode && (
+        <button
+          type="button"
+          onClick={() => setIsCurriculumFocusMode(false)}
+          title="Exit focus mode (show topbar and bottom navigation) [Esc]"
+          aria-label="Exit focus mode"
+          className="fixed top-3.5 right-6 z-50 inline-flex items-center gap-1.5 h-8.5 px-2.5 rounded-full border border-(--accent) bg-[color-mix(in_srgb,var(--surface)_92%,var(--canvas))] text-(--text) shadow-[0_4px_20px_color-mix(in_srgb,var(--accent)_25%,transparent)] backdrop-blur-md cursor-pointer transition-all hover:scale-105 active:scale-95"
+        >
+          <CornersIn size={15} weight="bold" className="text-(--accent)" />
+          <kbd className="inline-block px-1.5 py-0.5 text-[0.68rem] font-mono rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--text-secondary) font-bold">
+            Esc
+          </kbd>
+        </button>
+      )}
+
       {/* Wizard Header */}
       <header className="relative shrink-0 mb-2 max-[768px]:mb-1.5 max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0 max-[768px]:box-border">
         <div className="flex items-start justify-between gap-4 mb-1 max-[768px]:flex-col max-[768px]:gap-2 max-[768px]:mb-1.5">
@@ -8943,6 +9059,18 @@ export function CourseCreatePage({
               </p>
             </div>
           </div>
+
+          {activeStep === "curriculum" && (
+            <button
+              type="button"
+              onClick={() => setIsCurriculumFocusMode(true)}
+              title="Focus mode (hide topbar and bottom bar for more workspace) [Esc]"
+              aria-label="Enter focus mode"
+              className="inline-flex items-center justify-center w-8.5 h-8.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--text)_4%,transparent)] text-(--text-secondary) cursor-pointer transition-all hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] shrink-0 self-start sm:self-center p-0"
+            >
+              <CornersOut size={15} weight="bold" />
+            </button>
+          )}
         </div>
 
         {/* Publish validation error toast if any */}
@@ -9038,7 +9166,7 @@ export function CourseCreatePage({
         spaceBetween={32}
       >
         {(panelStep) =>
-          panelStep === "basics" ? (
+          !mountedTabs.has(panelStep) ? null : panelStep === "basics" ? (
             <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
               {/* Left Column: Form Sections */}
               <div className="flex flex-col gap-5">
@@ -9178,31 +9306,32 @@ export function CourseCreatePage({
                               : undefined
                         }
                         className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
-                    />
-                    <span className="absolute right-3.5 text-(--muted) text-[0.76rem] pointer-events-none">
-                      {courseTitle.length} / 120
-                    </span>
+                      />
+                      <span className="absolute right-3.5 text-(--muted) text-[0.76rem] pointer-events-none">
+                        {courseTitle.length} / 120
+                      </span>
+                    </div>
+                    {!isDownstreamUnlocked && (
+                      <p
+                        className="m-0 mt-0.5 text-(--muted) text-[0.78rem] flex items-center gap-1.5"
+                        role="status"
+                        data-testid="basics-title-helper"
+                      >
+                        {createCourseMutation.isPending ||
+                        isInitialCourseCreationPending ? (
+                          <>
+                            <CircleNotch
+                              size={13}
+                              className="animate-spin text-(--accent) shrink-0"
+                            />
+                            <span>Creating course…</span>
+                          </>
+                        ) : (
+                          "Add a course title to continue."
+                        )}
+                      </p>
+                    )}
                   </div>
-                  {!isDownstreamUnlocked && (
-                    <p
-                      className="m-0 mt-0.5 text-(--muted) text-[0.78rem] flex items-center gap-1.5"
-                      role="status"
-                      data-testid="basics-title-helper"
-                    >
-                      {createCourseMutation.isPending || isInitialCourseCreationPending ? (
-                <>
-                          <CircleNotch
-                            size={13}
-                            className="animate-spin text-(--accent) shrink-0"
-                          />
-                          <span>Creating course…</span>
-                        </>
-                      ) : (
-                        "Add a course title to continue."
-                      )}
-                    </p>
-                  )}
-                </div>
                   <div className="flex flex-col gap-2 mb-5">
                     <div className="flex items-center justify-between">
                       <label
@@ -9359,7 +9488,9 @@ export function CourseCreatePage({
                       type="file"
                       ref={thumbnailInputRef}
                       disabled={
-                        !isDownstreamUnlocked || isBasicsSaving || isThumbnailBusy
+                        !isDownstreamUnlocked ||
+                        isBasicsSaving ||
+                        isThumbnailBusy
                       }
                       onChange={(event) => {
                         void handleThumbnailFileSelect(event);
@@ -9473,19 +9604,6 @@ export function CourseCreatePage({
                           </p>
                         </div>
                       )}
-                      {thumbnailUploadStatus !== "idle" &&
-                      thumbnailUploadStatus !== "error" ? (
-                        <p
-                          className="m-0 mt-2 text-(--accent) text-[0.75rem]"
-                          aria-live="polite"
-                        >
-                          {thumbnailUploadStatus === "uploading"
-                            ? `Uploading thumbnail… ${thumbnailUploadProgress}%`
-                            : thumbnailUploadStatus === "confirming"
-                              ? "Confirming thumbnail upload…"
-                              : "Saving thumbnail to this course…"}
-                        </p>
-                      ) : null}
                       {thumbnailUploadError ? (
                         <p
                           className="m-0 mt-2 text-red-400 text-[0.75rem]"
@@ -9558,6 +9676,7 @@ export function CourseCreatePage({
                             <LessonVideoUpload
                               disabled={!isDownstreamUnlocked || isBasicsSaving}
                               mediaAssetId={editorData?.course?.trailerMediaId}
+                              visibility="public"
                               hideUploadWhenAttached={Boolean(
                                 editorData?.course?.trailerMediaId,
                               )}
@@ -9658,7 +9777,9 @@ export function CourseCreatePage({
                       </h4>
                       {courseDescription.trim() ? (
                         <DiscussionMarkdown
-                          content={createDiscussionDraft(courseDescription.trim())}
+                          content={createDiscussionDraft(
+                            courseDescription.trim(),
+                          )}
                           label="Course description preview"
                           className="[&>:first-child]:mt-0 max-w-none"
                         />
@@ -9697,6 +9818,42 @@ export function CourseCreatePage({
                       <span>Saving section order...</span>
                     </span>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setIsCurriculumFocusMode((prev) => !prev)}
+                    style={{
+                      width: "34px",
+                      height: "34px",
+                      borderRadius: "8px",
+                      padding: 0,
+                    }}
+                    className={`inline-flex items-center justify-center border text-xs font-semibold cursor-pointer transition-all duration-150 ease-out shrink-0 ${
+                      isCurriculumFocusMode
+                        ? "border-(--accent) text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]"
+                        : "border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
+                    }`}
+                    title={
+                      isCurriculumFocusMode
+                        ? "Exit focus mode (show topbar and bottom navigation) [Esc]"
+                        : "Focus mode (hide topbar and bottom bar for more workspace)"
+                    }
+                    aria-label={
+                      isCurriculumFocusMode
+                        ? "Exit focus mode"
+                        : "Enter focus mode"
+                    }
+                    aria-pressed={isCurriculumFocusMode}
+                  >
+                    {isCurriculumFocusMode ? (
+                      <CornersIn
+                        size={16}
+                        weight="bold"
+                        className="text-(--accent)"
+                      />
+                    ) : (
+                      <CornersOut size={16} weight="bold" />
+                    )}
+                  </button>
                   <button
                     type="button"
                     disabled={
@@ -10067,646 +10224,718 @@ export function CourseCreatePage({
                               onDragEnd={handleLessonDragEnd}
                             >
                               <>
-                              {/* Lesson Header */}
-                              <div
-                                className="flex items-center justify-between px-4 py-3 select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[10px_12px]"
-                                onClick={() =>
-                                  handleToggleLessonExpand(sec.id, les.id)
-                                }
-                                title="Click to toggle lesson editor"
-                              >
-                                <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
-                                  <span
-                                    className={`flex items-center justify-center text-(--muted) transition-opacity duration-150 ${
-                                      les.isPendingCreation ||
-                                      reorderingLessonsSectionId ||
-                                      reorderLessonsMutation.isPending
-                                        ? "opacity-25 cursor-not-allowed pointer-events-none"
-                                        : "cursor-grab opacity-60 hover:opacity-100"
-                                    }`}
-                                    title={
-                                      les.isPendingCreation
-                                        ? "Creating lesson..."
-                                        : reorderingLessonsSectionId ||
-                                            reorderLessonsMutation.isPending
-                                          ? "Reordering in progress..."
-                                          : "Drag to reorder lesson"
-                                    }
-                                    onMouseEnter={() => {
-                                      if (
-                                        !les.isPendingCreation &&
-                                        !reorderingLessonsSectionId &&
-                                        !reorderLessonsMutation.isPending
-                                      ) {
-                                        setDragEnabledLessonId(les.id);
+                                {/* Lesson Header */}
+                                <div
+                                  className="flex items-center justify-between px-4 py-3 select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[10px_12px]"
+                                  onClick={() =>
+                                    handleToggleLessonExpand(sec.id, les.id)
+                                  }
+                                  title="Click to toggle lesson editor"
+                                >
+                                  <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
+                                    <span
+                                      className={`flex items-center justify-center text-(--muted) transition-opacity duration-150 ${
+                                        les.isPendingCreation ||
+                                        reorderingLessonsSectionId ||
+                                        reorderLessonsMutation.isPending
+                                          ? "opacity-25 cursor-not-allowed pointer-events-none"
+                                          : "cursor-grab opacity-60 hover:opacity-100"
+                                      }`}
+                                      title={
+                                        les.isPendingCreation
+                                          ? "Creating lesson..."
+                                          : reorderingLessonsSectionId ||
+                                              reorderLessonsMutation.isPending
+                                            ? "Reordering in progress..."
+                                            : "Drag to reorder lesson"
                                       }
-                                    }}
-                                    onMouseLeave={() => {
-                                      if (!draggedLessonState)
-                                        setDragEnabledLessonId(null);
-                                    }}
-                                    onMouseDown={() => {
-                                      if (
-                                        !les.isPendingCreation &&
-                                        !reorderingLessonsSectionId &&
-                                        !reorderLessonsMutation.isPending
-                                      ) {
-                                        setDragEnabledLessonId(les.id);
-                                      }
-                                    }}
-                                    onMouseUp={() => {
-                                      if (!draggedLessonState)
-                                        setDragEnabledLessonId(null);
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <DotsSixVertical size={18} />
-                                  </span>
-                                  <span className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded text-(--muted) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-[0.72rem] font-medium">
-                                    {lesIndex + 1}
-                                  </span>
-                                  {les.isExpanded && les.isEditingTitle ? (
-                                    <div
-                                      className="flex min-w-0 flex-1 items-center gap-2"
+                                      onMouseEnter={() => {
+                                        if (
+                                          !les.isPendingCreation &&
+                                          !reorderingLessonsSectionId &&
+                                          !reorderLessonsMutation.isPending
+                                        ) {
+                                          setDragEnabledLessonId(les.id);
+                                        }
+                                      }}
+                                      onMouseLeave={() => {
+                                        if (!draggedLessonState)
+                                          setDragEnabledLessonId(null);
+                                      }}
+                                      onMouseDown={() => {
+                                        if (
+                                          !les.isPendingCreation &&
+                                          !reorderingLessonsSectionId &&
+                                          !reorderLessonsMutation.isPending
+                                        ) {
+                                          setDragEnabledLessonId(les.id);
+                                        }
+                                      }}
+                                      onMouseUp={() => {
+                                        if (!draggedLessonState)
+                                          setDragEnabledLessonId(null);
+                                      }}
                                       onClick={(e) => e.stopPropagation()}
                                     >
-                                      <input
-                                        id={`les-title-${les.id}`}
-                                        type="text"
-                                        maxLength={120}
-                                        value={les.title}
-                                        disabled={
-                                          les.isPendingCreation ||
-                                          savingLessonId === les.id
-                                        }
-                                        onChange={(e) =>
-                                          handleUpdateLesson(sec.id, les.id, {
-                                            title: e.target.value,
-                                          })
-                                        }
-                                        onBlur={() => {
-                                          void handleLessonTitleBlur(
+                                      <DotsSixVertical size={18} />
+                                    </span>
+                                    <span className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded text-(--muted) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-[0.72rem] font-medium">
+                                      {lesIndex + 1}
+                                    </span>
+                                    {les.isExpanded && les.isEditingTitle ? (
+                                      <div
+                                        className="flex min-w-0 flex-1 items-center gap-2"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <input
+                                          id={`les-title-${les.id}`}
+                                          type="text"
+                                          maxLength={120}
+                                          value={les.title}
+                                          disabled={
+                                            les.isPendingCreation ||
+                                            savingLessonId === les.id
+                                          }
+                                          onChange={(e) =>
+                                            handleUpdateLesson(sec.id, les.id, {
+                                              title: e.target.value,
+                                            })
+                                          }
+                                          onBlur={() => {
+                                            void handleLessonTitleBlur(
+                                              sec.id,
+                                              les.id,
+                                            );
+                                          }}
+                                          placeholder="e.g. Introduction to React Hooks"
+                                          className="border border-(--accent) rounded-md px-2 py-0.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <span
+                                        className="text-(--text) text-[0.88rem] font-semibold max-[768px]:flex-1 max-[768px]:min-w-0 max-[768px]:break-words cursor-text"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleStartEditLessonTitle(
                                             sec.id,
                                             les.id,
                                           );
                                         }}
-                                        placeholder="e.g. Introduction to React Hooks"
-                                        className="border border-(--accent) rounded-md px-2 py-0.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                      >
+                                        {les.title}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+                                    {les.isPendingCreation ? (
+                                      <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                                        <CircleNotch
+                                          size={12}
+                                          className="animate-spin text-(--accent)"
+                                        />
+                                        <span>Creating...</span>
+                                      </span>
+                                    ) : deletingLessonId === les.id ? (
+                                      <span className="inline-flex items-center gap-1 text-red-400 text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/28">
+                                        <CircleNotch
+                                          size={12}
+                                          className="animate-spin text-red-400"
+                                        />
+                                        <span>Deleting...</span>
+                                      </span>
+                                    ) : (
+                                      <CurriculumItemStatusIndicator
+                                        status={getCurriculumItemDisplayStatus(
+                                          les.id,
+                                        )}
+                                        testId={`curriculum-status-lesson-${les.id}`}
                                       />
-                                    </div>
-                                  ) : (
-                                    <span
-                                      className="text-(--text) text-[0.88rem] font-semibold max-[768px]:flex-1 max-[768px]:min-w-0 max-[768px]:break-words cursor-text"
+                                    )}
+                                    {les.isPublished === false && (
+                                      <span
+                                        className="inline-flex items-center gap-1 text-[#f59e0b] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#f59e0b_12%,transparent)] border border-[color-mix(in_srgb,#f59e0b_28%,transparent)]"
+                                        title="Draft mode: This lesson is not published and is hidden from students."
+                                      >
+                                        <EyeSlash size={13} weight="bold" />{" "}
+                                        Unpublished
+                                      </span>
+                                    )}
+                                    {les.isPreview === true && (
+                                      <span
+                                        className="inline-flex items-center gap-1 text-[#10b981] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#10b981_12%,transparent)] border border-[color-mix(in_srgb,#10b981_28%,transparent)]"
+                                        title="Free Preview: Anyone can view this lesson without enrolling."
+                                      >
+                                        Preview
+                                      </span>
+                                    )}
+                                    {les.contentType === "video" ? (
+                                      <span className="inline-flex items-center gap-1.25 text-(--accent-ink,var(--accent)) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                                        <PlayCircle size={13} weight="fill" />{" "}
+                                        Video
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1.25 text-(--accent-ink,var(--accent)) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_24%,transparent)]">
+                                        <FileText size={13} weight="fill" />{" "}
+                                        Document
+                                      </span>
+                                    )}
+                                    {lessonsWithQuizzes.has(les.id) && (
+                                      <span
+                                        className="inline-flex items-center gap-1.25 text-[color-mix(in_srgb,#8b5cf6_90%,var(--text))] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#8b5cf6_12%,transparent)] border border-[color-mix(in_srgb,#8b5cf6_28%,transparent)]"
+                                        title="This lesson includes an attached quiz assessment"
+                                      >
+                                        <PuzzlePiece size={13} weight="fill" className="text-[#8b5cf6]" />{" "}
+                                        + Quiz
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        les.isPendingCreation ||
+                                        deletingLessonId === les.id
+                                      }
+                                      className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                                      aria-label="Delete lesson"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleStartEditLessonTitle(sec.id, les.id);
+                                        handleDeleteLesson(sec.id, les.id);
                                       }}
                                     >
-                                      {les.title}
-                                    </span>
-                                  )}
+                                      {deletingLessonId === les.id ? (
+                                        <CircleNotch
+                                          size={14}
+                                          className="animate-spin text-red-400"
+                                        />
+                                      ) : (
+                                        <Trash size={15} />
+                                      )}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 [&>svg]:transition-transform [&>svg]:duration-200 ${
+                                        les.isExpanded
+                                          ? "is-expanded [&>svg]:rotate-180"
+                                          : ""
+                                      }`}
+                                      aria-label={
+                                        les.isExpanded
+                                          ? "Collapse lesson editor"
+                                          : "Expand lesson editor"
+                                      }
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleLessonExpand(
+                                          sec.id,
+                                          les.id,
+                                        );
+                                      }}
+                                    >
+                                      <CaretDown size={15} />
+                                    </button>
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
-                                  {les.isPendingCreation ? (
-                                    <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+
+                                {les.isPendingCreation ? (
+                                  <div className="flex min-h-48 items-center justify-center border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-8">
+                                    <div className="flex items-center gap-2 text-(--muted) text-[0.86rem] font-semibold">
                                       <CircleNotch
-                                        size={12}
+                                        size={16}
                                         className="animate-spin text-(--accent)"
                                       />
-                                      <span>Creating...</span>
-                                    </span>
-                                  ) : deletingLessonId === les.id ? (
-                                    <span className="inline-flex items-center gap-1 text-red-400 text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/28">
-                                      <CircleNotch
-                                        size={12}
-                                        className="animate-spin text-red-400"
-                                      />
-                                      <span>Deleting...</span>
-                                    </span>
-                                  ) : (
-                                    <CurriculumItemStatusIndicator
-                                      status={getCurriculumItemDisplayStatus(
-                                        les.id,
-                                      )}
-                                      testId={`curriculum-status-lesson-${les.id}`}
-                                    />
-                                  )}
-                                  {les.isPublished === false && (
-                                    <span
-                                      className="inline-flex items-center gap-1 text-[#f59e0b] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#f59e0b_12%,transparent)] border border-[color-mix(in_srgb,#f59e0b_28%,transparent)]"
-                                      title="Draft mode: This lesson is not published and is hidden from students."
-                                    >
-                                      <EyeSlash size={13} weight="bold" />{" "}
-                                      Unpublished
-                                    </span>
-                                  )}
-                                  {les.isPreview === true && (
-                                    <span
-                                      className="inline-flex items-center gap-1 text-[#10b981] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#10b981_12%,transparent)] border border-[color-mix(in_srgb,#10b981_28%,transparent)]"
-                                      title="Free Preview: Anyone can view this lesson without enrolling."
-                                    >
-                                      Preview
-                                    </span>
-                                  )}
-                                  {les.contentType === "video" ? (
-                                    <span className="inline-flex items-center gap-1.25 text-(--accent-ink,var(--accent)) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                                      <PlayCircle size={13} weight="fill" />{" "}
-                                      Video
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1.25 text-(--accent-ink,var(--accent)) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_24%,transparent)]">
-                                      <FileText size={13} weight="fill" />{" "}
-                                      Document
-                                    </span>
-                                  )}
-                                  <button
-                                    type="button"
-                                    disabled={
-                                      les.isPendingCreation ||
-                                      deletingLessonId === les.id
-                                    }
-                                    className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                                    aria-label="Delete lesson"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeleteLesson(sec.id, les.id);
-                                    }}
-                                  >
-                                    {deletingLessonId === les.id ? (
-                                      <CircleNotch
-                                        size={14}
-                                        className="animate-spin text-red-400"
-                                      />
-                                    ) : (
-                                      <Trash size={15} />
-                                    )}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 [&>svg]:transition-transform [&>svg]:duration-200 ${
-                                      les.isExpanded
-                                        ? "is-expanded [&>svg]:rotate-180"
-                                        : ""
-                                    }`}
-                                    aria-label={
-                                      les.isExpanded
-                                        ? "Collapse lesson editor"
-                                        : "Expand lesson editor"
-                                    }
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleToggleLessonExpand(sec.id, les.id);
-                                    }}
-                                  >
-                                    <CaretDown size={15} />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {les.isPendingCreation ? (
-                                <div className="flex min-h-48 items-center justify-center border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-8">
-                                  <div className="flex items-center gap-2 text-(--muted) text-[0.86rem] font-semibold">
-                                    <CircleNotch size={16} className="animate-spin text-(--accent)" />
-                                    Creating lesson...
-                                  </div>
-                                </div>
-                              ) : !les.contentTypeSelected ? (
-                                <div className="flex flex-col items-center justify-center gap-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-8 text-center">
-                                  <h3 className="m-0 text-(--text) text-[1rem] font-bold">
-                                    What type of lesson is this?
-                                  </h3>
-                                  <p className="m-0 text-(--muted) text-[0.82rem]">
-                                    Choose the type of content you want to add to this lesson.
-                                  </p>
-                                  <div className="flex items-center justify-center gap-3 pt-2 max-[520px]:w-full max-[520px]:flex-col">
-                                    <button
-                                      type="button"
-                                      disabled={
-                                        les.isPendingCreation ||
-                                        savingLessonId === les.id
-                                      }
-                                      style={{
-                                        fontSize: "0.84rem",
-                                        fontWeight: 600,
-                                        gap: "8px",
-                                      }}
-                                      className="inline-flex min-h-9 min-w-36 items-center justify-center gap-2 rounded-[8px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-4 py-2 text-[0.84rem] font-semibold text-(--text) cursor-pointer transition-all hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-                                      onClick={() => {
-                                        if (
-                                          les.isPendingCreation ||
-                                          savingLessonId === les.id
-                                        )
-                                          return;
-                                        void handleLessonDiscreteChange(
-                                          sec.id,
-                                          les.id,
-                                          {
-                                            contentType: "video",
-                                            contentTypeSelected: true,
-                                          },
-                                        );
-                                      }}
-                                    >
-                                      {savingLessonId === les.id ? (
-                                        <CircleNotch
-                                          size={16}
-                                          className="animate-spin text-(--accent)"
-                                        />
-                                      ) : (
-                                        <Video
-                                          size={18}
-                                          weight="fill"
-                                          className="text-(--accent) shrink-0"
-                                        />
-                                      )}
-                                      <span>Video</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={
-                                        les.isPendingCreation ||
-                                        savingLessonId === les.id
-                                      }
-                                      style={{
-                                        fontSize: "0.84rem",
-                                        fontWeight: 600,
-                                        gap: "8px",
-                                      }}
-                                      className="inline-flex min-h-9 min-w-36 items-center justify-center gap-2 rounded-[8px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-4 py-2 text-[0.84rem] font-semibold text-(--text) cursor-pointer transition-all hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-                                      onClick={() => {
-                                        if (
-                                          les.isPendingCreation ||
-                                          savingLessonId === les.id
-                                        )
-                                          return;
-                                        void handleLessonDiscreteChange(
-                                          sec.id,
-                                          les.id,
-                                          {
-                                            contentType: "document",
-                                            contentMediaId: null,
-                                            contentTypeSelected: true,
-                                          },
-                                        );
-                                      }}
-                                    >
-                                      {savingLessonId === les.id ? (
-                                        <CircleNotch
-                                          size={16}
-                                          className="animate-spin text-(--accent)"
-                                        />
-                                      ) : (
-                                        <FileText
-                                          size={18}
-                                          weight="fill"
-                                          className="text-(--accent) shrink-0"
-                                        />
-                                      )}
-                                      <span>Document / PDF</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                              <div
-                                className={`grid transition-[grid-template-rows] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                                  les.isExpanded
-                                    ? "is-open grid-rows-[1fr]"
-                                    : "grid-rows-[0fr]"
-                                }`}
-                                draggable={false}
-                                onMouseDown={(e) => e.stopPropagation()}
-                              >
-                                <div
-                                  className={`min-h-0 overflow-hidden border-t border-transparent bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] transition-[padding,border-color] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                                    les.isExpanded
-                                      ? "px-5 pt-4 pb-5 border-t-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[768px]:p-[14px_12px_16px]"
-                                      : "px-5 py-0 max-[768px]:p-0"
-                                  }`}
-                                >
-                                  <div className="grid grid-cols-1 min-[1024px]:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-6 max-[768px]:gap-3.5">
-                                    {/* Left column */}
-                                    <div className="flex flex-col gap-4.5">
-                                      {/* Lesson Description Rich Editor */}
-                                      <div className="flex flex-col gap-2 mb-3">
-                                        <label
-                                          id={`les-desc-label-${les.id}`}
-                                          className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                                        >
-                                          Lesson Description
-                                        </label>
-                                        <div
-                                          className={
-                                            les.isPendingCreation
-                                              ? "opacity-60 pointer-events-none"
-                                              : ""
-                                          }
-                                          onBlur={(e) => {
-                                            if (
-                                              !e.currentTarget.contains(
-                                                e.relatedTarget as Node,
-                                              )
-                                            ) {
-                                              void handleLessonFieldBlur(
-                                                sec.id,
-                                                les.id,
-                                              );
-                                            }
-                                          }}
-                                        >
-                                          <LessonDescriptionEditor
-                                            id={`lesson-description-${les.id}`}
-                                            disabled={les.isPendingCreation}
-                                            value={les.description}
-                                            onChange={(val) =>
-                                              handleUpdateLesson(
-                                                sec.id,
-                                                les.id,
-                                                {
-                                                  description: val,
-                                                },
-                                              )
-                                            }
-                                            placeholder="Add a detailed description of what students will learn in this lesson..."
-                                            maxLength={1500}
-                                          />
-                                        </div>
-                                      </div>
+                                      Creating lesson...
                                     </div>
-
-                                    {/* Right column */}
-                                    <div className="flex flex-col gap-4.5">
-                                      {/* Content Type Selector */}
-                                      {!les.contentTypeSelected && (
-                                      <div className="flex flex-col gap-2 mb-5">
-                                        <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                                          Content Type{""}
-                                          <span className="text-[#ff5252] ml-0.5">
-                                            *
-                                          </span>
-                                        </label>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                          <div
-                                            className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
-                                              les.isPendingCreation
-                                                ? "opacity-60 cursor-not-allowed"
-                                                : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
-                                            } ${
-                                              les.contentType === "video"
-                                                ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
-                                                : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
-                                            }`}
-                                            onClick={() => {
-                                              if (les.isPendingCreation) return;
-                                              void handleLessonDiscreteChange(
-                                                sec.id,
-                                                les.id,
-                                                {
-                                                  contentType: "video",
-                                                },
-                                              );
-                                            }}
-                                          >
-                                            <div
-                                              className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "video" ? "border-(--accent)" : "border-(--muted)"}`}
-                                            >
-                                              {les.contentType === "video" && (
-                                                <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                                              )}
-                                            </div>
-                                            <div className="flex items-center justify-center text-(--accent) mt-px">
-                                              <Video size={18} weight="fill" />
-                                            </div>
-                                            <div className="flex flex-col gap-0.5">
-                                              <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
-                                                Video
-                                              </span>
-                                              <span className="text-(--muted) text-[0.75rem]">
-                                                Upload or select a video
-                                              </span>
-                                            </div>
-                                          </div>
-
-                                          <div
-                                            className={`relative flex items-center gap-3 border rounded-[10px] px-3.5 py-3 text-left transition-[border-color,background-color] duration-150 ease-out ${
-                                              les.isPendingCreation
-                                                ? "opacity-60 cursor-not-allowed"
-                                                : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
-                                            } ${
-                                              les.contentType === "document"
-                                                ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
-                                                : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
-                                            }`}
-                                            onClick={() => {
-                                              if (les.isPendingCreation) return;
-                                              void handleLessonDiscreteChange(
-                                                sec.id,
-                                                les.id,
-                                                {
-                                                  contentType: "document",
-                                                  contentMediaId: null,
-                                                },
-                                              );
-                                            }}
-                                          >
-                                            <div
-                                              className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "document" ? "border-(--accent)" : "border-(--muted)"}`}
-                                            >
-                                              {les.contentType ===
-                                                "document" && (
-                                                <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                                              )}
-                                            </div>
-                                            <div className="flex items-center justify-center text-(--accent) mt-px">
-                                              <FileText
-                                                size={18}
-                                                weight="fill"
-                                              />
-                                            </div>
-                                            <div className="flex flex-col gap-0.5">
-                                              <span className="text-(--text) text-[0.86rem] font-bold leading-[18px]">
-                                                Document / PDF
-                                              </span>
-                                              <span className="text-(--muted) text-[0.75rem]">
-                                                Upload PDF or document
-                                              </span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      )}
-
-                                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                      {/* Content Source Controls (Video or Document) */}
-                                      <div className="flex flex-col gap-2 mb-0">
-                                        <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                                          {les.contentType === "video"
-                                            ? "Video Source"
-                                            : "Document / PDF Source"}
-                                          {""}
-                                          <span className="text-[#ff5252] ml-0.5">
-                                            *
-                                          </span>
-                                        </label>
-                                        {les.contentType === "video" ? (
-                                          <LessonVideoUpload
-                                            mediaAssetId={les.contentMediaId}
-                                            disabled={les.isPendingCreation}
-                                            onMediaAttached={(mediaAssetId) =>
-                                              handleLessonMediaAttached(
-                                                sec.id,
-                                                les.id,
-                                                mediaAssetId,
-                                              )
-                                            }
-                                            onProcessingComplete={() =>
-                                              handleLessonProcessingComplete()
-                                            }
-                                          />
-                                        ) : (
-                                          <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:flex max-[768px]:gap-2">
-                                            <button
-                                              type="button"
-                                              disabled={les.isPendingCreation}
-                                              style={{
-                                                fontSize: "0.80rem",
-                                                fontWeight: 700,
-                                                height: "34px",
-                                                borderRadius: "8px",
-                                                gap: "6px",
-                                                paddingLeft: "16px",
-                                                paddingRight: "16px",
-                                              }}
-                                              className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
-                                            >
-                                              <UploadSimple size={15} />
-                                              Upload 
-                                            </button>
-                                            <button
-                                              type="button"
-                                              disabled={les.isPendingCreation}
-                                              style={{
-                                                fontSize: "0.80rem",
-                                                fontWeight: 500,
-                                                height: "34px",
-                                                borderRadius: "8px",
-                                                gap: "6px",
-                                                paddingLeft: "14px",
-                                                paddingRight: "14px",
-                                              }}
-                                              className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text) bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
-                                            >
-                                              <FileText
-                                                size={15}
-                                                className="text-(--text-secondary)"
-                                              />
-                                              Select from Media
-                                            </button>
-                                          </div>
-                                        )}
-                                      </div>
-
-                                      {/* Lesson Publishing Status */}
-                                      <div className="flex flex-col gap-2 mb-0">
-                                        <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                                          Publishing Status
-                                        </label>
-                                        <ThemedSelect
-                                          value={
-                                            les.isPublished !== false
-                                              ? "published"
-                                              : "draft"
-                                          }
-                                          onValueChange={(value) => {
-                                            if (les.isPendingCreation) return;
-                                            void handleLessonDiscreteChange(
-                                              sec.id,
-                                              les.id,
-                                              {
-                                                isPublished:
-                                                  value === "published",
-                                              },
-                                            );
-                                          }}
-                                          options={[
-                                            ["published", "Published"],
-                                            ["draft", "Draft (Hidden)"],
-                                          ]}
-                                          disabled={les.isPendingCreation}
-                                          ariaLabel="Publishing status"
-                                          triggerClassName="!h-9 !w-full !rounded-[8px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !px-3 !text-[0.84rem] !text-(--text) !bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] font-semibold disabled:!opacity-60"
-                                        />
-                                      </div>
-                                      </div>
-
-                                      {/* Free Preview Toggle */}
-                                      <div
-                                        className={`flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[8px] px-3 py-2 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-3 ${les.isPendingCreation ? "opacity-60 pointer-events-none" : ""}`}
+                                  </div>
+                                ) : !les.contentTypeSelected ? (
+                                  <div className="flex flex-col items-center justify-center gap-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-8 text-center">
+                                    <h3 className="m-0 text-(--text) text-[1rem] font-bold">
+                                      What type of lesson is this?
+                                    </h3>
+                                    <p className="m-0 text-(--muted) text-[0.82rem]">
+                                      Choose whether this lesson delivers video or document content. Quizzes can be added as assessments to either type.
+                                    </p>
+                                    <div className="flex items-center justify-center gap-3 pt-2 max-[520px]:w-full max-[520px]:flex-col">
+                                      <button
+                                        type="button"
+                                        style={{
+                                          fontSize: "0.84rem",
+                                          fontWeight: 600,
+                                          gap: "6px",
+                                        }}
+                                        className={`inline-flex min-h-9 min-w-36 items-center justify-center gap-2 rounded-[8px] border px-4 py-1.5 text-[0.84rem] font-semibold cursor-pointer transition-colors ${les.pendingContentType === "video" ? "border-(--accent) bg-[color-mix(in_srgb,var(--text)_10%,var(--surface))] text-(--text)" : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-transparent text-(--muted) hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"}`}
+                                        onClick={() =>
+                                          handleUpdateLesson(sec.id, les.id, {
+                                            pendingContentType: "video",
+                                          })
+                                        }
                                       >
-                                        <div className="pr-3">
-                                          <strong className="block mb-0.5 text-(--text) text-[0.88rem] font-[650]">
-                                            Free Preview
-                                          </strong>
-                                          <p className="m-0 text-(--muted) text-[0.78rem]">
-                                            Allow prospective students to view
-                                            this lesson before enrolling or
-                                            purchasing.
-                                          </p>
+                                        <Video size={18} weight="fill" /> Video
+                                      </button>
+                                      <button
+                                        type="button"
+                                        style={{
+                                          fontSize: "0.84rem",
+                                          fontWeight: 600,
+                                          gap: "6px",
+                                        }}
+                                        className={`inline-flex min-h-9 min-w-36 items-center justify-center gap-2 rounded-[8px] border px-4 py-1.5 text-[0.84rem] font-semibold cursor-pointer transition-colors ${les.pendingContentType === "document" ? "border-(--accent) bg-[color-mix(in_srgb,var(--text)_10%,var(--surface))] text-(--text)" : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-transparent text-(--muted) hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"}`}
+                                        onClick={() =>
+                                          handleUpdateLesson(sec.id, les.id, {
+                                            pendingContentType: "document",
+                                          })
+                                        }
+                                      >
+                                        <FileText size={18} weight="fill" />{" "}
+                                        Document / PDF
+                                      </button>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        !les.pendingContentType ||
+                                        savingLessonId === les.id
+                                      }
+                                      style={{
+                                        fontSize: "0.84rem",
+                                        fontWeight: 600,
+                                        height: "34px",
+                                        borderRadius: "8px",
+                                        gap: "6px",
+                                        paddingTop: 0,
+                                        paddingBottom: 0,
+                                      }}
+                                      className="mt-2 inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) px-4 shadow-[0_3px_10px_var(--accent-shadow)] cursor-pointer transition-all hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                                      onClick={() => {
+                                        if (!les.pendingContentType) return;
+                                        void handleLessonDiscreteChange(
+                                          sec.id,
+                                          les.id,
+                                          {
+                                            contentType: les.pendingContentType,
+                                            ...(les.pendingContentType ===
+                                            "document"
+                                              ? { contentMediaId: null }
+                                              : {}),
+                                          },
+                                        );
+                                      }}
+                                    >
+                                      {savingLessonId === les.id
+                                        ? "Saving..."
+                                        : "Continue"}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div
+                                    className={`grid transition-[grid-template-rows] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                                      les.isExpanded
+                                        ? "is-open grid-rows-[1fr]"
+                                        : "grid-rows-[0fr]"
+                                    }`}
+                                    draggable={false}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                  >
+                                    <div
+                                      className={`min-h-0 overflow-hidden border-t border-transparent bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] transition-[padding,border-color] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                                        les.isExpanded
+                                          ? "px-5 pt-4 pb-5 border-t-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[768px]:p-[14px_12px_16px]"
+                                          : "px-5 py-0 max-[768px]:p-0"
+                                      }`}
+                                    >
+                                      <div className="grid grid-cols-1 min-[1024px]:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-6 max-[768px]:gap-3.5">
+                                        {/* Left column */}
+                                        <div className="flex flex-col gap-4.5">
+                                          {/* Lesson Description Rich Editor */}
+                                          <div className="flex flex-col gap-2 mb-3">
+                                            <label
+                                              id={`les-desc-label-${les.id}`}
+                                              className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                                            >
+                                              Lesson Description
+                                            </label>
+                                            <div
+                                              className={
+                                                les.isPendingCreation
+                                                  ? "opacity-60 pointer-events-none"
+                                                  : ""
+                                              }
+                                              onBlur={(e) => {
+                                                if (
+                                                  !e.currentTarget.contains(
+                                                    e.relatedTarget as Node,
+                                                  )
+                                                ) {
+                                                  void handleLessonFieldBlur(
+                                                    sec.id,
+                                                    les.id,
+                                                  );
+                                                }
+                                              }}
+                                            >
+                                              <LessonDescriptionEditor
+                                                id={`lesson-description-${les.id}`}
+                                                disabled={les.isPendingCreation}
+                                                value={les.description}
+                                                onChange={(val) =>
+                                                  handleUpdateLesson(
+                                                    sec.id,
+                                                    les.id,
+                                                    {
+                                                      description: val,
+                                                    },
+                                                  )
+                                                }
+                                                placeholder="Add a detailed description of what students will learn in this lesson..."
+                                                maxLength={1500}
+                                              />
+                                            </div>
+                                          </div>
                                         </div>
-                                        <SettingsToggle
-                                          checked={les.isPreview === true}
-                                          onChange={(checked) => {
-                                            if (les.isPendingCreation) return;
-                                            void handleLessonDiscreteChange(
-                                              sec.id,
-                                              les.id,
-                                              {
-                                                isPreview: checked,
-                                              },
-                                            );
-                                          }}
-                                          label="Toggle Free Preview"
-                                        />
+
+                                        {/* Right column */}
+                                        <div className="flex flex-col gap-4.5">
+                                            {/* Content Type Selector */}
+                                            <div className="flex flex-col gap-2 mb-4">
+                                              <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                                                Content Type{""}
+                                                <span className="text-[#ff5252] ml-0.5">
+                                                  *
+                                                </span>
+                                              </label>
+                                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                                <div
+                                                  className={`relative flex items-center gap-2.5 border rounded-[10px] px-3 py-2.5 text-left transition-[border-color,background-color] duration-150 ease-out ${
+                                                    les.isPendingCreation
+                                                      ? "opacity-60 cursor-not-allowed"
+                                                      : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
+                                                  } ${
+                                                    les.contentType === "video"
+                                                      ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
+                                                      : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
+                                                  }`}
+                                                  onClick={() => {
+                                                    if (les.isPendingCreation)
+                                                      return;
+                                                    void handleLessonDiscreteChange(
+                                                      sec.id,
+                                                      les.id,
+                                                      {
+                                                        contentType: "video",
+                                                      },
+                                                    );
+                                                  }}
+                                                >
+                                                  <div
+                                                    className={`flex w-4 h-4 shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "video" ? "border-(--accent)" : "border-(--muted)"}`}
+                                                  >
+                                                    {les.contentType ===
+                                                      "video" && (
+                                                      <div className="w-1.5 h-1.5 rounded-full bg-(--accent)" />
+                                                    )}
+                                                  </div>
+                                                  <div className="flex items-center justify-center text-(--accent)">
+                                                    <Video
+                                                      size={16}
+                                                      weight="fill"
+                                                    />
+                                                  </div>
+                                                  <div className="flex flex-col min-w-0">
+                                                    <span className="text-(--text) text-[0.82rem] font-bold leading-tight truncate">
+                                                      Video
+                                                    </span>
+                                                    <span className="text-(--muted) text-[0.70rem] truncate">
+                                                      Video lesson
+                                                    </span>
+                                                  </div>
+                                                </div>
+
+                                                <div
+                                                  className={`relative flex items-center gap-2.5 border rounded-[10px] px-3 py-2.5 text-left transition-[border-color,background-color] duration-150 ease-out ${
+                                                    les.isPendingCreation
+                                                      ? "opacity-60 cursor-not-allowed"
+                                                      : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
+                                                  } ${
+                                                    les.contentType ===
+                                                    "document"
+                                                      ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
+                                                      : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
+                                                  }`}
+                                                  onClick={() => {
+                                                    if (les.isPendingCreation)
+                                                      return;
+                                                    void handleLessonDiscreteChange(
+                                                      sec.id,
+                                                      les.id,
+                                                      {
+                                                        contentType: "document",
+                                                      },
+                                                    );
+                                                  }}
+                                                >
+                                                  <div
+                                                    className={`flex w-4 h-4 shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "document" ? "border-(--accent)" : "border-(--muted)"}`}
+                                                  >
+                                                    {les.contentType ===
+                                                      "document" && (
+                                                      <div className="w-1.5 h-1.5 rounded-full bg-(--accent)" />
+                                                    )}
+                                                  </div>
+                                                  <div className="flex items-center justify-center text-(--accent)">
+                                                    <FileText
+                                                      size={16}
+                                                      weight="fill"
+                                                    />
+                                                  </div>
+                                                  <div className="flex flex-col min-w-0">
+                                                    <span className="text-(--text) text-[0.82rem] font-bold leading-tight truncate">
+                                                      Document
+                                                    </span>
+                                                    <span className="text-(--muted) text-[0.70rem] truncate">
+                                                      PDF / Reading
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                              {/* Content Source Controls (Video or Document) */}
+                                              <div className="flex flex-col gap-2 mb-0">
+                                                <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                                                  {les.contentType === "video"
+                                                    ? "Video Source"
+                                                    : "Document / PDF Source"}
+                                                  <span className="text-[#ff5252] ml-0.5">
+                                                    *
+                                                  </span>
+                                                </label>
+                                                {les.contentType === "video" ? (
+                                                  <LessonVideoUpload
+                                                    mediaAssetId={
+                                                      les.contentMediaId
+                                                    }
+                                                    disabled={
+                                                      les.isPendingCreation
+                                                    }
+                                                    onMediaAttached={(
+                                                      mediaAssetId,
+                                                    ) =>
+                                                      handleLessonMediaAttached(
+                                                        sec.id,
+                                                        les.id,
+                                                        mediaAssetId,
+                                                      )
+                                                    }
+                                                    onProcessingComplete={() =>
+                                                      handleLessonProcessingComplete()
+                                                    }
+                                                  />
+                                                ) : (
+                                                <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:flex max-[768px]:gap-2">
+                                                  <button
+                                                    type="button"
+                                                    disabled={
+                                                      les.isPendingCreation
+                                                    }
+                                                    style={{
+                                                      fontSize: "0.80rem",
+                                                      fontWeight: 700,
+                                                      height: "34px",
+                                                      borderRadius: "8px",
+                                                      gap: "6px",
+                                                      paddingLeft: "16px",
+                                                      paddingRight: "16px",
+                                                    }}
+                                                    className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
+                                                  >
+                                                    <UploadSimple size={15} />
+                                                    Upload
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    disabled={
+                                                      les.isPendingCreation
+                                                    }
+                                                    style={{
+                                                      fontSize: "0.80rem",
+                                                      fontWeight: 500,
+                                                      height: "34px",
+                                                      borderRadius: "8px",
+                                                      gap: "6px",
+                                                      paddingLeft: "14px",
+                                                      paddingRight: "14px",
+                                                    }}
+                                                    className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text) bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
+                                                  >
+                                                    <FileText
+                                                      size={15}
+                                                      className="text-(--text-secondary)"
+                                                    />
+                                                    Select from Media
+                                                  </button>
+                                                </div>
+                                              )}
+                                            </div>
+
+                                            {/* Lesson Publishing Status */}
+                                            <div className="flex flex-col gap-2 mb-0">
+                                              <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                                                Publishing Status
+                                              </label>
+                                              <ThemedSelect
+                                                value={
+                                                  les.isPublished !== false
+                                                    ? "published"
+                                                    : "draft"
+                                                }
+                                                onValueChange={(value) => {
+                                                  if (les.isPendingCreation)
+                                                    return;
+                                                  void handleLessonDiscreteChange(
+                                                    sec.id,
+                                                    les.id,
+                                                    {
+                                                      isPublished:
+                                                        value === "published",
+                                                    },
+                                                  );
+                                                }}
+                                                options={[
+                                                  ["published", "Published"],
+                                                  ["draft", "Draft (Hidden)"],
+                                                ]}
+                                                disabled={les.isPendingCreation}
+                                                ariaLabel="Publishing status"
+                                                triggerClassName="!h-9 !w-full !rounded-[8px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !px-3 !text-[0.84rem] !text-(--text) !bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] font-semibold disabled:!opacity-60"
+                                              />
+                                            </div>
+                                          </div>
+
+                                          {/* Free Preview Toggle */}
+                                          <div
+                                            className={`flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[8px] px-3 py-2 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-3 ${les.isPendingCreation ? "opacity-60 pointer-events-none" : ""}`}
+                                          >
+                                            <div className="pr-3">
+                                              <strong className="block mb-0.5 text-(--text) text-[0.88rem] font-[650]">
+                                                Free Preview
+                                              </strong>
+                                              <p className="m-0 text-(--muted) text-[0.78rem]">
+                                                Allow prospective students to
+                                                view this lesson before
+                                                enrolling or purchasing.
+                                              </p>
+                                            </div>
+                                            <SettingsToggle
+                                              checked={les.isPreview === true}
+                                              onChange={(checked) => {
+                                                if (les.isPendingCreation)
+                                                  return;
+                                                void handleLessonDiscreteChange(
+                                                  sec.id,
+                                                  les.id,
+                                                  {
+                                                    isPreview: checked,
+                                                  },
+                                                );
+                                              }}
+                                              label="Toggle Free Preview"
+                                            />
+                                          </div>
+
+                                          {/* Lesson Resources */}
+                                          <LessonResourceManager
+                                            courseId={currentCourseId}
+                                            lessonId={les.id}
+                                            resources={les.resources}
+                                            disabled={
+                                              les.isPendingCreation ||
+                                              createLessonResourceMutation.isPending ||
+                                              deleteLessonResourceMutation.isPending
+                                            }
+                                            onCreateResource={(payload) =>
+                                              handleCreateLessonResource(
+                                                les.id,
+                                                payload,
+                                              )
+                                            }
+                                            onResourceAdded={(resource) =>
+                                              handleLessonResourceAdded(
+                                                sec.id,
+                                                les.id,
+                                                resource,
+                                              )
+                                            }
+                                            onDeleteResource={(resourceId) =>
+                                              handleDeleteLessonResource(
+                                                resourceId,
+                                              )
+                                            }
+                                            onResourceRemoved={(resource) =>
+                                              handleLessonResourceRemoved(
+                                                sec.id,
+                                                les.id,
+                                                resource,
+                                              )
+                                            }
+                                          />
+                                        </div>
                                       </div>
 
-                                      {/* Lesson Resources */}
-                                      <LessonResourceManager
-                                        courseId={currentCourseId}
-                                        lessonId={les.id}
-                                        resources={les.resources}
-                                        disabled={
-                                          les.isPendingCreation ||
-                                          createLessonResourceMutation.isPending ||
-                                          deleteLessonResourceMutation.isPending
-                                        }
-                                        onCreateResource={(payload) =>
-                                          handleCreateLessonResource(
-                                            les.id,
-                                            payload,
-                                          )
-                                        }
-                                        onResourceAdded={(resource) =>
-                                          handleLessonResourceAdded(
-                                            sec.id,
-                                            les.id,
-                                            resource,
-                                          )
-                                        }
-                                        onDeleteResource={(resourceId) =>
-                                          handleDeleteLessonResource(resourceId)
-                                        }
-                                        onResourceRemoved={(resource) =>
-                                          handleLessonResourceRemoved(
-                                            sec.id,
-                                            les.id,
-                                            resource,
-                                          )
-                                        }
-                                      />
+                                        {/* Attached Quiz Assessment (Optional) */}
+                                        <div className="mt-5 pt-4 border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
+                                          <details
+                                            open={lessonsWithQuizzes.has(les.id) ? true : undefined}
+                                            className="group rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-3.5 transition-all"
+                                          >
+                                            <summary className="flex cursor-pointer items-center justify-between text-xs font-semibold text-(--text) select-none">
+                                              <div className="flex items-center gap-2">
+                                                <PuzzlePiece
+                                                  size={16}
+                                                  className="text-(--accent)"
+                                                  weight="fill"
+                                                />
+                                                <span>
+                                                  Attached Quiz Assessment (Optional)
+                                                </span>
+                                                {lessonsWithQuizzes.has(les.id) && (
+                                                  <span className="inline-flex items-center gap-1 text-[0.70rem] font-bold text-[#8b5cf6] bg-[color-mix(in_srgb,#8b5cf6_15%,transparent)] px-2 py-0.5 rounded-full border border-[color-mix(in_srgb,#8b5cf6_28%,transparent)]">
+                                                    Quiz attached
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <span className="text-[0.72rem] text-(--accent) group-open:rotate-180 transition-transform">
+                                                ▼
+                                              </span>
+                                            </summary>
+                                            <div className="mt-3 pt-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+                                              {currentCourseId &&
+                                              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                                                les.id,
+                                              ) ? (
+                                                <QuizAuthoringPanel
+                                                  courseId={currentCourseId}
+                                                  lessonId={les.id}
+                                                  lessonTitle={les.title}
+                                                  onQuizDeleted={() => {
+                                                    // Quiz deleted, query invalidation in hook updates UI
+                                                  }}
+                                                  isFocusMode={isCurriculumFocusMode}
+                                                  onToggleFocusMode={() =>
+                                                    setIsCurriculumFocusMode(
+                                                      (prev) => !prev,
+                                                    )
+                                                  }
+                                                />
+                                              ) : (
+                                                <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
+                                                  Save the course and lesson before configuring an attached Quiz.
+                                                </div>
+                                              )}
+                                            </div>
+                                          </details>
+                                        </div>
                                     </div>
                                   </div>
-                                </div>
-                              </div>
-                              )}
+                                )}
                               </>
                             </div>
                           ))}
@@ -13437,7 +13666,10 @@ export function CourseCreatePage({
               >
                 {actionLoading === "publish" ? (
                   <>
-                    <CircleNotch size={15} className="animate-spin text-white" />
+                    <CircleNotch
+                      size={15}
+                      className="animate-spin text-white"
+                    />
                     <span>Publishing...</span>
                   </>
                 ) : (

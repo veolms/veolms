@@ -4,6 +4,17 @@ on:
   push:
     branches:
       - development
+    paths:
+      - "apps/web/**"
+      - "packages/contracts/**"
+      - "packages/database/**"
+      - "packages/config/**"
+      - "packages/storage/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - ".github/workflows/deploy-development-ui.yml"
   workflow_dispatch:
 
 permissions:
@@ -49,15 +60,15 @@ jobs:
       - name: Run web unit tests
         run: pnpm --filter @veolms/web test:unit
 
-      - name: Build web application without an external media base URL
-        if: ${{ vars.VITE_COURSE_MEDIA_BASE_URL == '' }}
+      - name: Build web application without an external CDN URL
+        if: ${{ vars.VITE_CDN_URL == '' && vars.CDN_URL == '' }}
         run: pnpm build:web
 
-      - name: Build web application with the configured media base URL
-        if: ${{ vars.VITE_COURSE_MEDIA_BASE_URL != '' }}
+      - name: Build web application with the configured CDN URL
+        if: ${{ vars.VITE_CDN_URL != '' || vars.CDN_URL != '' }}
         run: pnpm build:web
         env:
-          VITE_COURSE_MEDIA_BASE_URL: ${{ vars.VITE_COURSE_MEDIA_BASE_URL }}
+          VITE_CDN_URL: ${{ vars.VITE_CDN_URL || vars.CDN_URL }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3

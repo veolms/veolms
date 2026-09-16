@@ -9,6 +9,8 @@ export interface OauthProfile {
   name: string;
   username: string;
   providerUserId: string;
+  /** The provider's profile photo URL, when it exposes one. */
+  pictureUrl?: string | undefined;
 }
 
 export interface OauthProviderCredentials {
@@ -43,6 +45,7 @@ const googleUserInfoSchema = z.object({
   email: z.email(),
   email_verified: z.boolean().optional(),
   name: z.string().optional(),
+  picture: z.url().optional(),
 });
 
 const githubTokenSchema = z.object({
@@ -56,6 +59,7 @@ const githubUserSchema = z.object({
   login: z.string().optional(),
   name: z.string().nullable().optional(),
   email: z.string().nullable().optional(),
+  avatar_url: z.string().optional(),
 });
 
 const githubEmailsSchema = z.array(
@@ -91,6 +95,7 @@ function mockProfile(provider: OauthProviderName, code: string): OauthProfile {
     username,
     name: `${provider === "google" ? "Google" : "GitHub"} Mock User`,
     providerUserId: `mock_${provider}_${username}`,
+    pictureUrl: undefined,
   };
 }
 
@@ -148,6 +153,7 @@ async function fetchGoogleProfile(
     name: profile.name || localPart || "Google User",
     username: localPart,
     providerUserId: profile.sub,
+    pictureUrl: profile.picture,
   };
 }
 
@@ -238,6 +244,7 @@ async function fetchGithubProfile(
     name: user.name || user.login || "GitHub User",
     username: user.login || "",
     providerUserId: String(user.id),
+    pictureUrl: user.avatar_url,
   };
 }
 

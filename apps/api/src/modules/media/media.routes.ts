@@ -2,9 +2,11 @@ import { z } from "zod";
 import {
   presignMediaRequestSchema,
   presignMediaResponseSchema,
-  mediaAssetStatusSchema,
+  mediaDeliveryResponseSchema,
+  mediaUploadCompleteResponseSchema,
   videoJobProgressResponseSchema,
   videoPlaybackBootstrapSchema,
+  videoPlaybackTokenSchema,
 } from "@veolms/contracts";
 
 import { errorResponse } from "../../lib/errors.ts";
@@ -53,6 +55,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           403: errorResponse("Course access denied"),
           404: errorResponse("Lesson or media not found"),
           409: errorResponse("Video is not ready for playback"),
+          503: errorResponse("CDN delivery is not configured"),
         },
       },
       preHandler: [
@@ -61,6 +64,39 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
       ],
     },
     controller.getPlaybackBootstrap,
+  );
+
+  app.get(
+    "/courses/:idOrSlug/lessons/:lessonNumber/playback-token",
+    {
+      schema: {
+        operationId: "getVideoPlaybackToken",
+        tags: ["Media"],
+        summary: "Refresh an authorized lesson video segment token",
+        description:
+          "Returns only a new short-lived token for protected HLS segments. The same course access and media readiness rules as playback bootstrap are applied.",
+        params: z.object({
+          idOrSlug: z.string().min(1).max(160),
+          lessonNumber: z.coerce.number().int().positive(),
+        }),
+        response: {
+          200: jsonResponse(
+            "Protected video playback token",
+            videoPlaybackTokenSchema,
+          ),
+          401: errorResponse("Authentication required"),
+          403: errorResponse("Course access denied"),
+          404: errorResponse("Lesson or media not found"),
+          409: errorResponse("Video is not ready or does not require a token"),
+          503: errorResponse("CDN delivery is not configured"),
+        },
+      },
+      preHandler: [
+        authMiddleware.authenticate,
+        authMiddleware.requireMfaVerifiedIfAuthenticated,
+      ],
+    },
+    controller.getPlaybackToken,
   );
 
   app.post(
@@ -94,10 +130,11 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse(
             "Upload confirmed",
-            z.object({ status: mediaAssetStatusSchema }),
+            mediaUploadCompleteResponseSchema,
           ),
           400: errorResponse("File not found or size mismatch"),
           404: errorResponse("Media not found"),
+          503: errorResponse("CDN delivery is not configured"),
         },
       },
       preHandler: requireAuthenticated,
@@ -154,10 +191,10 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
   );
 
   app.get(
-    "/media/:mediaId/hls/*",
+    "/media/:mediaId/delivery",
     {
       schema: {
-        operationId: "streamProtectedHlsResource",
+        operationId: "getMediaDelivery",
         tags: ["Media"],
         summary: "Stream an authorized HLS playlist or segment",
         params: z.object({
@@ -180,6 +217,15 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
   );
 
   app.get(
+    "/media/:mediaId/variants/:width",
+    {
+      schema: { params: z.object({ mediaId: z.uuid(), width: z.coerce.number().int().positive() }) },
+      preHandler: [authMiddleware.authenticate],
+    },
+    controller.getImageVariantStream,
+  );
+
+  app.get(
     "/media/:mediaId",
     {
       schema: {
@@ -188,17 +234,17 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
         summary: "Stream media file content by media ID",
         params: z.object({ mediaId: z.string().uuid() }),
         response: {
-          404: errorResponse("Media or file not found"),
+          200: jsonResponse(
+            "Direct media delivery URL",
+            mediaDeliveryResponseSchema,
+          ),
+          404: errorResponse("Media not found or access denied"),
+          503: errorResponse("CDN delivery is not configured"),
         },
       },
-      // Not requireAuthenticated: published-course thumbnails/trailers must
-      // stay servable to anonymous visitors on public marketing pages.
-      // `authenticate` alone populates request.user when a session cookie
-      // is present, without rejecting anonymous requests — the service
-      // layer then enforces ownership for anything non-public.
       preHandler: [authMiddleware.authenticate],
     },
-    controller.getMediaAssetStream,
+    controller.getMediaDelivery,
   );
 };
 

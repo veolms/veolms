@@ -3,12 +3,14 @@ import {
   clearSessionCookie,
   setSessionCookie,
 } from "../shared/auth.cookies.ts";
-import { presentLogin } from "../shared/auth.presenters.ts";
+import { presentAvatar, presentLogin } from "../shared/auth.presenters.ts";
 import {
   normalizePhoneIdentifier,
   resolveIdentifier,
 } from "../shared/auth.utils.ts";
 import type {
+  AvatarUploadCompleteRequest,
+  AvatarUploadPresignRequest,
   LoginRequest,
   ProfileUpdateRequest,
   RegisterRequest,
@@ -101,7 +103,7 @@ export function createAuthController(context: AuthContext) {
       id: user.id,
       username: user.username,
       displayName: user.displayName,
-      avatarDataUrl: user.avatarDataUrl,
+      ...presentAvatar(user.avatarDataUrl),
       bio: user.bio,
       emailPublic: Boolean(
         user.emailPublic && user.email && user.emailVerified,
@@ -137,7 +139,53 @@ export function createAuthController(context: AuthContext) {
       id: updated.id,
       username: updated.username,
       displayName: updated.display_name,
-      avatarDataUrl: updated.avatar_data_url,
+      ...presentAvatar(updated.avatar_data_url),
+      bio: updated.bio,
+      emailPublic: Boolean(
+        updated.email_public && updated.email && updated.email_verified_at,
+      ),
+      mobilePublic: Boolean(
+        updated.mobile_public && updated.phone_no && updated.phone_verified_at,
+      ),
+      linkedinUrl: updated.linkedin_url,
+      linkedinPublic: Boolean(updated.linkedin_public && updated.linkedin_url),
+      githubUrl: updated.github_url,
+      githubPublic: Boolean(updated.github_public && updated.github_url),
+      websiteUrl: updated.website_url,
+      websitePublic: Boolean(updated.website_public && updated.website_url),
+      email: updated.email,
+      emailVerified: Boolean(updated.email_verified_at),
+      phoneNo: updated.phone_no,
+      mobileVerified: Boolean(updated.phone_verified_at),
+      roles: updated.roles,
+      mfaVerified: request.session?.mfa_verified ?? false,
+      totpEnabled: user.totpEnabled,
+      passkeyEnabled: user.passkeyEnabled,
+      mfaMandatory: user.mfaMandatory,
+    };
+  }
+
+  async function presignAvatarUpload(
+    request: FastifyRequest<{ Body: AvatarUploadPresignRequest }>,
+  ) {
+    const user = request.user!;
+    return authService.presignAvatarUpload(user.id, request.body);
+  }
+
+  async function completeAvatarUpload(
+    request: FastifyRequest<{ Body: AvatarUploadCompleteRequest }>,
+  ) {
+    const user = request.user!;
+    const updated = await authService.completeAvatarUpload(
+      user.id,
+      request.body,
+    );
+
+    return {
+      id: updated.id,
+      username: updated.username,
+      displayName: updated.display_name,
+      ...presentAvatar(updated.avatar_data_url),
       bio: updated.bio,
       emailPublic: Boolean(
         updated.email_public && updated.email && updated.email_verified_at,
@@ -179,6 +227,8 @@ export function createAuthController(context: AuthContext) {
     logout,
     me,
     updateProfile,
+    presignAvatarUpload,
+    completeAvatarUpload,
     deactivateAccount,
   };
 }

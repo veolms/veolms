@@ -20,6 +20,7 @@ const enrolledCourse: Course = {
   students: 967,
   thumbnail: "/course.jpg",
   lifecycleStatus: "published",
+  creatorId: "creator-1",
 };
 
 const nonEnrolledCourse = {
@@ -52,6 +53,7 @@ const renderCard = (props: Partial<CourseCardProps> = {}) => {
       role="student"
       wishlisted={false}
       menuOpen={false}
+      currentUserId="creator-1"
       {...callbacks}
       {...props}
     />,
@@ -237,6 +239,7 @@ describe("CourseCard", () => {
         role="creator"
         wishlisted={false}
         menuOpen
+        currentUserId="creator-1"
         onWishlist={vi.fn()}
         onOpen={onOpen}
         onExplore={vi.fn()}
@@ -401,7 +404,7 @@ describe("PlaceholderPage", () => {
     render(<PlaceholderPage section="Students" role="creator" />);
 
     expect(screen.getByRole("heading", { name: "Students" })).toBeVisible();
-    expect(screen.getByText("Creator workspace")).toBeVisible();
+    expect(screen.getByText("Instructor workspace")).toBeVisible();
     expect(
       screen.getByText("Student management is not implemented yet.", {
         exact: false,

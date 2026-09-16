@@ -55,7 +55,7 @@ export const getLearningPlayerSwipeSplitX = (playerAnchor: Element) => {
 };
 
 export interface PointerGestureClaim {
-  owner: "curriculum" | "learning-space";
+  owner: "curriculum";
   pointerId: number;
 }
 
@@ -73,7 +73,7 @@ export const subscribeToPointerGestureClaims = (
   const handleClaim = (event: Event) => {
     const detail = (event as CustomEvent<PointerGestureClaim>).detail;
     if (
-      (detail?.owner !== "curriculum" && detail?.owner !== "learning-space") ||
+      detail?.owner !== "curriculum" ||
       !Number.isInteger(detail.pointerId)
     )
       return;

@@ -46,6 +46,14 @@ export const DEFAULT_SEED_USER = {
   email_verified_at: new Date(),
 } as const;
 
+const DEFAULT_SEED_ACADEMY = {
+  id: "00000000-0000-4000-8000-000000000100",
+  name: "VeoLMS Academy",
+  logo_url: null,
+  custom_domain: null,
+  setup_completed: true,
+} as const;
+
 export const DEFAULT_SYSTEM_USER_ID = DEFAULT_SEED_USER.id;
 
 const database = createDatabase(config.DATABASE_URL);
@@ -53,7 +61,14 @@ const database = createDatabase(config.DATABASE_URL);
 try {
   await seedRolesAndPermissions(database);
 
-  // Seed default creator user
+  // 1. Seed Academy
+  await database
+    .insertInto("academy")
+    .values(DEFAULT_SEED_ACADEMY)
+    .onConflict((conflict) => conflict.column("id").doNothing())
+    .execute();
+
+  // 2. Seed default user
   await database
     .insertInto("users")
     .values(DEFAULT_SEED_USER)
@@ -67,16 +82,30 @@ try {
     )
     .execute();
 
-  // Assign creator role to the default user
+  // 3. Seed Scoped Role Assignment (Admin)
+  await database
+    .insertInto("role_assignments")
+    .values({
+      id: "00000000-0000-4000-8000-000000000001",
+      user_id: DEFAULT_SEED_USER.id,
+      role_id: "00000000-0000-4000-8000-000000000000", // Admin
+      scope_type: "platform",
+      course_id: null,
+    })
+    .onConflict((conflict) => conflict.column("id").doNothing())
+    .execute();
+
+  // Assign legacy user_roles for compatibility
   await database
     .insertInto("user_roles")
     .values({
       user_id: DEFAULT_SEED_USER.id,
-      role_id: "00000000-0000-4000-8000-000000000001",
+      role_id: "00000000-0000-4000-8000-000000000000",
     })
     .onConflict((conflict) => conflict.doNothing())
     .execute();
 
+  // 4. Seed courses
   for (const course of courses) {
     await database
       .insertInto("courses")
@@ -98,8 +127,7 @@ try {
       .execute();
   }
 
-  console.info(`Seeded ${courses.length} published courses.`);
+  console.info(`Seeded ${courses.length} published courses with Admin role assignment.`);
 } finally {
   await database.destroy();
 }
-

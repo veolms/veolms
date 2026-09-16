@@ -937,7 +937,7 @@ describe("Phase 3A optimistic thread creation", () => {
         "courses",
         1,
         undefined,
-        "client-thread-temp",
+        { threadId: "client-thread-temp" },
       ),
     ).not.toContain("thread=");
   });

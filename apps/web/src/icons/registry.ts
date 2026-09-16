@@ -4,6 +4,7 @@ import {
   ClockIcon,
   Copy as CopyIcon,
   DeviceMobile,
+  DownloadSimple,
   EnvelopeSimple,
   KeyIcon,
   LockIcon,
@@ -19,6 +20,7 @@ import {
   CircleUserRound,
   Clock,
   Copy,
+  Download,
   Lock,
   Mail,
   UserRoundKey,
@@ -53,10 +55,12 @@ export const iconRegistry = {
   person: { lucide: CircleUserRound, phosphor: UserCircleIcon },
   passkey: { lucide: UserRoundKey, phosphor: KeyIcon },
   authenticator: { lucide: Lock, phosphor: LockIcon },
+  lock: { lucide: Lock, phosphor: LockIcon },
   recommended: { lucide: Star, phosphor: StarIcon },
   shield: { lucide: ShieldCheck, phosphor: ShieldCheckIcon },
   refreshTimer: { lucide: Clock, phosphor: ClockIcon },
   copy: { lucide: Copy, phosphor: CopyIcon },
+  download: { lucide: Download, phosphor: DownloadSimple },
 } as const satisfies Record<string, Record<IconPack, IconGlyph>>;
 
 export type IconName = keyof typeof iconRegistry;

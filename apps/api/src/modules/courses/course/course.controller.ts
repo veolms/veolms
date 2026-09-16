@@ -64,7 +64,7 @@ export function createCourseController({
 
   async function listMyCourses(request: FastifyRequest) {
     const creatorId = request.user!.id;
-    return await service.listMyCourses(creatorId);
+    return await service.listMyCourses(creatorId, request.user?.roles);
   }
 
   async function getCourseEditor(
@@ -72,7 +72,7 @@ export function createCourseController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.getCourseEditorData(id, creatorId);
+    return await service.getCourseEditorData(id, creatorId, request.user?.roles);
   }
 
   async function updateCourseBasics(
@@ -89,6 +89,7 @@ export function createCourseController({
       creatorId,
       request.body,
       request.log,
+      request.user?.roles,
     );
 
     if (result.accepted) {
@@ -120,7 +121,41 @@ export function createCourseController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.deleteCourse(id, creatorId);
+    return await service.deleteCourse(id, creatorId, request.user?.roles);
+  }
+
+  async function updateCourseThumbnail(
+    request: FastifyRequest<{
+      Params: { id: string };
+      Body: { thumbnailUrl: string; thumbnailMediaId?: string | null };
+    }>,
+  ) {
+    const { id } = request.params;
+    return await service.updateCourseThumbnail(id, request.body);
+  }
+
+  async function updateCourseDetails(
+    request: FastifyRequest<{
+      Params: { id: string };
+      Body: {
+        title?: string;
+        subtitle?: string | null;
+        description?: string | null;
+        language?: string;
+        level?: "beginner" | "intermediate" | "advanced" | "all_levels";
+        categoryId?: string | null;
+      };
+    }>,
+  ) {
+    const { id } = request.params;
+    return await service.updateCourseDetails(id, request.body);
+  }
+
+  async function archiveCourse(
+    request: FastifyRequest<{ Params: { id: string } }>,
+  ) {
+    const { id } = request.params;
+    return await service.archiveCourse(id);
   }
 
   return {
@@ -131,6 +166,9 @@ export function createCourseController({
     listMyCourses,
     getCourseEditor,
     updateCourseBasics,
+    updateCourseThumbnail,
+    updateCourseDetails,
+    archiveCourse,
     getCourseOverview,
     deleteCourse,
   };

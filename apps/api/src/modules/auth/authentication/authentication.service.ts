@@ -1,7 +1,13 @@
 import crypto from "node:crypto";
 
 import type { Database } from "@veolms/database";
-import type { ProfileUpdateRequest } from "@veolms/contracts";
+import type {
+  AvatarUploadCompleteRequest,
+  AvatarUploadPresignRequest,
+  ProfileUpdateRequest,
+} from "@veolms/contracts";
+import { buildDicebearSvgUrl, DEFAULT_AVATAR_STYLE } from "@veolms/contracts";
+import type { S3StorageService } from "@veolms/storage";
 import { sql, type Kysely } from "kysely";
 
 import { AppError } from "../../../lib/errors.ts";
@@ -17,20 +23,95 @@ import * as userRepository from "./authentication.repository.ts";
 import type { OtpService } from "../otp/otp.service.ts";
 import type { SessionService } from "../session/session.service.ts";
 import { normalizePhoneNumber } from "../shared/auth.utils.ts";
+import {
+  AVATAR_CONTENT_TYPES,
+  AVATAR_UPLOAD_MAX_BYTES,
+  avatarCdnUrl,
+  avatarOriginalKey,
+  detectImageContentType,
+  isStoredAvatarUrl,
+  removeAvatarVariants,
+  removeOtherAvatarOriginals,
+  removeAvatar,
+  storeAvatarBuffer,
+  storeAvatarFromUrl,
+} from "../../avatars/index.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
+
+const AVATAR_VALIDATION_RANGE = "bytes=0-31";
+
+async function readObjectPrefix(
+  body: AsyncIterable<Uint8Array>,
+  maxBytes: number,
+): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let remaining = maxBytes;
+
+  for await (const chunk of body) {
+    if (remaining <= 0) break;
+    const bytes = Buffer.from(chunk).subarray(0, remaining);
+    if (bytes.length > 0) {
+      chunks.push(bytes);
+      remaining -= bytes.length;
+    }
+  }
+
+  return Buffer.concat(chunks);
+}
 
 export interface AuthServiceOptions {
   database: Kysely<Database>;
   otpService?: OtpService;
   sessionService?: SessionService;
+  /** Omitted by the read-only callers (notification worker, course lookups)
+   * that never create a user or touch an avatar. */
+  storage?: S3StorageService;
 }
 
 export function createAuthService({
   database,
   otpService,
   sessionService,
+  storage,
 }: AuthServiceOptions) {
   const outbox = createOutboxService();
+
+  /** DiceBear needs no fetch at all — it's served straight from DiceBear's
+   * own CDN, so this is just the deterministic default URL for a new user. */
+  function defaultAvatarUrl(seed: string): string {
+    return buildDicebearSvgUrl(DEFAULT_AVATAR_STYLE, seed);
+  }
+
+  function requireAvatarStorage(): S3StorageService {
+    if (!storage) {
+      throw new AppError(
+        500,
+        "CONFIG_ERROR",
+        "AuthService requires storage to upload an avatar photo.",
+      );
+    }
+    return storage;
+  }
+
+  function validateAvatarUpload(input: {
+    contentType: string;
+    fileSize: number;
+  }): void {
+    if (!AVATAR_CONTENT_TYPES.has(input.contentType)) {
+      throw new AppError(
+        400,
+        "INVALID_AVATAR_FILE",
+        "Choose a JPEG, PNG, WebP, or GIF image.",
+      );
+    }
+    if (input.fileSize > AVATAR_UPLOAD_MAX_BYTES) {
+      throw new AppError(
+        413,
+        "AVATAR_FILE_TOO_LARGE",
+        "The avatar file must be 2 MB or smaller.",
+      );
+    }
+  }
 
   function findUserById(userId: string) {
     return userRepository.findUserById(database, userId);
@@ -112,6 +193,34 @@ export function createAuthService({
     return userRepository.usernameExists(database, username);
   }
 
+  const avatarMutationLocks = new Map<string, Promise<unknown>>();
+
+  async function withAvatarLock<T>(
+    userId: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const previous = avatarMutationLocks.get(userId) ?? Promise.resolve();
+    let resolveCurrent: () => void;
+    const current = new Promise<void>((resolve) => {
+      resolveCurrent = resolve;
+    });
+    const chain = previous.then(
+      () => current,
+      () => current,
+    );
+    avatarMutationLocks.set(userId, chain);
+
+    try {
+      await previous.catch(() => {});
+      return await fn();
+    } finally {
+      resolveCurrent!();
+      if (avatarMutationLocks.get(userId) === chain) {
+        avatarMutationLocks.delete(userId);
+      }
+    }
+  }
+
   async function updateProfile(userId: string, input: ProfileUpdateRequest) {
     const username = input.username?.trim().toLowerCase();
     if (
@@ -121,86 +230,115 @@ export function createAuthService({
       throw new AppError(400, "USERNAME_TAKEN", "Username is already taken.");
     }
 
-    const currentUser = await userRepository.findUserById(database, userId);
-    if (!currentUser) {
-      throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+    const performUpdate = async () => {
+      const currentUser = await userRepository.findUserById(database, userId);
+      if (!currentUser) {
+        throw new AppError(
+          404,
+          "USER_NOT_FOUND",
+          "User account was not found.",
+        );
+      }
+
+      const linkedinUrl =
+        input.linkedinUrl !== undefined
+          ? input.linkedinUrl?.trim() || null
+          : currentUser.linkedin_url;
+      const githubUrl =
+        input.githubUrl !== undefined
+          ? input.githubUrl?.trim() || null
+          : currentUser.github_url;
+      const websiteUrl =
+        input.websiteUrl !== undefined
+          ? input.websiteUrl?.trim() || null
+          : currentUser.website_url;
+
+      const user = await userRepository.updateUserProfile(database, userId, {
+        ...(username ? { username } : {}),
+        ...(input.displayName !== undefined
+          ? { displayName: input.displayName.trim() }
+          : {}),
+        ...(input.avatarDataUrl !== undefined
+          ? { avatarDataUrl: input.avatarDataUrl }
+          : {}),
+        ...(input.bio !== undefined ? { bio: input.bio?.trim() || null } : {}),
+        ...(input.emailPublic !== undefined
+          ? {
+              emailPublic: Boolean(
+                input.emailPublic &&
+                currentUser.email &&
+                currentUser.email_verified_at,
+              ),
+            }
+          : {}),
+        ...(input.mobilePublic !== undefined
+          ? {
+              // A phone number is only publishable after the exact number on the
+              // account has completed the verification flow.
+              mobilePublic: Boolean(
+                input.mobilePublic &&
+                currentUser.phone_no &&
+                currentUser.phone_verified_at,
+              ),
+            }
+          : {}),
+        ...(input.linkedinUrl !== undefined ? { linkedinUrl } : {}),
+        ...(input.linkedinPublic !== undefined ||
+        input.linkedinUrl !== undefined
+          ? {
+              linkedinPublic: Boolean(
+                (input.linkedinPublic ?? currentUser.linkedin_public) &&
+                linkedinUrl,
+              ),
+            }
+          : {}),
+        ...(input.githubUrl !== undefined ? { githubUrl } : {}),
+        ...(input.githubPublic !== undefined || input.githubUrl !== undefined
+          ? {
+              githubPublic: Boolean(
+                (input.githubPublic ?? currentUser.github_public) && githubUrl,
+              ),
+            }
+          : {}),
+        ...(input.websiteUrl !== undefined ? { websiteUrl } : {}),
+        ...(input.websitePublic !== undefined || input.websiteUrl !== undefined
+          ? {
+              websitePublic: Boolean(
+                (input.websitePublic ?? currentUser.website_public) &&
+                websiteUrl,
+              ),
+            }
+          : {}),
+      });
+
+      if (!user) {
+        throw new AppError(
+          404,
+          "USER_NOT_FOUND",
+          "User account was not found.",
+        );
+      }
+
+      // Remove the stored avatar files when the profile changes to a DiceBear
+      // avatar or is cleared.
+      if (
+        storage &&
+        input.avatarDataUrl !== undefined &&
+        isStoredAvatarUrl(currentUser.avatar_data_url) &&
+        currentUser.avatar_data_url !== user.avatar_data_url &&
+        !isStoredAvatarUrl(user.avatar_data_url)
+      ) {
+        await removeAvatar(storage, userId);
+      }
+
+      const roles = await getUserRoles(userId);
+      return { ...user, roles };
+    };
+
+    if (input.avatarDataUrl !== undefined) {
+      return withAvatarLock(userId, performUpdate);
     }
-
-    const linkedinUrl =
-      input.linkedinUrl !== undefined
-        ? input.linkedinUrl?.trim() || null
-        : currentUser.linkedin_url;
-    const githubUrl =
-      input.githubUrl !== undefined
-        ? input.githubUrl?.trim() || null
-        : currentUser.github_url;
-    const websiteUrl =
-      input.websiteUrl !== undefined
-        ? input.websiteUrl?.trim() || null
-        : currentUser.website_url;
-
-    const user = await userRepository.updateUserProfile(database, userId, {
-      ...(username ? { username } : {}),
-      ...(input.displayName !== undefined
-        ? { displayName: input.displayName.trim() }
-        : {}),
-      ...(input.avatarDataUrl !== undefined
-        ? { avatarDataUrl: input.avatarDataUrl }
-        : {}),
-      ...(input.bio !== undefined ? { bio: input.bio?.trim() || null } : {}),
-      ...(input.emailPublic !== undefined
-        ? {
-            emailPublic: Boolean(
-              input.emailPublic &&
-              currentUser.email &&
-              currentUser.email_verified_at,
-            ),
-          }
-        : {}),
-      ...(input.mobilePublic !== undefined
-        ? {
-            // A phone number is only publishable after the exact number on the
-            // account has completed the verification flow.
-            mobilePublic: Boolean(
-              input.mobilePublic &&
-              currentUser.phone_no &&
-              currentUser.phone_verified_at,
-            ),
-          }
-        : {}),
-      ...(input.linkedinUrl !== undefined ? { linkedinUrl } : {}),
-      ...(input.linkedinPublic !== undefined || input.linkedinUrl !== undefined
-        ? {
-            linkedinPublic: Boolean(
-              (input.linkedinPublic ?? currentUser.linkedin_public) &&
-              linkedinUrl,
-            ),
-          }
-        : {}),
-      ...(input.githubUrl !== undefined ? { githubUrl } : {}),
-      ...(input.githubPublic !== undefined || input.githubUrl !== undefined
-        ? {
-            githubPublic: Boolean(
-              (input.githubPublic ?? currentUser.github_public) && githubUrl,
-            ),
-          }
-        : {}),
-      ...(input.websiteUrl !== undefined ? { websiteUrl } : {}),
-      ...(input.websitePublic !== undefined || input.websiteUrl !== undefined
-        ? {
-            websitePublic: Boolean(
-              (input.websitePublic ?? currentUser.website_public) && websiteUrl,
-            ),
-          }
-        : {}),
-    });
-
-    if (!user) {
-      throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
-    }
-
-    const roles = await getUserRoles(userId);
-    return { ...user, roles };
+    return performUpdate();
   }
 
   async function sendPhoneVerificationOtp(
@@ -589,6 +727,16 @@ export function createAuthService({
    */
   async function createUser(input: CreateUserInput): Promise<string> {
     const userId = crypto.randomUUID();
+    // A provider (Google/GitHub) photo is downloaded into R2 and used as the
+    // avatar; any failure there — or no provider photo at all — falls back to
+    // a deterministic DiceBear default seeded by the display name rather than
+    // the (not-yet-known-to-the-client) user id. That lets the registration
+    // screen preview this exact avatar live as the name is typed, before the
+    // account — and its id — even exist.
+    const avatarDataUrl =
+      (input.avatarSourceUrl && storage
+        ? await storeAvatarFromUrl(storage, userId, input.avatarSourceUrl)
+        : null) ?? defaultAvatarUrl(input.displayName.trim() || userId);
 
     await database.transaction().execute(async (trx) => {
       await sql`select pg_advisory_xact_lock(hashtext('veolms:user-bootstrap'))`.execute(
@@ -606,6 +754,7 @@ export function createAuthService({
         emailVerifiedAt: input.emailVerified ? new Date() : null,
         phoneVerifiedAt: input.phoneVerified ? new Date() : null,
         mfaMandatory: isFirstUser,
+        avatarDataUrl,
       });
 
       if (input.oauth) {
@@ -648,6 +797,129 @@ export function createAuthService({
     return user as SessionUser;
   }
 
+  /** Issues a direct-to-storage upload URL for the user's flat avatar key. */
+  async function presignAvatarUpload(
+    userId: string,
+    input: AvatarUploadPresignRequest,
+  ) {
+    validateAvatarUpload(input);
+    const avatarStorage = requireAvatarStorage();
+    await avatarStorage.ensureBucketCors();
+    const uploadUrl = await avatarStorage.getPresignedPutUrl(
+      avatarOriginalKey(userId, input.contentType),
+      input.contentType,
+      input.fileSize,
+    );
+
+    return { uploadUrl };
+  }
+
+  /** Confirms the direct upload, then stores the canonical CDN variant URL. */
+  async function completeAvatarUpload(
+    userId: string,
+    input: AvatarUploadCompleteRequest,
+  ) {
+    validateAvatarUpload(input);
+    const avatarStorage = requireAvatarStorage();
+
+    return withAvatarLock(userId, async () => {
+      const storageKey = avatarOriginalKey(userId, input.contentType);
+      const discardUploadedAvatar = async (): Promise<void> => {
+        await avatarStorage.deleteObject(storageKey).catch(() => undefined);
+      };
+      const metadata = await avatarStorage.headObject(storageKey);
+      if (!metadata) {
+        await discardUploadedAvatar();
+        throw new AppError(
+          400,
+          "FILE_NOT_FOUND",
+          "File could not be found in storage.",
+        );
+      }
+
+      if (
+        metadata.contentLength !== undefined &&
+        metadata.contentLength !== input.fileSize
+      ) {
+        await discardUploadedAvatar();
+        throw new AppError(
+          400,
+          "FILE_SIZE_MISMATCH",
+          "Uploaded file size does not match presigned size.",
+        );
+      }
+
+      if (
+        metadata.contentType !== undefined &&
+        metadata.contentType !== input.contentType
+      ) {
+        await discardUploadedAvatar();
+        throw new AppError(
+          400,
+          "INVALID_AVATAR_FILE",
+          "Uploaded avatar content type does not match the presigned upload.",
+        );
+      }
+
+      try {
+        const object = await avatarStorage.getObject(storageKey, {
+          range: AVATAR_VALIDATION_RANGE,
+        });
+        if (!object) {
+          throw new AppError(
+            400,
+            "FILE_NOT_FOUND",
+            "File could not be found in storage.",
+          );
+        }
+
+        const detectedType = detectImageContentType(
+          await readObjectPrefix(object.body, 32),
+        );
+        if (detectedType !== input.contentType) {
+          throw new AppError(
+            400,
+            "INVALID_AVATAR_FILE",
+            "Uploaded avatar bytes do not match the selected image type.",
+          );
+        }
+      } catch (error) {
+        await discardUploadedAvatar();
+        throw error;
+      }
+
+      const avatarDataUrl = avatarCdnUrl(avatarStorage, userId);
+      if (!avatarDataUrl) {
+        throw new AppError(
+          503,
+          "CDN_NOT_CONFIGURED",
+          "Avatar CDN delivery is not configured.",
+        );
+      }
+
+      await removeAvatarVariants(avatarStorage, userId);
+      await removeOtherAvatarOriginals(
+        avatarStorage,
+        userId,
+        input.contentType,
+      );
+
+      const user = await userRepository.updateUserProfile(database, userId, {
+        avatarDataUrl,
+      });
+      if (!user) {
+        throw new AppError(
+          404,
+          "USER_NOT_FOUND",
+          "User account was not found.",
+        );
+      }
+
+      const roles = await getUserRoles(userId);
+      return { ...user, roles };
+    });
+  }
+
   return {
     findUserById,
     findUserByIdForNotification,
@@ -661,6 +933,8 @@ export function createAuthService({
     countUsers,
     usernameExists,
     updateProfile,
+    presignAvatarUpload,
+    completeAvatarUpload,
     sendPhoneVerificationOtp,
     verifyPhoneNumber,
     sendEmailVerificationOtp,

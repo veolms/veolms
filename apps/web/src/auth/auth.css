@@ -37,7 +37,7 @@
 .auth-page::before {
   position: fixed;
   inset: 0;
-  opacity: 0.055;
+  opacity: 0.09;
   background: var(--text);
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320' viewBox='0 0 320 320' fill='%23000'%3E%3Cg transform='translate(14,26) scale(0.15) rotate(-10,128,128)'%3E%3Cpath d='M232,52H160a36,36,0,0,0-32,19.54A36,36,0,0,0,96,52H24a4,4,0,0,0-4,4V200a4,4,0,0,0,4,4H96a28,28,0,0,1,28,28,4,4,0,0,0,8,0,28,28,0,0,1,28-28h72a4,4,0,0,0,4-4V56A4,4,0,0,0,232,52ZM96,196H28V60H96a28,28,0,0,1,28,28V209.4A35.93,35.93,0,0,0,96,196Zm132,0H160a35.94,35.94,0,0,0-28,13.41V88a28,28,0,0,1,28-28h68Z'/%3E%3C/g%3E%3Cg transform='translate(150,10) scale(0.15) rotate(0,128,128)'%3E%3Cpath d='M90.66,67,22,128l68.64,61a4,4,0,0,1-5.32,6l-72-64a4,4,0,0,1,0-6l72-64a4,4,0,1,1,5.32,6Zm152,58-72-64a4,4,0,1,0-5.32,6L234,128l-68.64,61a4,4,0,0,0,5.32,6l72-64a4,4,0,0,0,0-6Z'/%3E%3C/g%3E%3Cg transform='translate(248,92) scale(0.15) rotate(8,128,128)'%3E%3Cpath d='M249.88,92.47l-120-64a4,4,0,0,0-3.76,0l-120,64a4,4,0,0,0,0,7.06L36,115.47v50.82a11.92,11.92,0,0,0,3,8c12.65,14.09,41,37.73,89,37.73,21,0,38.2-4.52,52-10.79V240a4,4,0,0,0,8,0V197.18a111.64,111.64,0,0,0,29-22.91,11.94,11.94,0,0,0,3-8V115.47l29.88-15.94a4,4,0,0,0,0-7.06ZM128,204c-44.83,0-71.25-22-83-35.08a3.92,3.92,0,0,1-1-2.63V119.73l82.12,43.8a4,4,0,0,0,3.76,0L180,136.8v55.53C166.58,199,149.39,204,128,204Zm84-37.71a4,4,0,0,1-1,2.64,103.32,103.32,0,0,1-23,19v-55.4l24-12.8Zm-24.59-42.51a4,4,0,0,0-1.53-1.44l-56-29.87a4,4,0,0,0-3.76,7.06L179.5,128,128,155.47,16.5,96,128,36.53,239.5,96Z'/%3E%3C/g%3E%3Cg transform='translate(58,142) scale(0.15) rotate(0,128,128)'%3E%3Cpath d='M136,128a8,8,0,1,1-8-8A8,8,0,0,1,136,128Zm-52-8a8,8,0,1,0,8,8A8,8,0,0,0,84,120Zm88,0a8,8,0,1,0,8,8A8,8,0,0,0,172,120Zm56,8A100,100,0,0,1,79.5,215.47l-35.69,11.9a12,12,0,0,1-15.18-15.18l11.9-35.69A100,100,0,1,1,228,128Zm-8,0A92,92,0,1,0,48.35,174.07a4,4,0,0,1,.33,3.27L36.22,214.72a4,4,0,0,0,5.06,5.06l37.38-12.46a3.93,3.93,0,0,1,1.27-.21,4.05,4.05,0,0,1,2,.54A92,92,0,0,0,220,128Z'/%3E%3C/g%3E%3Cg transform='translate(214,226) scale(0.15) rotate(-8,128,128)'%3E%3Cpath d='M232,68H204V48a4,4,0,0,0-4-4H56a4,4,0,0,0-4,4V68H24A12,12,0,0,0,12,80V96a36,36,0,0,0,36,36h6.66A76,76,0,0,0,124,187.89V220H96a4,4,0,0,0,0,8h64a4,4,0,0,0,0-8H132V187.88c32.93-1.74,60.41-24.91,69.11-55.88H208a36,36,0,0,0,36-36V80A12,12,0,0,0,232,68ZM48,124A28,28,0,0,1,20,96V80a4,4,0,0,1,4-4H52v36a77,77,0,0,0,1,12Zm148-12.9c0,37.71-30.79,68.62-68,68.9a68,68,0,0,1-68-68V52H196ZM236,96a28,28,0,0,1-28,28h-5.1a77.35,77.35,0,0,0,1.1-12.9V76h28a4,4,0,0,1,4,4Z'/%3E%3C/g%3E%3Cg transform='translate(108,252) scale(0.15) rotate(6,128,128)'%3E%3Cpath d='M224,52H32a4,4,0,0,0-4,4V192a12,12,0,0,0,12,12H216a12,12,0,0,0,12-12V56A4,4,0,0,0,224,52Zm-10.28,8L128,138.57,42.28,60ZM216,196H40a4,4,0,0,1-4-4V65.09L125.3,147a4,4,0,0,0,5.4,0L220,65.09V192A4,4,0,0,1,216,196Z'/%3E%3C/g%3E%3C/svg%3E")
     0 0 / 320px 320px repeat;
@@ -55,12 +55,12 @@
   grid-template-columns: minmax(0, 1fr);
   width: 100%;
   min-width: 0;
-  max-width: 480px;
+  max-width: 460px;
   margin: 0 auto;
   padding: var(--auth-pad-y) var(--auth-pad-x);
   border: 1px solid var(--auth-line);
-  border-radius: 15px;
-  background: var(--main-surface);
+  border-radius: 16px;
+  background: var(--surface);
   box-shadow: 0 24px 60px
     color-mix(in srgb, var(--card-shadow) 32%, transparent);
 }
@@ -78,12 +78,6 @@
 .auth-page__form-column:has([data-app-loading]) {
   align-content: center;
   justify-items: stretch;
-}
-
-.auth-page__brand-column {
-  display: none;
-  min-width: 0;
-  overflow: hidden;
 }
 
 .auth-page__footer {
@@ -470,6 +464,43 @@
   background: var(--hover);
 }
 
+.auth-secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--auth-h-submit, 44px);
+  padding: 0 16px;
+  border: 1px solid var(--auth-line);
+  border-radius: var(--auth-radius);
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: none;
+  font: inherit;
+  font-size: clamp(0.84rem, 1.1vw, 0.92rem);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.auth-secondary-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--text) 25%, var(--auth-line));
+  background: color-mix(in srgb, var(--text) 6%, var(--surface));
+}
+
+.auth-secondary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-secondary-btn > svg {
+  flex: 0 0 auto;
+}
+
 .auth-brand-panel {
   display: grid;
   align-content: center;
@@ -634,6 +665,48 @@
 .auth-account-form__verified-state {
   color: var(--success);
   font-weight: 600;
+}
+
+.auth-account-form__identity-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.auth-account-form__identity-row .auth-form__input-shell {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.auth-account-form__avatar-circle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--muted);
+  background: var(--surface);
+  box-shadow:
+    0 0 0 1px var(--auth-line),
+    0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
+  overflow: hidden;
+}
+
+.auth-account-form__avatar-circle img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.auth-account-form__avatar-hint {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
 }
 
 .auth-account-form__label {
@@ -849,124 +922,6 @@
     padding: 32px;
   }
 
-  .auth-page__container {
-    grid-template-columns: minmax(0, 0.79fr) minmax(0, 1fr);
-    align-items: stretch;
-    gap: 40px;
-    max-width: 1085px;
-    min-height: 480px;
-    padding: var(--auth-pad-y) var(--auth-pad-x);
-  }
-
-  .auth-page__form-column {
-    align-self: center;
-    padding: 26px;
-    border: 1px solid var(--auth-line);
-    border-radius: 16px;
-    background: var(--surface);
-    box-shadow: 0 16px 38px
-      color-mix(in srgb, var(--card-shadow) 42%, transparent);
-  }
-
-  .auth-page__form-column:has([data-app-loading]) {
-    align-self: stretch;
-  }
-
-  .auth-page__brand-column {
-    display: grid;
-    align-self: stretch;
-    min-height: 350px;
-    overflow: hidden;
-  }
-
-  .auth-brand-panel {
-    display: grid;
-    align-content: stretch;
-    height: 100%;
-    min-height: 350px;
-  }
-
-  .auth-brand-panel__illustration-slot {
-    position: relative;
-    isolation: isolate;
-    width: 100%;
-    height: 100%;
-    min-height: 350px;
-    overflow: hidden;
-    background: url("../assets/auth-illustration.webp") center / contain
-      no-repeat;
-  }
-
-  /* The artwork is a black-backed WebP. Lighten knocks the black out against
-     the dark card so the 3D cluster floats without a colored rectangle. */
-  :root[data-theme="dark"] .auth-brand-panel__illustration-slot {
-    mix-blend-mode: lighten;
-  }
-
-  :root[data-palette="codex"] .auth-brand-panel__illustration-slot {
-    filter: grayscale(1) brightness(1.08) contrast(1.05);
-  }
-
-  :root[data-palette="ocean"] .auth-brand-panel__illustration-slot {
-    filter: sepia(1) hue-rotate(188deg) saturate(3) brightness(1.1);
-  }
-
-  :root[data-palette="midnight"] .auth-brand-panel__illustration-slot {
-    filter: sepia(1) hue-rotate(187deg) saturate(3) brightness(1);
-  }
-
-  :root[data-palette="graphite"] .auth-brand-panel__illustration-slot {
-    filter: sepia(1) hue-rotate(216deg) saturate(3) brightness(1.1);
-  }
-
-  :root[data-palette="violet"] .auth-brand-panel__illustration-slot {
-    filter: sepia(1) hue-rotate(-18deg) saturate(2.8) brightness(1.1);
-  }
-
-  :root[data-palette="ember"] .auth-brand-panel__illustration-slot {
-    filter: sepia(1) hue-rotate(-12deg) saturate(3.5) brightness(1.15);
-  }
-
-  :root[data-palette="sunlit"] .auth-brand-panel__illustration-slot {
-    filter: sepia(1) hue-rotate(7deg) saturate(3.5) brightness(1.2);
-  }
-
-  :root[data-palette="grove"] .auth-brand-panel__illustration-slot {
-    filter: sepia(1) hue-rotate(102deg) saturate(3.2) brightness(1.1);
-  }
-
-  :root[data-palette="rose"] .auth-brand-panel__illustration-slot {
-    filter: sepia(1) hue-rotate(-53deg) saturate(3.2) brightness(1.1);
-  }
-
-  :root[data-palette="signal"] .auth-brand-panel__illustration-slot {
-    filter: sepia(1) hue-rotate(-49deg) saturate(3.8) brightness(1.05);
-  }
-
-  :root[data-palette="barbie"] .auth-brand-panel__illustration-slot {
-    filter: sepia(1) hue-rotate(-68deg) saturate(3.5) brightness(1.1);
-  }
-
-  :root[data-palette="aurora"] .auth-brand-panel__illustration-slot {
-    filter: sepia(1) hue-rotate(136deg) saturate(3) brightness(1.1);
-  }
-
-  :root[data-palette="brainwave"] .auth-brand-panel__illustration-slot {
-    filter: sepia(1) hue-rotate(171deg) saturate(3.5) brightness(1.1);
-  }
-
-  :root[data-palette="lilac"] .auth-brand-panel__illustration-slot {
-    filter: sepia(1) hue-rotate(229deg) saturate(3) brightness(1.15);
-  }
-
-  :root[data-palette="champagne"] .auth-brand-panel__illustration-slot {
-    filter: sepia(1) hue-rotate(3deg) saturate(2) brightness(1.15);
-  }
-
-  :root[data-palette="lime"] .auth-brand-panel__illustration-slot {
-    filter: sepia(1) hue-rotate(45deg) saturate(3.5) brightness(1.15);
-  }
-
   .auth-otp-form__destination {
     margin-top: var(--auth-gap-block);
   }
@@ -1036,25 +991,11 @@
 }
 
 :root[data-theme="light"] .auth-page::before {
-  opacity: 0.035;
+  opacity: 0.06;
 }
 
 :root[data-theme="light"] .auth-page__container {
-  background: var(--main-surface, var(--surface));
+  background: var(--surface);
   box-shadow: 0 20px 50px
     color-mix(in srgb, var(--card-shadow, #000) 10%, transparent);
-}
-
-@media (min-width: 1024px) {
-  :root[data-theme="light"] .auth-page__form-column {
-    background: var(--surface);
-    box-shadow: 0 12px 30px
-      color-mix(in srgb, var(--card-shadow, #000) 8%, transparent);
-  }
-}
-
-:root[data-theme="light"] .auth-brand-panel {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
 }

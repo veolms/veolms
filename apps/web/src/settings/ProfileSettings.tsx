@@ -18,6 +18,7 @@ import { GithubLogoIcon as GithubLogo } from "@phosphor-icons/react/GithubLogo";
 import { GlobeIcon as Globe } from "@phosphor-icons/react/Globe";
 import { LinkedinLogoIcon as LinkedinLogo } from "@phosphor-icons/react/LinkedinLogo";
 import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
+import { MagicWandIcon as MagicWand } from "@phosphor-icons/react/MagicWand";
 import { PhoneIcon as Phone } from "@phosphor-icons/react/Phone";
 import { SealCheckIcon as SealCheck } from "@phosphor-icons/react/SealCheck";
 import { ShieldWarningIcon as ShieldWarning } from "@phosphor-icons/react/ShieldWarning";
@@ -28,7 +29,7 @@ import {
   CountryCodeSelect,
   getDefaultCountry,
 } from "../auth/CountryCodeSelect";
-import "../auth/auth.css";
+import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
 import { OtpCodeInput } from "../auth/OtpCodeInput";
 import {
   DEFAULT_COUNTRY_ID,
@@ -40,6 +41,8 @@ import {
 } from "../auth/identifier";
 import type { CountryOption } from "../auth/identifier";
 import { useBackDismiss } from "../navigation/useBackDismiss";
+import { AvatarStylePicker } from "./AvatarStylePicker";
+import { DicebearAvatar } from "./DicebearAvatar";
 import type {
   ProfileIdentity,
   ProfilePreferences,
@@ -54,11 +57,19 @@ import {
   useVerifyPhoneNumber,
 } from "../services/auth";
 import { authStore, useAuthStore, type AuthUser } from "../store/auth.store";
-import type { ProfileUpdateRequest } from "@veolms/contracts";
+import {
+  DICEBEAR_BASE_URL,
+  type ProfileUpdateRequest,
+} from "@veolms/contracts";
 import { CircularCheckbox } from "../components/CircularCheckbox";
 import { AutosaveStatus, useAutosync } from "../lib/autosync";
-import { authKeys, authService } from "../services/auth";
+import {
+  authKeys,
+  authService,
+  resolveAvatarUploadContentType,
+} from "../services/auth";
 import { useQueryClient } from "@tanstack/react-query";
+import { getRoleDisplayName, getUserRoles } from "../shell/workspaceRole";
 
 type EditableProfile = ProfilePreferences & {
   bio: string;
@@ -84,6 +95,7 @@ export interface ProfileSettingsProps {
 const toEditableProfile = (profile: ProfileIdentity): EditableProfile => ({
   displayName: profile.displayName,
   avatarDataUrl: profile.avatarDataUrl,
+  avatarSrcSet: profile.avatarSrcSet,
   username: profile.username ?? "",
   bio: profile.bio ?? "",
   mobileNumber: profile.mobileNumber ?? "",
@@ -104,6 +116,7 @@ const profileIdentityFromUser = (
 ): ProfileIdentity => ({
   displayName: user?.displayName ?? "",
   avatarDataUrl: user?.avatarDataUrl ?? null,
+  avatarSrcSet: user?.avatarSrcSet ?? [],
   username: user?.username ?? "",
   bio: user?.bio ?? "",
   email: user?.email ?? "",
@@ -119,7 +132,7 @@ const profileIdentityFromUser = (
   githubPublic: Boolean(user?.githubPublic && user?.githubUrl),
   websitePublic: Boolean(user?.websitePublic && user?.websiteUrl),
   websiteUrl: user?.websiteUrl ?? "",
-  roleLabel: role === "creator" ? "Instructor" : "Student",
+  roleLabel: getRoleDisplayName(role, getUserRoles(user)),
 });
 
 const normalizedMobileNumber = (value: string | null | undefined) =>
@@ -439,6 +452,30 @@ export function ProfileSettings({
     },
     [],
   );
+  const [nameError, setNameError] = useState("");
+  const [usernameError, setUsernameError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [mobileError, setMobileError] = useState("");
+  const [socialVisibilityErrors, setSocialVisibilityErrors] = useState<
+    Partial<Record<SocialVisibilityField, string>>
+  >({});
+  const [photoError, setPhotoError] = useState("");
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [blockedControl, setBlockedControl] = useState("");
+  const [activeLockedControl, setActiveLockedControl] = useState<string | null>(
+    null,
+  );
+  const [verificationRequested, setVerificationRequested] = useState(false);
+  const [verificationPhone, setVerificationPhone] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [emailVerificationRequested, setEmailVerificationRequested] =
+    useState(false);
+  const [emailVerificationCode, setEmailVerificationCode] = useState("");
+  const [emailVerifiedLocally, setEmailVerifiedLocally] = useState(false);
+  const [mobileCountryId, setMobileCountryId] = useState(DEFAULT_COUNTRY_ID);
+  const [mobileVisibilityPromptOpen, setMobileVisibilityPromptOpen] =
+    useState(false);
+
   const handleProfileSynced = useCallback(
     (updatedUser: Awaited<ReturnType<typeof authService.updateProfile>>) => {
       const nextProfile = toEditableProfile(
@@ -472,28 +509,6 @@ export function ProfileSettings({
     isEqual: profilesMatch,
     onSynced: handleProfileSynced,
   });
-  const [nameError, setNameError] = useState("");
-  const [usernameError, setUsernameError] = useState("");
-  const [emailError, setEmailError] = useState("");
-  const [mobileError, setMobileError] = useState("");
-  const [socialVisibilityErrors, setSocialVisibilityErrors] = useState<
-    Partial<Record<SocialVisibilityField, string>>
-  >({});
-  const [photoError, setPhotoError] = useState("");
-  const [blockedControl, setBlockedControl] = useState("");
-  const [activeLockedControl, setActiveLockedControl] = useState<string | null>(
-    null,
-  );
-  const [verificationRequested, setVerificationRequested] = useState(false);
-  const [verificationPhone, setVerificationPhone] = useState("");
-  const [verificationCode, setVerificationCode] = useState("");
-  const [emailVerificationRequested, setEmailVerificationRequested] =
-    useState(false);
-  const [emailVerificationCode, setEmailVerificationCode] = useState("");
-  const [emailVerifiedLocally, setEmailVerifiedLocally] = useState(false);
-  const [mobileCountryId, setMobileCountryId] = useState(DEFAULT_COUNTRY_ID);
-  const [mobileVisibilityPromptOpen, setMobileVisibilityPromptOpen] =
-    useState(false);
   const verificationModalOpen =
     canEdit && (emailVerificationRequested || verificationRequested);
   const verificationChannel = emailVerificationRequested
@@ -528,6 +543,7 @@ export function ProfileSettings({
   const [mobileVisibilityAcknowledged, setMobileVisibilityAcknowledged] =
     useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mobileVisibilityDialogRef = useRef<HTMLDialogElement>(null);
   const verificationDialogRef = useRef<HTMLDivElement>(null);
@@ -551,6 +567,7 @@ export function ProfileSettings({
     setMobileError("");
     setSocialVisibilityErrors({});
     setPhotoError("");
+    setPhotoUploading(false);
     setBlockedControl("");
     setActiveLockedControl(null);
     setVerificationRequested(false);
@@ -561,6 +578,7 @@ export function ProfileSettings({
     setEmailVerifiedLocally(false);
     setMobileVisibilityPromptOpen(false);
     setMobileVisibilityAcknowledged(false);
+    setAvatarPickerOpen(false);
   }, [activeUser, role]);
 
   useEffect(() => {
@@ -919,7 +937,7 @@ export function ProfileSettings({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
+    if (!resolveAvatarUploadContentType(file)) {
       setPhotoError("Choose an image file and try again.");
       return;
     }
@@ -927,36 +945,57 @@ export function ProfileSettings({
       setPhotoError("Choose a profile photo that is 2 MB or smaller.");
       return;
     }
-    const reader = new FileReader();
-    reader.addEventListener("load", () => {
-      if (typeof reader.result !== "string") {
-        setPhotoError(
-          "We couldn't read that photo. Choose another image and try again.",
-        );
-        return;
-      }
-      update((current) => ({
-        ...current,
-        avatarDataUrl: reader.result as string,
-      }));
-      setPhotoError("");
-    });
-    reader.addEventListener("error", () =>
-      setPhotoError(
-        "We couldn't read that photo. Choose another image and try again.",
-      ),
-    );
-    reader.readAsDataURL(file);
+
+    const activeUserId = authStore.getState().user?.id;
+    if (!activeUserId) return;
+
+    setPhotoError("");
+    setPhotoUploading(true);
+    authService
+      .uploadAvatarPhoto(file)
+      .then((updated) => {
+        if (authStore.getState().user?.id !== activeUserId) return;
+        authStore.setUser(updated);
+        queryClient.setQueryData(authKeys.me(), updated);
+        setAvatarFailed(false);
+        mergeFromServer({
+          avatarDataUrl: updated.avatarDataUrl,
+          avatarSrcSet: updated.avatarSrcSet,
+        });
+      })
+      .catch((error: unknown) => {
+        if (authStore.getState().user?.id !== activeUserId) return;
+        const message =
+          error && typeof error === "object" && "message" in error
+            ? String((error as { message?: unknown }).message)
+            : "We couldn't upload that photo. Please try again.";
+        setPhotoError(message);
+      })
+      .finally(() => setPhotoUploading(false));
   };
+
+  const isDicebearAvatar = Boolean(
+    draftProfile.avatarDataUrl?.startsWith(DICEBEAR_BASE_URL),
+  );
 
   const avatar = (className: string) => (
     <span className={className} aria-hidden="true">
-      {showAvatar ? (
-        <img
+      {showAvatar && isDicebearAvatar ? (
+        <DicebearAvatar
+          url={draftProfile.avatarDataUrl!}
+          size={160}
+          onError={() => setAvatarFailed(true)}
+        />
+      ) : showAvatar ? (
+        <ResponsiveAvatar
           src={draftProfile.avatarDataUrl ?? undefined}
+          srcSet={draftProfile.avatarSrcSet}
+          sizes="116px"
           alt=""
           width={160}
           height={160}
+          loading="eager"
+          fetchPriority="high"
           onError={() => setAvatarFailed(true)}
         />
       ) : (
@@ -1065,7 +1104,7 @@ export function ProfileSettings({
                         onClick={() => {
                           if (canEdit) fileInputRef.current?.click();
                         }}
-                        disabled={!canEdit}
+                        disabled={!canEdit || photoUploading}
                       >
                         <Camera size={17} weight="fill" />
                       </button>
@@ -1079,8 +1118,23 @@ export function ProfileSettings({
                     aria-label="Profile photo file"
                     tabIndex={-1}
                     onChange={handlePhotoChange}
-                    disabled={!canEdit}
+                    disabled={!canEdit || photoUploading}
                   />
+                  {canEdit && (
+                    <button
+                      type="button"
+                      className="settings-profile__generate-avatar"
+                      disabled={photoUploading}
+                      onClick={() => {
+                        if (!photoUploading) {
+                          setAvatarPickerOpen(true);
+                        }
+                      }}
+                    >
+                      <MagicWand size={14} weight="fill" aria-hidden="true" />
+                      Generate avatar
+                    </button>
+                  )}
                   <h3>
                     {displayName}{" "}
                     <SealCheck
@@ -1813,6 +1867,20 @@ export function ProfileSettings({
             </div>
           </dialog>
         )}
+
+        <AvatarStylePicker
+          open={avatarPickerOpen && canEdit}
+          seed={activeUser?.id ?? ""}
+          onClose={() => setAvatarPickerOpen(false)}
+          onSelect={(avatarUrl) => {
+            update((current) => ({
+              ...current,
+              avatarDataUrl: avatarUrl,
+              avatarSrcSet: [],
+            }));
+            setPhotoError("");
+          }}
+        />
       </section>
     </LockedProfileControlContext.Provider>
   );

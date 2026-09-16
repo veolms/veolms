@@ -63,3 +63,16 @@ export function hasAdminRole(
   return roles.some((role) => role.toLowerCase() === "admin");
 }
 
+export function getRoleDisplayName(
+  role: CourseRole,
+  userRoles?: readonly string[] | null,
+): string {
+  if (role === "student") {
+    return "Student";
+  }
+  if (hasAdminRole(userRoles)) {
+    return "Admin";
+  }
+  return "Instructor";
+}
+

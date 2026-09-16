@@ -1,6 +1,9 @@
 import {
   authConfigResponseSchema,
   authMessageResponseSchema,
+  avatarUploadCompleteRequestSchema,
+  avatarUploadPresignRequestSchema,
+  avatarUploadPresignResponseSchema,
   currentUserResponseSchema,
   loginRequestSchema,
   loginResponseSchema,
@@ -136,6 +139,56 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
       preHandler: [middleware.authenticate, middleware.requireAuthenticated],
     },
     controller.updateProfile,
+  );
+
+  app.post(
+    "/auth/me/avatar/presign",
+    {
+      schema: {
+        operationId: "presignCurrentUserAvatarUpload",
+        tags: ["Auth"],
+        summary: "Obtain a pre-signed profile photo upload URL",
+        description:
+          "Returns a direct-to-storage upload URL for the authenticated user's avatar original.",
+        body: avatarUploadPresignRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Pre-signed avatar upload response.",
+            avatarUploadPresignResponseSchema,
+          ),
+          400: errorResponse("A supported image file is required."),
+          401: errorResponse("Authentication required."),
+          413: errorResponse("The file is too large."),
+          503: errorResponse("Avatar storage is not configured."),
+        },
+      },
+      preHandler: [middleware.authenticate, middleware.requireAuthenticated],
+    },
+    controller.presignAvatarUpload,
+  );
+
+  app.post(
+    "/auth/me/avatar/complete",
+    {
+      schema: {
+        operationId: "completeCurrentUserAvatarUpload",
+        tags: ["Auth"],
+        summary: "Complete a profile photo upload",
+        description:
+          "Verifies the direct upload and persists the canonical 160px CDN avatar URL.",
+        body: avatarUploadCompleteRequestSchema,
+        response: {
+          200: jsonResponse("Avatar updated.", userProfileResponseSchema),
+          400: errorResponse("File not found, mismatched, or invalid."),
+          401: errorResponse("Authentication required."),
+          404: errorResponse("User account was not found."),
+          413: errorResponse("The file is too large."),
+          503: errorResponse("Avatar CDN delivery is not configured."),
+        },
+      },
+      preHandler: [middleware.authenticate, middleware.requireAuthenticated],
+    },
+    controller.completeAvatarUpload,
   );
 
   app.delete(
