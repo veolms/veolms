@@ -1,4 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type {
   LearningNotesListResponse,
   LearningRepliesListResponse,
@@ -6,6 +10,7 @@ import type {
   ListLearningRepliesQuery,
   ListLearningThreadsQuery,
   ListReportsQuery,
+  LearningThreadsListResponse,
   ReportsListResponse,
   UserAutocompleteQuery,
   UserAutocompleteResponse,
@@ -37,7 +42,26 @@ import {
 import type {
   NoteCreationRecord,
   ReplyCreationRecord,
+  ThreadCreationRecord,
 } from "./interaction-creation-coordinator";
+import { isInfiniteCacheData } from "./paginated-cache";
+
+type LessonThreadsQuery = Partial<Omit<ListLearningThreadsQuery, "cursor">>;
+type UserNotesQuery = Partial<Omit<ListLearningNotesQuery, "cursor">>;
+
+function normalizeExistingInfiniteCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  queryKey: readonly unknown[],
+  pageKeys: readonly string[],
+): void {
+  const existing = queryClient.getQueryData<unknown>(queryKey);
+  if (!existing || isInfiniteCacheData(existing)) return;
+  if (!pageKeys.some((key) => key in Object(existing))) return;
+  queryClient.setQueryData(queryKey, {
+    pages: [existing],
+    pageParams: [null],
+  });
+}
 
 function getReplySequence(reply: LearningReplyCacheItem): number {
   return "localSequence" in reply
@@ -272,7 +296,7 @@ function projectNoteEditState(
 
 function noteMatchesQuery(
   note: LearningNoteCacheItem,
-  query?: ListLearningNotesQuery,
+  query?: UserNotesQuery,
 ): boolean {
   if (!query) return true;
   if (query.courseId && query.courseId !== note.courseId) return false;
@@ -288,13 +312,12 @@ function noteMatchesQuery(
     if (!searchable.includes(needle)) return false;
   }
   if (query.tag && !note.tags.includes(query.tag)) return false;
-  if (query.cursor) return false;
   return true;
 }
 
 export function mergeNotesWithCreationRecords(
   response: LearningNotesListResponse,
-  query: ListLearningNotesQuery | undefined,
+  query: UserNotesQuery | undefined,
   records: readonly NoteCreationRecord[],
 ): LearningNotesCacheResponse {
   const notes: LearningNoteCacheItem[] = [...response.notes];
@@ -331,6 +354,86 @@ export function mergeNotesWithCreationRecords(
       response.totalCount === undefined
         ? response.totalCount
         : response.totalCount + addedLocalNotes,
+  };
+}
+
+function threadMatchesQuery(
+  thread: LearningThreadEntity,
+  query?: LessonThreadsQuery,
+): boolean {
+  if (!query) return true;
+  const normalizedKind = query.kind === "qna" ? "question" : query.kind;
+  if (
+    normalizedKind &&
+    normalizedKind !== "all" &&
+    thread.kind !== normalizedKind
+  ) {
+    return false;
+  }
+  if (query.courseId && query.courseId !== thread.courseId) return false;
+  if (query.lessonId && query.lessonId !== thread.lessonId) return false;
+  if (query.visibility && query.visibility !== thread.visibility) return false;
+  if (query.mine !== undefined && Boolean(query.mine) !== Boolean(thread.isOwn)) {
+    return false;
+  }
+  if (query.search) {
+    const needle = query.search.toLowerCase();
+    if (
+      !`${thread.title ?? ""} ${thread.plainText} ${thread.content}`
+        .toLowerCase()
+        .includes(needle)
+    ) {
+      return false;
+    }
+  }
+  if (query.status === "answered" && (thread.repliesCount ?? 0) <= 0) {
+    return false;
+  }
+  if (query.status === "solved" && !thread.acceptedAnswerId) return false;
+  if (
+    query.status === "open" &&
+    ((thread.repliesCount ?? 0) > 0 || thread.acceptedAnswerId)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function mergeThreadsWithCreationRecords(
+  response: LearningThreadsListResponse,
+  query: LessonThreadsQuery | undefined,
+  records: readonly ThreadCreationRecord[],
+): LearningThreadCacheResponse {
+  const threads: LearningThreadEntity[] = response.threads.map(
+    (thread) => toLearningThreadEntity(thread),
+  );
+  let addedLocalThreads = 0;
+
+  for (const record of records) {
+    const localThread = record.optimisticThread;
+    if (!threadMatchesQuery(localThread, query)) continue;
+
+    const existingIndex = threads.findIndex(
+      (thread) =>
+        getClientEntityId(thread) === record.clientId ||
+        (record.optimisticThread.serverId !== undefined &&
+          getServerEntityId(thread) === record.optimisticThread.serverId),
+    );
+    if (existingIndex >= 0) {
+      threads[existingIndex] = localThread;
+    } else {
+      threads.push(localThread);
+      addedLocalThreads += 1;
+    }
+  }
+
+  return {
+    ...response,
+    threads: threads.map(projectThreadLocalState),
+    totalCount:
+      response.totalCount === undefined
+        ? response.totalCount
+        : response.totalCount + addedLocalThreads,
   };
 }
 
@@ -395,24 +498,45 @@ export function mergeRepliesWithCreationRecords(
 export function useLessonThreads(
   courseId: string,
   lessonId: string,
-  query?: ListLearningThreadsQuery,
+  query?: LessonThreadsQuery,
   options?: { enabled?: boolean },
 ) {
-  const result = useQuery<LearningThreadCacheResponse, ApiError>({
-    queryKey: learningInteractionKeys.lessonThreads(courseId, lessonId, query),
-    queryFn: async () => {
+  const queryClient = useQueryClient();
+  const queryKey = learningInteractionKeys.lessonThreads(courseId, lessonId, query);
+  normalizeExistingInfiniteCache(queryClient, queryKey, ["threads"]);
+  const result = useInfiniteQuery({
+    queryKey,
+    queryFn: async ({ pageParam }) => {
       const response = await learningInteractionsService.listLessonThreads(
         courseId,
         lessonId,
-        query,
+        {
+          ...query,
+          ...(pageParam ? { cursor: pageParam } : {}),
+        } as ListLearningThreadsQuery,
       );
-      return {
+      const page = {
         ...response,
         threads: response.threads.map((thread) =>
-          projectThreadLocalState(toLearningThreadEntity(thread)),
+          toLearningThreadEntity(thread),
         ),
       };
+      return pageParam === null
+        ? mergeThreadsWithCreationRecords(
+            page,
+            query,
+            interactionCreationCoordinator.getActiveThreadRecords({
+              courseId,
+              lessonId,
+            }),
+          )
+        : {
+            ...page,
+            threads: page.threads.map(projectThreadLocalState),
+          };
     },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: options?.enabled ?? Boolean(courseId && lessonId),
     staleTime: 30 * 1000,
   });
@@ -422,7 +546,10 @@ export function useLessonThreads(
     data: result.data
       ? {
           ...result.data,
-          threads: result.data.threads.map(projectThreadLocalState),
+          pages: result.data.pages.map((page) => ({
+            ...page,
+            threads: page.threads.map(projectThreadLocalState),
+          })),
         }
       : result.data,
   };
@@ -432,10 +559,16 @@ export function useHubThreads(
   query?: ListLearningThreadsQuery,
   options?: { enabled?: boolean },
 ) {
-  const result = useQuery<LearningThreadCacheResponse, ApiError>({
-    queryKey: learningInteractionKeys.hubThreads(query),
-    queryFn: async () => {
-      const response = await learningInteractionsService.listHubThreads(query);
+  const queryClient = useQueryClient();
+  const queryKey = learningInteractionKeys.hubThreads(query);
+  normalizeExistingInfiniteCache(queryClient, queryKey, ["threads"]);
+  const result = useInfiniteQuery({
+    queryKey,
+    queryFn: async ({ pageParam }) => {
+      const response = await learningInteractionsService.listHubThreads({
+        ...query,
+        ...(pageParam ? { cursor: pageParam } : {}),
+      } as ListLearningThreadsQuery);
       return {
         ...response,
         threads: response.threads.map((thread) =>
@@ -443,6 +576,8 @@ export function useHubThreads(
         ),
       };
     },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: options?.enabled ?? true,
     staleTime: 30 * 1000,
   });
@@ -452,7 +587,10 @@ export function useHubThreads(
     data: result.data
       ? {
           ...result.data,
-          threads: result.data.threads.map(projectThreadLocalState),
+          pages: result.data.pages.map((page) => ({
+            ...page,
+            threads: page.threads.map(projectThreadLocalState),
+          })),
         }
       : result.data,
   };
@@ -546,20 +684,37 @@ export function useThreadReplies(
 }
 
 export function useUserNotes(
-  query?: ListLearningNotesQuery,
+  query?: UserNotesQuery,
   options?: { enabled?: boolean },
 ) {
-  const result = useQuery<LearningNotesCacheResponse, ApiError>({
-    queryKey: learningInteractionKeys.notes(query),
-    queryFn: async () => {
-      const response = await learningInteractionsService.listNotes(query);
+  const queryClient = useQueryClient();
+  const queryKey = learningInteractionKeys.notes(query);
+  normalizeExistingInfiniteCache(queryClient, queryKey, ["notes"]);
+  const result = useInfiniteQuery({
+    queryKey,
+    queryFn: async ({ pageParam }) => {
+      const response = await learningInteractionsService.listNotes({
+        ...query,
+        ...(pageParam ? { cursor: pageParam } : {}),
+      } as ListLearningNotesQuery);
+      if (pageParam !== null) {
+        return {
+          ...response,
+          notes: response.notes.map((note) =>
+            projectNoteLocalState(note),
+          ),
+        };
+      }
       return mergeNotesWithCreationRecords(
         response,
         query,
         interactionCreationCoordinator.getActiveNoteRecords(query),
       );
     },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: options?.enabled ?? true,
+    staleTime: 30 * 1000,
   });
   useOptimisticDeletionRevision();
   return {
@@ -567,7 +722,10 @@ export function useUserNotes(
     data: result.data
       ? {
           ...result.data,
-          notes: result.data.notes.map(projectNoteLocalState),
+          pages: result.data.pages.map((page) => ({
+            ...page,
+            notes: page.notes.map(projectNoteLocalState),
+          })),
         }
       : result.data,
   };

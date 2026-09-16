@@ -11,6 +11,7 @@ import type {
   OptimisticEditFields,
   OptimisticEditKind,
 } from "./optimistic-edit-coordinator";
+import { isInfiniteCacheData } from "./paginated-cache";
 
 type CacheEntity = {
   id: string | number;
@@ -69,6 +70,23 @@ function updateCacheData(
   fields: OptimisticEditFields,
 ): unknown {
   if (!data || typeof data !== "object") return data;
+
+  if (isInfiniteCacheData<unknown>(data)) {
+    let changed = false;
+    const pages = data.pages.map((page) => {
+      const updated = updateCacheData(
+        page,
+        queryKey,
+        kind,
+        clientId,
+        serverId,
+        fields,
+      );
+      changed ||= updated !== page;
+      return updated;
+    });
+    return changed ? { ...data, pages } : data;
+  }
 
   if (Array.isArray(data)) {
     if (kind !== "reply") return data;

@@ -12,6 +12,7 @@ import {
 } from "./interaction-entities";
 import { learningInteractionKeys } from "./learning-interactions.keys";
 import { optimisticEditCoordinator } from "./optimistic-edit-coordinator";
+import { mapPaginatedCache } from "./paginated-cache";
 
 export const UNDO_DELETE_TIMEOUT_MS = 10_000;
 
@@ -260,7 +261,7 @@ export class OptimisticDeletionCoordinator {
 
   private finalizeInCaches(record: InternalDeletionRecord): void {
     if (record.kind === "thread") {
-      const removeThread = (old: LearningThreadCacheResponse | undefined) => {
+      const removeThreadPage = (old: LearningThreadCacheResponse | undefined) => {
         if (!old) return old;
         const threads = withRemovedItem(old.threads, (thread) =>
           matchesEntity(thread, record),
@@ -275,13 +276,27 @@ export class OptimisticDeletionCoordinator {
               : Math.max(0, old.totalCount - 1),
         };
       };
-      record.queryClient.setQueriesData<LearningThreadCacheResponse>(
+      record.queryClient.setQueriesData<
+        LearningThreadCacheResponse | import("@tanstack/react-query").InfiniteData<LearningThreadCacheResponse>
+      >(
         { queryKey: [...learningInteractionKeys.all, "lesson-threads"] },
-        removeThread,
+        (old) =>
+          old === undefined
+            ? old
+            : mapPaginatedCache<LearningThreadCacheResponse>(old, (page) =>
+                removeThreadPage(page) ?? page,
+              ),
       );
-      record.queryClient.setQueriesData<LearningThreadCacheResponse>(
+      record.queryClient.setQueriesData<
+        LearningThreadCacheResponse | import("@tanstack/react-query").InfiniteData<LearningThreadCacheResponse>
+      >(
         { queryKey: [...learningInteractionKeys.all, "hub-threads"] },
-        removeThread,
+        (old) =>
+          old === undefined
+            ? old
+            : mapPaginatedCache<LearningThreadCacheResponse>(old, (page) =>
+                removeThreadPage(page) ?? page,
+              ),
       );
       record.queryClient.removeQueries({
         queryKey: learningInteractionKeys.threadDetails(record.serverId),
@@ -311,22 +326,26 @@ export class OptimisticDeletionCoordinator {
       return;
     }
 
-    record.queryClient.setQueriesData<LearningNotesCacheResponse>(
+    record.queryClient.setQueriesData<
+      LearningNotesCacheResponse | import("@tanstack/react-query").InfiniteData<LearningNotesCacheResponse>
+    >(
       { queryKey: learningInteractionKeys.notesRoot() },
       (old) => {
-        if (!old) return old;
-        const notes = withRemovedItem(old.notes, (note) =>
-          matchesEntity(note, record),
-        );
-        if (!notes) return old;
-        return {
-          ...old,
-          notes,
-          totalCount:
-            old.totalCount === undefined
-              ? old.totalCount
-              : Math.max(0, old.totalCount - 1),
-        };
+        if (old === undefined) return old;
+        return mapPaginatedCache<LearningNotesCacheResponse>(old, (page) => {
+          const notes = withRemovedItem(page.notes, (note) =>
+            matchesEntity(note, record),
+          );
+          if (!notes) return page;
+          return {
+            ...page,
+            notes,
+            totalCount:
+              page.totalCount === undefined
+                ? page.totalCount
+                : Math.max(0, page.totalCount - 1),
+          };
+        });
       },
     );
     record.queryClient.removeQueries({

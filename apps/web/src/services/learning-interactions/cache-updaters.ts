@@ -12,6 +12,46 @@ import {
   type LearningNotesCacheResponse,
   type LearningRepliesCacheResponse,
 } from "./interaction-entities";
+import { mapPaginatedCache } from "./paginated-cache";
+
+type ThreadListCache =
+  | LearningThreadsListResponse
+  | import("@tanstack/react-query").InfiniteData<LearningThreadsListResponse>;
+type NoteListCache =
+  | LearningNotesCacheResponse
+  | import("@tanstack/react-query").InfiniteData<LearningNotesCacheResponse>;
+
+function setThreadQueriesData(
+  queryClient: QueryClient,
+  filters: { queryKey: readonly unknown[] },
+  updater: (
+    old: LearningThreadsListResponse | undefined,
+  ) => LearningThreadsListResponse | undefined,
+): void {
+  queryClient.setQueriesData<ThreadListCache>(filters, (old) =>
+    old === undefined
+      ? old
+      : mapPaginatedCache<LearningThreadsListResponse>(old, (page) =>
+          updater(page) ?? page,
+        ),
+  );
+}
+
+function setNoteQueriesData(
+  queryClient: QueryClient,
+  filters: { queryKey: readonly unknown[] },
+  updater: (
+    old: LearningNotesCacheResponse | undefined,
+  ) => LearningNotesCacheResponse | undefined,
+): void {
+  queryClient.setQueriesData<NoteListCache>(filters, (old) =>
+    old === undefined
+      ? old
+      : mapPaginatedCache<LearningNotesCacheResponse>(old, (page) =>
+          updater(page) ?? page,
+        ),
+  );
+}
 
 function matchesThreadIdentity(
   thread: { id: string; clientId?: string; serverId?: string },
@@ -54,7 +94,8 @@ export function updateThreadLikeInCache(
   lessonContext?: { courseId: string; lessonId: string },
 ): void {
   // 1. Update lesson threads lists
-  queryClient.setQueriesData<LearningThreadsListResponse>(
+  setThreadQueriesData(
+    queryClient,
     {
       queryKey: lessonContext
         ? [
@@ -107,7 +148,8 @@ export function updateThreadLikeInCache(
   );
 
   // 3. Update hub threads list if present
-  queryClient.setQueriesData<LearningThreadsListResponse>(
+  setThreadQueriesData(
+    queryClient,
     { queryKey: [...learningInteractionKeys.all, "hub-threads"] },
     (old) => {
       if (!old?.threads) return old;
@@ -180,7 +222,8 @@ export function updateNoteLikeInCache(
   serverId?: string,
 ): void {
   // 1. Update notes list queries
-  queryClient.setQueriesData<LearningNotesCacheResponse>(
+  setNoteQueriesData(
+    queryClient,
     { queryKey: learningInteractionKeys.notesRoot() },
     (old) => {
       if (!old?.notes) return old;
@@ -255,7 +298,8 @@ export function updateThreadBookmarkInCache(
   lessonContext?: { courseId: string; lessonId: string },
 ): void {
   // 1. Update lesson threads lists
-  queryClient.setQueriesData<LearningThreadsListResponse>(
+  setThreadQueriesData(
+    queryClient,
     {
       queryKey: lessonContext
         ? [
@@ -296,7 +340,8 @@ export function updateThreadBookmarkInCache(
   );
 
   // 3. Update hub threads list if present in cache
-  queryClient.setQueriesData<LearningThreadsListResponse>(
+  setThreadQueriesData(
+    queryClient,
     { queryKey: [...learningInteractionKeys.all, "hub-threads"] },
     (old) => {
       if (!old?.threads) return old;
@@ -328,7 +373,8 @@ export function updateThreadFollowInCache(
   lessonContext?: { courseId: string; lessonId: string },
 ): void {
   // 1. Update lesson threads lists
-  queryClient.setQueriesData<LearningThreadsListResponse>(
+  setThreadQueriesData(
+    queryClient,
     {
       queryKey: lessonContext
         ? [
@@ -369,7 +415,8 @@ export function updateThreadFollowInCache(
   );
 
   // 3. Update hub threads list if present in cache
-  queryClient.setQueriesData<LearningThreadsListResponse>(
+  setThreadQueriesData(
+    queryClient,
     { queryKey: [...learningInteractionKeys.all, "hub-threads"] },
     (old) => {
       if (!old?.threads) return old;
@@ -401,7 +448,8 @@ export function updateThreadLockInCache(
   lessonContext?: { courseId: string; lessonId: string },
 ): void {
   // 1. Update lesson threads lists
-  queryClient.setQueriesData<LearningThreadsListResponse>(
+  setThreadQueriesData(
+    queryClient,
     {
       queryKey: lessonContext
         ? [
@@ -442,7 +490,8 @@ export function updateThreadLockInCache(
   );
 
   // 3. Update hub threads list if present in cache
-  queryClient.setQueriesData<LearningThreadsListResponse>(
+  setThreadQueriesData(
+    queryClient,
     { queryKey: [...learningInteractionKeys.all, "hub-threads"] },
     (old) => {
       if (!old?.threads) return old;
@@ -511,7 +560,8 @@ export function updateAcceptedAnswerInCache(
   );
 
   // 3. Update lesson threads lists
-  queryClient.setQueriesData<LearningThreadsListResponse>(
+  setThreadQueriesData(
+    queryClient,
     {
       queryKey: lessonContext
         ? [
@@ -541,7 +591,8 @@ export function updateAcceptedAnswerInCache(
   );
 
   // 4. Update hub threads list if present in cache
-  queryClient.setQueriesData<LearningThreadsListResponse>(
+  setThreadQueriesData(
+    queryClient,
     { queryKey: [...learningInteractionKeys.all, "hub-threads"] },
     (old) => {
       if (!old?.threads) return old;

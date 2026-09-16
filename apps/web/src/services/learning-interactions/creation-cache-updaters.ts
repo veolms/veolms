@@ -3,6 +3,7 @@ import type {
   LearningNote,
   LearningReply,
   LearningThread,
+  LearningThreadsListResponse,
   ListLearningNotesQuery,
 } from "@veolms/contracts";
 import { learningInteractionKeys } from "./learning-interactions.keys";
@@ -16,7 +17,6 @@ import {
   type LearningReplyCacheItem,
   type LearningReplyEntity,
   type LearningRepliesCacheResponse,
-  type LearningThreadCacheResponse,
   type LearningThreadEntity,
 } from "./interaction-entities";
 import {
@@ -24,6 +24,18 @@ import {
   type InteractionAttachment,
   type InteractionAttachmentPatch,
 } from "./attachment-model";
+import {
+  isInfiniteCacheData,
+  mapFirstPaginatedPage,
+  mapPaginatedCache,
+} from "./paginated-cache";
+
+type ThreadListCache =
+  | LearningThreadsListResponse
+  | import("@tanstack/react-query").InfiniteData<LearningThreadsListResponse>;
+type NoteListCache =
+  | LearningNotesCacheResponse
+  | import("@tanstack/react-query").InfiniteData<LearningNotesCacheResponse>;
 
 export interface LessonThreadCacheContext {
   courseId: string;
@@ -54,6 +66,15 @@ function getNoteClientId(note: LearningNoteCacheItem): string {
 
 function getNoteServerId(note: LearningNoteCacheItem): string | undefined {
   return getServerEntityId(note);
+}
+
+function getListFilters(
+  queryKey: readonly unknown[],
+): ListLearningNotesQuery | undefined {
+  const filters = queryKey[2] === "infinite" ? queryKey[3] : queryKey[2];
+  return filters && typeof filters === "object"
+    ? (filters as ListLearningNotesQuery)
+    : undefined;
 }
 
 function matchesNoteContext(
@@ -87,13 +108,6 @@ function matchesNoteQuery(
   return true;
 }
 
-function getNoteFilters(queryKey: readonly unknown[]): ListLearningNotesQuery | undefined {
-  const filters = queryKey[2];
-  return filters && typeof filters === "object"
-    ? (filters as ListLearningNotesQuery)
-    : undefined;
-}
-
 function forEachNoteCache(
   queryClient: QueryClient,
   updater: (
@@ -102,11 +116,35 @@ function forEachNoteCache(
   ) => LearningNotesCacheResponse,
 ): boolean {
   let changed = false;
-  for (const [queryKey, data] of queryClient.getQueriesData<LearningNotesCacheResponse>({
+  for (const [queryKey, data] of queryClient.getQueriesData<NoteListCache>({
     queryKey: noteQueryPrefix(),
   })) {
     if (!data) continue;
-    const next = updater(data, getNoteFilters(queryKey));
+    const next = mapPaginatedCache(data, (page) =>
+      updater(page, getListFilters(queryKey)),
+    );
+    if (next === data) continue;
+    queryClient.setQueryData(queryKey, next);
+    changed = true;
+  }
+  return changed;
+}
+
+function forEachNoteCacheFirstPage(
+  queryClient: QueryClient,
+  updater: (
+    data: LearningNotesCacheResponse,
+    filters: ListLearningNotesQuery | undefined,
+  ) => LearningNotesCacheResponse,
+): boolean {
+  let changed = false;
+  for (const [queryKey, data] of queryClient.getQueriesData<NoteListCache>({
+    queryKey: noteQueryPrefix(),
+  })) {
+    if (!data) continue;
+    const next = mapFirstPaginatedPage(data, (page) =>
+      updater(page, getListFilters(queryKey)),
+    );
     if (next === data) continue;
     queryClient.setQueryData(queryKey, next);
     changed = true;
@@ -119,22 +157,34 @@ function addToCanonicalNoteCache(
   context: NoteCacheContext,
   note: LearningNoteCacheItem,
 ): void {
-  queryClient.setQueryData<LearningNotesCacheResponse>(
+  queryClient.setQueryData<NoteListCache>(
     learningInteractionKeys.notes({
       courseId: context.courseId,
       lessonId: context.lessonId,
-      limit: 50,
+      limit: 20,
     }),
     (old) => {
-      if (old?.notes.some((candidate) => getNoteClientId(candidate) === getNoteClientId(note))) {
-        return old;
-      }
-      return {
-        ...(old ?? { nextCursor: null }),
-        notes: [note, ...(old?.notes ?? [])],
-        totalCount:
-          old?.totalCount === undefined ? old?.totalCount : old.totalCount + 1,
+      const prepend = (page: LearningNotesCacheResponse) => {
+        if (page.notes.some((candidate) => getNoteClientId(candidate) === getNoteClientId(note))) {
+          return page;
+        }
+        return {
+          ...page,
+          notes: [note, ...page.notes],
+          totalCount:
+            page.totalCount === undefined ? page.totalCount : page.totalCount + 1,
+        };
       };
+      if (isInfiniteCacheData<LearningNotesCacheResponse>(old)) {
+        const firstPage = old.pages[0];
+        if (!firstPage) return old;
+        const nextPage = prepend(firstPage);
+        return nextPage === firstPage
+          ? old
+          : { ...old, pages: [nextPage, ...old.pages.slice(1)] };
+      }
+      const page = prepend(old ?? { notes: [], nextCursor: null });
+      return { pages: [page], pageParams: [null] };
     },
   );
 }
@@ -144,7 +194,7 @@ export function insertOptimisticNoteInCaches(
   context: NoteCacheContext,
   note: LearningNoteEntity,
 ): void {
-  const changedExistingCache = forEachNoteCache(queryClient, (old, filters) => {
+  const changedExistingCache = forEachNoteCacheFirstPage(queryClient, (old, filters) => {
     if (!matchesNoteContext(note, context) || !matchesNoteQuery(note, filters)) {
       return old;
     }
@@ -304,6 +354,22 @@ function setReplyCaches(
   return changedExistingCache;
 }
 
+function setThreadListCaches(
+  queryClient: QueryClient,
+  queryKey: readonly unknown[],
+  updater: (
+    old: LearningThreadsListResponse | undefined,
+  ) => LearningThreadsListResponse | undefined,
+): void {
+  queryClient.setQueriesData<ThreadListCache>({ queryKey }, (old) =>
+    old === undefined
+      ? old
+      : mapPaginatedCache<LearningThreadsListResponse>(old, (page) =>
+          updater(page) ?? page,
+        ),
+  );
+}
+
 export function updateReplyCountInThreadCaches(
   queryClient: QueryClient,
   parentId: string,
@@ -340,16 +406,16 @@ export function updateReplyCountInThreadCaches(
     return changed ? { ...old, threads } : old;
   };
 
-  queryClient.setQueriesData<{
-    threads: Array<LearningThread | LearningThreadEntity>;
-    nextCursor: string | null;
-    totalCount?: number;
-  }>({ queryKey: [...learningInteractionKeys.all, "lesson-threads"] }, updateThreadLists);
-  queryClient.setQueriesData<{
-    threads: Array<LearningThread | LearningThreadEntity>;
-    nextCursor: string | null;
-    totalCount?: number;
-  }>({ queryKey: [...learningInteractionKeys.all, "hub-threads"] }, updateThreadLists);
+  setThreadListCaches(
+    queryClient,
+    [...learningInteractionKeys.all, "lesson-threads"],
+    updateThreadLists,
+  );
+  setThreadListCaches(
+    queryClient,
+    [...learningInteractionKeys.all, "hub-threads"],
+    updateThreadLists,
+  );
 }
 
 export function insertOptimisticReplyInCaches(
@@ -556,14 +622,43 @@ function setLessonThreadCaches(
   queryClient: QueryClient,
   context: LessonThreadCacheContext,
   updater: (
-    old: LearningThreadCacheResponse | undefined,
-  ) => LearningThreadCacheResponse | undefined,
+    old: LearningThreadsListResponse | undefined,
+  ) => LearningThreadsListResponse | undefined,
 ): boolean {
   let changedExistingCache = false;
-  queryClient.setQueriesData<LearningThreadCacheResponse>(
+  queryClient.setQueriesData<ThreadListCache>(
     { queryKey: lessonThreadQueryPrefix(context) },
     (old) => {
-      const next = updater(old);
+      const next =
+        old === undefined
+          ? old
+          : mapPaginatedCache<LearningThreadsListResponse>(old, (page) =>
+              updater(page) ?? page,
+            );
+      if (next !== old) changedExistingCache = true;
+      return next;
+    },
+  );
+  return changedExistingCache;
+}
+
+function setLessonThreadCachesFirstPage(
+  queryClient: QueryClient,
+  context: LessonThreadCacheContext,
+  updater: (
+    old: LearningThreadsListResponse | undefined,
+  ) => LearningThreadsListResponse | undefined,
+): boolean {
+  let changedExistingCache = false;
+  queryClient.setQueriesData<ThreadListCache>(
+    { queryKey: lessonThreadQueryPrefix(context) },
+    (old) => {
+      const next =
+        old === undefined
+          ? old
+          : mapFirstPaginatedPage<LearningThreadsListResponse>(old, (page) =>
+              updater(page) ?? page,
+            );
       if (next !== old) changedExistingCache = true;
       return next;
     },
@@ -576,7 +671,7 @@ export function insertOptimisticThreadInLessonCaches(
   context: LessonThreadCacheContext,
   optimisticThread: LearningThreadEntity,
 ): void {
-  const changedExistingCache = setLessonThreadCaches(
+  const changedExistingCache = setLessonThreadCachesFirstPage(
     queryClient,
     context,
     (old) => {
@@ -596,25 +691,40 @@ export function insertOptimisticThreadInLessonCaches(
   );
 
   if (!changedExistingCache) {
-    queryClient.setQueryData<LearningThreadCacheResponse>(
+    queryClient.setQueryData<ThreadListCache>(
       learningInteractionKeys.lessonThreads(
         context.courseId,
         context.lessonId,
-        { kind: "all", status: "all", sort: "latest", limit: 100 },
+        { kind: "all", status: "all", sort: "latest", limit: 20 },
       ),
       (old) => {
-        if (
-          old?.threads?.some(
-            (thread) => getClientEntityId(thread) === optimisticThread.clientId,
-          )
-        )
-          return old;
+        const insert = (page: LearningThreadsListResponse) => {
+          if (
+            page.threads.some(
+              (thread) => getClientEntityId(thread) === optimisticThread.clientId,
+            )
+          ) {
+            return page;
+          }
+          return {
+            ...page,
+            threads: [
+              optimisticThread,
+              ...page.threads.map(asThreadEntity),
+            ],
+          };
+        };
+        if (isInfiniteCacheData<LearningThreadsListResponse>(old)) {
+          const firstPage = old.pages[0];
+          if (!firstPage) return old;
+          const nextPage = insert(firstPage);
+          return nextPage === firstPage
+            ? old
+            : { ...old, pages: [nextPage, ...old.pages.slice(1)] };
+        }
         return {
-          ...(old ?? { nextCursor: null }),
-          threads: [
-            optimisticThread,
-            ...(old?.threads ?? []).map(asThreadEntity),
-          ],
+          pages: [insert(old ?? { threads: [], nextCursor: null })],
+          pageParams: [null],
         };
       },
     );
@@ -677,22 +787,39 @@ export function reconcileOptimisticThreadInLessonCaches(
   );
 
   if (!changedExistingCache) {
-    queryClient.setQueryData<LearningThreadCacheResponse>(
+    queryClient.setQueryData<ThreadListCache>(
       learningInteractionKeys.lessonThreads(
         context.courseId,
         context.lessonId,
-        { kind: "all", status: "all", sort: "latest", limit: 100 },
+        { kind: "all", status: "all", sort: "latest", limit: 20 },
       ),
       (old) => {
-        if (!old?.threads) return old;
-        if (
-          old.threads.some((thread) => hasServerThread(thread, serverThread.id))
-        )
-          return old;
-        return {
-          ...old,
-          threads: [...old.threads.map(asThreadEntity), confirmedThread],
+        const reconcile = (page: LearningThreadsListResponse) => {
+          if (
+            page.threads.some((thread) => hasServerThread(thread, serverThread.id))
+          ) {
+            return page;
+          }
+          return {
+            ...page,
+            threads: [...page.threads.map(asThreadEntity), confirmedThread],
+          };
         };
+        if (isInfiniteCacheData<LearningThreadsListResponse>(old)) {
+          const firstPage = old.pages[0];
+          if (!firstPage) return old;
+          const nextPage = reconcile(firstPage);
+          return nextPage === firstPage
+            ? old
+            : { ...old, pages: [nextPage, ...old.pages.slice(1)] };
+        }
+        if (!old) {
+          return {
+            pages: [{ threads: [confirmedThread], nextCursor: null }],
+            pageParams: [null],
+          };
+        }
+        return reconcile(old);
       },
     );
   }

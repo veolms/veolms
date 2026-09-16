@@ -356,6 +356,20 @@ export class InteractionCreationCoordinator {
     return this.threadRecords.get(clientId);
   }
 
+  getActiveThreadRecords(
+    context?: LessonThreadCacheContext,
+  ): ThreadCreationRecord[] {
+    return [...this.threadRecords.values()]
+      .filter(
+        (record) =>
+          this.isCurrentAuth(record) &&
+          (!context ||
+            (record.context.courseId === context.courseId &&
+              record.context.lessonId === context.lessonId)),
+      )
+      .sort((left, right) => left.optimisticThread.createdAt.localeCompare(right.optimisticThread.createdAt));
+  }
+
   getThreadResolution(clientId: string): ThreadResolution | undefined {
     const resolution = this.threadResolutions.get(clientId);
     return resolution?.authGeneration === authStore.getWriteGeneration()

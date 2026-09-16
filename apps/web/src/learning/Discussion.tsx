@@ -76,6 +76,8 @@ import {
   getServerEntityId,
   isClientEntityId,
   isPendingClientEntity,
+  type LearningNoteCacheItem,
+  type LearningThreadEntity,
 } from "../services/learning-interactions/interaction-entities";
 import {
   DiscussionReportDialog,
@@ -436,19 +438,54 @@ function DiscussionInner({
     CURRENT_USER.name;
   const authorAvatar = currentUser?.avatarDataUrl || CURRENT_USER.avatar;
 
+  const [entryKind, setEntryKind] =
+    useState<DiscussionEntryKind>(firstAvailableKind);
+  const [visibility, setVisibility] = useState<DiscussionVisibility>("public");
+  const [entryFilter, setEntryFilter] = useState<DiscussionEntryFilter>(
+    enabledKinds.length === 1 ? enabledKinds[0]! : "all",
+  );
+  const [feedSort, setFeedSort] = useState<DiscussionFeedSort>("newest");
+
+  const threadQuery = useMemo(
+    () => ({
+      kind:
+        entryFilter === "comment" || entryFilter === "question"
+          ? entryFilter
+          : "all" as const,
+      status: "all" as const,
+      sort: feedSort === "top" ? ("popular" as const) : ("latest" as const),
+      ...(feedSort === "mine" ? { mine: true } : {}),
+      limit: 20,
+    }),
+    [entryFilter, feedSort],
+  );
+  const notesQuery = useMemo(
+    () => ({
+      courseId: courseId ?? "",
+      lessonId: lessonId ?? "",
+      ...(feedSort === "mine" ? { mine: true } : {}),
+      limit: 20,
+    }),
+    [courseId, feedSort, lessonId],
+  );
+
   const {
     data: notesData,
     isLoading: isNotesLoading,
     isError: isNotesError,
     refetch: refetchNotes,
+    fetchNextPage: fetchNextNotesPage,
+    hasNextPage: hasNextNotesPage,
+    isFetchingNextPage: isFetchingNextNotesPage,
   } = useUserNotes(
+    notesQuery,
     {
-      courseId: courseId ?? "",
-      lessonId: lessonId ?? "",
-      limit: 50,
-    },
-    {
-      enabled: Boolean(courseId && lessonId && capabilities.allowNotes),
+      enabled: Boolean(
+        courseId &&
+          lessonId &&
+          capabilities.allowNotes &&
+          (entryFilter === "all" || entryFilter === "note"),
+      ),
     },
   ) ?? {};
 
@@ -463,17 +500,15 @@ function DiscussionInner({
     isLoading: isThreadsLoading,
     isError: isThreadsError,
     refetch: refetchThreads,
+    fetchNextPage: fetchNextThreadsPage,
+    hasNextPage: hasNextThreadsPage,
+    isFetchingNextPage: isFetchingNextThreadsPage,
   } = useLessonThreads(
     courseId ?? "",
     lessonId ?? "",
+    threadQuery,
     {
-      kind: "all",
-      status: "all",
-      sort: "latest",
-      limit: 100,
-    },
-    {
-      enabled: shouldFetchThreads,
+      enabled: shouldFetchThreads && entryFilter !== "note",
     },
   ) ?? {};
 
@@ -504,21 +539,37 @@ function DiscussionInner({
   }, [currentUser?.roles]);
 
   const backendNotes = useMemo<Comment[]>(() => {
-    if (!courseId || !lessonId || !capabilities.allowNotes || !notesData?.notes)
+    const legacyNotesData = notesData as unknown as
+      | {
+          pages?: Array<{ notes: LearningNoteCacheItem[] }>;
+          notes?: LearningNoteCacheItem[];
+        }
+      | undefined;
+    const pages =
+      legacyNotesData?.pages ??
+      (legacyNotesData?.notes ? [{ notes: legacyNotesData.notes }] : []);
+    if (
+      !courseId ||
+      !lessonId ||
+      !capabilities.allowNotes ||
+      pages.length === 0
+    )
       return [];
-    return notesData.notes.map((note) =>
-      adaptLearningNoteToComment(
-        note,
-        authorName,
-        authorAvatar,
-        currentUser?.id,
+    return pages.flatMap((page) =>
+      page.notes.map((note) =>
+        adaptLearningNoteToComment(
+          note,
+          authorName,
+          authorAvatar,
+          currentUser?.id,
+        ),
       ),
     );
   }, [
     capabilities.allowNotes,
     courseId,
     lessonId,
-    notesData?.notes,
+    notesData,
     currentUser?.id,
     authorName,
     authorAvatar,
@@ -547,25 +598,36 @@ function DiscussionInner({
   }, [currentUser?.id, directThreadData]);
 
   const backendThreads = useMemo<Comment[]>(() => {
+    const legacyThreadsData = threadsData as unknown as
+      | {
+          pages?: Array<{ threads: LearningThreadEntity[] }>;
+          threads?: LearningThreadEntity[];
+        }
+      | undefined;
+    const pages =
+      legacyThreadsData?.pages ??
+      (legacyThreadsData?.threads ? [{ threads: legacyThreadsData.threads }] : []);
     if (
       !courseId ||
       !lessonId ||
       (!capabilities.allowComments && !capabilities.allowQa) ||
-      !threadsData?.threads
+      pages.length === 0
     ) {
       return [];
     }
 
-    return threadsData.threads
-      .filter(isCommentOrQaThread)
-      .map((thread) => adaptLearningThreadToComment(thread, currentUser?.id));
+    return pages.flatMap((page) =>
+      page.threads
+        .filter(isCommentOrQaThread)
+        .map((thread) => adaptLearningThreadToComment(thread, currentUser?.id)),
+    );
   }, [
     capabilities.allowComments,
     capabilities.allowQa,
     courseId,
     currentUser?.id,
     lessonId,
-    threadsData?.threads,
+    threadsData,
   ]);
 
   const storageBase = `veolms-learning-${persistenceKey}-discussion`;
@@ -618,13 +680,6 @@ function DiscussionInner({
     ]);
   }, [isBackendMode, postedEntries, setPostedEntries]);
 
-  const [entryKind, setEntryKind] =
-    useState<DiscussionEntryKind>(firstAvailableKind);
-  const [visibility, setVisibility] = useState<DiscussionVisibility>("public");
-  const [entryFilter, setEntryFilter] = useState<DiscussionEntryFilter>(
-    enabledKinds.length === 1 ? enabledKinds[0]! : "all",
-  );
-  const [feedSort, setFeedSort] = useState<DiscussionFeedSort>("newest");
   const [editingEntry, setEditingEntry] = useState<EditingEntry | null>(null);
   const [openThread, setOpenThread] = useState<OpenDiscussionThread | null>(
     null,
@@ -678,17 +733,79 @@ function DiscussionInner({
     return [...backendNotes, ...entries];
   }, [backendNotes, backendThreads, entries, isBackendMode]);
 
+  const dedupedBackendEntries = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          combinedEntries.map((entry) => [getClientEntityId(entry), entry]),
+        ).values(),
+      ),
+    [combinedEntries],
+  );
+
   const filteredEntries = useMemo(
     () =>
       applyDiscussionFeed({
         currentUserName: authorName,
-        entries: combinedEntries,
+        // All intentionally keeps the existing client-side mixed projection.
+        // A globally ordered mixed cursor requires a backend unified-feed
+        // contract and is deferred to that future migration.
+        entries: isBackendMode ? dedupedBackendEntries : combinedEntries,
         filter: entryFilter,
         sort: feedSort,
         capabilities,
       }),
-    [authorName, capabilities, combinedEntries, entryFilter, feedSort],
+    [
+      authorName,
+      capabilities,
+      combinedEntries,
+      dedupedBackendEntries,
+      entryFilter,
+      feedSort,
+      isBackendMode,
+    ],
   );
+
+  const loadMoreDiscussion = useCallback(async () => {
+    if (entryFilter === "note") {
+      if (hasNextNotesPage && !isFetchingNextNotesPage) {
+        await fetchNextNotesPage();
+      }
+      return;
+    }
+    if (entryFilter === "all") {
+      await Promise.all([
+        hasNextThreadsPage && !isFetchingNextThreadsPage
+          ? fetchNextThreadsPage()
+          : undefined,
+        hasNextNotesPage && !isFetchingNextNotesPage
+          ? fetchNextNotesPage()
+          : undefined,
+      ]);
+      return;
+    }
+    if (hasNextThreadsPage && !isFetchingNextThreadsPage) {
+      await fetchNextThreadsPage();
+    }
+  }, [
+    entryFilter,
+    fetchNextNotesPage,
+    fetchNextThreadsPage,
+    hasNextNotesPage,
+    hasNextThreadsPage,
+    isFetchingNextNotesPage,
+    isFetchingNextThreadsPage,
+  ]);
+
+  const hasNextDiscussionPage =
+    isBackendMode &&
+    (entryFilter === "note"
+      ? Boolean(hasNextNotesPage)
+      : entryFilter === "all"
+        ? Boolean(hasNextThreadsPage || hasNextNotesPage)
+        : Boolean(hasNextThreadsPage));
+  const isFetchingNextDiscussionPage =
+    isFetchingNextThreadsPage || isFetchingNextNotesPage;
   const threadEntries = useMemo(() => {
     const list = combinedEntries.filter((entry) => entry.entryKind !== "note");
     if (!directThreadComment) {
@@ -1599,6 +1716,9 @@ function DiscussionInner({
         isNotesLoading={isNotesLoading}
         isNotesError={isNotesError}
         onRetryNotes={() => refetchNotes()}
+        onLoadMore={loadMoreDiscussion}
+        hasNextPage={hasNextDiscussionPage}
+        isFetchingNextPage={isFetchingNextDiscussionPage}
         isThreadsLoading={isThreadsLoading}
         isThreadsError={isThreadsError}
         onRetryThreads={() => refetchThreads()}
@@ -1828,6 +1948,9 @@ interface ThreadSurfaceProps {
   isNotesLoading?: boolean;
   isNotesError?: boolean;
   onRetryNotes?: () => void;
+  onLoadMore?: () => Promise<void>;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
   isThreadsLoading?: boolean;
   isThreadsError?: boolean;
   onRetryThreads?: () => void;
@@ -1884,6 +2007,28 @@ interface ThreadSurfaceProps {
   courseId?: string;
 }
 
+export function shouldShowDiscussionEnd({
+  isBackendMode,
+  entryFilter,
+  entryCount,
+  hasNextPage,
+  isNotesLoading,
+  isThreadsLoading,
+}: {
+  isBackendMode: boolean;
+  entryFilter: DiscussionEntryFilter;
+  entryCount: number;
+  hasNextPage: boolean;
+  isNotesLoading: boolean;
+  isThreadsLoading: boolean;
+}): boolean {
+  if (!isBackendMode || entryCount === 0 || hasNextPage) return false;
+  if (entryFilter === "all") {
+    return !isNotesLoading && !isThreadsLoading;
+  }
+  return entryFilter === "note" ? !isNotesLoading : !isThreadsLoading;
+}
+
 function ThreadSurface({
   lessonDescription,
   isLessonDescriptionLoading = false,
@@ -1902,6 +2047,9 @@ function ThreadSurface({
   isNotesLoading = false,
   isNotesError = false,
   onRetryNotes,
+  onLoadMore,
+  hasNextPage = false,
+  isFetchingNextPage = false,
   isThreadsLoading = false,
   isThreadsError = false,
   onRetryThreads,
@@ -1939,6 +2087,7 @@ function ThreadSurface({
 }: ThreadSurfaceProps) {
   const isPhone = usePhoneComposerLayout();
   const composerHostRef = useRef<HTMLDivElement>(null);
+  const feedSentinelRef = useRef<HTMLDivElement>(null);
   const compactComposerScrollHidden =
     mobileBottomNavigation && mobileBottomNavigationHidden;
   const [composerMode, setComposerMode] = useState<ComposerMode>("collapsed");
@@ -2098,6 +2247,31 @@ function ThreadSurface({
     }
     return succeeded;
   };
+
+  useEffect(() => {
+    const sentinel = feedSentinelRef.current;
+    if (
+      !sentinel ||
+      !onLoadMore ||
+      !hasNextPage ||
+      isFetchingNextPage
+    ) {
+      return undefined;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          void onLoadMore();
+        }
+      },
+      {
+        root: document.getElementById("courses-main-scrollport"),
+        rootMargin: "600px 0px",
+      },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, onLoadMore]);
 
   if (isInteractionCapabilitiesLoading) {
     return (
@@ -2320,6 +2494,32 @@ function ThreadSurface({
                 courseId={courseId}
               />
             ))}
+            {isBackendMode && hasNextPage && (
+              <div ref={feedSentinelRef} className="h-1" aria-hidden="true" />
+            )}
+            {isBackendMode && isFetchingNextPage && (
+              <p
+                className="py-4 text-center text-sm text-(--muted)"
+                data-testid="learning-feed-loading-more"
+              >
+                Loading more…
+              </p>
+            )}
+            {shouldShowDiscussionEnd({
+              isBackendMode,
+              entryFilter,
+              entryCount: entries.length,
+              hasNextPage,
+              isNotesLoading,
+              isThreadsLoading,
+            }) && (
+              <p
+                className="py-4 text-center text-xs text-(--muted)"
+                data-testid="learning-feed-end"
+              >
+                You’ve reached the end.
+              </p>
+            )}
             {entries.length === 0 && (
               <div className="py-12 text-center">
                 <p className="font-semibold text-(--text)">

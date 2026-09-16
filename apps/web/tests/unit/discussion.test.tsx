@@ -12,6 +12,7 @@ import { hasCommentToolbarOverflow } from "../../src/learning/CommentFormattingT
 import {
   Discussion,
   getDiscussionComposerViewportGeometry,
+  shouldShowDiscussionEnd,
 } from "../../src/learning/Discussion.tsx";
 import { LessonDescription } from "../../src/learning/LessonDescription.tsx";
 import { getDiscussionFeedCountLabel } from "../../src/learning/discussionFeed";
@@ -663,6 +664,64 @@ describe("CommentCard", () => {
     });
     expect(onDelete).not.toHaveBeenCalled();
     expect(screen.getByText("Keep this comment")).toBeVisible();
+  });
+});
+
+describe("Discussion pagination end state", () => {
+  it("does not show the end marker while the initial source is loading", () => {
+    expect(
+      shouldShowDiscussionEnd({
+        isBackendMode: true,
+        entryFilter: "comment",
+        entryCount: 2,
+        hasNextPage: false,
+        isNotesLoading: false,
+        isThreadsLoading: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowDiscussionEnd({
+        isBackendMode: true,
+        entryFilter: "note",
+        entryCount: 2,
+        hasNextPage: false,
+        isNotesLoading: true,
+        isThreadsLoading: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("waits for both All sources to settle before showing the end marker", () => {
+    expect(
+      shouldShowDiscussionEnd({
+        isBackendMode: true,
+        entryFilter: "all",
+        entryCount: 2,
+        hasNextPage: false,
+        isNotesLoading: true,
+        isThreadsLoading: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowDiscussionEnd({
+        isBackendMode: true,
+        entryFilter: "all",
+        entryCount: 2,
+        hasNextPage: false,
+        isNotesLoading: false,
+        isThreadsLoading: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowDiscussionEnd({
+        isBackendMode: true,
+        entryFilter: "all",
+        entryCount: 2,
+        hasNextPage: false,
+        isNotesLoading: false,
+        isThreadsLoading: false,
+      }),
+    ).toBe(true);
   });
 });
 

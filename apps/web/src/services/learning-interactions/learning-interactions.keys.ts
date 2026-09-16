@@ -1,9 +1,9 @@
 export const learningInteractionKeys = {
   all: ["learning-interactions"] as const,
   lessonThreads: (courseId: string, lessonId: string, filters?: Record<string, unknown>) =>
-    [...learningInteractionKeys.all, "lesson-threads", courseId, lessonId, filters] as const,
+    [...learningInteractionKeys.all, "lesson-threads", courseId, lessonId, "infinite", filters] as const,
   hubThreads: (filters?: Record<string, unknown>) =>
-    [...learningInteractionKeys.all, "hub-threads", filters] as const,
+    [...learningInteractionKeys.all, "hub-threads", "infinite", filters] as const,
   threadDetails: (threadId: string) =>
     [...learningInteractionKeys.all, "thread", threadId] as const,
   threadRepliesRoot: (threadId: string) =>
@@ -12,7 +12,7 @@ export const learningInteractionKeys = {
     [...learningInteractionKeys.threadRepliesRoot(threadId), query] as const,
   notesRoot: () => [...learningInteractionKeys.all, "notes"] as const,
   notes: (filters?: Record<string, unknown>) =>
-    [...learningInteractionKeys.notesRoot(), filters] as const,
+    [...learningInteractionKeys.notesRoot(), "infinite", filters] as const,
   noteDetails: (noteId: string) =>
     [...learningInteractionKeys.all, "note", noteId] as const,
   autocompleteUsers: (courseId: string, query?: string) =>
