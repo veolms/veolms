@@ -6,7 +6,7 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
   const COURSE_1 = "22222222-2222-4000-8000-000000000001";
   const COURSE_2 = "22222222-2222-4000-8000-000000000002";
 
-  const USER_PLATFORM_ADMIN = "33333333-3333-4000-8000-000000000001";
+  const USER_ADMIN = "33333333-3333-4000-8000-000000000001";
   const USER_COURSE_MANAGER_1 = "33333333-3333-4000-8000-000000000002";
   const USER_THUMBNAIL_EDITOR_1 = "33333333-3333-4000-8000-000000000003";
   const USER_DENIED_CURRICULUM = "33333333-3333-4000-8000-000000000004";
@@ -70,8 +70,8 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
           };
         }
 
-        // 4. Platform Admin scope (all permissions across platform & all courses)
-        if (userId === USER_PLATFORM_ADMIN) {
+        // 4. Admin scope (all permissions across platform & all courses)
+        if (userId === USER_ADMIN) {
           return { allowed: true, code: "ALLOWED" as const, scope: { courseId } };
         }
 
@@ -152,7 +152,7 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
         }
 
         let perms: string[] = [];
-        if (userId === USER_PLATFORM_ADMIN) {
+        if (userId === USER_ADMIN) {
           perms = [
             "course.create",
             "course.read",
@@ -315,25 +315,25 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
     });
   });
 
-  describe("3. Platform Administrator Scope", () => {
+  describe("3. Administrator Scope", () => {
     const service = createTestAuthService();
 
-    it("allows Platform Administrator platform-wide and course-scoped actions across all courses", async () => {
+    it("allows Administrator platform-wide and course-scoped actions across all courses", async () => {
       const resPlatform = await service.check({
-        userId: USER_PLATFORM_ADMIN,
+        userId: USER_ADMIN,
         permission: "course.create",
       });
       assert.equal(resPlatform.allowed, true);
 
       const resC1 = await service.check({
-        userId: USER_PLATFORM_ADMIN,
+        userId: USER_ADMIN,
         permission: "course.delete",
         courseId: COURSE_1,
       });
       assert.equal(resC1.allowed, true);
 
       const resC2 = await service.check({
-        userId: USER_PLATFORM_ADMIN,
+        userId: USER_ADMIN,
         permission: "course.delete",
         courseId: COURSE_2,
       });
@@ -495,7 +495,7 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
       let sentBody: any = null;
 
       const mockRequest: any = {
-        user: { id: USER_PLATFORM_ADMIN },
+        user: { id: USER_ADMIN },
         params: { id: COURSE_1 },
       };
       const mockReply: any = {

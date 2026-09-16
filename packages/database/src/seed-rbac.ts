@@ -3,10 +3,10 @@ import { permissions, type Permission } from "@veolms/contracts";
 import type { Database } from "./schema/index.ts";
 
 export const SYSTEM_ROLES = {
-  platform_admin: {
+  admin: {
     id: "00000000-0000-4000-8000-000000000000",
-    role_key: "platform_admin",
-    name: "Platform Administrator",
+    role_key: "admin",
+    name: "Administrator",
     description: "Operates the entire VeoLMS platform with full access",
     is_system: true,
   },
@@ -62,7 +62,7 @@ export const SYSTEM_ROLES = {
 } as const;
 
 export const ROLES = {
-  admin: SYSTEM_ROLES.platform_admin,
+  admin: SYSTEM_ROLES.admin,
   instructor: SYSTEM_ROLES.instructor,
   student: {
     id: "00000000-0000-4000-8000-000000000002",
@@ -84,7 +84,7 @@ export const STANDARD_FEATURES = [
 ] as const;
 
 export const ROLE_CAPABILITY_MAPPINGS: Record<keyof typeof SYSTEM_ROLES, readonly Permission[]> = {
-  platform_admin: permissions, // all platform capabilities
+  admin: permissions, // all platform capabilities
   course_manager: [
     "course.read",
     "course.preview",

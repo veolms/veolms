@@ -82,13 +82,13 @@ try {
     )
     .execute();
 
-  // 3. Seed Scoped Role Assignment (Platform Admin)
+  // 3. Seed Scoped Role Assignment (Admin)
   await database
     .insertInto("role_assignments")
     .values({
       id: "00000000-0000-4000-8000-000000000001",
       user_id: DEFAULT_SEED_USER.id,
-      role_id: "00000000-0000-4000-8000-000000000000", // Platform Admin
+      role_id: "00000000-0000-4000-8000-000000000000", // Admin
       scope_type: "platform",
       course_id: null,
     })
@@ -127,7 +127,7 @@ try {
       .execute();
   }
 
-  console.info(`Seeded ${courses.length} published courses with Platform Admin role assignment.`);
+  console.info(`Seeded ${courses.length} published courses with Admin role assignment.`);
 } finally {
   await database.destroy();
 }

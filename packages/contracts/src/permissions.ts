@@ -76,7 +76,7 @@ export const permissionSchema = z.enum(
  * Standard system role keys
  */
 export const systemRoleKeys = [
-  "platform_admin",
+  "admin",
   "course_manager",
   "content_editor",
   "thumbnail_editor",
