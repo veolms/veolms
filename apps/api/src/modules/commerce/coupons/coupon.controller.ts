@@ -14,9 +14,7 @@ export function createCouponController({
   async function listCoupons(
     request: FastifyRequest<{ Querystring: ListCouponsQuery }>,
   ) {
-    return await service.listCoupons({
-      courseId: request.query.courseId,
-    });
+    return await service.listCoupons(request.query);
   }
 
   async function getCoupon(

@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Coupon } from "@veolms/contracts";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
-import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { ToggleLeftIcon as ToggleLeft } from "@phosphor-icons/react/ToggleLeft";
 import { ToggleRightIcon as ToggleRight } from "@phosphor-icons/react/ToggleRight";
 import { Button } from "../components/Button";
@@ -20,9 +19,10 @@ import {
 export interface CouponsTableProps {
   coupons: Coupon[];
   isLoading: boolean;
-  canDelete?: boolean;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  fetchNextPage?: () => void;
   onEditCoupon: (coupon: Coupon) => void;
-  onDeleteCoupon: (coupon: Coupon) => void;
   onToggleStatus: (coupon: Coupon) => void;
   onCreateNew: () => void;
   setNotice?: (message: string) => void;
@@ -44,14 +44,40 @@ function LoadingRows() {
 export function CouponsTable({
   coupons,
   isLoading,
-  canDelete = true,
+  hasNextPage,
+  isFetchingNextPage,
+  fetchNextPage,
   onEditCoupon,
-  onDeleteCoupon,
   onToggleStatus,
   onCreateNew,
   setNotice,
 }: CouponsTableProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const observerTarget = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!hasNextPage || isFetchingNextPage || !fetchNextPage) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          fetchNextPage();
+        }
+      },
+      { threshold: 0.1, rootMargin: "100px" },
+    );
+
+    const current = observerTarget.current;
+    if (current) {
+      observer.observe(current);
+    }
+
+    return () => {
+      if (current) {
+        observer.unobserve(current);
+      }
+    };
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const handleCopyCode = async (coupon: Coupon) => {
     await navigator.clipboard.writeText(coupon.code);
@@ -83,7 +109,7 @@ export function CouponsTable({
   }
 
   return (
-    <div className="divide-y divide-(--border)">
+    <div className="divide-y divide-(--border) overflow-hidden rounded-b-[inherit]">
       {coupons.map((coupon) => {
         const status = getCouponStatus(coupon);
         const redemptionCount = coupon.redemptionCount ?? 0;
@@ -96,7 +122,7 @@ export function CouponsTable({
         return (
           <div
             key={coupon.id}
-            className="flex flex-col gap-3 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-4 hover:bg-(--hover)"
+            className="flex flex-col gap-3 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-4 hover:bg-(--hover) transition-colors"
           >
             <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
               <div className="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent)">
@@ -164,16 +190,6 @@ export function CouponsTable({
                   <ToggleLeft size={16} weight="bold" className="text-(--muted)" />
                 )}
               </button>
-              {canDelete ? (
-                <button
-                  type="button"
-                  onClick={() => onDeleteCoupon(coupon)}
-                  title="Delete coupon"
-                  className="inline-flex size-8 sm:size-9 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] text-rose-500 shadow-[var(--card-compact-shadow)] hover:bg-rose-500/10 cursor-pointer"
-                >
-                  <Trash size={15} weight="bold" />
-                </button>
-              ) : null}
               <button
                 type="button"
                 onClick={() => onEditCoupon(coupon)}
@@ -186,6 +202,29 @@ export function CouponsTable({
           </div>
         );
       })}
+
+      {hasNextPage ? (
+        <div
+          ref={observerTarget}
+          className="flex flex-col items-center justify-center p-4 sm:p-6 border-t border-(--border)"
+        >
+          {isFetchingNextPage ? (
+            <div className="flex items-center gap-2.5 text-xs font-medium text-(--muted)">
+              <div className="size-4 animate-spin rounded-full border-2 border-(--accent) border-t-transparent" />
+              <span>Loading more coupons...</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fetchNextPage?.()}
+              className="rounded-xl border border-(--border) bg-(--card-surface) px-4 py-2 text-xs font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
+              style={{ boxShadow: "var(--card-shadow)" }}
+            >
+              Load more coupons
+            </button>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

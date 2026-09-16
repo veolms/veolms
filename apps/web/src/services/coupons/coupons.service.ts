@@ -1,14 +1,16 @@
 import { api } from "../../lib/api-client";
 import type {
   Coupon,
+  CouponListResponse,
   CreateCouponRequest,
+  ListCouponsQuery,
   UpdateCouponRequest,
 } from "@veolms/contracts";
 
 export const couponsService = {
-  listCoupons: (filters?: { courseId?: string }): Promise<Coupon[]> => {
-    return api.get<Coupon[]>("/coupons", {
-      params: filters?.courseId ? { courseId: filters.courseId } : undefined,
+  listCoupons: (filters?: ListCouponsQuery): Promise<CouponListResponse> => {
+    return api.get<CouponListResponse>("/coupons", {
+      params: filters,
     });
   },
 

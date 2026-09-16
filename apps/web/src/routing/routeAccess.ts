@@ -8,6 +8,7 @@ export const MFA_CHALLENGE_PATH = "/mfa-setup?mfa=required";
 
 const COURSE_AUTHOR_ROLES = new Set([
   "admin",
+  "administrator",
   "creator",
   "instructor",
   "platform_admin",

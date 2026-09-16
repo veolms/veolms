@@ -22,6 +22,7 @@ export function getAllowedWorkspaceRoles(
   const normalized = new Set(roles.map((role) => role.toLowerCase()));
   if (
     normalized.has("admin") ||
+    normalized.has("administrator") ||
     normalized.has("platform_admin") ||
     normalized.has("platform administrator")
   ) {
@@ -71,9 +72,10 @@ export function hasAdminRole(
     return false;
   }
   return roles.some((role) => {
-    const r = role.toLowerCase();
+    const r = role.trim().toLowerCase();
     return (
       r === "admin" ||
+      r === "administrator" ||
       r === "platform_admin" ||
       r === "platform administrator"
     );

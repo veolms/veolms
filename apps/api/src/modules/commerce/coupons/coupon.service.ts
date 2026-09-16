@@ -1,7 +1,8 @@
-import crypto from "node:crypto";
 import type {
   Coupon,
+  CouponListResponse,
   CreateCouponRequest,
+  ListCouponsQuery,
   UpdateCouponRequest,
 } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
@@ -9,12 +10,52 @@ import { AppError } from "../../../lib/errors.ts";
 import * as couponRepo from "./coupon.repository.ts";
 
 export interface CouponService {
-  listCoupons(filters?: { courseId?: string }): Promise<Coupon[]>;
+  listCoupons(query?: ListCouponsQuery): Promise<CouponListResponse>;
   getCouponById(id: string): Promise<Coupon>;
   getCouponByCode(code: string): Promise<Coupon>;
   createCoupon(request: CreateCouponRequest): Promise<Coupon>;
   updateCoupon(id: string, request: UpdateCouponRequest): Promise<Coupon>;
   deleteCoupon(id: string): Promise<void>;
+}
+
+interface DecodedCouponCursor {
+  createdAt: Date;
+  id: string;
+}
+
+function encodeCouponCursor(cursor: DecodedCouponCursor): string {
+  return Buffer.from(
+    JSON.stringify([cursor.createdAt.toISOString(), cursor.id]),
+    "utf8",
+  ).toString("base64url");
+}
+
+function decodeCouponCursor(value: string): DecodedCouponCursor {
+  try {
+    const decoded: unknown = JSON.parse(
+      Buffer.from(value, "base64url").toString("utf8"),
+    );
+    if (
+      !Array.isArray(decoded) ||
+      decoded.length !== 2 ||
+      typeof decoded[0] !== "string" ||
+      typeof decoded[1] !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+        decoded[1],
+      )
+    ) {
+      throw new Error("Malformed cursor");
+    }
+    const createdAt = new Date(decoded[0]);
+    if (Number.isNaN(createdAt.getTime())) throw new Error("Invalid date");
+    return { createdAt, id: decoded[1] };
+  } catch {
+    throw new AppError(
+      400,
+      "INVALID_COUPON_CURSOR",
+      "The coupon pagination cursor is invalid or expired.",
+    );
+  }
 }
 
 function assertValidWindow(startsAt: Date, expiresAt: Date) {
@@ -72,13 +113,31 @@ export function createCouponService({
     return mapToCoupon(row, usage);
   }
 
-  async function listCoupons(filters?: {
-    courseId?: string;
-  }): Promise<Coupon[]> {
-    const [list, stats] = await Promise.all([
-      couponRepo.listCoupons(database, filters),
-      couponRepo.listCouponRedemptionStats(database),
+  async function listCoupons(
+    query?: ListCouponsQuery,
+  ): Promise<CouponListResponse> {
+    const limit = query?.limit ?? 30;
+    const cursor = query?.cursor ? decodeCouponCursor(query.cursor) : undefined;
+
+    const [rows, summary] = await Promise.all([
+      couponRepo.listCoupons(database, {
+        courseId: query?.courseId,
+        cursor,
+        limit,
+      }),
+      couponRepo.getCouponOverallSummary(database, {
+        courseId: query?.courseId,
+      }),
     ]);
+
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+    const couponIds = pageRows.map((r) => r.id);
+    const stats = await couponRepo.listCouponRedemptionStats(
+      database,
+      couponIds,
+    );
     const usageById = new Map(
       stats.map((row) => [
         row.coupon_id,
@@ -88,7 +147,24 @@ export function createCouponService({
         },
       ]),
     );
-    return list.map((row) => mapToCoupon(row, usageById.get(row.id)));
+
+    const items = pageRows.map((row) =>
+      mapToCoupon(row, usageById.get(row.id)),
+    );
+    const lastRow = pageRows.at(-1);
+
+    return {
+      items,
+      nextCursor:
+        hasMore && lastRow
+          ? encodeCouponCursor({
+              createdAt: lastRow.created_at,
+              id: lastRow.id,
+            })
+          : null,
+      totalCount: summary.totalCount,
+      summary,
+    };
   }
 
   async function getCouponById(id: string): Promise<Coupon> {

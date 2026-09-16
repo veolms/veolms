@@ -1,15 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import type { Coupon } from "@veolms/contracts";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { ShieldWarningIcon as ShieldWarning } from "@phosphor-icons/react/ShieldWarning";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
-import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { Button } from "../components/Button";
-import { ConfirmActionModal } from "../shell/ConfirmActionModal";
 import { useCurrentUser } from "../services/auth";
+import { useAuthStore } from "../store/auth.store";
 import { hasAdminRole, getUserRoles } from "../shell/workspaceRole";
 import type { NavigateTo } from "../routing/navigation";
-import { useDeleteCoupon, useUpdateCoupon } from "../services/coupons";
+import { useUpdateCoupon } from "../services/coupons";
 import { getApiError } from "../lib/api-error";
 import { CouponSummaryCards } from "./CouponSummaryCards";
 import { CouponFiltersBar } from "./CouponFiltersBar";
@@ -23,7 +22,9 @@ export interface CouponsPageProps {
 }
 
 export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
-  const { data: user } = useCurrentUser();
+  const { data: authUser, isFetched: authUserFetched } = useCurrentUser();
+  const storeUser = useAuthStore((s) => s.user);
+  const user = authUserFetched ? authUser : storeUser;
   const userRoles = getUserRoles(user);
   const isAdmin = hasAdminRole(userRoles);
   const isAuthorized =
@@ -31,7 +32,16 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
     isAdmin ||
     Boolean(
       userRoles?.some((role) =>
-        ["admin", "creator", "instructor"].includes(role.toLowerCase()),
+        [
+          "admin",
+          "administrator",
+          "creator",
+          "instructor",
+          "platform_admin",
+          "platform administrator",
+          "superadmin",
+          "super_admin",
+        ].includes(role.trim().toLowerCase()),
       ),
     );
 
@@ -51,11 +61,12 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
     isError,
     error,
     refetch,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
   } = useCouponsFilter();
 
   const updateMutation = useUpdateCoupon();
-  const deleteMutation = useDeleteCoupon();
-  const [deletingCoupon, setDeletingCoupon] = useState<Coupon | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -94,17 +105,6 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
           ? `${coupon.code} is now inactive.`
           : `${coupon.code} is now active.`,
       );
-    } catch (err) {
-      setNotice?.(getApiError(err).message);
-    }
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!deletingCoupon) return;
-    try {
-      await deleteMutation.mutateAsync(deletingCoupon.id);
-      setNotice?.(`${deletingCoupon.code} deleted.`);
-      setDeletingCoupon(null);
     } catch (err) {
       setNotice?.(getApiError(err).message);
     }
@@ -210,34 +210,16 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
           <CouponsTable
             coupons={coupons}
             isLoading={isLoading}
-            canDelete={isAdmin}
+            hasNextPage={hasNextPage}
+            isFetchingNextPage={isFetchingNextPage}
+            fetchNextPage={fetchNextPage}
             onEditCoupon={handleOpenEdit}
-            onDeleteCoupon={setDeletingCoupon}
             onToggleStatus={handleToggleStatus}
             onCreateNew={handleOpenCreate}
             setNotice={setNotice}
           />
         )}
       </section>
-
-      <ConfirmActionModal
-        id="delete-coupon"
-        isOpen={Boolean(deletingCoupon)}
-        isPending={deleteMutation.isPending}
-        onClose={() => setDeletingCoupon(null)}
-        onConfirm={handleDeleteConfirm}
-        icon={Trash}
-        title="Delete coupon?"
-        description={
-          deletingCoupon
-            ? `Learners will no longer be able to use ${deletingCoupon.code}. Coupons that already have redemptions cannot be deleted.`
-            : ""
-        }
-        cancelLabel="Cancel"
-        confirmLabel="Delete coupon"
-        pendingLabel="Deleting..."
-        tone="danger"
-      />
     </main>
   );
 }

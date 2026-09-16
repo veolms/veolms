@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  couponListResponseSchema,
   couponSchema,
   createCouponRequestSchema,
   listCouponsQuerySchema,
@@ -26,10 +27,10 @@ const couponRoutes: RoutePlugin = async (app, options) => {
         tags: ["Commerce - Coupons"],
         summary: "List coupons",
         description:
-          "Returns academy coupons. Pass `courseId` to include only coupons that apply to that course.",
+          "Returns academy coupons with cursor pagination. Pass `courseId` to include only coupons that apply to that course.",
         querystring: listCouponsQuerySchema,
         response: {
-          200: jsonResponse("List of coupons", z.array(couponSchema)),
+          200: jsonResponse("List of coupons", couponListResponseSchema),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden"),
         },

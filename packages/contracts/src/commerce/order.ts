@@ -120,8 +120,29 @@ export type Coupon = z.infer<typeof couponSchema>;
 
 export const listCouponsQuerySchema = z.object({
   courseId: z.uuid().optional(),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
 });
 export type ListCouponsQuery = z.infer<typeof listCouponsQuerySchema>;
+
+export const couponSummarySchema = z.object({
+  totalCount: z.number().int().nonnegative(),
+  activeCount: z.number().int().nonnegative(),
+  scheduledCount: z.number().int().nonnegative(),
+  expiredCount: z.number().int().nonnegative(),
+  inactiveCount: z.number().int().nonnegative(),
+  totalRedemptions: z.number().int().nonnegative(),
+  totalDiscountGiven: z.number().int().nonnegative(),
+});
+export type CouponSummary = z.infer<typeof couponSummarySchema>;
+
+export const couponListResponseSchema = z.object({
+  items: z.array(couponSchema),
+  nextCursor: z.string().nullable(),
+  totalCount: z.number().int().nonnegative().optional(),
+  summary: couponSummarySchema.optional(),
+});
+export type CouponListResponse = z.infer<typeof couponListResponseSchema>;
 
 export const createCouponRequestSchema = z.strictObject({
   code: z.string().min(1).max(50).toUpperCase(),

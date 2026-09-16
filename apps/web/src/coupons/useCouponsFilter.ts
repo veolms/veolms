@@ -13,16 +13,22 @@ export type {
 } from "./couponHelpers";
 export { getCouponStatus } from "./couponHelpers";
 
-export function useCouponsFilter() {
+export function useCouponsFilter(options?: { courseId?: string | null }) {
   const {
-    data: serverCoupons = [],
+    data,
     isLoading,
     isError,
     error,
     refetch,
-  } = useCouponsList();
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useCouponsList({ courseId: options?.courseId, limit: 10 });
 
-  const coupons = serverCoupons;
+  const coupons = useMemo(
+    () => data?.pages.flatMap((page) => page.items) ?? [],
+    [data],
+  );
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -39,7 +45,20 @@ export function useCouponsFilter() {
     "all" | "percentage" | "fixed"
   >("all");
 
+  const serverSummary = data?.pages[0]?.summary;
+  const serverTotalCount = data?.pages[0]?.totalCount;
+
   const counts = useMemo(() => {
+    if (serverSummary) {
+      return {
+        all: serverSummary.totalCount,
+        active: serverSummary.activeCount,
+        scheduled: serverSummary.scheduledCount,
+        expired: serverSummary.expiredCount,
+        draft: serverSummary.inactiveCount,
+      };
+    }
+
     let active = 0;
     let scheduled = 0;
     let expired = 0;
@@ -54,15 +73,27 @@ export function useCouponsFilter() {
     }
 
     return {
-      all: coupons.length,
+      all: serverTotalCount ?? coupons.length,
       active,
       scheduled,
       expired,
       draft,
     };
-  }, [coupons, now]);
+  }, [serverSummary, serverTotalCount, coupons, now]);
 
   const summaryMetrics = useMemo(() => {
+    if (serverSummary) {
+      return {
+        totalCoupons: serverSummary.totalCount,
+        totalRedemptions: serverSummary.totalRedemptions,
+        totalDiscountGiven: serverSummary.totalDiscountGiven,
+        activeCoupons: serverSummary.activeCount,
+        expiredCoupons: serverSummary.expiredCount,
+        draftCoupons: serverSummary.inactiveCount,
+        scheduledCoupons: serverSummary.scheduledCount,
+      };
+    }
+
     let totalRedemptions = 0;
     let totalDiscountGiven = 0;
 
@@ -72,7 +103,7 @@ export function useCouponsFilter() {
     }
 
     return {
-      totalCoupons: coupons.length,
+      totalCoupons: serverTotalCount ?? coupons.length,
       totalRedemptions,
       totalDiscountGiven,
       activeCoupons: counts.active,
@@ -80,7 +111,7 @@ export function useCouponsFilter() {
       draftCoupons: counts.draft,
       scheduledCoupons: counts.scheduled,
     };
-  }, [coupons, counts]);
+  }, [serverSummary, serverTotalCount, coupons, counts]);
 
   const filteredCoupons = useMemo(() => {
     return coupons
@@ -147,5 +178,8 @@ export function useCouponsFilter() {
     isError,
     error,
     refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
   };
 }
