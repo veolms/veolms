@@ -4,8 +4,6 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-performance.mjs",
-    "deploy": "pnpm build && wrangler deploy -c ../../wrangler.jsonc",
-    "deploy:only": "wrangler deploy -c ../../wrangler.jsonc",
     "benchmark:web-vitals": "node scripts/benchmark-web-vitals.mjs",
     "dev": "react-router dev",
     "generate:reading-mode-texture": "node scripts/generate-reading-mode-texture.mjs",
@@ -98,7 +96,6 @@
     "purgecss": "^7.0.2",
     "tailwindcss": "^4.3.3",
     "vite": "8.2.1",
-    "vitest": "^4.1.10",
-    "wrangler": "^4.131.2"
+    "vitest": "^4.1.10"
   }
 }

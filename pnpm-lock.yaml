@@ -417,9 +417,6 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-      wrangler:
-        specifier: ^4.131.2
-        version: 4.131.2(@types/node@24.13.3)
 
   packages/config:
     dependencies:

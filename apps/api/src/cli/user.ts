@@ -5,6 +5,7 @@ import { createDatabase } from "@veolms/database";
 import { config } from "../config.ts";
 import { createEmailService, otpVerificationEmail } from "../services/email/index.ts";
 import {
+  ADMIN_ROLE,
   INSTRUCTOR_ROLE,
   OTP_TTL_MINUTES,
   OTP_TTL_MS,
@@ -28,20 +29,53 @@ const dummyLogger = {
   fatal: () => {},
 };
 
+type TargetRole = "instructor" | "admin";
+
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+function parseRole(value?: string | null): TargetRole | null {
+  if (!value) return null;
+  const lower = value.trim().toLowerCase();
+  if (lower === "admin" || lower === "administrator" || lower === "2") return "admin";
+  if (lower === "instructor" || lower === "1") return "instructor";
+  return null;
+}
+
 async function main() {
-  const args = process.argv.slice(2);
+  const rawArgs = process.argv.slice(2);
   const rl = readline.createInterface({ input: stdin, output: stdout });
 
-  let rawEmail = args[0];
-  let directCode = args[1];
+  // Extract flag-based role (e.g. --role=admin or --role admin)
+  let selectedRole: TargetRole | null = null;
+  const positionalArgs: string[] = [];
 
-  // If email was not passed as CLI argument, prompt interactively
+  for (let i = 0; i < rawArgs.length; i++) {
+    const arg = rawArgs[i]!;
+    if (arg.startsWith("--role=")) {
+      selectedRole = parseRole(arg.split("=")[1]);
+    } else if (arg === "--role" && rawArgs[i + 1]) {
+      selectedRole = parseRole(rawArgs[++i]);
+    } else {
+      positionalArgs.push(arg);
+    }
+  }
+
+  // Parse positional arguments: <email> [otp/code] [role]
+  let rawEmail = positionalArgs[0];
+  let directCode = positionalArgs[1];
+
+  if (!selectedRole && positionalArgs[2]) {
+    selectedRole = parseRole(positionalArgs[2]);
+  } else if (!selectedRole && positionalArgs[1] && parseRole(positionalArgs[1])) {
+    selectedRole = parseRole(positionalArgs[1]);
+    directCode = undefined;
+  }
+
+  // If email was not passed, prompt interactively
   if (!rawEmail) {
-    rawEmail = await rl.question(`${cyan("? ")}${bold("Enter instructor email: ")}`);
+    rawEmail = await rl.question(`${cyan("? ")}${bold("Enter user email: ")}`);
   }
 
   const email = rawEmail.trim().toLowerCase();
@@ -51,6 +85,19 @@ async function main() {
     rl.close();
     process.exit(1);
   }
+
+  // If role was not passed, prompt interactively with choices
+  if (!selectedRole) {
+    console.log(`\n${cyan("? ")}${bold("Select role to assign:")}`);
+    console.log(`  ${dim("1)")} Instructor     ${dim("(Course author and instructor)")}`);
+    console.log(`  ${dim("2)")} Administrator  ${dim("(Full platform access)")}`);
+
+    const roleChoice = await rl.question(`${cyan("➜ ")}${bold("Enter choice [1/2] (default 1): ")}`);
+    selectedRole = parseRole(roleChoice) || "instructor";
+  }
+
+  const isAdministrator = selectedRole === "admin";
+  const roleDisplayName = isAdministrator ? "Administrator" : "Instructor";
 
   const database = createDatabase(config.DATABASE_URL);
   const emailService = createEmailService({
@@ -66,33 +113,56 @@ async function main() {
   });
 
   try {
-    // 1. Ensure instructor role exists in database
-    let instructorRole = await database
+    // 1. Ensure target role exists in database
+    let targetRoleRecord = await database
       .selectFrom("roles")
       .selectAll()
-      .where("name", "=", INSTRUCTOR_ROLE)
+      .where((eb) =>
+        isAdministrator
+          ? eb.or([
+              eb("name", "=", ADMIN_ROLE),
+              eb("name", "=", "Administrator"),
+              eb("role_key", "=", ADMIN_ROLE),
+              eb("id", "=", "00000000-0000-4000-8000-000000000000"),
+            ])
+          : eb.or([
+              eb("name", "=", INSTRUCTOR_ROLE),
+              eb("name", "=", "Instructor"),
+              eb("role_key", "=", INSTRUCTOR_ROLE),
+              eb("id", "=", "00000000-0000-4000-8000-000000000001"),
+            ]),
+      )
       .executeTakeFirst();
 
-    if (!instructorRole) {
-      const defaultInstructorRoleId = "00000000-0000-4000-8000-000000000001";
+    if (!targetRoleRecord) {
+      const defaultRoleId = isAdministrator
+        ? "00000000-0000-4000-8000-000000000000"
+        : "00000000-0000-4000-8000-000000000001";
+      const defaultRoleName = isAdministrator ? ADMIN_ROLE : INSTRUCTOR_ROLE;
+      const defaultRoleDescription = isAdministrator
+        ? "System administrator with full platform access"
+        : "Course instructor and author";
+
       await database
         .insertInto("roles")
         .values({
-          id: defaultInstructorRoleId,
-          name: INSTRUCTOR_ROLE,
-          description: "Course instructor and author",
+          id: defaultRoleId,
+          name: defaultRoleName,
+          role_key: defaultRoleName,
+          description: defaultRoleDescription,
+          is_system: true,
         })
         .onConflict((oc) => oc.doNothing())
         .execute();
 
-      instructorRole = await database
+      targetRoleRecord = await database
         .selectFrom("roles")
         .selectAll()
-        .where("name", "=", INSTRUCTOR_ROLE)
+        .where("id", "=", defaultRoleId)
         .executeTakeFirst();
 
-      if (!instructorRole) {
-        throw new Error(`Failed to initialize ${INSTRUCTOR_ROLE} role in database.`);
+      if (!targetRoleRecord) {
+        throw new Error(`Failed to initialize ${roleDisplayName} role in database.`);
       }
     }
 
@@ -183,7 +253,7 @@ async function main() {
       .where("id", "=", matchingOtp.id)
       .execute();
 
-    // 6. Create or update user as instructor
+    // 6. Create or update user
     const existingUser = await database
       .selectFrom("users")
       .selectAll()
@@ -199,7 +269,7 @@ async function main() {
       username = existingUser.username;
       displayName = existingUser.display_name;
 
-      // Ensure user is marked verified
+      // Ensure user is marked verified and active
       if (!existingUser.email_verified_at || existingUser.is_deleted) {
         await database
           .updateTable("users")
@@ -208,18 +278,42 @@ async function main() {
           .execute();
       }
 
-      // Assign instructor role
+      // Assign role in user_roles
       await database
         .insertInto("user_roles")
         .values({
           user_id: userId,
-          role_id: instructorRole.id,
+          role_id: targetRoleRecord.id,
         })
         .onConflict((oc) => oc.doNothing())
         .execute();
 
+      // For Administrator, also ensure platform-scoped role_assignment exists
+      if (isAdministrator) {
+        const existingAssignment = await database
+          .selectFrom("role_assignments")
+          .select("id")
+          .where("user_id", "=", userId)
+          .where("role_id", "=", targetRoleRecord.id)
+          .where("scope_type", "=", "platform")
+          .executeTakeFirst();
+
+        if (!existingAssignment) {
+          await database
+            .insertInto("role_assignments")
+            .values({
+              id: crypto.randomUUID(),
+              user_id: userId,
+              role_id: targetRoleRecord.id,
+              scope_type: "platform",
+              course_id: null,
+            })
+            .execute();
+        }
+      }
+
       console.log(`\n${green("✓ OTP verified successfully!")}`);
-      console.log(`${green("✓ User upgraded to Instructor:")}`);
+      console.log(`${green(`✓ User upgraded to ${roleDisplayName}:`)}`);
     } else {
       userId = crypto.randomUUID();
 
@@ -228,7 +322,7 @@ async function main() {
         .split("@")[0]!
         .toLowerCase()
         .replace(/[^a-z0-9_]/g, "_")
-        .slice(0, 30) || "instructor";
+        .slice(0, 30) || selectedRole;
 
       username = baseUsername;
       let suffix = 1;
@@ -261,25 +355,39 @@ async function main() {
         })
         .execute();
 
-      // Assign instructor role
+      // Assign role in user_roles
       await database
         .insertInto("user_roles")
         .values({
           user_id: userId,
-          role_id: instructorRole.id,
+          role_id: targetRoleRecord.id,
         })
         .onConflict((oc) => oc.doNothing())
         .execute();
 
+      // For Administrator, assign platform-scoped role_assignment
+      if (isAdministrator) {
+        await database
+          .insertInto("role_assignments")
+          .values({
+            id: crypto.randomUUID(),
+            user_id: userId,
+            role_id: targetRoleRecord.id,
+            scope_type: "platform",
+            course_id: null,
+          })
+          .execute();
+      }
+
       console.log(`\n${green("✓ OTP verified successfully!")}`);
-      console.log(`${green("✓ Instructor account created:")}`);
+      console.log(`${green(`✓ ${roleDisplayName} account created:`)}`);
     }
 
     console.log(`  ${dim("•")} User ID:      ${cyan(userId)}`);
     console.log(`  ${dim("•")} Email:        ${cyan(email)}`);
     console.log(`  ${dim("•")} Username:     ${cyan(username)}`);
     console.log(`  ${dim("•")} Display Name: ${cyan(displayName)}`);
-    console.log(`  ${dim("•")} Role:         ${cyan(instructorRole.name)}`);
+    console.log(`  ${dim("•")} Role:         ${cyan(targetRoleRecord.name)}`);
     console.log(`\n${green("✓ You can now log in at:")} ${bold(cyan(loginUrl))}\n`);
   } catch (error) {
     console.error(`\n${red("✘ Error:")}`, error instanceof Error ? error.message : error, "\n");
