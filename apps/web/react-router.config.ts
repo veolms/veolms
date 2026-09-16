@@ -3,6 +3,13 @@ import { createLearningPrerenderPaths } from "./src/learning/prerenderLearningPa
 
 const staticApplicationPages = [
   "/",
+  // Auth routes need to be prerendered as well. In the static production
+  // build, an unprerendered auth URL falls back to `/` and therefore omits the
+  // route-critical auth stylesheet from the document head.
+  "/login",
+  "/mfa-setup",
+  "/register",
+  "/auth/callback",
   "/courses",
   "/settings",
   "/settings/profile",
