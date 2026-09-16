@@ -292,6 +292,8 @@ function resolveWebAuthnOrigins(parsed: ParsedServerConfig): string[] {
   if (parsed.NODE_ENV !== "production") {
     origins.add("http://localhost:3000");
     origins.add("http://127.0.0.1:3000");
+    origins.add("http://localhost:4173");
+    origins.add("http://127.0.0.1:4173");
     origins.add("http://localhost:7000");
     origins.add("http://127.0.0.1:7000");
   }
