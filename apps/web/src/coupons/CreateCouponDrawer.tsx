@@ -13,8 +13,10 @@ import { ThemedDateTimePicker } from "../ThemedDateTimePicker";
 import { CouponTicketPreview } from "./CouponTicketPreview";
 import {
   isoToLocalDateTimeValue,
+  packCouponCopy,
   parseLocalDateTime,
   toLocalDateTimeValue,
+  unpackCouponCopy,
 } from "./couponHelpers";
 
 export interface CreateCouponDrawerProps {
@@ -76,11 +78,11 @@ export function CreateCouponDrawer({
 
   useEffect(() => {
     if (couponToEdit) {
+      const { title: unpackedTitle, description: unpackedDesc } =
+        unpackCouponCopy(couponToEdit.description);
       setCode(couponToEdit.code);
-      setTitle(
-        couponToEdit.description?.split(".")[0] || `${couponToEdit.code} Offer`,
-      );
-      setDescription(couponToEdit.description || "");
+      setTitle(unpackedTitle || `${couponToEdit.code} Offer`);
+      setDescription(unpackedDesc);
       setDiscountType(couponToEdit.discountType);
       setDiscountValue(couponToEdit.discountValue);
       setMaxDiscountAmount(
@@ -143,18 +145,13 @@ export function CreateCouponDrawer({
       return;
     }
 
-    if (discountValue <= 0) {
+    if (!discountValue || Number(discountValue) <= 0) {
       setErrorMessage("Discount value must be greater than 0.");
       return;
     }
 
-    if (discountType === "percentage" && discountValue > 100) {
+    if (discountType === "percentage" && Number(discountValue) > 100) {
       setErrorMessage("Percentage discount cannot exceed 100%.");
-      return;
-    }
-
-    if (!startsAt || !expiresAt) {
-      setErrorMessage("Start and expiry dates are required.");
       return;
     }
 
@@ -170,10 +167,12 @@ export function CreateCouponDrawer({
       return;
     }
 
+    const packedDescription = packCouponCopy(title, description);
+
     try {
       if (isEditMode && couponToEdit) {
         await onSubmitUpdate(couponToEdit.id, {
-          description: description.trim() || title.trim() || undefined,
+          description: packedDescription,
           discountType,
           discountValue: Number(discountValue),
           maxDiscountAmount: maxDiscountAmount ? Number(maxDiscountAmount) : null,
@@ -187,7 +186,7 @@ export function CreateCouponDrawer({
       } else {
         await onSubmitCreate({
           code: cleanCode,
-          description: description.trim() || title.trim() || undefined,
+          description: packedDescription,
           discountType,
           discountValue: Number(discountValue),
           maxDiscountAmount: maxDiscountAmount ? Number(maxDiscountAmount) : undefined,

@@ -120,6 +120,23 @@ export function couponMoneyToForm(coupon: Coupon) {
   };
 }
 
+export function packCouponCopy(title: string, description: string): string | undefined {
+  const nextTitle = title.trim();
+  const nextDescription = description.trim();
+  if (nextTitle && nextDescription) return `${nextTitle}. ${nextDescription}`;
+  return nextTitle || nextDescription || undefined;
+}
+
+export function unpackCouponCopy(raw?: string | null): { title: string; description: string } {
+  if (!raw?.trim()) return { title: "", description: "" };
+  const splitAt = raw.indexOf(". ");
+  if (splitAt === -1) return { title: raw, description: "" };
+  return {
+    title: raw.slice(0, splitAt),
+    description: raw.slice(splitAt + 2),
+  };
+}
+
 export function couponCampaignTitle(coupon: Coupon) {
   const description = coupon.description?.trim();
   if (!description) {

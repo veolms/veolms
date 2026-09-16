@@ -1,12 +1,24 @@
 import type { CourseRole } from "../courses/catalogue";
 
-const CREATOR_ROLES = new Set([
-  "creator",
-  "instructor",
+export const ADMIN_ROLES = new Set([
   "admin",
+  "administrator",
   "platform_admin",
   "platform administrator",
 ]);
+
+export const CREATOR_ROLES = new Set([
+  "creator",
+  "instructor",
+  ...ADMIN_ROLES,
+]);
+
+export function normalizeRoles(
+  roles: readonly string[] | null | undefined,
+): string[] {
+  if (!roles?.length) return [];
+  return roles.map((r) => r.trim().toLowerCase());
+}
 
 export function getWorkspaceRoleStorageKey(userId?: string | null): string {
   return userId ? `veolms-role-${userId}` : "veolms-role";
@@ -19,13 +31,8 @@ export function getAllowedWorkspaceRoles(
     return [];
   }
 
-  const normalized = new Set(roles.map((role) => role.toLowerCase()));
-  if (
-    normalized.has("admin") ||
-    normalized.has("administrator") ||
-    normalized.has("platform_admin") ||
-    normalized.has("platform administrator")
-  ) {
+  const normalized = new Set(normalizeRoles(roles));
+  if ([...normalized].some((role) => ADMIN_ROLES.has(role))) {
     return ["student", "creator"];
   }
 
@@ -71,15 +78,7 @@ export function hasAdminRole(
   if (!roles?.length) {
     return false;
   }
-  return roles.some((role) => {
-    const r = role.trim().toLowerCase();
-    return (
-      r === "admin" ||
-      r === "administrator" ||
-      r === "platform_admin" ||
-      r === "platform administrator"
-    );
-  });
+  return normalizeRoles(roles).some((role) => ADMIN_ROLES.has(role));
 }
 
 export function getRoleDisplayName(

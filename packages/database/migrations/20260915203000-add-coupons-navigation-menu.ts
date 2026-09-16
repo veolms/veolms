@@ -1,6 +1,6 @@
 import { sql, type Kysely } from "kysely";
 
-const couponMenuId = "00000000-0000-4000-8000-000000000801";
+const couponMenuId = "00000000-0000-4000-9000-000000000018";
 
 export async function up(db: Kysely<unknown>): Promise<void> {
   await sql`
@@ -24,9 +24,9 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     )
     select
       gen_random_uuid(), roles.id, ${couponMenuId}::uuid,
-      true, true, true, roles.name = 'admin'
+      true, true, true, (roles.role_key in ('admin', 'platform_admin') or roles.name in ('admin', 'Administrator', 'administrator'))
     from roles
-    where roles.name in ('admin', 'instructor')
+    where (roles.role_key in ('admin', 'instructor', 'platform_admin') or roles.name in ('admin', 'instructor', 'Administrator', 'administrator', 'Instructor'))
     on conflict (role_id, menu_id) do update set
       can_create = excluded.can_create,
       can_read = excluded.can_read,

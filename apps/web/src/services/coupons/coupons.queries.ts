@@ -12,7 +12,7 @@ export function useCouponsList(options?: {
   const courseId = options?.courseId ?? undefined;
 
   return useInfiniteQuery<CouponListResponse, ApiError>({
-    queryKey: couponKeys.list(courseId ? { courseId } : undefined),
+    queryKey: couponKeys.list({ courseId, limit }),
     queryFn: ({ pageParam }) =>
       couponsService.listCoupons({
         courseId,

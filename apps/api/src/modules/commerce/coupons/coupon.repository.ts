@@ -368,13 +368,23 @@ export async function getCouponOverallSummary(
     }
   }
 
-  const redemptionStats = await database
-    .selectFrom("coupon_redemptions")
-    .select([
-      sql<number>`count(*)::int`.as("total_redemptions"),
-      sql<number>`coalesce(sum(discount_amount), 0)::int`.as("total_discount_given"),
-    ])
-    .executeTakeFirst();
+  let totalRedemptions = 0;
+  let totalDiscountGiven = 0;
+
+  if (coupons.length > 0) {
+    const couponIds = coupons.map((c) => c.id);
+    const redemptionStats = await database
+      .selectFrom("coupon_redemptions")
+      .select([
+        sql<number>`count(*)::int`.as("total_redemptions"),
+        sql<number>`coalesce(sum(discount_amount), 0)::int`.as("total_discount_given"),
+      ])
+      .where("coupon_id", "in", couponIds)
+      .executeTakeFirst();
+
+    totalRedemptions = Number(redemptionStats?.total_redemptions ?? 0);
+    totalDiscountGiven = Number(redemptionStats?.total_discount_given ?? 0);
+  }
 
   return {
     totalCount,
@@ -382,7 +392,7 @@ export async function getCouponOverallSummary(
     scheduledCount,
     expiredCount,
     inactiveCount,
-    totalRedemptions: Number(redemptionStats?.total_redemptions ?? 0),
-    totalDiscountGiven: Number(redemptionStats?.total_discount_given ?? 0),
+    totalRedemptions,
+    totalDiscountGiven,
   };
 }

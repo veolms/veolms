@@ -22,10 +22,12 @@ import {
   couponMoneyToForm,
   inputClass,
   isoToLocalDateTimeValue,
+  packCouponCopy,
   parseLocalDateTime,
   surfaceClass,
   toCouponMoneyPayload,
   toLocalDateTimeValue,
+  unpackCouponCopy,
 } from "./couponHelpers";
 
 export interface CouponBuilderPageProps {
@@ -43,23 +45,6 @@ function generateRandomCode(): string {
   const prefixes = ["PROMO", "SPECIAL", "SUPER", "SAVE", "FLASH", "MEGA", "LEARN"];
   const prefix = prefixes[Math.floor(Math.random() * prefixes.length)] ?? "PROMO";
   return `${prefix}${Math.floor(10 + Math.random() * 89)}`;
-}
-
-function packCouponCopy(title: string, description: string) {
-  const nextTitle = title.trim();
-  const nextDescription = description.trim();
-  if (nextTitle && nextDescription) return `${nextTitle}. ${nextDescription}`;
-  return nextTitle || nextDescription || undefined;
-}
-
-function unpackCouponCopy(raw?: string | null) {
-  if (!raw?.trim()) return { title: "", description: "" };
-  const splitAt = raw.indexOf(". ");
-  if (splitAt === -1) return { title: raw, description: "" };
-  return {
-    title: raw.slice(0, splitAt),
-    description: raw.slice(splitAt + 2),
-  };
 }
 
 function isSafeReturnPath(path: string | null): path is string {
@@ -283,7 +268,7 @@ export function CouponBuilderPage({
           expiresAt: endDateObj.toISOString(),
           globalUsageLimit: hasUsageLimit ? Number(usageLimit) : null,
           perUserLimit: hasPerUserLimit ? Number(perUserLimit) : 1,
-          isActive: true,
+          isActive: existingCoupon.isActive,
           restrictedCourseIds:
             restrictedCourseIds.length > 0 ? restrictedCourseIds : null,
         };
