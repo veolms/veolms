@@ -142,6 +142,7 @@ export function CourseDescriptionEditor({
           <CommentFormattingToolbar
             editor={controller}
             formattingState={formattingState}
+            attachmentsEnabled={false}
           />
         )}
         <div

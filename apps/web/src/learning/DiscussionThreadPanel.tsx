@@ -74,6 +74,7 @@ import {
   type DiscussionAttachmentItem,
 } from "./discussion-attachments";
 import { CommentFormattingToolbar } from "./CommentFormattingToolbar";
+import { DiscussionAvatar } from "./DiscussionAvatar";
 import {
   DiscussionEditor,
   type DiscussionEditorController,
@@ -922,7 +923,7 @@ function ThreadSlide({
       id: Date.now(),
       name: currentUser?.name || "Ashi Singh",
       time: "Just now",
-      avatar: currentUser?.avatar || "/assets/sofia-avatar-160.webp",
+      avatar: currentUser?.avatar || "",
       text: draft.plainText.trim(),
       content: draft,
       likes: 0,
@@ -1224,11 +1225,7 @@ function ThreadRootEntry({
   return (
     <article className="mx-auto mb-1 max-w-4xl pt-3 pb-4">
       <div className="flex gap-3 sm:gap-3.5">
-        <img
-          src={entry.avatar}
-          alt=""
-          className="size-10 shrink-0 rounded-full object-cover sm:size-11"
-        />
+      <DiscussionAvatar src={entry.avatar} className="size-10 sm:size-11" />
         <div className="min-w-0 flex-1">
           <div className="relative flex items-start gap-2 pr-9">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
@@ -1479,10 +1476,9 @@ function ThreadReplyEntry({
       >
         <div className="min-h-0 overflow-hidden">
           <div className="flex gap-3.5">
-            <img
+            <DiscussionAvatar
               src={reply.avatar}
-              alt=""
-              className="size-9 shrink-0 rounded-full object-cover sm:size-10"
+              className="size-9 sm:size-10"
             />
             <div className="min-w-0 flex-1">
               <div className="relative flex items-start gap-2 pr-9">
@@ -1772,7 +1768,7 @@ function ThreadReplyComposer({
     setEditorController(controller);
   };
 
-  const composerAvatar = currentUser?.avatar || "/assets/sofia-avatar-160.webp";
+  const composerAvatar = currentUser?.avatar || "";
 
   return (
     <div
@@ -1812,10 +1808,9 @@ function ThreadReplyComposer({
         </p>
       )}
       <div className="flex min-h-14 min-w-0 items-center gap-1.5 overflow-hidden bg-[color-mix(in_srgb,var(--surface)_66%,transparent)] px-2.5 py-2 sm:gap-2 sm:px-3">
-        <img
+        <DiscussionAvatar
           src={composerAvatar}
-          alt=""
-          className="size-9 shrink-0 rounded-full object-cover sm:size-10"
+          className="size-9 sm:size-10"
         />
         {editorController && (
           <CommentFormattingToolbar

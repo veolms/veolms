@@ -5,6 +5,7 @@ import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/Pape
 import { useEffect, useRef, useState } from "react";
 import { CommentFormattingToolbar } from "./CommentFormattingToolbar";
 import { CommentPublishingOptions } from "./CommentPublishingOptions";
+import { DiscussionAvatar } from "./DiscussionAvatar";
 import {
   type DiscussionEntryKind,
   type DiscussionVisibility,
@@ -44,6 +45,7 @@ interface CommentComposerProps {
   courseId?: string;
   autoFocus?: boolean;
   presentation?: "inline" | "drawer";
+  avatar?: string | null;
 }
 
 export function CommentComposer({
@@ -66,6 +68,7 @@ export function CommentComposer({
   courseId,
   autoFocus = false,
   presentation = "inline",
+  avatar,
 }: CommentComposerProps) {
   const reviewHeadingRef = useRef<HTMLDivElement>(null);
   const [editorController, setEditorController] =
@@ -212,11 +215,7 @@ export function CommentComposer({
             data-comment-toolbar
             className="flex shrink-0 items-center gap-1.5 bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] px-2.5 py-2.5 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_8%,transparent)] sm:gap-2 sm:px-3"
           >
-            <img
-              src="/assets/sofia-avatar-160.webp"
-              alt=""
-              className="size-9 shrink-0 rounded-full object-cover sm:size-10"
-            />
+            <DiscussionAvatar src={avatar} className="size-9 sm:size-10" />
             {editorController && (
               <CommentFormattingToolbar
                 editor={editorController}

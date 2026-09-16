@@ -139,7 +139,7 @@ export function createThreadsService(
         id: row.userId,
         displayName: row.authorName || "Anonymous Learner",
         username: row.authorUsername || `user-${row.userId.slice(0, 8)}`,
-        avatarUrl: null,
+        avatarUrl: row.authorAvatarUrl,
         role: mapAuthorRole(row.authorRole),
       },
       kind: row.kind,

@@ -246,6 +246,10 @@ describe("LessonDescriptionEditor Integration Tests", () => {
     expect(
       screen.getByRole("button", { name: "Add or edit link" }),
     ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Attach file" })).toBeNull();
+    expect(
+      screen.queryByLabelText("Choose image, video, document, or code file"),
+    ).toBeNull();
   });
 
   it("9. preserves dirty tracking comparison between draft and baseline", () => {

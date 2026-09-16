@@ -45,6 +45,7 @@ import {
 import { optimisticEditCoordinator } from "../services/learning-interactions/optimistic-edit-coordinator";
 import { adaptLearningReplyToCommentReply } from "./learning-replies.adapter";
 import { useCurrentUser } from "../services/auth";
+import { DiscussionAvatar } from "./DiscussionAvatar";
 import {
   DiscussionAttachmentsList,
   type DiscussionAttachmentItem,
@@ -277,7 +278,7 @@ export function CommentCard({
         id: Date.now(),
         name: "Ashi Singh",
         time: "Just now",
-        avatar: "/assets/sofia-avatar-160.webp",
+        avatar: "",
         text,
         content: replyDraft,
         likes: 0,
@@ -449,10 +450,9 @@ export function CommentCard({
       >
         <div className="min-h-0 overflow-hidden">
           <div className="relative flex gap-3 sm:gap-3.5">
-            <img
+            <DiscussionAvatar
               src={comment.avatar}
-              alt=""
-              className="relative z-10 size-10 shrink-0 rounded-full object-cover sm:size-11"
+              className="relative z-10 size-10 sm:size-11"
             />
 
             <div className="min-w-0 flex-1">
@@ -952,10 +952,9 @@ function ReplyCard({
       >
         <div className="min-h-0 overflow-hidden">
           <div className="relative flex gap-3">
-            <img
+            <DiscussionAvatar
               src={reply.avatar}
-              alt=""
-              className="relative z-10 size-9 shrink-0 rounded-full object-cover sm:size-10"
+              className="relative z-10 size-9 sm:size-10"
             />
 
             <div className="min-w-0 flex-1">

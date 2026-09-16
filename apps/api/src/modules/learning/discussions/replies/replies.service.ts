@@ -123,7 +123,7 @@ export function createRepliesService({
         username:
           (row.authorUsername || row.authorEmail || "user").split("@")[0] ||
           "user",
-        avatarUrl: null,
+        avatarUrl: row.authorAvatarUrl,
         role: mapAuthorRole(row.authorRole),
       },
       content: row.content,

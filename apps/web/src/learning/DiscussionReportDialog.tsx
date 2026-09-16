@@ -1,4 +1,4 @@
-import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import type { ReportReason } from "@veolms/contracts";
 import React, { useEffect, useRef, useState } from "react";
@@ -164,7 +164,7 @@ export function DiscussionReportDialog({
       aria-labelledby="report-dialog-title"
       aria-describedby="report-dialog-description"
       data-testid="discussion-report-dialog"
-      className="fixed inset-0 z-150 m-auto w-[92vw] max-w-md rounded-2xl border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-(--surface) p-6 text-(--text) shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-xs"
+      className="fixed inset-0 z-150 m-auto w-[min(92vw,32rem)] rounded-3xl border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface)_96%,var(--canvas))] p-5 text-(--text) shadow-[0_24px_80px_color-mix(in_srgb,black_42%,transparent),0_0_0_1px_color-mix(in_srgb,var(--text)_5%,transparent)] backdrop:bg-black/65 backdrop:backdrop-blur-sm sm:p-6"
       onCancel={(event) => {
         event.preventDefault();
         if (!isSubmitting) onClose();
@@ -187,53 +187,56 @@ export function DiscussionReportDialog({
           <X size={18} weight="bold" />
         </button>
 
-        <div className="flex items-center gap-3">
-          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
-            <Flag size={20} weight="bold" aria-hidden="true" />
-          </div>
-          <div>
-            <h2 id="report-dialog-title" className="text-base font-semibold text-(--text)">
-              {title}
-            </h2>
-            <p id="report-dialog-description" className="text-xs text-(--text-secondary)">
-              {target.authorName
-                ? `Reporting ${targetLabel} by ${target.authorName}`
-                : `Help us understand the issue with this ${targetLabel}`}
-            </p>
-          </div>
+        <div className="min-w-0 pr-8 pt-0.5">
+          <h2 id="report-dialog-title" className="text-lg font-semibold tracking-[-0.01em] text-(--text)">
+            {title}
+          </h2>
+          <p id="report-dialog-description" className="mt-0.5 text-sm leading-5 text-(--text-secondary)">
+            {target.authorName
+              ? `Reporting ${targetLabel} by ${target.authorName}`
+              : `Help us understand the issue with this ${targetLabel}`}
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+        <form onSubmit={handleSubmit} className="mt-6 space-y-5">
           <div>
             <label
               htmlFor="report-reason-select"
-              className="block text-xs font-semibold text-(--text)"
+              className="block text-sm font-semibold text-(--text)"
             >
               Reason for reporting <span className="text-rose-500">*</span>
             </label>
-            <select
-              id="report-reason-select"
-              data-testid="report-reason-select"
-              value={reason}
-              disabled={isSubmitting}
-              onChange={(e) => setReason(e.target.value as ReportReason)}
-              className="mt-1.5 block w-full rounded-lg border border-[color-mix(in_srgb,var(--text)_18%,transparent)] bg-(--surface) px-3 py-2 text-sm text-(--text) transition-colors focus:border-(--accent) focus:outline-hidden disabled:opacity-60"
-            >
-              <option value="" disabled>
-                Select a reason…
-              </option>
-              {REPORT_REASONS.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
+            <div className="relative mt-2">
+              <select
+                id="report-reason-select"
+                data-testid="report-reason-select"
+                value={reason}
+                disabled={isSubmitting}
+                onChange={(e) => setReason(e.target.value as ReportReason)}
+                className="block h-11 w-full appearance-none rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3.5 pr-10 text-sm text-(--text) shadow-[inset_0_1px_2px_color-mix(in_srgb,black_8%,transparent)] transition-colors focus:border-(--accent) focus:outline-hidden focus:ring-2 focus:ring-(--accent)/20 disabled:opacity-60"
+              >
+                <option value="" disabled>
+                  Select a reason…
                 </option>
-              ))}
-            </select>
+                {REPORT_REASONS.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+              <CaretDown
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2 text-(--muted)"
+                size={16}
+                weight="bold"
+              />
+            </div>
           </div>
 
           <div>
             <label
               htmlFor="report-details-input"
-              className="block text-xs font-semibold text-(--text)"
+              className="block text-sm font-semibold text-(--text)"
             >
               Additional details (optional)
             </label>
@@ -246,7 +249,7 @@ export function DiscussionReportDialog({
               rows={3}
               placeholder="Provide any additional context that will help our moderators…"
               onChange={(e) => setDetails(e.target.value)}
-              className="mt-1.5 block w-full rounded-lg border border-[color-mix(in_srgb,var(--text)_18%,transparent)] bg-(--surface) px-3 py-2 text-sm text-(--text) placeholder:text-(--muted) transition-colors focus:border-(--accent) focus:outline-hidden disabled:opacity-60"
+              className="mt-2 block w-full resize-y rounded-xl border border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_58%,var(--surface))] px-3.5 py-3 text-sm leading-5 text-(--text) placeholder:text-(--muted) shadow-[inset_0_1px_2px_color-mix(in_srgb,black_8%,transparent)] transition-colors focus:border-(--accent) focus:outline-hidden focus:ring-2 focus:ring-(--accent)/20 disabled:opacity-60"
             />
             <p className="mt-1 text-right text-[11px] text-(--muted)">
               {details.length}/1000
@@ -263,13 +266,13 @@ export function DiscussionReportDialog({
             </p>
           )}
 
-          <div className="flex items-center justify-end gap-2.5 pt-2">
+          <div className="flex items-center justify-end gap-2.5 border-t border-[color-mix(in_srgb,var(--text)_9%,transparent)] pt-4">
             <button
               type="button"
               data-testid="report-cancel-button"
               disabled={isSubmitting}
               onClick={onClose}
-              className="inline-flex min-h-9 items-center justify-center rounded-lg px-4 text-xs font-semibold text-(--text-secondary) transition-colors hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) disabled:opacity-50"
+              className="inline-flex min-h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold text-(--text-secondary) transition-colors hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) disabled:opacity-50"
             >
               Cancel
             </button>
@@ -277,7 +280,7 @@ export function DiscussionReportDialog({
               type="submit"
               data-testid="report-submit-button"
               disabled={!reason || isSubmitting}
-              className="inline-flex min-h-9 items-center justify-center rounded-lg bg-rose-600 px-4 text-xs font-semibold text-white shadow-sm transition-all hover:bg-rose-700 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-10 items-center justify-center rounded-xl bg-rose-600 px-5 text-sm font-semibold text-white shadow-[0_6px_16px_color-mix(in_srgb,theme(colors.rose.600)_28%,transparent)] transition-all hover:bg-rose-700 hover:shadow-[0_8px_20px_color-mix(in_srgb,theme(colors.rose.600)_34%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? "Submitting…" : "Submit report"}
             </button>

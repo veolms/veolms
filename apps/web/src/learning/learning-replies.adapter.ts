@@ -25,7 +25,7 @@ export function adaptLearningReplyToCommentReply(
     creationStatus: isPendingClientEntity(reply) ? "pending" : "confirmed",
     name: reply.author.displayName || reply.author.username || "Learner",
     time: formatRelativeTime(reply.createdAt),
-    avatar: reply.author.avatarUrl || "/assets/sofia-avatar-160.webp",
+    avatar: reply.author.avatarUrl || "",
     text: reply.plainText || reply.content,
     content: contentDraft,
     likes: reply.likesCount ?? 0,

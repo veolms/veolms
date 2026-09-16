@@ -21,6 +21,7 @@ import { DISCUSSION_ATTACHMENTS_ENABLED } from "./discussion-editor/image-storag
 interface CommentFormattingToolbarProps {
   editor: DiscussionEditorController;
   formattingState: DiscussionFormattingState;
+  attachmentsEnabled?: boolean;
 }
 
 export function hasCommentToolbarOverflow(
@@ -33,6 +34,7 @@ export function hasCommentToolbarOverflow(
 export function CommentFormattingToolbar({
   editor,
   formattingState,
+  attachmentsEnabled = true,
 }: CommentFormattingToolbarProps) {
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const scrollportRef = useRef<HTMLDivElement>(null);
@@ -186,7 +188,7 @@ export function CommentFormattingToolbar({
         >
           <LinkSimple size={17} />
         </ToolbarButton>
-        {DISCUSSION_ATTACHMENTS_ENABLED && (
+        {attachmentsEnabled && DISCUSSION_ATTACHMENTS_ENABLED && (
           <ToolbarButton
             label="Attach file"
             onClick={() => attachmentInputRef.current?.click()}
@@ -232,7 +234,7 @@ export function CommentFormattingToolbar({
         />
       )}
 
-      {DISCUSSION_ATTACHMENTS_ENABLED && (
+      {attachmentsEnabled && DISCUSSION_ATTACHMENTS_ENABLED && (
         <input
           ref={attachmentInputRef}
           type="file"

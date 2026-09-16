@@ -153,6 +153,7 @@ describe("DiscussionAttachmentsList Component", () => {
 
     const img = screen.getByRole("img", { name: "diagram.png" });
     expect(img).toBeInTheDocument();
+    expect(img).toHaveClass("object-cover");
     expect(img).toHaveAttribute("src", "/api/v1/discussion-uploads/att-1.png");
     expect(img).toHaveAttribute("loading", "lazy");
     expect(img).toHaveAttribute("decoding", "async");

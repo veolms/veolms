@@ -30,6 +30,7 @@ export interface ReplyRowWithAuthor {
   updatedAt: Date;
   authorName: string | null;
   authorUsername: string | null;
+  authorAvatarUrl: string | null;
   authorEmail: string | null;
   authorRole: string | null;
   replyToUsername: string | null;
@@ -141,6 +142,7 @@ export function createRepliesRepository(): RepliesRepository {
           "r.updated_at as updatedAt",
           "u.display_name as authorName",
           "u.username as authorUsername",
+          "u.avatar_data_url as authorAvatarUrl",
           "u.email as authorEmail",
           authorRoleSql("r.user_id"),
           "ru.username as replyToUsername",
@@ -176,6 +178,7 @@ export function createRepliesRepository(): RepliesRepository {
           "r.updated_at as updatedAt",
           "u.display_name as authorName",
           "u.username as authorUsername",
+          "u.avatar_data_url as authorAvatarUrl",
           "u.email as authorEmail",
           authorRoleSql("r.user_id"),
           "ru.username as replyToUsername",

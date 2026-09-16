@@ -25,6 +25,7 @@ import { ToastNotification, type ToastMessage } from "../ToastNotification";
 import { CommentCard } from "./CommentCard";
 import type { Comment, CommentReply } from "./CommentCard";
 import { CommentComposer } from "./CommentComposer";
+import { DiscussionAvatar } from "./DiscussionAvatar";
 import {
   applyDiscussionFeed,
   DISCUSSION_FEED_SORT_OPTIONS,
@@ -100,7 +101,7 @@ import { getApplicationScrollElement } from "../shell/applicationScroll";
 
 const CURRENT_USER = {
   name: "Ashi Singh",
-  avatar: "/assets/sofia-avatar-160.webp",
+  avatar: "",
 };
 
 const EMPTY_MOBILE_COMPOSER_DRAFT = createEmptyDiscussionDraft();
@@ -1740,6 +1741,7 @@ function DiscussionInner({
         availableFilters={availableFilters}
         enabledKinds={enabledKinds}
         promptText={promptText}
+        authorAvatar={authorAvatar}
         onDraftChange={(value) => {
           if (editingEntry) {
             setEditingEntry((current) =>
@@ -1972,6 +1974,7 @@ interface ThreadSurfaceProps {
   availableFilters: readonly (readonly [DiscussionEntryFilter, string])[];
   enabledKinds: DiscussionEntryKind[];
   promptText: string;
+  authorAvatar?: string | null;
   attachments?: LocalComposerAttachment[];
   onAttachmentsChange?: (attachments: LocalComposerAttachment[]) => void;
   onDraftChange: (value: DiscussionDraft) => void;
@@ -2274,6 +2277,7 @@ function ThreadSurface({
   isAllDisabled,
   availableFilters,
   promptText,
+  authorAvatar,
   attachments,
   onAttachmentsChange,
   onDraftChange,
@@ -2613,6 +2617,7 @@ function ThreadSurface({
           {composerMode === "desktop" ? (
             <CommentComposer
               draft={draft}
+              avatar={authorAvatar}
               documentId={
                 editingEntryId === null
                   ? "discussion-new"
@@ -2640,6 +2645,7 @@ function ThreadSurface({
               draft={draft}
               attachmentCount={draftAttachmentCount}
               promptText={promptText}
+              avatar={authorAvatar}
               onOpen={() => setComposerMode("desktop")}
             />
           )}
@@ -2814,6 +2820,7 @@ function ThreadSurface({
           draft={draft}
           attachmentCount={draftAttachmentCount}
           promptText={promptText}
+          avatar={authorAvatar}
           mobileBottomNavigation={mobileBottomNavigation}
           scrollHidden={compactComposerScrollHidden}
           onOpen={openMobileComposer}
@@ -2874,6 +2881,7 @@ function ThreadSurface({
             </DrawerDescription>
             <CommentComposer
               draft={draft}
+              avatar={authorAvatar}
               documentId={
                 editingEntryId === null
                   ? "discussion-new"
@@ -2908,6 +2916,7 @@ interface CompactComposerProps {
   draft: DiscussionDraft;
   attachmentCount: number;
   promptText?: string;
+  avatar?: string | null;
   disabled?: boolean;
   onOpen: () => void;
 }
@@ -2921,6 +2930,7 @@ interface MobileCompactComposerPortalProps {
   draft: DiscussionDraft;
   attachmentCount: number;
   promptText?: string;
+  avatar?: string | null;
   mobileBottomNavigation: boolean;
   scrollHidden: boolean;
   onOpen: () => void;
@@ -2930,6 +2940,7 @@ function MobileCompactComposerPortal({
   draft,
   attachmentCount,
   promptText,
+  avatar,
   mobileBottomNavigation,
   scrollHidden,
   onOpen,
@@ -2965,6 +2976,7 @@ function MobileCompactComposerPortal({
           draft={draft}
           attachmentCount={attachmentCount}
           promptText={promptText}
+          avatar={avatar}
           onOpen={onOpen}
         />
       </div>
@@ -2986,6 +2998,7 @@ export function PrerenderedMobileCommentComposer() {
         <CompactComposer
           draft={EMPTY_MOBILE_COMPOSER_DRAFT}
           attachmentCount={0}
+          avatar={null}
           disabled
           onOpen={() => undefined}
         />
@@ -2998,6 +3011,7 @@ function CompactComposer({
   draft,
   attachmentCount,
   promptText = "Write something…",
+  avatar,
   disabled = false,
   onOpen,
 }: CompactComposerProps) {
@@ -3025,10 +3039,9 @@ function CompactComposer({
       }}
       className={`flex w-full cursor-pointer items-center gap-2 p-1.5 text-left ${COMPACT_COMPOSER_SURFACE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)${disabled ? " pointer-events-none opacity-60" : ""}`}
     >
-      <img
-        src={CURRENT_USER.avatar}
-        alt=""
-        className="pointer-events-none size-9 shrink-0 rounded-full object-cover"
+      <DiscussionAvatar
+        src={avatar}
+        className="pointer-events-none size-9"
       />
       <span className="learning-discussion__composer-prompt min-w-0 flex-1 truncate px-2 py-1.5 text-(--muted)">
         {preview || (attachmentCount > 0 ? attachmentPreview : promptText)}

@@ -117,7 +117,7 @@ export function DiscussionAttachmentsList({
                         src={visualUrl}
                         alt={attachment.fileName}
                         loading="lazy"
-                        className={`relative block h-full w-full object-contain transition-opacity duration-150 ${
+                        className={`relative block h-full w-full object-cover transition-opacity duration-150 ${
                           isImageLoaded ? "opacity-100" : "opacity-0"
                         }`}
                         decoding="async"

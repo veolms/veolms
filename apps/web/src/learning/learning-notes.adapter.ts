@@ -48,10 +48,10 @@ export function adaptLearningNoteToComment(
 
   // Real note author avatar if DTO provides one, else current user avatar if own, else safe fallback
   const avatar =
-    (note as { authorAvatarUrl?: string }).authorAvatarUrl ||
+    note.authorAvatarUrl ||
     (isOwn && currentUserAvatar
       ? currentUserAvatar
-      : "/assets/sofia-avatar-160.webp");
+      : "");
 
   return {
     id: getClientEntityId(note),

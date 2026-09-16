@@ -50,7 +50,7 @@ export type LearningNoteEntity = Omit<LearningNote, "id" | "attachments"> &
     /** Compatibility value for existing view-model consumers. */
     id: string;
     localSequence: number;
-    authorAvatarUrl?: string;
+    authorAvatarUrl?: string | null;
     attachments: InteractionAttachment[];
   };
 

@@ -130,6 +130,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
       userId: row.userId,
       authorName: row.authorName ?? null,
       authorUsername: row.authorUsername ?? null,
+      authorAvatarUrl: row.authorAvatarUrl ?? null,
       courseId: row.courseId,
       courseTitle: row.courseTitle,
       sectionId: row.sectionId ?? undefined,

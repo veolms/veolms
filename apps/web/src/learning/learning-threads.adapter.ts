@@ -46,7 +46,7 @@ export function adaptLearningThreadToComment(
     creationStatus: isPendingClientEntity(thread) ? "pending" : "confirmed",
     name: thread.author.displayName || thread.author.username || "Learner",
     time: formatRelativeTime(thread.createdAt),
-    avatar: thread.author.avatarUrl || "/assets/sofia-avatar-160.webp",
+    avatar: thread.author.avatarUrl || "",
     text: thread.plainText || thread.content,
     content: contentDraft,
     visibility: thread.visibility,
