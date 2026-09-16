@@ -14,8 +14,6 @@ import {
 } from "../services/auth";
 import { productName } from "../routing/routeDescriptors";
 import { authStore } from "../store/auth.store";
-import "../auth/auth.css";
-import "../auth/mfa-setup.css";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const url = new URL(request.url);
