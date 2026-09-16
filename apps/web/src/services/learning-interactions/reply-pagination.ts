@@ -9,14 +9,53 @@ import {
 
 type RepliesInfiniteData = InfiniteData<LearningRepliesCacheResponse>;
 
-function getReplySequence(reply: LearningReplyCacheItem): number {
-  return "localSequence" in reply
-    ? reply.localSequence
-    : Number.MAX_SAFE_INTEGER;
-}
-
 function isLocallyCreatedReply(reply: LearningReplyCacheItem): boolean {
   return "creationStatus" in reply && "localSequence" in reply;
+}
+
+function isPendingLocalReply(reply: LearningReplyCacheItem): boolean {
+  return "creationStatus" in reply && reply.creationStatus === "pending";
+}
+
+function getReplySequence(reply: LearningReplyCacheItem): number {
+  return "localSequence" in reply ? reply.localSequence : 0;
+}
+
+function getReplyCreatedAt(reply: LearningReplyCacheItem): number {
+  const timestamp = Date.parse(reply.createdAt);
+  return Number.isNaN(timestamp) ? Number.MIN_SAFE_INTEGER : timestamp;
+}
+
+function getReplyStableId(reply: LearningReplyCacheItem): string {
+  return getServerEntityId(reply) ?? getClientEntityId(reply);
+}
+
+function compareNewestFirst(
+  left: LearningReplyCacheItem,
+  right: LearningReplyCacheItem,
+): number {
+  const leftIsAccepted = Boolean(left.isAccepted);
+  const rightIsAccepted = Boolean(right.isAccepted);
+  if (leftIsAccepted !== rightIsAccepted) {
+    return leftIsAccepted ? -1 : 1;
+  }
+
+  const leftIsLocal = isPendingLocalReply(left);
+  const rightIsLocal = isPendingLocalReply(right);
+  if (leftIsLocal !== rightIsLocal) {
+    return leftIsLocal ? -1 : 1;
+  }
+
+  if (leftIsLocal && rightIsLocal) {
+    const sequenceDifference = getReplySequence(right) - getReplySequence(left);
+    if (sequenceDifference !== 0) return sequenceDifference;
+  } else {
+    const createdAtDifference =
+      getReplyCreatedAt(right) - getReplyCreatedAt(left);
+    if (createdAtDifference !== 0) return createdAtDifference;
+  }
+
+  return getReplyStableId(right).localeCompare(getReplyStableId(left));
 }
 
 export function flattenReplyPages(
@@ -41,7 +80,12 @@ export function flattenReplyPages(
       );
       if (existingIndex >= 0) {
         const existing = dedupedReplies[existingIndex]!;
-        if (isLocallyCreatedReply(reply) && !isLocallyCreatedReply(existing)) {
+        const replyHasServerId = getServerEntityId(reply) !== undefined;
+        const existingHasServerId = getServerEntityId(existing) !== undefined;
+        if (
+          (replyHasServerId && !existingHasServerId) ||
+          (isLocallyCreatedReply(reply) && !isLocallyCreatedReply(existing))
+        ) {
           dedupedReplies[existingIndex] = reply;
         }
         continue;
@@ -50,14 +94,7 @@ export function flattenReplyPages(
     }
   }
 
-  const serverReplies = dedupedReplies.filter(
-    (reply) => !isLocallyCreatedReply(reply),
-  );
-  const localReplies = dedupedReplies.filter(isLocallyCreatedReply);
-  localReplies.sort(
-    (left, right) => getReplySequence(left) - getReplySequence(right),
-  );
-  return [...serverReplies, ...localReplies];
+  return [...dedupedReplies].sort(compareNewestFirst);
 }
 
 export function getReplyTotalCount(

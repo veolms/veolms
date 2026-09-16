@@ -265,9 +265,9 @@ describe("learning interaction cursor pagination", () => {
     ).toEqual(learningInteractionKeys.threadReplies("thread-1", { cursor: "b" }));
   });
 
-  it("flattens reply pages in server order, dedupes identities, and keeps local replies last", () => {
+  it("flattens replies newest-first, dedupes identities, and keeps accepted answers first", () => {
     const pendingReply = {
-      ...reply("client-reply"),
+      ...reply("client-reply", "2026-09-15T10:05:00.000Z"),
       id: "client-reply",
       clientId: "client-reply",
       serverId: undefined,
@@ -277,12 +277,15 @@ describe("learning interaction cursor pagination", () => {
     const data = {
       pages: [
         {
-          replies: [reply("reply-1"), pendingReply],
+          replies: [reply("reply-1", "2026-09-15T10:00:00.000Z"), pendingReply],
           nextCursor: "cursor-2",
           totalCount: 3,
         },
         {
-          replies: [reply("reply-2"), { ...reply("reply-1"), clientId: "old-client" }],
+          replies: [
+            reply("reply-2", "2026-09-15T10:02:00.000Z"),
+            { ...reply("reply-1"), clientId: "old-client" },
+          ],
           nextCursor: null,
           totalCount: 3,
         },
@@ -291,9 +294,148 @@ describe("learning interaction cursor pagination", () => {
     };
 
     expect(flattenReplyPages(data, "thread-1").map((item) => item.id)).toEqual([
-      "reply-1",
-      "reply-2",
       "client-reply",
+      "reply-2",
+      "reply-1",
+    ]);
+  });
+
+  it("places rapid optimistic replies newest-first above normal replies", () => {
+    const optimisticReplies = [1, 2, 3, 4].map((localSequence) => ({
+      ...reply(`client-reply-${localSequence}`),
+      id: `client-reply-${localSequence}`,
+      clientId: `client-reply-${localSequence}`,
+      serverId: undefined,
+      creationStatus: "pending" as const,
+      localSequence,
+    }));
+
+    const data = {
+      pages: [
+        {
+          replies: [
+            reply("server-old", "2026-09-15T09:00:00.000Z"),
+            ...optimisticReplies,
+          ],
+          nextCursor: "cursor-2",
+          totalCount: 5,
+        },
+        {
+          replies: [reply("server-new", "2026-09-15T10:00:00.000Z")],
+          nextCursor: null,
+          totalCount: 5,
+        },
+      ],
+      pageParams: [null, "cursor-2"],
+    };
+
+    expect(flattenReplyPages(data, "thread-1").map((item) => item.id)).toEqual([
+      "client-reply-4",
+      "client-reply-3",
+      "client-reply-2",
+      "client-reply-1",
+      "server-new",
+      "server-old",
+    ]);
+  });
+
+  it("keeps an accepted answer first while sorting normal replies newest-first", () => {
+    const acceptedReply = {
+      ...reply("accepted", "2026-09-15T08:00:00.000Z"),
+      isAccepted: true,
+    };
+    const optimisticReply = {
+      ...reply("client-reply", "2026-09-15T10:00:00.000Z"),
+      id: "client-reply",
+      clientId: "client-reply",
+      serverId: undefined,
+      creationStatus: "pending" as const,
+      localSequence: 1,
+    };
+
+    expect(
+      flattenReplyPages(
+        {
+          replies: [
+            acceptedReply,
+            reply("normal-old", "2026-09-15T09:00:00.000Z"),
+            optimisticReply,
+            reply("normal-new", "2026-09-15T09:30:00.000Z"),
+          ],
+          nextCursor: null,
+          totalCount: 4,
+        },
+        "thread-1",
+      ).map((item) => item.id),
+    ).toEqual(["accepted", "client-reply", "normal-new", "normal-old"]);
+  });
+
+  it("keeps reconciled replies in order without duplicating the server entity", () => {
+    const pendingReply = {
+      ...reply("client-reply", "2026-09-15T10:00:00.000Z"),
+      id: "client-reply",
+      clientId: "client-reply",
+      serverId: undefined,
+      creationStatus: "pending" as const,
+      localSequence: 2,
+    };
+    const reconciledReply = {
+      ...reply("server-reply", "2026-09-15T10:00:00.000Z"),
+      id: "server-reply",
+      clientId: "client-reply",
+      serverId: "server-reply",
+      creationStatus: "confirmed" as const,
+      localSequence: 2,
+    };
+
+    const replies = flattenReplyPages(
+      {
+        pages: [
+          {
+            replies: [
+              pendingReply,
+              reply("server-old", "2026-09-15T09:00:00.000Z"),
+            ],
+            nextCursor: "cursor-2",
+            totalCount: 2,
+          },
+          {
+            replies: [reconciledReply],
+            nextCursor: null,
+            totalCount: 2,
+          },
+        ],
+        pageParams: [null, "cursor-2"],
+      },
+      "thread-1",
+    );
+
+    expect(replies.map((item) => item.id)).toEqual([
+      "server-reply",
+      "server-old",
+    ]);
+    expect(replies[0]).toMatchObject({
+      clientId: "client-reply",
+      serverId: "server-reply",
+      creationStatus: "confirmed",
+    });
+  });
+
+  it("uses a deterministic stable-id tie-breaker for equal timestamps", () => {
+    const data = {
+      replies: [
+        reply("reply-a", "2026-09-15T10:00:00.000Z"),
+        reply("reply-c", "2026-09-15T10:00:00.000Z"),
+        reply("reply-b", "2026-09-15T10:00:00.000Z"),
+      ],
+      nextCursor: null,
+      totalCount: 3,
+    };
+
+    expect(flattenReplyPages(data, "thread-1").map((item) => item.id)).toEqual([
+      "reply-c",
+      "reply-b",
+      "reply-a",
     ]);
   });
 
