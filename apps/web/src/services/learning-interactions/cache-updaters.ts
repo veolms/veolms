@@ -12,7 +12,7 @@ import {
   type LearningNotesCacheResponse,
   type LearningRepliesCacheResponse,
 } from "./interaction-entities";
-import { mapPaginatedCache } from "./paginated-cache";
+import { isInfiniteCacheData, mapPaginatedCache } from "./paginated-cache";
 
 type ThreadListCache =
   | LearningThreadsListResponse
@@ -20,6 +20,9 @@ type ThreadListCache =
 type NoteListCache =
   | LearningNotesCacheResponse
   | import("@tanstack/react-query").InfiniteData<LearningNotesCacheResponse>;
+type ReplyListCache =
+  | LearningRepliesCacheResponse
+  | import("@tanstack/react-query").InfiniteData<LearningRepliesCacheResponse>;
 
 function setThreadQueriesData(
   queryClient: QueryClient,
@@ -183,31 +186,37 @@ export function updateReplyLikeInCache(
   replyId: string,
   desiredLiked: boolean,
 ): void {
-  queryClient.setQueriesData<LearningRepliesCacheResponse>(
+  queryClient.setQueriesData<ReplyListCache>(
     { queryKey: learningInteractionKeys.threadRepliesRoot(threadId) },
     (old) => {
-      if (!old?.replies) return old;
-      let hasChange = false;
-      const nextReplies = old.replies.map((reply) => {
-        if (
-          getClientEntityId(reply) !== replyId &&
-          getServerEntityId(reply) !== replyId
-        )
-          return reply;
-        const currentLiked = Boolean(reply.isLiked);
-        if (currentLiked === desiredLiked) return reply;
-        hasChange = true;
-        return {
-          ...reply,
-          isLiked: desiredLiked,
-          likesCount: calculateNextLikesCount(
-            reply.likesCount ?? 0,
-            reply.isLiked,
-            desiredLiked,
-          ),
-        };
-      });
-      return hasChange ? { ...old, replies: nextReplies } : old;
+      const updatePage = (page: LearningRepliesCacheResponse) => {
+        let hasChange = false;
+        const nextReplies = page.replies.map((reply) => {
+          if (
+            getClientEntityId(reply) !== replyId &&
+            getServerEntityId(reply) !== replyId
+          )
+            return reply;
+          const currentLiked = Boolean(reply.isLiked);
+          if (currentLiked === desiredLiked) return reply;
+          hasChange = true;
+          return {
+            ...reply,
+            isLiked: desiredLiked,
+            likesCount: calculateNextLikesCount(
+              reply.likesCount ?? 0,
+              reply.isLiked,
+              desiredLiked,
+            ),
+          };
+        });
+        return hasChange ? { ...page, replies: nextReplies } : page;
+      };
+      return isInfiniteCacheData<LearningRepliesCacheResponse>(old)
+        ? mapPaginatedCache<LearningRepliesCacheResponse>(old, updatePage) ?? old
+        : old
+          ? updatePage(old)
+          : old;
     },
   );
 }

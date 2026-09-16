@@ -107,7 +107,7 @@ describe("Learning Space Optimistic Likes Integration", () => {
       kind: "all",
       status: "all",
       sort: "latest",
-      limit: 100,
+      limit: 20,
     });
 
     const thread: LearningThread = {
@@ -246,7 +246,7 @@ describe("Learning Space Optimistic Likes Integration", () => {
     // Instant optimistic update in cache
     await waitFor(() => {
       expect(replyLikeBtn).toHaveAttribute("aria-pressed", "true");
-      expect(screen.getByText("1")).toBeInTheDocument();
+      expect(replyLikeBtn).toHaveTextContent("1");
     });
 
     expect(invalidateSpy).not.toHaveBeenCalledWith(
@@ -258,7 +258,7 @@ describe("Learning Space Optimistic Likes Integration", () => {
     const noteKey = learningInteractionKeys.notes({
       courseId: "course-1",
       lessonId: "lesson-1",
-      limit: 50,
+      limit: 20,
     });
 
     const note: LearningNote = {

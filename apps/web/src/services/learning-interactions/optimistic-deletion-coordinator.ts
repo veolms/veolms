@@ -12,7 +12,7 @@ import {
 } from "./interaction-entities";
 import { learningInteractionKeys } from "./learning-interactions.keys";
 import { optimisticEditCoordinator } from "./optimistic-edit-coordinator";
-import { mapPaginatedCache } from "./paginated-cache";
+import { isInfiniteCacheData, mapPaginatedCache } from "./paginated-cache";
 
 export const UNDO_DELETE_TIMEOUT_MS = 10_000;
 
@@ -305,22 +305,40 @@ export class OptimisticDeletionCoordinator {
     }
 
     if (record.kind === "reply") {
-      record.queryClient.setQueriesData<LearningRepliesCacheResponse>(
+      record.queryClient.setQueriesData<
+        | LearningRepliesCacheResponse
+        | import("@tanstack/react-query").InfiniteData<LearningRepliesCacheResponse>
+      >(
         { queryKey: [...learningInteractionKeys.all, "replies"] },
         (old) => {
           if (!old) return old;
-          const replies = withRemovedItem(old.replies, (reply) =>
-            matchesEntity(reply, record),
-          );
-          if (!replies) return old;
-          return {
-            ...old,
-            replies,
-            totalCount:
-              old.totalCount === undefined
-                ? old.totalCount
-                : Math.max(0, old.totalCount - 1),
+          const removePage = (
+            page: LearningRepliesCacheResponse,
+            decrementTotalCount: boolean,
+          ) => {
+            const replies = withRemovedItem(page.replies, (reply) =>
+              matchesEntity(reply, record),
+            );
+            if (!replies) return page;
+            return {
+              ...page,
+              replies,
+              totalCount:
+                !decrementTotalCount || page.totalCount === undefined
+                  ? page.totalCount
+                  : Math.max(0, page.totalCount - 1),
+            };
           };
+          if (isInfiniteCacheData<LearningRepliesCacheResponse>(old)) {
+            let changed = false;
+            const pages = old.pages.map((page, pageIndex) => {
+              const next = removePage(page, pageIndex === 0);
+              changed ||= next !== page;
+              return next;
+            });
+            return changed ? { ...old, pages } : old;
+          }
+          return removePage(old, true);
         },
       );
       return;

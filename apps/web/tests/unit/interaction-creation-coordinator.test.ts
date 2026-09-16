@@ -7,6 +7,7 @@ import { authStore } from "../../src/store/auth.store";
 import { interactionCreationCoordinator } from "../../src/services/learning-interactions/interaction-creation-coordinator";
 import { desiredStateCoordinator } from "../../src/services/learning-interactions/desired-state-coordinator";
 import {
+  flattenReplyPages,
   useThreadDetails,
   useThreadReplies,
 } from "../../src/services/learning-interactions/learning-interactions.queries";
@@ -1242,9 +1243,12 @@ describe("Phase 3A optimistic thread creation", () => {
         resolveCreate(serverReply);
         await waitFor(() =>
           expect(
-            queryClient.getQueryData<LearningRepliesCacheResponse>(
-              learningInteractionKeys.threadReplies(parentId, undefined),
-            )?.replies[0],
+            flattenReplyPages(
+              queryClient.getQueryData<LearningRepliesCacheResponse>(
+                learningInteractionKeys.threadReplies(parentId, undefined),
+              ),
+              parentId,
+            )[0],
           ).toMatchObject({
             clientId: record.clientId,
             serverId: serverReply.id,
@@ -1264,9 +1268,12 @@ describe("Phase 3A optimistic thread creation", () => {
 
       if (race === "GET-first") {
         expect(
-          queryClient.getQueryData<LearningRepliesCacheResponse>(
-            learningInteractionKeys.threadReplies(parentId, undefined),
-          )?.replies[0],
+          flattenReplyPages(
+            queryClient.getQueryData<LearningRepliesCacheResponse>(
+              learningInteractionKeys.threadReplies(parentId, undefined),
+            ),
+            parentId,
+          )[0],
         ).toMatchObject({
           clientId: record.clientId,
           serverId: undefined,
@@ -1276,10 +1283,12 @@ describe("Phase 3A optimistic thread creation", () => {
       }
 
       await waitFor(() => {
-        const replies =
+        const replies = flattenReplyPages(
           queryClient.getQueryData<LearningRepliesCacheResponse>(
             learningInteractionKeys.threadReplies(parentId, undefined),
-          )?.replies ?? [];
+          ),
+          parentId,
+        );
         expect(replies).toHaveLength(1);
         expect(replies[0]).toMatchObject({
           clientId: record.clientId,

@@ -8,8 +8,8 @@ export const learningInteractionKeys = {
     [...learningInteractionKeys.all, "thread", threadId] as const,
   threadRepliesRoot: (threadId: string) =>
     [...learningInteractionKeys.all, "replies", threadId] as const,
-  threadReplies: (threadId: string, query?: Record<string, unknown>) =>
-    [...learningInteractionKeys.threadRepliesRoot(threadId), query] as const,
+  threadReplies: (threadId: string, _query?: Record<string, unknown>) =>
+    [...learningInteractionKeys.threadRepliesRoot(threadId)] as const,
   notesRoot: () => [...learningInteractionKeys.all, "notes"] as const,
   notes: (filters?: Record<string, unknown>) =>
     [...learningInteractionKeys.notesRoot(), "infinite", filters] as const,

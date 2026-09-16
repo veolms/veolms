@@ -62,6 +62,10 @@ import {
   getClientEntityId,
   getServerEntityId,
 } from "../services/learning-interactions/interaction-entities";
+import {
+  flattenReplyPages,
+  getReplyTotalCount,
+} from "../services/learning-interactions/reply-pagination";
 import { adaptLearningReplyToCommentReply } from "./learning-replies.adapter";
 import { UndoDeleteButton } from "./useUndoableDeletion";
 import {
@@ -821,9 +825,56 @@ function ThreadSlide({
     isLoading: isRepliesLoading,
     isError: isRepliesError,
     refetch: refetchReplies,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
   } = useThreadReplies(replyParentId, undefined, {
     enabled: isBackend && active,
   });
+  const replyScrollportRef = useRef<HTMLDivElement>(null);
+  const replyLoadMoreRef = useRef<HTMLDivElement>(null);
+  const fetchingNextPageRef = useRef(false);
+
+  useEffect(() => {
+    const root = replyScrollportRef.current;
+    const sentinel = replyLoadMoreRef.current;
+    if (
+      !active ||
+      !isBackend ||
+      !hasNextPage ||
+      isFetchingNextPage ||
+      isFetchNextPageError ||
+      !root ||
+      !sentinel ||
+      typeof IntersectionObserver === "undefined"
+    ) {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries.some((entry) => entry.isIntersecting) &&
+          !fetchingNextPageRef.current
+        ) {
+          fetchingNextPageRef.current = true;
+          void fetchNextPage().finally(() => {
+            fetchingNextPageRef.current = false;
+          });
+        }
+      },
+      { root, rootMargin: "300px 0px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [
+    active,
+    fetchNextPage,
+    hasNextPage,
+    isBackend,
+    isFetchNextPageError,
+    isFetchingNextPage,
+  ]);
 
   const createReplyMutation = useCreateReply(threadId);
   const updateReplyMutation = useUpdateReply(threadId);
@@ -833,10 +884,10 @@ function ThreadSlide({
     if (!isBackendMode) {
       return entry.thread ?? [];
     }
-    return (repliesData?.replies ?? []).map((reply) =>
+    return flattenReplyPages(repliesData, replyParentId ?? "").map((reply) =>
       adaptLearningReplyToCommentReply(reply, currentUserId),
     );
-  }, [isBackendMode, entry.thread, repliesData?.replies, currentUserId]);
+  }, [isBackendMode, entry.thread, repliesData, replyParentId, currentUserId]);
 
   const handleAddReply = async (
     draft: DiscussionDraft,
@@ -943,7 +994,7 @@ function ThreadSlide({
           serverId: serverReplyId,
           parentClientId: clientId,
           parentServerId: serverId,
-          parentRepliesCount: repliesData?.totalCount ?? entry.replies,
+          parentRepliesCount: getReplyTotalCount(repliesData) ?? entry.replies,
           queryClient,
           commit: () => deleteReplyMutation.mutateAsync(serverReplyId),
           onFailure: () => onReplyDeleteError?.(),
@@ -993,7 +1044,10 @@ function ThreadSlide({
       inert={active ? undefined : true}
       className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden px-4 pb-4"
     >
-      <div className="learning-comment-formatting-scrollport min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
+      <div
+        ref={replyScrollportRef}
+        className="learning-comment-formatting-scrollport min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain"
+      >
         <ThreadRootEntry
           entry={entry}
           isBackendMode={isBackendMode}
@@ -1015,7 +1069,7 @@ function ThreadSlide({
         />
 
         <div className="mx-auto max-w-4xl">
-          {!active ? null : isBackend && isRepliesLoading ? (
+          {!active ? null : isBackend && isRepliesLoading && !repliesData ? (
             <div
               className="py-12 text-center"
               data-testid="learning-replies-loading"
@@ -1025,7 +1079,7 @@ function ThreadSlide({
                 Loading replies…
               </p>
             </div>
-          ) : isBackend && isRepliesError ? (
+          ) : isBackend && isRepliesError && !repliesData ? (
             <div
               className="py-12 text-center"
               data-testid="learning-replies-error"
@@ -1083,6 +1137,23 @@ function ThreadSlide({
               <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-(--muted)">
                 Be the first to reply to {entry.name}.
               </p>
+            </div>
+          )}
+          {isBackend && hasNextPage && (
+            <div ref={replyLoadMoreRef} className="flex justify-center py-4">
+              {isFetchNextPageError ? (
+                <button
+                  type="button"
+                  onClick={() => void fetchNextPage()}
+                  className="inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+                >
+                  Retry loading replies
+                </button>
+              ) : isFetchingNextPage ? (
+                <p className="text-xs font-medium text-(--muted)">
+                  Loading more replies…
+                </p>
+              ) : null}
             </div>
           )}
         </div>

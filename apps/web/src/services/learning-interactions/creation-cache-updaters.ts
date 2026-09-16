@@ -1,4 +1,4 @@
-import type { QueryClient } from "@tanstack/react-query";
+import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import type {
   LearningNote,
   LearningReply,
@@ -36,6 +36,9 @@ type ThreadListCache =
 type NoteListCache =
   | LearningNotesCacheResponse
   | import("@tanstack/react-query").InfiniteData<LearningNotesCacheResponse>;
+type ReplyListCache =
+  | LearningRepliesCacheResponse
+  | InfiniteData<LearningRepliesCacheResponse>;
 
 export interface LessonThreadCacheContext {
   courseId: string;
@@ -57,6 +60,18 @@ const lessonThreadQueryPrefix = (context: LessonThreadCacheContext) =>
 
 const replyQueryPrefix = (parentId: string) =>
   learningInteractionKeys.threadRepliesRoot(parentId);
+
+function hasReplyQueryObserver(
+  queryClient: QueryClient,
+  parentId: string,
+): boolean {
+  return Boolean(
+    queryClient
+      .getQueryCache()
+      .find({ queryKey: replyQueryPrefix(parentId) })
+      ?.getObserversCount(),
+  );
+}
 
 const noteQueryPrefix = () => learningInteractionKeys.notesRoot();
 
@@ -325,33 +340,70 @@ function getReplyServerId(reply: LearningReplyCacheItem): string | undefined {
   return getServerEntityId(reply);
 }
 
-function getReplySequence(reply: LearningReplyCacheItem): number {
-  return "localSequence" in reply ? reply.localSequence : Number.MAX_SAFE_INTEGER;
-}
-
-function sortReplies(replies: LearningReplyCacheItem[]): LearningReplyCacheItem[] {
-  return [...replies].sort((left, right) => {
-    return getReplySequence(left) - getReplySequence(right);
-  });
-}
-
 function setReplyCaches(
   queryClient: QueryClient,
   parentId: string,
-  updater: (old: LearningRepliesCacheResponse | undefined) =>
-    | LearningRepliesCacheResponse
-    | undefined,
+  updater: (
+    old: LearningRepliesCacheResponse,
+    pageIndex: number,
+    pageCount: number,
+  ) => LearningRepliesCacheResponse,
 ): boolean {
   let changedExistingCache = false;
-  queryClient.setQueriesData<LearningRepliesCacheResponse>(
+  queryClient.setQueriesData<ReplyListCache>(
     { queryKey: replyQueryPrefix(parentId) },
     (old) => {
-      const next = updater(old);
+      if (!old) return old;
+      if (isInfiniteCacheData<LearningRepliesCacheResponse>(old)) {
+        let changed = false;
+        const pageCount = old.pages.length;
+        const pages = old.pages.map((page, pageIndex) => {
+          const next = updater(page, pageIndex, pageCount);
+          changed ||= next !== page;
+          return next;
+        });
+        if (!changed) return old;
+        changedExistingCache = true;
+        return { ...old, pages };
+      }
+      const next = updater(old, 0, 1);
       if (next !== old) changedExistingCache = true;
       return next;
     },
   );
   return changedExistingCache;
+}
+
+function adjustReplyTotalCountInCaches(
+  queryClient: QueryClient,
+  parentId: string,
+  delta: number,
+): void {
+  queryClient.setQueriesData<ReplyListCache>(
+    { queryKey: replyQueryPrefix(parentId) },
+    (old) => {
+      if (!old) return old;
+      if (isInfiniteCacheData<LearningRepliesCacheResponse>(old)) {
+        const firstPage = old.pages[0];
+        if (!firstPage || firstPage.totalCount === undefined) return old;
+        return {
+          ...old,
+          pages: [
+            {
+              ...firstPage,
+              totalCount: Math.max(0, firstPage.totalCount + delta),
+            },
+            ...old.pages.slice(1),
+          ],
+        };
+      }
+      if (old.totalCount === undefined) return old;
+      return {
+        ...old,
+        totalCount: Math.max(0, old.totalCount + delta),
+      };
+    },
+  );
 }
 
 function setThreadListCaches(
@@ -424,38 +476,64 @@ export function insertOptimisticReplyInCaches(
   reply: LearningReplyEntity,
 ): boolean {
   let inserted = false;
-  const changedExistingCache = setReplyCaches(queryClient, parentId, (old) => {
-    if (!old) return old;
-    if (old.replies.some((item) => getReplyClientId(item) === reply.clientId)) {
-      return old;
-    }
-    inserted = true;
-    return {
-      ...old,
-      replies: sortReplies([...old.replies, reply]),
-      totalCount:
-        old.totalCount === undefined ? old.totalCount : old.totalCount + 1,
-    };
-  });
+  const changedExistingCache = setReplyCaches(
+    queryClient,
+    parentId,
+    (old, pageIndex, pageCount) => {
+      if (old.replies.some((item) => getReplyClientId(item) === reply.clientId)) {
+        return old;
+      }
+      if (pageIndex !== pageCount - 1) return old;
+      inserted = true;
+      return { ...old, replies: [...old.replies, reply] };
+    },
+  );
 
   if (!changedExistingCache) {
-    queryClient.setQueryData<LearningRepliesCacheResponse>(
+    queryClient.setQueryData<ReplyListCache>(
       learningInteractionKeys.threadReplies(parentId, undefined),
       (old) => {
+        if (old && isInfiniteCacheData<LearningRepliesCacheResponse>(old)) {
+          const lastPageIndex = old.pages.length - 1;
+          const lastPage = old.pages[lastPageIndex];
+          if (!lastPage) return old;
+          if (lastPage.replies.some((item) => getReplyClientId(item) === reply.clientId)) {
+            return old;
+          }
+          inserted = true;
+          return {
+            ...old,
+            pages: [
+              ...old.pages.slice(0, lastPageIndex),
+              { ...lastPage, replies: [...lastPage.replies, reply] },
+            ],
+          };
+        }
+        if (!old && hasReplyQueryObserver(queryClient, parentId)) {
+          inserted = true;
+          return {
+            pages: [
+              { replies: [reply], nextCursor: null },
+            ],
+            pageParams: [null],
+          };
+        }
         if (old?.replies.some((item) => getReplyClientId(item) === reply.clientId)) {
           return old;
         }
         inserted = true;
-        return {
-          ...(old ?? { nextCursor: null }),
-          replies: sortReplies([...(old?.replies ?? []), reply]),
-          totalCount:
-            old?.totalCount === undefined ? old?.totalCount : old.totalCount + 1,
-        };
+        const page: LearningRepliesCacheResponse =
+          old && !isInfiniteCacheData<LearningRepliesCacheResponse>(old)
+            ? old
+            : { replies: [], nextCursor: null };
+        return { ...page, replies: [...page.replies, reply] };
       },
     );
   }
-  if (inserted) updateReplyCountInThreadCaches(queryClient, parentId, 1);
+  if (inserted) {
+    adjustReplyTotalCountInCaches(queryClient, parentId, 1);
+    updateReplyCountInThreadCaches(queryClient, parentId, 1);
+  }
   return inserted;
 }
 
@@ -464,31 +542,55 @@ export function migrateOptimisticRepliesToServerParent(
   parentClientId: string,
   parentServerId: string,
 ): void {
-  const pendingEntries = queryClient.getQueriesData<LearningRepliesCacheResponse>({
+  const pendingEntries = queryClient.getQueriesData<ReplyListCache>({
     queryKey: replyQueryPrefix(parentClientId),
   });
   for (const [pendingKey, pendingData] of pendingEntries) {
     if (!pendingData) continue;
     const suffix = pendingKey.slice(replyQueryPrefix(parentClientId).length);
     const serverKey = [...replyQueryPrefix(parentServerId), ...suffix];
-    queryClient.setQueryData<LearningRepliesCacheResponse>(serverKey, (old) => {
-      const replies = [...(old?.replies ?? [])];
-      for (const reply of pendingData.replies) {
-        if (
-          !replies.some(
+    queryClient.setQueryData<ReplyListCache>(serverKey, (old) => {
+      const pendingReplies = isInfiniteCacheData<LearningRepliesCacheResponse>(pendingData)
+        ? pendingData.pages.flatMap((page) => page.replies)
+        : pendingData.replies;
+      const existingReplies = old
+        ? isInfiniteCacheData<LearningRepliesCacheResponse>(old)
+          ? old.pages.flatMap((page) => page.replies)
+          : old.replies
+        : [];
+      const missingReplies = pendingReplies.filter(
+        (reply) =>
+          !existingReplies.some(
             (candidate) =>
               getReplyClientId(candidate) === getReplyClientId(reply) ||
               (getReplyServerId(candidate) !== undefined &&
                 getReplyServerId(candidate) === getReplyServerId(reply)),
-          )
-        ) {
-          replies.push(reply);
-        }
+          ),
+      );
+      if (missingReplies.length === 0 && old) return old;
+      if (old && isInfiniteCacheData<LearningRepliesCacheResponse>(old)) {
+        const lastPageIndex = old.pages.length - 1;
+        const lastPage = old.pages[lastPageIndex];
+        if (!lastPage) return old;
+        return {
+          ...old,
+          pages: [
+            ...old.pages.slice(0, lastPageIndex),
+            { ...lastPage, replies: [...lastPage.replies, ...missingReplies] },
+          ],
+        };
       }
-      return {
-        ...(old ?? { nextCursor: null }),
-        replies: sortReplies(replies),
-      };
+      const page: LearningRepliesCacheResponse =
+        old && !isInfiniteCacheData<LearningRepliesCacheResponse>(old)
+          ? old
+          : { replies: [], nextCursor: null };
+      if (!old && hasReplyQueryObserver(queryClient, parentServerId)) {
+        return {
+          pages: [{ ...page, replies: [...page.replies, ...missingReplies] }],
+          pageParams: [null],
+        };
+      }
+      return { ...page, replies: [...page.replies, ...missingReplies] };
     });
     queryClient.removeQueries({ queryKey: pendingKey, exact: true });
   }
@@ -514,31 +616,63 @@ export function reconcileOptimisticReplyInCaches(
     creationStatus: "confirmed",
     localSequence: Number.MAX_SAFE_INTEGER,
   };
-  const changedExistingCache = setReplyCaches(queryClient, parentServerId, (old) => {
-    if (!old) return old;
-    const existingIndex = old.replies.findIndex(
-      (reply) =>
-        getReplyClientId(reply) === clientId ||
-        getReplyServerId(reply) === serverReply.id,
-    );
-    if (existingIndex < 0) {
-      return { ...old, replies: sortReplies([...old.replies, confirmedReply]) };
-    }
-    const replies = [...old.replies];
-    const existing = replies[existingIndex]!;
-    replies[existingIndex] = {
-      ...confirmedReply,
-      localSequence: getReplySequence(existing),
-    };
-    return { ...old, replies: sortReplies(replies) };
-  });
+  let found = false;
+  const changedExistingCache = setReplyCaches(
+    queryClient,
+    parentServerId,
+    (old, pageIndex, pageCount) => {
+      const existingIndex = old.replies.findIndex(
+        (reply) =>
+          getReplyClientId(reply) === clientId ||
+          getReplyServerId(reply) === serverReply.id,
+      );
+      if (existingIndex >= 0) {
+        found = true;
+        const replies = [...old.replies];
+        const existing = replies[existingIndex]!;
+        replies[existingIndex] = {
+          ...confirmedReply,
+          localSequence:
+            "localSequence" in existing
+              ? existing.localSequence
+              : Number.MAX_SAFE_INTEGER,
+        };
+        return { ...old, replies };
+      }
+      if (!found && pageIndex === pageCount - 1) {
+        return { ...old, replies: [...old.replies, confirmedReply] };
+      }
+      return old;
+    },
+  );
   if (!changedExistingCache) {
-    queryClient.setQueryData<LearningRepliesCacheResponse>(
+    queryClient.setQueryData<ReplyListCache>(
       learningInteractionKeys.threadReplies(parentServerId, undefined),
-      (old) => ({
-        ...(old ?? { nextCursor: null }),
-        replies: sortReplies([...(old?.replies ?? []), confirmedReply]),
-      }),
+      (old) => {
+        if (old && isInfiniteCacheData<LearningRepliesCacheResponse>(old)) {
+          const lastPageIndex = old.pages.length - 1;
+          const lastPage = old.pages[lastPageIndex];
+          if (!lastPage) return old;
+          return {
+            ...old,
+            pages: [
+              ...old.pages.slice(0, lastPageIndex),
+              { ...lastPage, replies: [...lastPage.replies, confirmedReply] },
+            ],
+          };
+        }
+        const page: LearningRepliesCacheResponse =
+          old && !isInfiniteCacheData<LearningRepliesCacheResponse>(old)
+            ? old
+            : { replies: [], nextCursor: null };
+        if (!old && hasReplyQueryObserver(queryClient, parentServerId)) {
+          return {
+            pages: [{ ...page, replies: [...page.replies, confirmedReply] }],
+            pageParams: [null],
+          };
+        }
+        return { ...page, replies: [...page.replies, confirmedReply] };
+      },
     );
   }
 }
@@ -551,7 +685,6 @@ export function updateOptimisticReplyAttachmentInCaches(
   patch: InteractionAttachmentPatch,
 ): void {
   setReplyCaches(queryClient, parentId, (old) => {
-    if (!old) return old;
     let changed = false;
     const replies = old.replies.map((reply) => {
       if (getReplyClientId(reply) !== clientId) return reply;
@@ -577,18 +710,18 @@ export function removeOptimisticReplyFromCaches(
 ): void {
   let removed = false;
   setReplyCaches(queryClient, parentId, (old) => {
-    if (!old) return old;
     const replies = old.replies.filter((reply) => getReplyClientId(reply) !== clientId);
     if (replies.length === old.replies.length) return old;
     removed = true;
     return {
       ...old,
       replies,
-      totalCount:
-        old.totalCount === undefined ? old.totalCount : Math.max(0, old.totalCount - 1),
     };
   });
-  if (removed) updateReplyCountInThreadCaches(queryClient, parentId, -1);
+  if (removed) {
+    adjustReplyTotalCountInCaches(queryClient, parentId, -1);
+    updateReplyCountInThreadCaches(queryClient, parentId, -1);
+  }
 }
 
 function asThreadEntity(

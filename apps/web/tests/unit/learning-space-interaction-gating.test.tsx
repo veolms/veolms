@@ -552,7 +552,7 @@ describe("Learning Space Notes Cleanup and Temporary Guard", () => {
         expect(query).toEqual({
           courseId: "course-uuid-1",
           lessonId: "lesson-uuid-1",
-          limit: 50,
+          limit: 20,
         });
         expect(options?.enabled).toBe(true);
         return {

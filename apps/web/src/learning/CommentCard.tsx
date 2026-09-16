@@ -53,6 +53,10 @@ import {
   getClientEntityId,
   getServerEntityId,
 } from "../services/learning-interactions/interaction-entities";
+import {
+  flattenReplyPages,
+  getReplyTotalCount,
+} from "../services/learning-interactions/reply-pagination";
 
 export interface CommentReply {
   id: string | number;
@@ -222,6 +226,10 @@ export function CommentCard({
     isLoading: isRepliesLoading,
     isError: isRepliesError,
     refetch: refetchReplies,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
   } = useThreadReplies(threadId, undefined, {
     enabled: isBackendEntity && repliesOpen && !isNote,
   });
@@ -230,11 +238,10 @@ export function CommentCard({
   const deleteReplyMutation = useDeleteReply(threadId);
 
   const backendReplies = useMemo<CommentReply[]>(() => {
-    if (!repliesData?.replies) return [];
-    return repliesData.replies.map((reply) =>
+    return flattenReplyPages(repliesData, threadId ?? "").map((reply) =>
       adaptLearningReplyToCommentReply(reply, effectiveUserId),
     );
-  }, [repliesData?.replies, effectiveUserId]);
+  }, [repliesData, effectiveUserId, threadId]);
 
   const effectiveReplies = isBackendEntity ? backendReplies : localReplies;
 
@@ -242,10 +249,7 @@ export function CommentCard({
     0,
     (comment.replies ?? 0) - (comment.thread?.length ?? 0),
   );
-  const backendCount =
-    repliesData?.totalCount !== undefined
-      ? repliesData.totalCount
-      : repliesData?.replies?.length;
+  const backendCount = getReplyTotalCount(repliesData);
   const replyCount = isBackendEntity
     ? backendCount !== undefined
       ? backendCount
@@ -760,7 +764,7 @@ export function CommentCard({
               className="mt-2.5 space-y-2.5"
               data-testid="inline-replies-container"
             >
-              {isBackendEntity && isRepliesLoading ? (
+              {isBackendEntity && isRepliesLoading && !repliesData ? (
                 <div
                   className="py-4 text-center"
                   data-testid="learning-replies-loading"
@@ -770,7 +774,7 @@ export function CommentCard({
                     Loading replies…
                   </p>
                 </div>
-              ) : isBackendEntity && isRepliesError ? (
+              ) : isBackendEntity && isRepliesError && !repliesData ? (
                 <div
                   className="py-4 text-center"
                   data-testid="learning-replies-error"
@@ -827,6 +831,29 @@ export function CommentCard({
                   data-testid="learning-replies-empty"
                 >
                   No replies yet.
+                </div>
+              )}
+              {isBackendEntity && hasNextPage && (
+                <div className="flex justify-center pt-1">
+                  {isFetchNextPageError ? (
+                    <button
+                      type="button"
+                      onClick={() => void fetchNextPage()}
+                      className="inline-flex items-center rounded-lg bg-(--surface) px-2.5 py-1 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+                    >
+                      Retry loading replies
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isFetchingNextPage}
+                      onClick={() => void fetchNextPage()}
+                      data-testid="learning-replies-load-more"
+                      className="inline-flex items-center rounded-lg bg-(--surface) px-2.5 py-1 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover) disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {isFetchingNextPage ? "Loading replies…" : "Load more replies"}
+                    </button>
+                  )}
                 </div>
               )}
             </div>

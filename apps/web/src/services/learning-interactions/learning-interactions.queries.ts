@@ -45,9 +45,18 @@ import type {
   ThreadCreationRecord,
 } from "./interaction-creation-coordinator";
 import { isInfiniteCacheData } from "./paginated-cache";
+import type { InfiniteData } from "@tanstack/react-query";
+import {
+  flattenReplyPages,
+  getReplyTotalCount,
+} from "./reply-pagination";
+
+export { flattenReplyPages, getReplyTotalCount } from "./reply-pagination";
 
 type LessonThreadsQuery = Partial<Omit<ListLearningThreadsQuery, "cursor">>;
 type UserNotesQuery = Partial<Omit<ListLearningNotesQuery, "cursor">>;
+type RepliesQuery = Partial<Omit<ListLearningRepliesQuery, "cursor">>;
+type RepliesInfiniteData = InfiniteData<LearningRepliesCacheResponse>;
 
 function normalizeExistingInfiniteCache(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -61,12 +70,6 @@ function normalizeExistingInfiniteCache(
     pages: [existing],
     pageParams: [null],
   });
-}
-
-function getReplySequence(reply: LearningReplyCacheItem): number {
-  return "localSequence" in reply
-    ? reply.localSequence
-    : Number.MAX_SAFE_INTEGER;
 }
 
 function matchesAcceptedReply(
@@ -479,9 +482,6 @@ export function mergeRepliesWithCreationRecords(
     addedLocalReplies += 1;
   }
 
-  replies.sort(
-    (left, right) => getReplySequence(left) - getReplySequence(right),
-  );
   const projectedReplies = replies.map((reply) =>
     projectReplyLocalState(reply, threadId),
   );
@@ -633,12 +633,15 @@ export function useThreadDetails(
 
 export function useThreadReplies(
   threadId: string | undefined,
-  query?: ListLearningRepliesQuery,
+  query?: RepliesQuery,
   options?: { enabled?: boolean },
 ) {
-  const result = useQuery<LearningRepliesCacheResponse, ApiError>({
-    queryKey: learningInteractionKeys.threadReplies(threadId ?? "", query),
-    queryFn: async () => {
+  const queryClient = useQueryClient();
+  const queryKey = learningInteractionKeys.threadReplies(threadId ?? "", query);
+  normalizeExistingInfiniteCache(queryClient, queryKey, ["replies"]);
+  const result = useInfiniteQuery({
+    queryKey,
+    queryFn: async ({ pageParam }) => {
       if (
         !threadId ||
         isClientEntityId(threadId) ||
@@ -646,16 +649,26 @@ export function useThreadReplies(
       ) {
         throw new Error("A confirmed server thread ID is required.");
       }
-      const response = await learningInteractionsService.listReplies(
-        threadId,
-        query,
-      );
-      return mergeRepliesWithCreationRecords(
-        response,
-        threadId,
-        interactionCreationCoordinator.getActiveReplyRecords(threadId),
-      );
+      const response = await learningInteractionsService.listReplies(threadId, {
+        ...query,
+        ...(pageParam ? { cursor: pageParam } : {}),
+        limit: 20,
+      });
+      return pageParam === null
+        ? mergeRepliesWithCreationRecords(
+            response,
+            threadId,
+            interactionCreationCoordinator.getActiveReplyRecords(threadId),
+          )
+        : {
+            ...response,
+            replies: response.replies.map((reply) =>
+              projectReplyLocalState(reply, threadId),
+            ),
+          };
     },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled:
       (options?.enabled ?? Boolean(threadId)) &&
       Boolean(threadId) &&
@@ -664,22 +677,29 @@ export function useThreadReplies(
   });
   useOptimisticDeletionRevision();
   if (!result.data) return result;
-  const replies = result.data.replies.map((reply) =>
-    projectReplyLocalState(reply, threadId ?? ""),
-  );
-  const hiddenCount = replies.filter((reply) =>
-    optimisticDeletionCoordinator.isTombstoned("reply", reply),
-  ).length;
+  const projectedPages = result.data.pages.map((page) => ({
+    ...page,
+    replies: page.replies.map((reply) =>
+      projectReplyLocalState(reply, threadId ?? ""),
+    ),
+  }));
+  const hiddenCount = projectedPages
+    .flatMap((page) => page.replies)
+    .filter((reply) => optimisticDeletionCoordinator.isTombstoned("reply", reply))
+    .length;
   return {
     ...result,
     data: {
       ...result.data,
-      replies,
-      totalCount:
-        result.data.totalCount === undefined
-          ? result.data.totalCount
-          : Math.max(0, result.data.totalCount - hiddenCount),
-    },
+      pages: projectedPages.map((page, pageIndex) =>
+        pageIndex === 0 && page.totalCount !== undefined
+          ? {
+              ...page,
+              totalCount: Math.max(0, page.totalCount - hiddenCount),
+            }
+          : page,
+      ),
+    } as RepliesInfiniteData,
   };
 }
 

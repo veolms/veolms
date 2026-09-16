@@ -101,7 +101,7 @@ describe("Learning Space Optimistic Phase 2 Integration (Bookmark, Follow, Lock,
       kind: "all",
       status: "all",
       sort: "latest",
-      limit: 100,
+      limit: 20,
     });
 
     const thread: LearningThread = {
@@ -177,7 +177,7 @@ describe("Learning Space Optimistic Phase 2 Integration (Bookmark, Follow, Lock,
       kind: "all",
       status: "all",
       sort: "latest",
-      limit: 100,
+      limit: 20,
     });
 
     const thread: LearningThread = {

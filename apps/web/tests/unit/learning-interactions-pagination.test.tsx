@@ -5,11 +5,15 @@ import type {
   LearningThread,
   LearningThreadsListResponse,
   LearningNotesListResponse,
+  LearningReply,
+  LearningRepliesListResponse,
 } from "@veolms/contracts";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  flattenReplyPages,
   useLessonThreads,
+  useThreadReplies,
   useUserNotes,
 } from "../../src/services/learning-interactions/learning-interactions.queries";
 import { learningInteractionsService } from "../../src/services/learning-interactions/learning-interactions.service";
@@ -76,6 +80,27 @@ const note = (id: string) =>
     createdAt: "2026-09-15T10:00:00.000Z",
     updatedAt: "2026-09-15T10:00:00.000Z",
   }) as unknown as LearningNote;
+
+const reply = (id: string, createdAt = "2026-09-15T10:00:00.000Z") =>
+  ({
+    id,
+    threadId: "thread-1",
+    userId: "user-1",
+    author: {
+      id: "user-1",
+      displayName: "User",
+      username: "user",
+      role: "Student",
+    },
+    content: id,
+    plainText: id,
+    likesCount: 0,
+    isLiked: false,
+    isOwn: false,
+    isAccepted: false,
+    createdAt,
+    updatedAt: createdAt,
+  }) as unknown as LearningReply;
 
 describe("learning interaction cursor pagination", () => {
   afterEach(() => {
@@ -180,6 +205,96 @@ describe("learning interaction cursor pagination", () => {
       ),
     );
     expect(result.current.hasNextPage).toBe(false);
+  });
+
+  it("fetches reply pages with limit 20 and keeps the cursor out of the key", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const listReplies = vi
+      .spyOn(learningInteractionsService, "listReplies")
+      .mockImplementation(async (_threadId, query) =>
+        (query?.cursor
+          ? {
+              replies: [reply("reply-2")],
+              nextCursor: null,
+              totalCount: 2,
+            }
+          : {
+              replies: [reply("reply-1")],
+              nextCursor: "reply-cursor-2",
+              totalCount: 2,
+            }) as LearningRepliesListResponse,
+      );
+
+    const { result } = renderHook(
+      () => useThreadReplies("thread-1", { limit: 50 }),
+      { wrapper: createWrapper(queryClient) },
+    );
+
+    await waitFor(() => expect(result.current.data?.pages).toHaveLength(1));
+    expect(listReplies).toHaveBeenNthCalledWith(
+      1,
+      "thread-1",
+      expect.objectContaining({ limit: 20 }),
+    );
+    expect(listReplies.mock.calls[0]?.[1]).not.toHaveProperty("cursor");
+    expect(result.current.hasNextPage).toBe(true);
+
+    await act(async () => {
+      await result.current.fetchNextPage();
+    });
+
+    expect(listReplies).toHaveBeenLastCalledWith(
+      "thread-1",
+      expect.objectContaining({ cursor: "reply-cursor-2", limit: 20 }),
+    );
+    await waitFor(() =>
+      expect(result.current.data?.pages.flatMap((page) => page.replies)).toHaveLength(2),
+    );
+    expect(result.current.hasNextPage).toBe(false);
+    expect(
+      queryClient.getQueryData(
+        learningInteractionKeys.threadReplies("thread-1", {
+          cursor: "different-cursor",
+        }),
+      ),
+    ).toBeDefined();
+    expect(
+      learningInteractionKeys.threadReplies("thread-1", { cursor: "a" }),
+    ).toEqual(learningInteractionKeys.threadReplies("thread-1", { cursor: "b" }));
+  });
+
+  it("flattens reply pages in server order, dedupes identities, and keeps local replies last", () => {
+    const pendingReply = {
+      ...reply("client-reply"),
+      id: "client-reply",
+      clientId: "client-reply",
+      serverId: undefined,
+      creationStatus: "pending" as const,
+      localSequence: 1,
+    };
+    const data = {
+      pages: [
+        {
+          replies: [reply("reply-1"), pendingReply],
+          nextCursor: "cursor-2",
+          totalCount: 3,
+        },
+        {
+          replies: [reply("reply-2"), { ...reply("reply-1"), clientId: "old-client" }],
+          nextCursor: null,
+          totalCount: 3,
+        },
+      ],
+      pageParams: [null, "cursor-2"],
+    };
+
+    expect(flattenReplyPages(data, "thread-1").map((item) => item.id)).toEqual([
+      "reply-1",
+      "reply-2",
+      "client-reply",
+    ]);
   });
 
   it("inserts optimistic entities only into the first loaded page", () => {
