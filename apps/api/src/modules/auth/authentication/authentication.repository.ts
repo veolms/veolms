@@ -247,21 +247,36 @@ export async function listUserRoleNames(
   const rows = await database
     .selectFrom("user_roles")
     .innerJoin("roles", "roles.id", "user_roles.role_id")
-    .select("roles.name")
+    .select(["roles.name", "roles.role_key"])
     .where("user_roles.user_id", "=", userId)
     .execute();
 
-  return rows.map((row) => row.name);
+  return rows.map((row) => {
+    const raw = row.role_key || row.name;
+    const lower = raw?.toLowerCase();
+    if (lower === "administrator") return "admin";
+    return lower || raw;
+  });
 }
 
 export async function findRoleIdByName(
   database: Executor,
   name: string,
 ): Promise<string | undefined> {
+  const targetName = name.trim();
+  const normalized = targetName.toLowerCase() === "administrator" ? "admin" : targetName.toLowerCase();
+
   const row = await database
     .selectFrom("roles")
     .select("id")
-    .where("name", "=", name)
+    .where((eb) =>
+      eb.or([
+        eb("name", "=", targetName),
+        eb("role_key", "=", targetName),
+        eb("name", "=", normalized),
+        eb("role_key", "=", normalized),
+      ]),
+    )
     .executeTakeFirst();
 
   return row?.id;
