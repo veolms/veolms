@@ -9,12 +9,29 @@ import { AppError } from "../../../lib/errors.ts";
 import * as couponRepo from "./coupon.repository.ts";
 
 export interface CouponService {
-  listCoupons(): Promise<Coupon[]>;
+  listCoupons(filters?: { courseId?: string }): Promise<Coupon[]>;
   getCouponById(id: string): Promise<Coupon>;
   getCouponByCode(code: string): Promise<Coupon>;
   createCoupon(request: CreateCouponRequest): Promise<Coupon>;
   updateCoupon(id: string, request: UpdateCouponRequest): Promise<Coupon>;
   deleteCoupon(id: string): Promise<void>;
+}
+
+function assertValidWindow(startsAt: Date, expiresAt: Date) {
+  if (Number.isNaN(startsAt.getTime()) || Number.isNaN(expiresAt.getTime())) {
+    throw new AppError(
+      400,
+      "INVALID_COUPON_DATES",
+      "Coupon start and expiry dates must be valid.",
+    );
+  }
+  if (startsAt >= expiresAt) {
+    throw new AppError(
+      400,
+      "INVALID_COUPON_DATES",
+      "Expiry date must be after the start date.",
+    );
+  }
 }
 
 export function createCouponService({
@@ -24,6 +41,7 @@ export function createCouponService({
 }): CouponService {
   function mapToCoupon(
     row: NonNullable<Awaited<ReturnType<typeof couponRepo.findCouponById>>>,
+    usage?: { redemptionCount: number; totalDiscountGiven: number },
   ): Coupon {
     return {
       id: row.id,
@@ -40,40 +58,81 @@ export function createCouponService({
       isActive: row.is_active,
       restrictedCourseIds: row.restricted_course_ids,
       restrictedBundleIds: row.restricted_bundle_ids,
+      redemptionCount: usage?.redemptionCount ?? 0,
+      totalDiscountGiven: usage?.totalDiscountGiven ?? 0,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
   }
 
-  async function listCoupons(): Promise<Coupon[]> {
-    const list = await couponRepo.listCoupons(database);
-    return list.map(mapToCoupon);
+  async function attachUsage(
+    row: NonNullable<Awaited<ReturnType<typeof couponRepo.findCouponById>>>,
+  ): Promise<Coupon> {
+    const usage = await couponRepo.getCouponRedemptionStats(database, row.id);
+    return mapToCoupon(row, usage);
+  }
+
+  async function listCoupons(filters?: {
+    courseId?: string;
+  }): Promise<Coupon[]> {
+    const [list, stats] = await Promise.all([
+      couponRepo.listCoupons(database, filters),
+      couponRepo.listCouponRedemptionStats(database),
+    ]);
+    const usageById = new Map(
+      stats.map((row) => [
+        row.coupon_id,
+        {
+          redemptionCount: Number(row.redemption_count ?? 0),
+          totalDiscountGiven: Number(row.total_discount_given ?? 0),
+        },
+      ]),
+    );
+    return list.map((row) => mapToCoupon(row, usageById.get(row.id)));
   }
 
   async function getCouponById(id: string): Promise<Coupon> {
     const coupon = await couponRepo.findCouponById(database, id);
     if (!coupon) {
-      throw new AppError(404, "COUPON_NOT_FOUND", `Coupon with id "${id}" was not found.`);
+      throw new AppError(
+        404,
+        "COUPON_NOT_FOUND",
+        `Coupon with id "${id}" was not found.`,
+      );
     }
-    return mapToCoupon(coupon);
+    return attachUsage(coupon);
   }
 
   async function getCouponByCode(code: string): Promise<Coupon> {
     const coupon = await couponRepo.findCouponByCode(database, code);
     if (!coupon) {
-      throw new AppError(404, "COUPON_NOT_FOUND", `Coupon "${code}" was not found.`);
+      throw new AppError(
+        404,
+        "COUPON_NOT_FOUND",
+        `Coupon "${code}" was not found.`,
+      );
     }
-    return mapToCoupon(coupon);
+    return attachUsage(coupon);
   }
 
   async function createCoupon(request: CreateCouponRequest): Promise<Coupon> {
     if (request.discountType === "percentage" && request.discountValue > 100) {
-      throw new AppError(400, "INVALID_COUPON_DISCOUNT", "Percentage discount cannot exceed 100%.");
+      throw new AppError(
+        400,
+        "INVALID_COUPON_DISCOUNT",
+        "Percentage discount cannot exceed 100%.",
+      );
     }
+
+    assertValidWindow(new Date(request.startsAt), new Date(request.expiresAt));
 
     const existing = await couponRepo.findCouponByCode(database, request.code);
     if (existing) {
-      throw new AppError(409, "COUPON_CODE_ALREADY_EXISTS", `Coupon code "${request.code}" already exists.`);
+      throw new AppError(
+        409,
+        "COUPON_CODE_ALREADY_EXISTS",
+        `Coupon code "${request.code}" already exists.`,
+      );
     }
 
     const now = new Date();
@@ -99,17 +158,37 @@ export function createCouponService({
     return mapToCoupon(created);
   }
 
-  async function updateCoupon(id: string, request: UpdateCouponRequest): Promise<Coupon> {
+  async function updateCoupon(
+    id: string,
+    request: UpdateCouponRequest,
+  ): Promise<Coupon> {
     const existing = await couponRepo.findCouponById(database, id);
     if (!existing) {
-      throw new AppError(404, "COUPON_NOT_FOUND", `Coupon with id "${id}" was not found.`);
+      throw new AppError(
+        404,
+        "COUPON_NOT_FOUND",
+        `Coupon with id "${id}" was not found.`,
+      );
     }
 
     const effectiveDiscountType = request.discountType ?? existing.discount_type;
-    const effectiveDiscountValue = request.discountValue ?? existing.discount_value;
+    const effectiveDiscountValue =
+      request.discountValue ?? existing.discount_value;
     if (effectiveDiscountType === "percentage" && effectiveDiscountValue > 100) {
-      throw new AppError(400, "INVALID_COUPON_DISCOUNT", "Percentage discount cannot exceed 100%.");
+      throw new AppError(
+        400,
+        "INVALID_COUPON_DISCOUNT",
+        "Percentage discount cannot exceed 100%.",
+      );
     }
+
+    const nextStartsAt = request.startsAt
+      ? new Date(request.startsAt)
+      : existing.starts_at;
+    const nextExpiresAt = request.expiresAt
+      ? new Date(request.expiresAt)
+      : existing.expires_at;
+    assertValidWindow(nextStartsAt, nextExpiresAt);
 
     const updated = await couponRepo.updateCoupon(database, id, {
       description: request.description,
@@ -127,17 +206,38 @@ export function createCouponService({
     });
 
     if (!updated) {
-      throw new AppError(404, "COUPON_NOT_FOUND", `Coupon with id "${id}" was not found.`);
+      throw new AppError(
+        404,
+        "COUPON_NOT_FOUND",
+        `Coupon with id "${id}" was not found.`,
+      );
     }
 
-    return mapToCoupon(updated);
+    return attachUsage(updated);
   }
 
   async function deleteCoupon(id: string): Promise<void> {
     const existing = await couponRepo.findCouponById(database, id);
     if (!existing) {
-      throw new AppError(404, "COUPON_NOT_FOUND", `Coupon with id "${id}" was not found.`);
+      throw new AppError(
+        404,
+        "COUPON_NOT_FOUND",
+        `Coupon with id "${id}" was not found.`,
+      );
     }
+
+    const redemptionCount = await couponRepo.countCouponRedemptionsGlobal(
+      database,
+      id,
+    );
+    if (redemptionCount > 0) {
+      throw new AppError(
+        409,
+        "COUPON_HAS_REDEMPTIONS",
+        "This coupon has already been redeemed. Deactivate it instead of deleting.",
+      );
+    }
+
     await couponRepo.deleteCoupon(database, id);
   }
 

@@ -111,10 +111,17 @@ export const couponSchema = z.strictObject({
   isActive: z.boolean().default(true),
   restrictedCourseIds: z.array(z.uuid()).nullable().optional(),
   restrictedBundleIds: z.array(z.uuid()).nullable().optional(),
+  redemptionCount: z.number().int().nonnegative().default(0),
+  totalDiscountGiven: z.number().int().nonnegative().default(0),
   createdAt: z.string().or(z.date()),
   updatedAt: z.string().or(z.date()),
 });
 export type Coupon = z.infer<typeof couponSchema>;
+
+export const listCouponsQuerySchema = z.object({
+  courseId: z.uuid().optional(),
+});
+export type ListCouponsQuery = z.infer<typeof listCouponsQuerySchema>;
 
 export const createCouponRequestSchema = z.strictObject({
   code: z.string().min(1).max(50).toUpperCase(),

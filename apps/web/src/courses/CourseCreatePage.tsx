@@ -11494,9 +11494,19 @@ export function CourseCreatePage({
                   }}
                   className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] max-[768px]:w-full max-[768px]:justify-center"
                   onClick={() => {
-                    if (onNavigatePage) {
-                      onNavigatePage("settings");
+                    if (!onNavigatePage) return;
+                    if (!currentCourseId) {
+                      onNavigatePage("/coupons/create");
+                      return;
                     }
+                    const params = new URLSearchParams({
+                      courseId: currentCourseId,
+                    });
+                    params.set(
+                      "returnTo",
+                      `${window.location.pathname}${window.location.search}`,
+                    );
+                    onNavigatePage(`/coupons/create?${params.toString()}`);
                   }}
                 >
                   Go to Coupons <ArrowUpRight size={15} weight="bold" />

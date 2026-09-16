@@ -289,7 +289,7 @@ export function createPricingService({
         discountType: coupon.discount_type,
         discountValue: coupon.discount_value,
         discountAmount: totalDiscount,
-        message: `${coupon.discount_type === "percentage" ? `${coupon.discount_value}%` : `₹${coupon.discount_value / 100}`} discount applied.`,
+        message: `${coupon.discount_type === "percentage" ? `${coupon.discount_value}%` : `₹${coupon.discount_value}`} discount applied.`,
       };
     }
 

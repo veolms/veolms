@@ -1,6 +1,12 @@
 import type { CourseRole } from "../courses/catalogue";
 
-const CREATOR_ROLES = new Set(["creator", "instructor", "admin"]);
+const CREATOR_ROLES = new Set([
+  "creator",
+  "instructor",
+  "admin",
+  "platform_admin",
+  "platform administrator",
+]);
 
 export function getWorkspaceRoleStorageKey(userId?: string | null): string {
   return userId ? `veolms-role-${userId}` : "veolms-role";
@@ -14,7 +20,11 @@ export function getAllowedWorkspaceRoles(
   }
 
   const normalized = new Set(roles.map((role) => role.toLowerCase()));
-  if (normalized.has("admin")) {
+  if (
+    normalized.has("admin") ||
+    normalized.has("platform_admin") ||
+    normalized.has("platform administrator")
+  ) {
     return ["student", "creator"];
   }
 
@@ -60,7 +70,14 @@ export function hasAdminRole(
   if (!roles?.length) {
     return false;
   }
-  return roles.some((role) => role.toLowerCase() === "admin");
+  return roles.some((role) => {
+    const r = role.toLowerCase();
+    return (
+      r === "admin" ||
+      r === "platform_admin" ||
+      r === "platform administrator"
+    );
+  });
 }
 
 export function getRoleDisplayName(

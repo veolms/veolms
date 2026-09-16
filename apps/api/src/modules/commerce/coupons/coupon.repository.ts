@@ -1,3 +1,4 @@
+import { sql } from "kysely";
 import type { CouponDiscountType } from "@veolms/database";
 import type { Executor } from "../shared/repository.types.ts";
 
@@ -157,7 +158,57 @@ export async function insertCoupon(
     .executeTakeFirstOrThrow();
 }
 
-export async function listCoupons(database: Executor) {
+export async function listCouponRedemptionStats(database: Executor) {
+  return await database
+    .selectFrom("coupon_redemptions")
+    .select((eb) => [
+      "coupon_id",
+      eb.fn.countAll<number>().as("redemption_count"),
+      eb.fn.sum<number>("discount_amount").as("total_discount_given"),
+    ])
+    .groupBy("coupon_id")
+    .execute();
+}
+
+export async function getCouponRedemptionStats(
+  database: Executor,
+  couponId: string,
+) {
+  const result = await database
+    .selectFrom("coupon_redemptions")
+    .select((eb) => [
+      eb.fn.countAll<number>().as("redemption_count"),
+      eb.fn.sum<number>("discount_amount").as("total_discount_given"),
+    ])
+    .where("coupon_id", "=", couponId)
+    .executeTakeFirst();
+
+  return {
+    redemptionCount: Number(result?.redemption_count ?? 0),
+    totalDiscountGiven: Number(result?.total_discount_given ?? 0),
+  };
+}
+
+export async function listCoupons(
+  database: Executor,
+  options?: { courseId?: string },
+) {
+  if (options?.courseId) {
+    const courseId = options.courseId;
+    return await database
+      .selectFrom("coupons")
+      .selectAll()
+      .where(
+        sql<boolean>`(
+          restricted_course_ids is null
+          or cardinality(restricted_course_ids) = 0
+          or ${courseId}::uuid = any(restricted_course_ids)
+        )`,
+      )
+      .orderBy("created_at", "desc")
+      .execute();
+  }
+
   return await database
     .selectFrom("coupons")
     .selectAll()

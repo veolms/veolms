@@ -46,12 +46,14 @@ import {
 import { useSecondPressHold } from "./gestures/useSecondPressHold";
 import { WorkspacePage } from "./workspace/WorkspacePages";
 import { ReviewsPage } from "./reviews/ReviewsPage";
+import { CouponsPage } from "./coupons/CouponsPage";
 import { OrdersPage } from "./orders/OrdersPage";
 import { OrderHistoryPage } from "./order-history/OrderHistoryPage";
 import { NotificationsPage } from "./notifications/NotificationsPage";
 import { QuizAnalyticsPage } from "./quizzes/QuizAnalyticsPage";
 import { QuizBuilderPage } from "./quizzes/QuizBuilderPage";
 import { QuizDirectAttemptPage } from "./quizzes/QuizDirectAttemptPage";
+import { CouponBuilderPage } from "./coupons/CouponBuilderPage";
 import { getVisibleCourses } from "./courses/catalogue";
 import type {
   Course,
@@ -222,6 +224,7 @@ interface CoursesPageProps {
   courseSlug?: string;
   quizId?: string;
   assignmentId?: string;
+  couponId?: string;
   miniPlayerCourseId?: string | null;
   learningBackground?: {
     courseSlug?: string;
@@ -535,6 +538,7 @@ export function CoursesPage({
   courseSlug,
   quizId,
   assignmentId,
+  couponId,
   miniPlayerCourseId = null,
   learningBackground = null,
   learningMotionStageRef,
@@ -3283,6 +3287,20 @@ export function CoursesPage({
     if (surfacePage === "reviews" || surfaceActiveSection === "Reviews") {
       return (
         <ReviewsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+      );
+    }
+    if (surfacePage === "coupon-builder") {
+      return (
+        <CouponBuilderPage
+          couponId={couponId}
+          onNavigatePage={onNavigatePage}
+          setNotice={setNotice}
+        />
+      );
+    }
+    if (surfacePage === "coupons" || surfaceActiveSection === "Coupons") {
+      return (
+        <CouponsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
       );
     }
     if (surfacePage === "orders" || surfaceActiveSection === "Orders") {

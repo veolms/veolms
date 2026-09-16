@@ -6,7 +6,13 @@ export const APP_HOME_PATH = "/courses";
 export const LOGIN_PATH = "/login";
 export const MFA_CHALLENGE_PATH = "/mfa-setup?mfa=required";
 
-const COURSE_AUTHOR_ROLES = new Set(["admin", "creator", "instructor"]);
+const COURSE_AUTHOR_ROLES = new Set([
+  "admin",
+  "creator",
+  "instructor",
+  "platform_admin",
+  "platform administrator",
+]);
 
 // Temporary product flag: keep lessons accessible while the login flow is disabled.
 // Set this to false to restore authentication for learning routes.

@@ -12,6 +12,7 @@
     "migrate": "node --env-file-if-exists=../../.env src/migrate.ts",
     "migrate:fleet": "node --env-file=../../apps/fleet-manager/.env src/migrate.ts",
     "seed": "node --env-file-if-exists=../../.env src/seed.ts",
+    "seed:admins": "node --env-file-if-exists=../../.env src/seed-admins.ts",
     "reset": "node --env-file-if-exists=../../.env src/reset.ts",
     "migration:create": "node ./scripts/create-migration.ts"
   },
