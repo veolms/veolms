@@ -6,6 +6,7 @@ import {
   AttachmentComposerPreview,
   formatFileSize,
   getAttachmentCategory,
+  getAttachmentAspectRatioStyle,
   type DiscussionAttachmentItem,
 } from "../../src/learning/discussion-attachments";
 import { CommentCard, type Comment } from "../../src/learning/CommentCard";
@@ -80,6 +81,8 @@ describe("DiscussionAttachmentsList Component", () => {
       fileSize: 5242880,
       kind: "document",
       mediaType: "video",
+      width: 1920,
+      height: 1080,
     },
     {
       id: "att-3",
@@ -98,6 +101,36 @@ describe("DiscussionAttachmentsList Component", () => {
       kind: "code",
     },
   ];
+
+  it.each([
+    [1080, 1920, "1080 / 1920", "min(100%, 13.5rem)"],
+    [1920, 1080, "1920 / 1080", "min(100%, 35.55555555555556rem)"],
+    [1080, 1080, "1080 / 1080", "min(100%, 20rem)"],
+    [3840, 2160, "3840 / 2160", "min(100%, 35.55555555555556rem)"],
+    [100, 1000, "100 / 1000", "min(100%, 2.4000000000000004rem)"],
+  ])(
+    "preserves the bounded geometry for %sx%s metadata",
+    (width, height, aspectRatio, boundedWidth) => {
+      expect(getAttachmentAspectRatioStyle({ width, height })).toEqual({
+        aspectRatio,
+        width: boundedWidth,
+      });
+    },
+  );
+
+  it.each([
+    [undefined, undefined],
+    [null, null],
+    [0, 1080],
+    [-1080, 1920],
+    [1080.5, 1920],
+    [1080, undefined],
+  ])("uses the 16:9 fallback for invalid metadata %s×%s", (width, height) => {
+    expect(getAttachmentAspectRatioStyle({ width, height })).toEqual({
+      aspectRatio: "16 / 9",
+      width: "min(100%, 35.55555555555556rem)",
+    });
+  });
 
   it("returns null when attachments list is empty or undefined", () => {
     const { container: c1 } = render(<DiscussionAttachmentsList />);
@@ -121,6 +154,8 @@ describe("DiscussionAttachmentsList Component", () => {
     const img = screen.getByRole("img", { name: "diagram.png" });
     expect(img).toBeInTheDocument();
     expect(img).toHaveAttribute("src", "/api/v1/discussion-uploads/att-1.png");
+    expect(img).toHaveAttribute("loading", "lazy");
+    expect(img).toHaveAttribute("decoding", "async");
 
     expect(screen.getByText("diagram.png")).toBeInTheDocument();
     expect(screen.getByText("200 KB")).toBeInTheDocument();
@@ -180,18 +215,42 @@ describe("DiscussionAttachmentsList Component", () => {
     expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
-  it("renders videos with video element and download link", () => {
+  it("renders persisted videos as unloaded placeholders until play", () => {
     render(<DiscussionAttachmentsList attachments={[sampleAttachments[1]!]} />);
 
     const item = screen.getByTestId("discussion-attachment-item");
     expect(item).toHaveAttribute("data-attachment-type", "video");
 
+    expect(item.querySelector("video")).toBeNull();
+    const placeholder = screen.getByTestId("thumbnail-placeholder-background");
+    expect(placeholder).toHaveClass(
+      "bg-[radial-gradient(ellipse_at_center,color-mix(in_srgb,var(--surface-strong)_85%,transparent)_0%,color-mix(in_srgb,var(--track)_95%,var(--canvas))_100%)]",
+    );
+    expect(placeholder.firstElementChild).toHaveClass("dark:opacity-[0.07]");
+    expect(placeholder.firstElementChild).toHaveStyle({
+      backgroundSize: "24px 24px",
+    });
+    expect(placeholder.querySelector("svg")).toBeNull();
+    const playButton = screen.getByRole("button", {
+      name: "Play video lecture-clip.mp4",
+    });
+    expect(playButton).toHaveClass("gap-2.5");
+    expect(playButton.querySelector("span")).toHaveClass("size-14");
+    expect(playButton.querySelector("svg")).toHaveAttribute("width", "28");
+    expect(screen.getByText("Play video")).toHaveClass("font-semibold");
+    const mediaSurface = playButton.parentElement;
+    expect(item).toHaveStyle({
+      width: "min(100%, 35.55555555555556rem)",
+    });
+    expect(mediaSurface).toHaveStyle({
+      aspectRatio: "1920 / 1080",
+    });
+    fireEvent.click(playButton);
+
     const video = item.querySelector("video");
     expect(video).toBeInTheDocument();
-    expect(video).toHaveAttribute(
-      "src",
-      "/api/v1/discussion-uploads/att-2.mp4",
-    );
+    expect(video?.parentElement).toBe(mediaSurface);
+    expect(video).toHaveAttribute("src", "/api/v1/discussion-uploads/att-2.mp4");
 
     expect(screen.getByText("lecture-clip.mp4")).toBeInTheDocument();
     expect(screen.getByText("5.0 MB")).toBeInTheDocument();
@@ -203,6 +262,156 @@ describe("DiscussionAttachmentsList Component", () => {
       "href",
       "/api/v1/discussion-uploads/att-2.mp4",
     );
+  });
+
+  it("uses a bounded 16:9 placeholder when video dimensions are unavailable", () => {
+    render(
+      <DiscussionAttachmentsList
+        attachments={[{ ...sampleAttachments[1]!, width: null, height: null }]}
+      />,
+    );
+
+    const playButton = screen.getByRole("button", {
+      name: "Play video lecture-clip.mp4",
+    });
+    expect(screen.getByTestId("discussion-attachment-item")).toHaveStyle({
+      width: "min(100%, 35.55555555555556rem)",
+    });
+    expect(playButton.parentElement).toHaveStyle({
+      aspectRatio: "16 / 9",
+    });
+    expect(playButton.parentElement?.querySelector("video")).toBeNull();
+  });
+
+  it.each([
+    ["portrait", 1080, 1920, "min(100%, 13.5rem)", "1080 / 1920"],
+    ["square", 1080, 1080, "min(100%, 20rem)", "1080 / 1080"],
+    ["landscape", 1920, 1080, "min(100%, 35.55555555555556rem)", "1920 / 1080"],
+  ])(
+    "uses one bounded shell for %s video geometry",
+    (_label, width, height, boundedWidth, aspectRatio) => {
+      render(
+        <DiscussionAttachmentsList
+          attachments={[{ ...sampleAttachments[1]!, width, height }]}
+        />,
+      );
+
+      const item = screen.getByTestId("discussion-attachment-item");
+      const playButton = screen.getByRole("button", {
+        name: "Play video lecture-clip.mp4",
+      });
+      expect(item).toHaveStyle({ width: boundedWidth });
+      expect(item.style.marginInline).toBe("");
+      expect(playButton.parentElement).toHaveStyle({ aspectRatio });
+      expect(item.querySelector("video")).toBeNull();
+    },
+  );
+
+  it("constrains long portrait filenames without widening the shell", () => {
+    render(
+      <DiscussionAttachmentsList
+        attachments={[
+          {
+            ...sampleAttachments[1]!,
+            fileName: "a-very-long-portrait-video-filename-that-must-truncate.mp4",
+            width: 1080,
+            height: 1920,
+          },
+        ]}
+      />,
+    );
+
+    const item = screen.getByTestId("discussion-attachment-item");
+    expect(item).toHaveStyle({
+      width: "min(100%, 13.5rem)",
+    });
+    expect(item.style.marginInline).toBe("");
+    expect(screen.getByText("a-very-long-portrait-video-filename-that-must-truncate.mp4"))
+      .toHaveClass("truncate");
+    expect(screen.getByRole("link", { name: /Download .*portrait-video/ }))
+      .toBeInTheDocument();
+  });
+
+  it("activates only the selected persisted video and supports keyboard play", () => {
+    const videos = [
+      { ...sampleAttachments[1]!, id: "video-a", fileName: "a.mp4" },
+      { ...sampleAttachments[1]!, id: "video-b", fileName: "b.mp4" },
+    ];
+    render(<DiscussionAttachmentsList attachments={videos} />);
+
+    const firstPlay = screen.getByRole("button", { name: "Play video a.mp4" });
+    fireEvent.keyDown(firstPlay, { key: "Enter", code: "Enter" });
+
+    const items = screen.getAllByTestId("discussion-attachment-item");
+    expect(items[0]?.querySelector("video")).toBeInTheDocument();
+    expect(items[1]?.querySelector("video")).toBeNull();
+  });
+
+  it("keeps a reconciled remote video unloaded until explicit activation", () => {
+    const { rerender } = render(
+      <DiscussionAttachmentsList
+        attachments={[
+          {
+            ...sampleAttachments[1]!,
+            id: "client-video",
+            clientId: "client-video",
+            localPreviewUrl: "blob:optimistic-video",
+            uploadState: "uploading",
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByTestId("discussion-attachment-item").querySelector("video"))
+      .toBeInTheDocument();
+
+    rerender(
+      <DiscussionAttachmentsList
+        attachments={[
+          {
+            ...sampleAttachments[1]!,
+            id: "client-video",
+            clientId: "client-video",
+            serverId: "server-video",
+            localPreviewUrl: undefined,
+            uploadState: "confirmed",
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByTestId("discussion-attachment-item").querySelector("video"))
+      .toBeNull();
+  });
+
+  it("keeps the attachment card usable when activated video playback fails", () => {
+    render(<DiscussionAttachmentsList attachments={[sampleAttachments[1]!]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Play video lecture-clip.mp4" }));
+    fireEvent.error(
+      screen.getByLabelText("Video attachment: lecture-clip.mp4"),
+    );
+
+    expect(screen.getByText("Unable to load video. Retry")).toBeInTheDocument();
+    expect(screen.getByText("lecture-clip.mp4")).toBeInTheDocument();
+  });
+
+  it("keeps local video previews active without activating remote playback", () => {
+    render(
+      <DiscussionAttachmentsList
+        attachments={[
+          {
+            ...sampleAttachments[1]!,
+            id: "local-video",
+            localPreviewUrl: "blob:local-video",
+            uploadState: "uploading",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId("discussion-attachment-item").querySelector("video"))
+      .toHaveAttribute("src", "blob:local-video");
+    expect(
+      screen.queryByRole("button", { name: "Play video lecture-clip.mp4" }),
+    ).toBeNull();
   });
 
   it("renders documents and code files with icon, size, and download link", () => {

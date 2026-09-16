@@ -2,8 +2,11 @@ import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/Down
 import { FileCodeIcon as FileCode } from "@phosphor-icons/react/FileCode";
 import { FilePdfIcon as FilePdf } from "@phosphor-icons/react/FilePdf";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
+import { PlayIcon as Play } from "@phosphor-icons/react/Play";
+import { VideoCameraIcon as VideoCamera } from "@phosphor-icons/react/VideoCamera";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { useEffect, useRef, useState } from "react";
+import { ThumbnailPlaceholderBackground } from "../../components/ui/ThumbnailPlaceholderBackground";
 import {
   type DiscussionAttachmentItem,
   formatFileSize,
@@ -23,6 +26,12 @@ export function DiscussionAttachmentsList({
 }: DiscussionAttachmentsListProps) {
   const [viewerAttachment, setViewerAttachment] =
     useState<DiscussionAttachmentItem | null>(null);
+  const [activatedVideoIds, setActivatedVideoIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [failedVideoIds, setFailedVideoIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const viewerDialogRef = useRef<HTMLDialogElement>(null);
   const viewerTriggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -69,6 +78,8 @@ export function DiscussionAttachmentsList({
               attachment.kind,
             );
             const visualUrl = getAttachmentVisualUrl(attachment);
+            const attachmentId = attachment.clientId ?? attachment.id;
+            const geometryStyle = getAttachmentAspectRatioStyle(attachment);
 
             if (category === "image") {
               return (
@@ -86,7 +97,7 @@ export function DiscussionAttachmentsList({
                       setViewerAttachment(attachment);
                     }}
                     className="relative flex max-h-80 max-w-md cursor-zoom-in items-center justify-center overflow-hidden bg-black/5 disabled:cursor-default dark:bg-white/5"
-                    style={getAttachmentAspectRatioStyle(attachment)}
+                    style={{ aspectRatio: geometryStyle.aspectRatio }}
                     aria-label={`View image ${attachment.fileName}`}
                   >
                     {visualUrl ? (
@@ -95,6 +106,7 @@ export function DiscussionAttachmentsList({
                         alt={attachment.fileName}
                         loading="lazy"
                         className="block max-h-80 max-w-full object-contain"
+                        decoding="async"
                       />
                     ) : null}
                     <AttachmentUploadTreatment attachment={attachment} />
@@ -105,29 +117,82 @@ export function DiscussionAttachmentsList({
             }
 
             if (category === "video") {
+              const isLocalVideo = Boolean(attachment.localPreviewUrl);
+              const isActivated =
+                isLocalVideo || activatedVideoIds.has(attachmentId);
+              const hasFailed = failedVideoIds.has(attachmentId);
+
               return (
                 <div
                   key={attachment.clientId ?? attachment.id}
                   data-testid="discussion-attachment-item"
                   data-attachment-type="video"
                   className="relative flex w-full max-w-md flex-col overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] shadow-xs"
+                  style={{
+                    width: geometryStyle.width,
+                  }}
                 >
                   <div
                     className="relative flex max-h-80 w-full items-center justify-center bg-black"
-                    style={getAttachmentAspectRatioStyle(attachment)}
+                    style={{ aspectRatio: geometryStyle.aspectRatio }}
                   >
-                    {visualUrl ? (
-                      <video
+                    {isActivated && visualUrl && !hasFailed ? (
+                      <ActivatedVideo
                         src={visualUrl}
-                        controls
-                        playsInline
-                        preload="metadata"
-                        className="max-h-80 w-full object-contain"
-                        aria-label={`Video attachment: ${attachment.fileName}`}
-                      >
-                        Your browser does not support video playback.
-                      </video>
-                    ) : null}
+                        fileName={attachment.fileName}
+                        attemptPlayback={!isLocalVideo}
+                        onError={() =>
+                          setFailedVideoIds((current) =>
+                            new Set(current).add(attachmentId),
+                          )
+                        }
+                      />
+                    ) : (
+                      <>
+                        <ThumbnailPlaceholderBackground />
+                        <button
+                          type="button"
+                          className="relative z-10 flex w-full flex-col items-center justify-center gap-2.5 px-4 text-(--text) focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-(--accent)"
+                          aria-label={`${hasFailed ? "Retry" : "Play"} video ${attachment.fileName}`}
+                          onClick={() => {
+                            setFailedVideoIds((current) => {
+                              const next = new Set(current);
+                              next.delete(attachmentId);
+                              return next;
+                            });
+                            setActivatedVideoIds((current) =>
+                              new Set(current).add(attachmentId),
+                            );
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter" && event.key !== " ") return;
+                            event.preventDefault();
+                            setFailedVideoIds((current) => {
+                              const next = new Set(current);
+                              next.delete(attachmentId);
+                              return next;
+                            });
+                            setActivatedVideoIds((current) =>
+                              new Set(current).add(attachmentId),
+                            );
+                          }}
+                        >
+                          {hasFailed ? (
+                            <>
+                              <VideoCamera size={28} weight="duotone" />
+                              <span className="text-sm">Unable to load video. Retry</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="grid size-14 place-items-center rounded-full border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_65%,transparent)] shadow-sm backdrop-blur-xs">
+                                <Play size={28} weight="fill" />
+                              </span>
+                              <span className="text-sm font-semibold">Play video</span>
+                            </>
+                          )}
+                        </button>
+                      </>
+                    )}
                     <AttachmentUploadTreatment attachment={attachment} />
                   </div>
                   <AttachmentMetadata attachment={attachment} />
@@ -168,6 +233,7 @@ export function DiscussionAttachmentsList({
             <img
               src={getAttachmentVisualUrl(viewerAttachment)}
               alt={viewerAttachment.fileName}
+              decoding="async"
               className="max-h-[88dvh] max-w-[92vw] rounded-xl object-contain shadow-2xl"
             />
             <button
@@ -182,6 +248,46 @@ export function DiscussionAttachmentsList({
         )}
       </dialog>
     </>
+  );
+}
+
+function ActivatedVideo({
+  src,
+  fileName,
+  attemptPlayback,
+  onError,
+}: {
+  src: string;
+  fileName: string;
+  attemptPlayback: boolean;
+  onError: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (!attemptPlayback) return;
+    try {
+      const playResult = videoRef.current?.play();
+      void playResult?.catch(() => undefined);
+    } catch {
+      // Browsers may reject playback even after an activated video is mounted.
+    }
+  }, [attemptPlayback]);
+
+  return (
+    <video
+      ref={videoRef}
+      src={src}
+      controls
+      playsInline
+      autoPlay={attemptPlayback}
+      preload={attemptPlayback ? undefined : "metadata"}
+      className="h-full w-full object-contain"
+      aria-label={`Video attachment: ${fileName}`}
+      onError={onError}
+    >
+      Your browser does not support video playback.
+    </video>
   );
 }
 

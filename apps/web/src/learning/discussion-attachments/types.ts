@@ -37,16 +37,25 @@ export type AttachmentVisualItem = Pick<
 
 export function getAttachmentAspectRatioStyle(
   attachment: Pick<DiscussionAttachmentItem, "width" | "height">,
-): { aspectRatio: string } | undefined {
-  if (
-    !attachment.width ||
-    !attachment.height ||
-    !Number.isInteger(attachment.width) ||
-    !Number.isInteger(attachment.height)
-  ) {
-    return undefined;
-  }
-  return { aspectRatio: `${attachment.width} / ${attachment.height}` };
+): { aspectRatio: string; width: string } {
+  const rawWidth = attachment.width;
+  const rawHeight = attachment.height;
+  const hasValidDimensions =
+    typeof rawWidth === "number" &&
+    typeof rawHeight === "number" &&
+    Number.isInteger(rawWidth) &&
+    Number.isInteger(rawHeight) &&
+    rawWidth > 0 &&
+    rawHeight > 0;
+  const width = hasValidDimensions ? rawWidth! : 16;
+  const height = hasValidDimensions ? rawHeight! : 9;
+  const ratio = width / height;
+  const maxHeightRem = ratio < 1 ? 24 : 20;
+
+  return {
+    aspectRatio: `${width} / ${height}`,
+    width: `min(100%, ${maxHeightRem * ratio}rem)`,
+  };
 }
 
 export function formatFileSize(bytes: number): string {
