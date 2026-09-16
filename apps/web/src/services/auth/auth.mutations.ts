@@ -42,6 +42,7 @@ function persistAuthenticatedSession(
     username: data.user.username,
     displayName: data.user.displayName,
     avatarDataUrl: data.user.avatarDataUrl,
+    avatarSrcSet: data.user.avatarSrcSet,
     bio: data.user.bio,
     emailPublic: data.user.emailPublic,
     mobilePublic: data.user.mobilePublic,

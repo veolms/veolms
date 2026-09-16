@@ -376,7 +376,7 @@ describe("Learning Workspace - Real Course Overview API Wiring", () => {
       const mockOverview = createMockOverview({
         thumbnailMediaId: "thumb-asset-999",
         thumbnailUrl:
-          "https://cdn.example.com/thumbnails/thumb-asset-999/processed/full.webp",
+          "https://cdn.example.com/public/thumbnails/thumb-asset-999/full.webp",
       });
       queryClient.setQueryData(
         courseKeys.overview("modern-ts-deep-dive"),
@@ -396,7 +396,7 @@ describe("Learning Workspace - Real Course Overview API Wiring", () => {
       );
       expect(coverImg).not.toBeNull();
       expect(coverImg?.getAttribute("src")).toBe(
-        "https://cdn.example.com/thumbnails/thumb-asset-999/processed/full.webp",
+        "https://cdn.example.com/public/thumbnails/thumb-asset-999/full.webp",
       );
     });
 

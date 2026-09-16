@@ -513,6 +513,9 @@ importers:
       '@veolms/fleet-types':
         specifier: workspace:*
         version: link:../fleet-types
+      '@veolms/storage':
+        specifier: workspace:*
+        version: link:../storage
     devDependencies:
       '@types/node':
         specifier: ^24.10.13
