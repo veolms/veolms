@@ -86,6 +86,8 @@ export function formatCoursePricing(
  */
 export function adaptCourseSummaryToCatalogueCourse(
   summary: CourseSummary,
+  enrolled?: ReadonlySet<string> | boolean | number,
+  progressMap?: ReadonlyMap<string, number | null> | unknown,
 ): Course {
   const validLevel: CourseLevel =
     summary.difficulty === "advanced" || summary.difficulty === "intermediate"
@@ -100,6 +102,27 @@ export function adaptCourseSummaryToCatalogueCourse(
       ? summary.categoryName
       : "Development";
 
+  const isEnrolled =
+    typeof enrolled === "boolean"
+      ? enrolled
+      : typeof enrolled === "number" || !enrolled
+        ? false
+        : enrolled.has(summary.id) ||
+          (summary.slug ? enrolled.has(summary.slug) : false);
+
+  const validProgressMap =
+    progressMap &&
+    typeof (progressMap as ReadonlyMap<string, number | null>).get ===
+      "function"
+      ? (progressMap as ReadonlyMap<string, number | null>)
+      : null;
+
+  const courseProgress = validProgressMap
+    ? (validProgressMap.get(summary.id) ??
+      (summary.slug ? validProgressMap.get(summary.slug) : null) ??
+      null)
+    : null;
+
   return {
     id: summary.id,
     slug: summary.slug,
@@ -109,8 +132,8 @@ export function adaptCourseSummaryToCatalogueCourse(
     category: validCategory,
     sections: summary.totalSections,
     lectures: summary.totalLessons,
-    progress: null,
-    enrolled: false,
+    progress: courseProgress,
+    enrolled: isEnrolled,
     duration: formatDuration(summary.totalDurationSeconds),
     students: 0,
     thumbnail: summary.thumbnailUrl || "",
@@ -126,7 +149,11 @@ export function adaptCourseSummaryToCatalogueCourse(
  * Adapts an API course from GET /api/v1/courses/mine into the frontend Course model
  * consumed by CourseCatalogue and CourseCard.
  */
-export function adaptApiCourseToCatalogueCourse(apiCourse: ApiCourse): Course {
+export function adaptApiCourseToCatalogueCourse(
+  apiCourse: ApiCourse,
+  enrolled?: ReadonlySet<string> | boolean | number,
+  progressMap?: ReadonlyMap<string, number | null> | unknown,
+): Course {
   const thumbnail =
     apiCourse.thumbnailUrl ||
     getCourseThumbnailCdnUrl(apiCourse.thumbnailMediaId) ||
@@ -138,6 +165,27 @@ export function adaptApiCourseToCatalogueCourse(apiCourse: ApiCourse): Course {
     apiCourse.status === "archived"
       ? apiCourse.status
       : "draft";
+
+  const isEnrolled =
+    typeof enrolled === "boolean"
+      ? enrolled
+      : typeof enrolled === "number" || !enrolled
+        ? false
+        : enrolled.has(apiCourse.id) ||
+          (apiCourse.slug ? enrolled.has(apiCourse.slug) : false);
+
+  const validProgressMap =
+    progressMap &&
+    typeof (progressMap as ReadonlyMap<string, number | null>).get ===
+      "function"
+      ? (progressMap as ReadonlyMap<string, number | null>)
+      : null;
+
+  const courseProgress = validProgressMap
+    ? (validProgressMap.get(apiCourse.id) ??
+      (apiCourse.slug ? validProgressMap.get(apiCourse.slug) : null) ??
+      null)
+    : null;
 
   return {
     id: apiCourse.id,
@@ -152,8 +200,8 @@ export function adaptApiCourseToCatalogueCourse(apiCourse: ApiCourse): Course {
     category: "Development",
     sections: apiCourse.totalSections ?? 0,
     lectures: apiCourse.totalLessons ?? 0,
-    progress: null,
-    enrolled: false,
+    progress: courseProgress,
+    enrolled: isEnrolled,
     duration: formatDuration(apiCourse.totalDurationSeconds ?? 0),
     students: 0,
     thumbnail,

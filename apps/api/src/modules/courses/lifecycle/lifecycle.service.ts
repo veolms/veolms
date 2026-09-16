@@ -166,8 +166,12 @@ export function createLifecycleService({
       }
     }
 
-    // Validate media status for all lessons
+    // Quiz lessons are self-contained and intentionally do not have a media
+    // asset. Video/document lessons still use the existing media validation.
     for (const lesson of lessons) {
+      if (lesson.content_type === "quiz") {
+        continue;
+      }
       if (!lesson.content_media_id) {
         const msg = `Lesson "${lesson.title}" does not have media content attached.`;
         curriculumErrors.push(msg);

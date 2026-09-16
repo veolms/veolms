@@ -13,6 +13,9 @@ import {
   moderationUserUnsuspendedEventSchema,
   paymentCompletedEventSchema,
   paymentFailedEventSchema,
+  quizAssignedEventSchema,
+  quizAttemptFailedFinalEventSchema,
+  quizAttemptPassedEventSchema,
   refundCompletedEventSchema,
   userMentionedEventSchema,
   videoProcessingEventSchema,
@@ -344,6 +347,64 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         deepLink: "/discussions",
       },
     ];
+  },
+  "quiz.attempt.passed": async (payload) => {
+    const event = quizAttemptPassedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "quiz.attempt.passed",
+        category: "learning",
+        templateKey: "quiz.attempt_passed",
+        templateData: {
+          courseTitle: event.courseTitle,
+          quizTitle: event.quizTitle,
+          scorePercentage: event.scorePercentage,
+        },
+        channels: commonChannels,
+        mandatory: false,
+        deepLink: event.deepLink,
+      },
+    ];
+  },
+  "quiz.attempt.failed_final": async (payload) => {
+    const event = quizAttemptFailedFinalEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "quiz.attempt.failed_final",
+        category: "learning",
+        templateKey: "quiz.attempt_failed_final",
+        templateData: {
+          courseTitle: event.courseTitle,
+          quizTitle: event.quizTitle,
+          maxAttempts: event.maxAttempts,
+          scorePercentage: event.scorePercentage,
+        },
+        channels: commonChannels,
+        mandatory: false,
+        deepLink: event.deepLink,
+      },
+    ];
+  },
+  "quiz.assigned": async (payload, dependencies) => {
+    const event = quizAssignedEventSchema.parse(payload);
+    const recipientUserIds =
+      await dependencies.listActiveCourseRecipientUserIds(event.courseId);
+    return recipientUserIds.map((recipientUserId) => ({
+      recipientUserId,
+      type: "quiz.assigned",
+      category: "learning",
+      templateKey: "quiz.assigned",
+      templateData: {
+        courseTitle: event.courseTitle,
+        quizTitle: event.quizTitle,
+        lessonTitle: event.lessonTitle,
+      },
+      channels: commonChannels,
+      mandatory: false,
+      deepLink: event.deepLink,
+    }));
   },
 };
 

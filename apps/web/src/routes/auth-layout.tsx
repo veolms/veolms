@@ -1,6 +1,5 @@
 import type { Route } from "./+types/auth-layout";
 import { Outlet, redirect } from "react-router";
-import { AuthBrandPanel } from "../auth/AuthBrandPanel";
 import { useAuthAppearance } from "../auth/useAuthAppearance";
 import { queryClient } from "../lib/query-client";
 import { AuthRouteGuard } from "../routing/RouteGuards";
@@ -15,8 +14,6 @@ import {
 } from "../services/auth";
 import { productName } from "../routing/routeDescriptors";
 import { authStore } from "../store/auth.store";
-import "../auth/auth.css";
-import "../auth/mfa-setup.css";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const url = new URL(request.url);
@@ -65,10 +62,6 @@ export default function AuthLayout() {
       <div className="auth-page__container">
         <div className="auth-page__form-column">
           <AuthRouteGuard />
-        </div>
-
-        <div className="auth-page__brand-column">
-          <AuthBrandPanel />
         </div>
       </div>
 

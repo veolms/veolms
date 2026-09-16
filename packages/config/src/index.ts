@@ -95,8 +95,9 @@ const serverConfigSchema = z.object({
   SETUP_TOKEN: z.string().default("veo_setup_token_123"),
 
   // WebAuthn Passkeys Config
-  RP_ID: z.string().default("localhost"),
+  RP_ID: z.string().optional(),
   RP_NAME: z.string().default("VeoLMS"),
+  WEBAUTHN_ORIGINS: z.string().optional(),
 
   // TOTP Configuration
   TOTP_STEP_SECONDS: z.coerce.number().int().min(1).default(30),
@@ -266,8 +267,80 @@ function resolveEmailTransport(parsed: ParsedServerConfig): "smtp" | "console" {
     : "smtp";
 }
 
-export type ServerConfig = ParsedServerConfig & {
+function resolveWebAuthnOrigins(parsed: ParsedServerConfig): string[] {
+  const origins = new Set<string>();
+
+  try {
+    origins.add(new URL(parsed.WEB_URL).origin);
+  } catch {
+    origins.add(parsed.WEB_URL);
+  }
+
+  if (parsed.WEBAUTHN_ORIGINS) {
+    for (const origin of parsed.WEBAUTHN_ORIGINS.split(",")) {
+      const trimmed = origin.trim();
+      if (trimmed) {
+        try {
+          origins.add(new URL(trimmed).origin);
+        } catch {
+          origins.add(trimmed);
+        }
+      }
+    }
+  }
+
+  if (parsed.NODE_ENV !== "production") {
+    origins.add("http://localhost:3000");
+    origins.add("http://127.0.0.1:3000");
+    origins.add("http://localhost:4173");
+    origins.add("http://127.0.0.1:4173");
+    origins.add("http://localhost:7000");
+    origins.add("http://127.0.0.1:7000");
+  }
+
+  return Array.from(origins);
+}
+
+function resolveWebAuthnRpId(parsed: ParsedServerConfig): string {
+  if (parsed.RP_ID && parsed.RP_ID.trim().length > 0) {
+    return parsed.RP_ID.trim();
+  }
+  try {
+    return new URL(parsed.WEB_URL).hostname;
+  } catch {
+    return "localhost";
+  }
+}
+
+function resolveWebAuthnRpIds(
+  resolvedRpId: string,
+  origins: string[],
+): string[] {
+  const rpIds = new Set<string>();
+  if (resolvedRpId) {
+    rpIds.add(resolvedRpId);
+  }
+  for (const origin of origins) {
+    try {
+      const hostname = new URL(origin).hostname;
+      if (hostname) {
+        rpIds.add(hostname);
+      }
+    } catch {
+      // Ignore malformed URLs
+    }
+  }
+  return Array.from(rpIds);
+}
+
+export type ServerConfig = Omit<
+  ParsedServerConfig,
+  "RP_ID" | "WEBAUTHN_ORIGINS"
+> & {
   EMAIL_TRANSPORT: "smtp" | "console";
+  RP_ID: string;
+  WEBAUTHN_ORIGINS: string[];
+  WEBAUTHN_RP_IDS: string[];
 };
 
 export function loadServerConfig(
@@ -298,7 +371,17 @@ export function loadServerConfig(
     );
   }
 
-  return { ...parsed, EMAIL_TRANSPORT: resolveEmailTransport(parsed) };
+  const resolvedRpId = resolveWebAuthnRpId(parsed);
+  const origins = resolveWebAuthnOrigins(parsed);
+  const rpIds = resolveWebAuthnRpIds(resolvedRpId, origins);
+
+  return {
+    ...parsed,
+    EMAIL_TRANSPORT: resolveEmailTransport(parsed),
+    RP_ID: resolvedRpId,
+    WEBAUTHN_ORIGINS: origins,
+    WEBAUTHN_RP_IDS: rpIds,
+  };
 }
 
 export function loadWebConfig(environment: Record<string, string | undefined>) {

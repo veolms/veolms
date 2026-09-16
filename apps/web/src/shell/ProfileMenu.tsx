@@ -5,6 +5,8 @@ import { StudentIcon as Student } from "@phosphor-icons/react/Student";
 import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { useEffect, useState } from "react";
+import type { AvatarImageVariant } from "@veolms/contracts";
+import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
 import type { CourseRole } from "../courses/catalogue";
 import { getRoleDisplayName } from "./workspaceRole";
 
@@ -13,15 +15,18 @@ const FALLBACK_AVATAR_CLASS =
 
 export function ShellProfileAvatar({
   avatarUrl,
+  avatarSrcSet,
 }: {
   avatarUrl: string | null;
+  avatarSrcSet?: readonly AvatarImageVariant[] | null;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const showImage = Boolean(avatarUrl) && !imageFailed;
+  const avatarSources = avatarSrcSet?.length ? avatarSrcSet : undefined;
 
   useEffect(() => {
     setImageFailed(false);
-  }, [avatarUrl]);
+  }, [avatarUrl, avatarSources]);
 
   return (
     <i
@@ -31,8 +36,10 @@ export function ShellProfileAvatar({
       aria-hidden="true"
     >
       {showImage && avatarUrl ? (
-        <img
+        <ResponsiveAvatar
           src={avatarUrl}
+          srcSet={avatarSources}
+          sizes="43px"
           alt=""
           width={43}
           height={43}

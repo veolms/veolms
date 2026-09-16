@@ -19,12 +19,16 @@ import { MFA_CONFIG } from "../auth/mfa.config";
 import { OtpCodeInput } from "../auth/OtpCodeInput";
 import { validateOtpCode } from "../auth/authFlow";
 import { isPasskeySupported, startPasskeyRegistration } from "../auth/webauthn";
+import { useQueryClient } from "@tanstack/react-query";
 import {
+  authKeys,
   useCurrentUser,
   useSetupTotp,
   useEnableTotp,
+  useDisableTotp,
   usePasskeyRegisterOptions,
   usePasskeyRegisterVerify,
+  useDeletePasskeys,
   useSessions,
   useRevokeSession,
   useRevokeAllOtherSessions,
@@ -57,6 +61,8 @@ function SettingsModalOverlay({
   );
 }
 
+import { downloadBackupCodesTxt } from "../auth/backupCodes.ts";
+
 interface BackupCodesModalProps {
   codes: string[];
   onClose: () => void;
@@ -64,6 +70,7 @@ interface BackupCodesModalProps {
 
 function BackupCodesModal({ codes, onClose }: BackupCodesModalProps) {
   const [copied, setCopied] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
 
   const copyAll = async () => {
     try {
@@ -73,6 +80,12 @@ function BackupCodesModal({ codes, onClose }: BackupCodesModalProps) {
     } catch {
       /* clipboard write error */
     }
+  };
+
+  const handleDownload = () => {
+    downloadBackupCodesTxt(codes);
+    setDownloaded(true);
+    setTimeout(() => setDownloaded(false), 2500);
   };
 
   return (
@@ -107,13 +120,22 @@ function BackupCodesModal({ codes, onClose }: BackupCodesModalProps) {
           className="auth-mfa-setup__modal-actions"
           style={{ justifyContent: "space-between" }}
         >
-          <button
-            className="auth-mfa-setup__copy-button"
-            onClick={copyAll}
-            type="button"
-          >
-            {copied ? "Copied!" : "Copy all codes"}
-          </button>
+          <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+            <button
+              className="auth-mfa-setup__copy-button"
+              onClick={copyAll}
+              type="button"
+            >
+              {copied ? "Copied!" : "Copy all codes"}
+            </button>
+            <button
+              className="auth-mfa-setup__copy-button"
+              onClick={handleDownload}
+              type="button"
+            >
+              {downloaded ? "Downloaded!" : "Download .txt"}
+            </button>
+          </div>
           <button className="settings-action" onClick={onClose} type="button">
             Done
           </button>
@@ -154,6 +176,8 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
     void startSetup();
   }
 
+  const queryClient = useQueryClient();
+
   const submitCode = async (codeToVerify: string) => {
     const validationError = validateOtpCode(codeToVerify);
     if (validationError) {
@@ -166,6 +190,8 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
         code: codeToVerify,
         secret,
       });
+      await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+      await queryClient.invalidateQueries({ queryKey: authKeys.sessions() });
       onSuccess(result.backupCodes);
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
@@ -353,12 +379,15 @@ export function SecuritySettings({
   const revokeAll = useRevokeAllOtherSessions();
   const passkeyOptionsMutation = usePasskeyRegisterOptions();
   const passkeyVerifyMutation = usePasskeyRegisterVerify();
+  const disableTotpMutation = useDisableTotp();
+  const deletePasskeysMutation = useDeletePasskeys();
 
   const [showTotpModal, setShowTotpModal] = useState(false);
   const [backupCodes, setBackupCodes] = useState<string[] | null>(null);
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
   const [passkeySuccess, setPasskeySuccess] = useState(false);
   const [totpSuccess, setTotpSuccess] = useState(false);
+  const [totpError, setTotpError] = useState<string | null>(null);
 
   const totpEnabled = currentUser?.totpEnabled ?? false;
   const passkeyEnabled = currentUser?.passkeyEnabled ?? false;
@@ -388,6 +417,36 @@ export function SecuritySettings({
       const errorObj = err as { message?: string };
       setPasskeyError(
         errorObj?.message || "Passkey registration failed. Please try again.",
+      );
+    }
+  };
+
+  const handleRemovePasskey = async () => {
+    if (!isAuthenticated || deletePasskeysMutation.isPending) return;
+    setPasskeyError(null);
+    setPasskeySuccess(false);
+    try {
+      await deletePasskeysMutation.mutateAsync();
+      setPasskeySuccess(false);
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
+      setPasskeyError(
+        errorObj?.message || "Failed to remove passkey. Please try again.",
+      );
+    }
+  };
+
+  const handleDisableTotp = async () => {
+    if (!isAuthenticated || disableTotpMutation.isPending) return;
+    setTotpError(null);
+    setTotpSuccess(false);
+    try {
+      await disableTotpMutation.mutateAsync();
+      setTotpSuccess(false);
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
+      setTotpError(
+        errorObj?.message || "Failed to remove authenticator app. Please try again.",
       );
     }
   };
@@ -574,27 +633,41 @@ export function SecuritySettings({
                   }
                 >
                   {passkeyBrowserSupported ? (
-                    <button
-                      aria-busy={
-                        passkeyOptionsMutation.isPending ||
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      {passkeyEnabled && (
+                        <button
+                          aria-busy={deletePasskeysMutation.isPending}
+                          className="settings-action settings-action--quiet"
+                          disabled={!isAuthenticated || deletePasskeysMutation.isPending}
+                          onClick={handleRemovePasskey}
+                          type="button"
+                        >
+                          {deletePasskeysMutation.isPending ? "Removing…" : "Remove"}
+                        </button>
+                      )}
+                      <button
+                        aria-busy={
+                          passkeyOptionsMutation.isPending ||
+                          passkeyVerifyMutation.isPending
+                        }
+                        className="settings-action"
+                        disabled={
+                          !isAuthenticated ||
+                          passkeyOptionsMutation.isPending ||
+                          passkeyVerifyMutation.isPending ||
+                          deletePasskeysMutation.isPending
+                        }
+                        onClick={handleRegisterPasskey}
+                        type="button"
+                      >
+                        {passkeyOptionsMutation.isPending ||
                         passkeyVerifyMutation.isPending
-                      }
-                      className="settings-action"
-                      disabled={
-                        !isAuthenticated ||
-                        passkeyOptionsMutation.isPending ||
-                        passkeyVerifyMutation.isPending
-                      }
-                      onClick={handleRegisterPasskey}
-                      type="button"
-                    >
-                      {passkeyOptionsMutation.isPending ||
-                      passkeyVerifyMutation.isPending
-                        ? "Registering…"
-                        : passkeyEnabled
-                          ? "Replace passkey"
-                          : "Register passkey"}
-                    </button>
+                          ? "Registering…"
+                          : passkeyEnabled
+                            ? "Replace"
+                            : "Register passkey"}
+                      </button>
+                    </div>
                   ) : (
                     <StatusNote>Not supported in this browser</StatusNote>
                   )}
@@ -644,19 +717,38 @@ export function SecuritySettings({
                         : "Add an extra layer of security to your sign-in."
                   }
                 >
-                  <button
-                    className="settings-action"
-                    onClick={() => setShowTotpModal(true)}
-                    disabled={!isAuthenticated}
-                    type="button"
-                  >
-                    {totpEnabled ? "Reconfigure" : "Set up"}
-                  </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    {totpEnabled && (
+                      <button
+                        aria-busy={disableTotpMutation.isPending}
+                        className="settings-action settings-action--quiet"
+                        disabled={!isAuthenticated || disableTotpMutation.isPending}
+                        onClick={handleDisableTotp}
+                        type="button"
+                      >
+                        {disableTotpMutation.isPending ? "Removing…" : "Remove"}
+                      </button>
+                    )}
+                    <button
+                      className="settings-action"
+                      onClick={() => setShowTotpModal(true)}
+                      disabled={!isAuthenticated || disableTotpMutation.isPending}
+                      type="button"
+                    >
+                      {totpEnabled ? "Reconfigure" : "Set up"}
+                    </button>
+                  </div>
                 </SettingRow>
 
                 {totpSuccess && (
                   <p className="auth-mfa-setup__success-note" role="status">
                     ✓ Authenticator app activated successfully.
+                  </p>
+                )}
+
+                {totpError && (
+                  <p className="auth-form__error px-3.5 py-1" role="alert">
+                    {totpError}
                   </p>
                 )}
               </div>

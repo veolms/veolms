@@ -8,6 +8,7 @@ import { OtpCodeInput } from "./OtpCodeInput.tsx";
 import {
   AUTH_CARD_HEADING_ID,
   OTP_ACTION_LABELS,
+  validateBackupCode,
   validateOtpCode,
 } from "./authFlow.ts";
 
@@ -27,9 +28,11 @@ export interface TwoFactorFormProps {
 type TwoFactorMethod = TwoFactorFormProps["method"];
 
 const CODE_LABEL = "Authentication code";
+const BACKUP_CODE_LABEL = "Backup recovery code";
 const MESSAGE_ID = "auth-two-factor-message";
 const PASSKEY_ACTION = "Continue with passkey";
 const USE_AUTHENTICATOR_ACTION = "Use authenticator app instead";
+const USE_BACKUP_CODE_ACTION = "Use a backup code instead";
 const USE_PASSKEY_ACTION = "Use passkey instead";
 
 const METHOD_TABS: readonly (readonly [TwoFactorMethod, string, IconName])[] = [
@@ -51,11 +54,13 @@ export function TwoFactorForm({
 }: TwoFactorFormProps) {
   const verifying = status === "verifying";
   const [invalidReason, setInvalidReason] = useState<string | null>(null);
+  const [useBackupCode, setUseBackupCode] = useState(false);
   const error = invalidReason ?? errorMessage ?? null;
   const hasBothMethods = allowPasskey && allowAuthenticator;
 
   const chooseMethod = (next: TwoFactorMethod) => {
     setInvalidReason(null);
+    setUseBackupCode(false);
     onMethodChange(next);
   };
 
@@ -63,28 +68,33 @@ export function TwoFactorForm({
     setInvalidReason(null);
     onCodeChange(next);
 
-    if (next.length === 6 && !validateOtpCode(next) && !verifying) {
+    if (!useBackupCode && next.length === 6 && !validateOtpCode(next) && !verifying) {
+      onSubmit(next);
+    } else if (useBackupCode && next.length === 8 && !validateBackupCode(next) && !verifying) {
       onSubmit(next);
     }
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const reason = validateOtpCode(code);
+    const reason = useBackupCode ? validateBackupCode(code) : validateOtpCode(code);
     setInvalidReason(reason);
 
     if (reason) {
       return;
     }
 
-    onSubmit(code);
+    const clean = useBackupCode ? code.trim().replace(/\s+/g, "") : code;
+    onSubmit(clean);
   };
 
   const subheadingText = hasBothMethods
     ? "Choose a method to verify your identity"
     : method === "passkey"
       ? "Verify your identity with your passkey"
-      : "Enter the code from your authenticator app";
+      : useBackupCode
+        ? "Enter one of your 8-digit backup codes"
+        : "Enter the code from your authenticator app";
 
   return (
     <div className="auth-two-factor">
@@ -188,24 +198,56 @@ export function TwoFactorForm({
         ) : (
           <form className="auth-form" noValidate onSubmit={submit}>
             <div className="auth-form__field">
-              <p className="auth-form__section-label">{CODE_LABEL}</p>
-
-              <OtpCodeInput
-                describedBy={error === null ? undefined : MESSAGE_ID}
-                disabled={verifying}
-                invalid={error !== null}
-                label={CODE_LABEL}
-                onChange={changeCode}
-                value={code}
-              />
-
-              <p className="auth-form__helper">
-                Open your authenticator app and enter the 6-digit code.
+              <p className="auth-form__section-label">
+                {useBackupCode ? BACKUP_CODE_LABEL : CODE_LABEL}
               </p>
-              <p className="auth-form__helper">
-                Works with Google Authenticator, Authy, or Microsoft
-                Authenticator.
-              </p>
+
+              {useBackupCode ? (
+                <div className="auth-form__input-shell">
+                  <Icon aria-hidden name="lock" size={18} />
+                  <input
+                    aria-describedby={error === null ? undefined : MESSAGE_ID}
+                    aria-invalid={error !== null}
+                    autoComplete="off"
+                    autoFocus
+                    className="auth-form__input"
+                    disabled={verifying}
+                    inputMode="numeric"
+                    maxLength={8}
+                    onChange={(event) => {
+                      const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
+                      changeCode(digits);
+                    }}
+                    placeholder="8-digit backup code"
+                    type="text"
+                    value={code}
+                  />
+                </div>
+              ) : (
+                <OtpCodeInput
+                  describedBy={error === null ? undefined : MESSAGE_ID}
+                  disabled={verifying}
+                  invalid={error !== null}
+                  label={CODE_LABEL}
+                  onChange={changeCode}
+                  value={code}
+                />
+              )}
+
+              {useBackupCode ? (
+                <p className="auth-form__helper">
+                  Enter one of your 8-digit backup codes. Each code can only be used once.
+                </p>
+              ) : (
+                <>
+                  <p className="auth-form__helper">
+                    Open your authenticator app and enter the 6-digit code.
+                  </p>
+                  <p className="auth-form__helper">
+                    Works with Google Authenticator, Authy, or Microsoft Authenticator.
+                  </p>
+                </>
+              )}
 
               {error === null ? null : (
                 <p className="auth-form__error" id={MESSAGE_ID} role="alert">
@@ -226,6 +268,18 @@ export function TwoFactorForm({
                   : OTP_ACTION_LABELS.verify}
               </span>
               <Icon aria-hidden emphasis="bold" name="arrowRight" size={18} />
+            </button>
+
+            <button
+              className="auth-two-factor__alternate"
+              onClick={() => {
+                setInvalidReason(null);
+                onCodeChange("");
+                setUseBackupCode(!useBackupCode);
+              }}
+              type="button"
+            >
+              {useBackupCode ? USE_AUTHENTICATOR_ACTION : USE_BACKUP_CODE_ACTION}
             </button>
 
             {hasBothMethods ? (

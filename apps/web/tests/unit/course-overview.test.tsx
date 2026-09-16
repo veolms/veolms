@@ -307,7 +307,7 @@ describe("CourseOverviewPage", () => {
       price: "Free",
     };
 
-    it("1. Creator viewing their course normally shows only 'Continue Learning' and opens Learning Space", () => {
+    it("1. Creator viewing their course normally shows only 'Continue Learning' and opens course player", () => {
       const onNavigatePage = vi.fn();
       renderWithClient(
         <CourseOverviewPage
@@ -330,7 +330,7 @@ describe("CourseOverviewPage", () => {
       expect(continueBtn).toBeVisible();
       expect(continueBtn).not.toBeDisabled();
 
-      // Clicking it opens Learning Space
+      // Clicking it opens course player
       fireEvent.click(continueBtn);
       expect(onNavigatePage).toHaveBeenCalledTimes(1);
       expect(onNavigatePage).toHaveBeenCalledWith(`/learn/${sampleCourse.slug}`);
@@ -442,7 +442,7 @@ describe("CourseOverviewPage", () => {
       expect(screen.getByRole("button", { name: /Apply coupon/i })).toBeVisible();
     });
 
-    it("3c. Student (Free) shows 'Free' and 'Continue Learning' opening Learning Space without coupon", () => {
+    it("3c. Student (Free) shows 'Free' and 'Continue Learning' opening course player without coupon", () => {
       const onNavigatePage = vi.fn();
       renderWithClient(
         <CourseOverviewPage
@@ -466,7 +466,7 @@ describe("CourseOverviewPage", () => {
       expect(continueBtn).toBeVisible();
       expect(continueBtn).not.toBeDisabled();
 
-      // Clicking opens existing Learning Space
+      // Clicking opens course player
       fireEvent.click(continueBtn);
       expect(onNavigatePage).toHaveBeenCalledTimes(1);
       expect(onNavigatePage).toHaveBeenCalledWith(`/learn/${sampleCourse.slug}`);

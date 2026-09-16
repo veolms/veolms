@@ -1,4 +1,6 @@
-import { ADMIN_ROLE } from "./auth.constants.ts";
+import { ADMIN_ROLE, INSTRUCTOR_ROLE } from "./auth.constants.ts";
+
+const MANDATORY_MFA_ROLES = new Set([ADMIN_ROLE, INSTRUCTOR_ROLE]);
 
 export function isMfaMandatoryAccount(
   storedFlag: boolean,
@@ -9,7 +11,7 @@ export function isMfaMandatoryAccount(
   }
 
   return Boolean(
-    roles?.some((role) => role.toLowerCase() === ADMIN_ROLE),
+    roles?.some((role) => MANDATORY_MFA_ROLES.has(role.toLowerCase())),
   );
 }
 

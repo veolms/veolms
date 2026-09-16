@@ -89,6 +89,17 @@
     );
   }
 
+  .courses-main:has([data-quiz-surface]),
+  .student-surface-main:has([data-quiz-surface]),
+  :root:has([data-quiz-surface]) .courses-main,
+  :root:has([data-quiz-surface]) .student-surface-main {
+    --application-page-block-start: 16px;
+    --application-page-inline-gutter: 14px;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+    padding-top: 16px !important;
+  }
+
   .courses-main.courses-main--learning {
     overflow: visible;
   }

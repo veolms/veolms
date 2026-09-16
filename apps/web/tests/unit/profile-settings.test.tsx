@@ -1,7 +1,18 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { AVATAR_STYLES } from "@veolms/contracts";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import {
+  AVATAR_STYLES,
+  avatarUploadContentTypeSchema,
+} from "@veolms/contracts";
 import { ProfileSettings } from "../../src/settings/ProfileSettings.tsx";
 import { autosyncManager, getAutosyncDraftKey } from "../../src/lib/autosync";
 import { renderWithQueryClient } from "./test-utils.tsx";
@@ -14,6 +25,7 @@ const authMocks = vi.hoisted(() => ({
   useVerifyEmail: vi.fn(),
   useVerifyPhoneNumber: vi.fn(),
   authService: { updateProfile: vi.fn(), uploadAvatarPhoto: vi.fn() },
+  resolveAvatarUploadContentType: vi.fn(),
   authKeys: { me: () => ["auth", "me"] },
   sendEmailVerification: vi.fn(),
   sendPhoneVerification: vi.fn(),
@@ -31,6 +43,7 @@ vi.mock("../../src/services/auth", () => ({
   useVerifyPhoneNumber: authMocks.useVerifyPhoneNumber,
   authService: authMocks.authService,
   authKeys: authMocks.authKeys,
+  resolveAvatarUploadContentType: authMocks.resolveAvatarUploadContentType,
 }));
 
 const profileUser = {
@@ -38,6 +51,7 @@ const profileUser = {
   username: "nileshyadav",
   displayName: "Nilesh Yadav",
   avatarDataUrl: null,
+  avatarSrcSet: [],
   bio: "",
   emailPublic: false,
   mobilePublic: false,
@@ -58,6 +72,14 @@ const profileUser = {
   totpEnabled: false,
   passkeyEnabled: false,
   mfaMandatory: false,
+};
+
+const AVATAR_CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
+  gif: "image/gif",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
 };
 
 beforeAll(() => {
@@ -89,6 +111,20 @@ describe("ProfileSettings mobile visibility confirmation", () => {
         authMocks.mutateAsync(...args),
     );
     authMocks.authService.uploadAvatarPhoto.mockReset();
+    authMocks.resolveAvatarUploadContentType.mockReset();
+    authMocks.resolveAvatarUploadContentType.mockImplementation(
+      (file: File) => {
+        const declaredType = file.type.trim().toLowerCase();
+        if (declaredType) {
+          const parsedType =
+            avatarUploadContentTypeSchema.safeParse(declaredType);
+          return parsedType.success ? parsedType.data : null;
+        }
+        const extension =
+          file.name.split(".").pop()?.trim().toLowerCase() ?? "";
+        return AVATAR_CONTENT_TYPE_BY_EXTENSION[extension] ?? null;
+      },
+    );
     authMocks.sendEmailVerification.mockReset();
     authMocks.sendPhoneVerification.mockReset();
     authMocks.verifyEmail.mockReset();
@@ -353,6 +389,43 @@ describe("ProfileSettings mobile visibility confirmation", () => {
     expect(screen.getAllByText("Verified")).toHaveLength(2);
   });
 
+  it("shows error and keeps profile signed in when mobile verification code is invalid", async () => {
+    authMocks.useCurrentUser.mockReturnValue({
+      data: { ...profileUser, phoneNo: null, mobileVerified: false },
+      isFetched: true,
+    });
+    authMocks.verifyPhoneNumber.mockRejectedValue(
+      new Error(
+        "Verification code is invalid, expired, or revoked due to excessive attempts.",
+      ),
+    );
+    renderWithQueryClient(<ProfileSettings role="student" />);
+
+    const mobileNumber = screen.getByLabelText("Mobile number");
+    fireEvent.change(mobileNumber, {
+      target: { value: "+91 98765 43210" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Verify now" }));
+
+    await screen.findByLabelText("Verification code");
+    fireEvent.change(screen.getByLabelText("Verification code"), {
+      target: { value: "000000" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Verify OTP" }));
+
+    await waitFor(() => expect(authMocks.verifyPhoneNumber).toHaveBeenCalled());
+    expect(
+      await screen.findAllByText(
+        "Verification code is invalid, expired, or revoked due to excessive attempts.",
+      ),
+    ).not.toHaveLength(0);
+    expect(
+      screen.queryByText("Sign in to edit your profile."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Display name")).not.toBeDisabled();
+    expect(screen.getByLabelText("Username")).not.toBeDisabled();
+  });
+
   it("verifies an unverified email address with the received OTP", async () => {
     authMocks.useCurrentUser.mockReturnValue({
       data: { ...profileUser, emailVerified: false },
@@ -582,19 +655,35 @@ describe("ProfileSettings mobile visibility confirmation", () => {
       () =>
         expect(authMocks.mutateAsync).toHaveBeenCalledWith(
           expect.objectContaining({
-            avatarDataUrl: expect.stringContaining(
-              "https://api.dicebear.com/",
-            ),
+            avatarDataUrl: expect.stringContaining("https://api.dicebear.com/"),
           }),
         ),
       { timeout: 2_000 },
     );
   });
 
-  it("uploads a profile photo through the avatar endpoint and merges the result without a redundant sync", async () => {
+  it("uploads a profile photo through direct storage upload and merges the result without a redundant sync", async () => {
     const uploadedProfile = {
       ...profileUser,
-      avatarDataUrl: "/api/v1/avatars/11111111-1111-4111-8111-111111111111",
+      avatarDataUrl:
+        "/cdn/public/avatars/11111111-1111-4111-8111-111111111111/160.webp",
+      avatarSrcSet: [
+        {
+          url: "/cdn/public/avatars/11111111-1111-4111-8111-111111111111/45.webp",
+          width: 45,
+          height: 45,
+        },
+        {
+          url: "/cdn/public/avatars/11111111-1111-4111-8111-111111111111/96.webp",
+          width: 96,
+          height: 96,
+        },
+        {
+          url: "/cdn/public/avatars/11111111-1111-4111-8111-111111111111/160.webp",
+          width: 160,
+          height: 160,
+        },
+      ],
     };
     authMocks.authService.uploadAvatarPhoto.mockResolvedValue(uploadedProfile);
 

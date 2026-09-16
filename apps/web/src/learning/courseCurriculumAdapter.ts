@@ -1,7 +1,4 @@
-import type {
-  CourseLesson,
-  CourseOverviewResponse,
-} from "@veolms/contracts";
+import type { CourseLesson, CourseOverviewResponse } from "@veolms/contracts";
 import {
   formatMediaTime,
   type CourseSection,
@@ -21,7 +18,7 @@ export interface AdaptedCurriculum {
 
 /**
  * Pure adapter converting a backend `CourseOverviewResponse` into the
- * Learning Space curriculum representation.
+ * learning workspace curriculum representation.
  *
  * - Sections are sorted by numeric `position`.
  * - Lessons within each section are sorted by numeric `position`.
@@ -68,6 +65,7 @@ export function adaptCourseOverviewToCurriculum(
           "todo" as const,
           les.isPreview,
           les.contentType ?? "video",
+          les.id,
         ];
       });
 

@@ -41,6 +41,66 @@ function resolveMediaVisibility(storageKey: string): "public" | "protected" {
     : "protected";
 }
 
+const IMAGE_EXTENSION_BY_MIME_TYPE: Readonly<Record<string, string>> = {
+  "image/avif": "avif",
+  "image/gif": "gif",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/svg+xml": "svg",
+  "image/webp": "webp",
+};
+
+function resolveImageExtension(filename: string, contentType: string): string {
+  const filenameExtension = /\.([a-z0-9]{1,12})$/iu.exec(filename)?.[1];
+  if (filenameExtension) return filenameExtension.toLowerCase();
+
+  const normalizedContentType = contentType
+    .toLowerCase()
+    .split(";", 1)[0]
+    ?.trim();
+  const knownExtension = normalizedContentType
+    ? IMAGE_EXTENSION_BY_MIME_TYPE[normalizedContentType]
+    : undefined;
+  if (knownExtension) return knownExtension;
+
+  const mimeSubtype = normalizedContentType?.split("/", 2)[1] ?? "";
+  return mimeSubtype.replace(/[^a-z0-9]/giu, "").slice(0, 12) || "bin";
+}
+
+function resolveImageThumbnailPrefix(
+  storageKey: string,
+  mediaId: string,
+): string {
+  const visibilityPrefix = `${resolveMediaVisibility(storageKey)}/`;
+  return `${visibilityPrefix}thumbnails/${mediaId}`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getPersistedImageVariantKey(
+  metadata: unknown,
+  variant: "full" | number,
+): string | null {
+  if (!isRecord(metadata)) return null;
+
+  if (variant === "full") {
+    const full = metadata.full;
+    if (!isRecord(full) || typeof full.key !== "string") return null;
+    return full.key.trim() || null;
+  }
+
+  if (!Array.isArray(metadata.variants)) return null;
+  const matchingVariant = metadata.variants.find(
+    (item) => isRecord(item) && item.width === variant,
+  );
+  if (!isRecord(matchingVariant) || typeof matchingVariant.key !== "string") {
+    return null;
+  }
+  return matchingVariant.key.trim() || null;
+}
+
 function isSafeHlsPath(path: string): boolean {
   const segments = path.split("/");
   return (
@@ -95,7 +155,7 @@ export function createMediaService({
       payload.visibility === "public" ? "public" : "protected";
     const storageKey =
       payload.type === "image"
-        ? `${visibilityPrefix}/thumbnails/${mediaId}/original/${payload.filename.replace(/[^a-zA-Z0-9._-]/g, "-")}`
+        ? `${visibilityPrefix}/thumbnails/${mediaId}/original.${resolveImageExtension(payload.filename, payload.contentType)}`
         : `${visibilityPrefix}/media/${ownerId}/${mediaId}${ext ? `.${ext}` : ""}`;
 
     const uploadUrl = await services.storage.getPresignedPutUrl(
@@ -104,7 +164,7 @@ export function createMediaService({
       payload.fileSize,
     );
 
-    void services.storage.ensureBucketCors().catch(() => {});
+    await services.storage.ensureBucketCors();
 
     await mediaRepo.insertMediaAsset(database, {
       id: mediaId,
@@ -773,7 +833,7 @@ export function createMediaService({
     }
 
     await assertPlaybackAccess(context, user);
-    if (context.lesson_content_type !== "video" || !context.content_media_id) {
+    if (!context.content_media_id) {
       throw new AppError(
         404,
         "MEDIA_NOT_FOUND",
@@ -951,18 +1011,11 @@ export function createMediaService({
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
     }
 
-    const fullKey =
-      media.type === "image" &&
-      media.status === "ready" &&
-      typeof media.metadata === "object" &&
-      media.metadata !== null &&
-      "full" in media.metadata &&
-      typeof media.metadata.full === "object" &&
-      media.metadata.full !== null &&
-      "key" in media.metadata.full &&
-      typeof media.metadata.full.key === "string"
-        ? media.metadata.full.key
-        : media.storage_key;
+    const isReadyImage = media.type === "image" && media.status === "ready";
+    const fullKey = isReadyImage
+      ? (getPersistedImageVariantKey(media.metadata, "full") ??
+        `${resolveImageThumbnailPrefix(media.storage_key, media.id)}/full.webp`)
+      : media.storage_key;
     const file = await services.storage.getObject(fullKey);
     if (!file) {
       throw new AppError(
@@ -973,10 +1026,9 @@ export function createMediaService({
     }
     return {
       stream: file.body,
-      contentType:
-        fullKey === media.storage_key
-          ? media.mime_type || file.contentType || "application/octet-stream"
-          : "image/webp",
+      contentType: isReadyImage
+        ? "image/webp"
+        : media.mime_type || file.contentType || "application/octet-stream",
       contentLength:
         file.contentLength ??
         (media.size_bytes ? Number(media.size_bytes) : undefined),
@@ -1002,10 +1054,7 @@ export function createMediaService({
     if (!isPublic && media.owner_id !== requestingUserId && !isAdmin)
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
     const variants =
-      typeof media.metadata === "object" &&
-      media.metadata !== null &&
-      "variants" in media.metadata &&
-      Array.isArray(media.metadata.variants)
+      isRecord(media.metadata) && Array.isArray(media.metadata.variants)
         ? media.metadata.variants
         : [];
     const variant = variants.find(
@@ -1013,18 +1062,14 @@ export function createMediaService({
         typeof item === "object" &&
         item !== null &&
         "width" in item &&
-        item.width === width &&
-        "key" in item &&
-        typeof item.key === "string",
+        item.width === width,
     );
-    if (
-      !variant ||
-      typeof variant !== "object" ||
-      !("key" in variant) ||
-      typeof variant.key !== "string"
-    )
+    if (!variant)
       throw new AppError(404, "MEDIA_NOT_FOUND", "Image variant not found.");
-    const file = await services.storage.getObject(variant.key);
+    const variantKey =
+      getPersistedImageVariantKey(media.metadata, width) ??
+      `${resolveImageThumbnailPrefix(media.storage_key, media.id)}/${width}.webp`;
+    const file = await services.storage.getObject(variantKey);
     if (!file)
       throw new AppError(
         404,

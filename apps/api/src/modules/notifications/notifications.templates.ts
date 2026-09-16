@@ -191,6 +191,24 @@ export function renderNotificationTemplate(
         body: `Your report regarding a ${stringValue(data, "targetType")} has been ${stringValue(data, "status")}${data.actionTaken ? ` (action: ${stringValue(data, "actionTaken")})` : "."}`,
       };
       break;
+    case "quiz.attempt_passed":
+      inApp = {
+        title: "Quiz Passed! 🎉",
+        body: `You scored ${numberValue(data, "scorePercentage")}% on "${stringValue(data, "quizTitle")}" in ${stringValue(data, "courseTitle")}.`,
+      };
+      break;
+    case "quiz.attempt_failed_final":
+      inApp = {
+        title: "Quiz Attempt Limit Reached",
+        body: `You scored ${numberValue(data, "scorePercentage")}% on "${stringValue(data, "quizTitle")}". All ${numberValue(data, "maxAttempts")} attempts have been used.`,
+      };
+      break;
+    case "quiz.assigned":
+      inApp = {
+        title: "New Quiz Available",
+        body: `"${stringValue(data, "quizTitle")}" has been assigned to ${stringValue(data, "lessonTitle")} in ${stringValue(data, "courseTitle")}.`,
+      };
+      break;
   }
 
   return {
