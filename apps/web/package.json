@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-performance.mjs",
-    "deploy": "pnpm build && wrangler deploy",
-    "deploy:only": "wrangler deploy",
+    "deploy": "pnpm build && wrangler deploy -c ../../wrangler.jsonc",
+    "deploy:only": "wrangler deploy -c ../../wrangler.jsonc",
     "benchmark:web-vitals": "node scripts/benchmark-web-vitals.mjs",
     "dev": "react-router dev",
     "generate:reading-mode-texture": "node scripts/generate-reading-mode-texture.mjs",
