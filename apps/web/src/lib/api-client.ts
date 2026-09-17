@@ -6,6 +6,9 @@ import axios, {
 } from "axios";
 import { getApiError, type ApiError } from "./api-error";
 import { authStore } from "../store/auth.store";
+import { interactionCreationCoordinator } from "../services/learning-interactions/interaction-creation-coordinator";
+import { desiredStateCoordinator } from "../services/learning-interactions/desired-state-coordinator";
+import { optimisticDeletionCoordinator } from "../services/learning-interactions/optimistic-deletion-coordinator";
 import {
   MFA_CHALLENGE_PATH,
   shouldRedirectToMfaChallenge,
@@ -129,6 +132,9 @@ axiosInstance.interceptors.response.use(
     redirectToMfaSetup(apiError);
     if (shouldClearAuthOnUnauthorized(error, apiError)) {
       authStore.clearAuth();
+      desiredStateCoordinator.reset();
+      interactionCreationCoordinator.reset();
+      optimisticDeletionCoordinator.reset();
     }
     return Promise.reject(apiError);
   },

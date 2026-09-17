@@ -24,6 +24,7 @@ import {
   type DiscussionActor,
 } from "../shared/discussion.access.ts";
 import { withWriteTransaction } from "../shared/discussion.mentions.ts";
+import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import type { NoteRow, NotesRepository } from "./notes.repository.ts";
 
 interface NoteAttachmentItem {
@@ -129,6 +130,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
       userId: row.userId,
       authorName: row.authorName ?? null,
       authorUsername: row.authorUsername ?? null,
+      authorAvatarUrl: row.authorAvatarUrl ?? null,
       courseId: row.courseId,
       courseTitle: row.courseTitle,
       sectionId: row.sectionId ?? undefined,
@@ -160,6 +162,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
         fileUrl: a.file_url,
         mimeType: a.mime_type,
         fileSize: Number(a.file_size || 0),
+        ...getAttachmentDimensionFields(a.metadata),
         metadata: a.metadata
           ? typeof a.metadata === "string"
             ? JSON.parse(a.metadata)
@@ -206,6 +209,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
         { userId: input.userId, roles: input.roles },
         input.courseId,
       );
+      await courseAccess.assertNotesEnabled(db, input.courseId);
 
       const lesson = await db
         .selectFrom("course_lessons")
@@ -285,13 +289,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
         throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
       }
 
-      const isOwner = note.userId === actor.userId;
-      if (!isOwner) {
-        if (note.visibility === "private") {
-          throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
-        }
-        await courseAccess.assertCanAccessCourse(db, actor, note.courseId);
-      }
+      await courseAccess.assertCanAccessNote(db, actor, note);
 
       const [attachments, likeRow] = await Promise.all([
         db
@@ -553,6 +551,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
     async updateNote(db, noteId, actor, updates) {
       const note = await notesRepo.findNoteById(db, noteId);
       assertOwnNote(note, actor.userId);
+      await courseAccess.assertNotesEnabled(db, note.courseId);
 
       const plainText = updates.content
         ? extractPlainText(updates.content)

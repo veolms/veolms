@@ -9,6 +9,7 @@ export const learningNoteSchema = z.object({
   userId: z.uuid(),
   authorName: z.string().nullable().optional(),
   authorUsername: z.string().nullable().optional(),
+  authorAvatarUrl: z.string().nullable().optional(),
   courseId: z.uuid(),
   courseTitle: z.string().optional(),
   sectionId: z.uuid().optional(),

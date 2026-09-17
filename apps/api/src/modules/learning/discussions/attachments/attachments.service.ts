@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import type { DatabaseExecutor } from "@veolms/database";
+import { attachmentDimensionsSchema } from "@veolms/contracts";
 import type {
   AttachmentKind,
   InitiateAttachmentUploadRequest,
@@ -12,10 +13,14 @@ import type {
 import { httpError } from "../../../../lib/errors.ts";
 import {
   discussionUploadPublicUrl,
+  isSupportedDiscussionUploadMimeType,
+  DISCUSSION_DEFAULT_EXTENSION_FOR_MIME,
+  isAllowedExtensionForMimeType,
   discussionUploadStorageKey,
   type DiscussionUploadStore,
 } from "../../../discussion-uploads/index.ts";
 import { DISCUSSION_CONSTANTS } from "../shared/discussion.constants.ts";
+import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import type { AttachmentsRepository } from "./attachments.repository.ts";
 
 export interface AttachmentsService {
@@ -33,6 +38,8 @@ export interface AttachmentsService {
       filename: string;
       mimetype: string;
       data: Buffer;
+      width?: number;
+      height?: number;
     },
   ): Promise<LearningAttachment>;
 
@@ -49,6 +56,8 @@ export interface AttachmentsService {
       filename: string;
       mimetype: string;
       data: Buffer;
+      width?: number;
+      height?: number;
     },
   ): Promise<LearningUploadResponse>;
 
@@ -69,6 +78,7 @@ export function createAttachmentsService(
     }
     const ext = path.extname(filename).toLowerCase();
     if (
+      mimetype === "application/json" ||
       (
         DISCUSSION_CONSTANTS.SUPPORTED_CODE_EXTENSIONS as readonly string[]
       ).includes(ext)
@@ -85,17 +95,79 @@ export function createAttachmentsService(
     return "document";
   }
 
+  function resolveExtension(filename: string, mimetype: string): string {
+    const rawExt = path.extname(filename).toLowerCase();
+    if (rawExt && isAllowedExtensionForMimeType(rawExt, mimetype)) {
+      return sanitizeExtension(rawExt);
+    }
+    const fallback = DISCUSSION_DEFAULT_EXTENSION_FOR_MIME[mimetype] || ".bin";
+    return sanitizeExtension(fallback);
+  }
+
   function sanitizeExtension(ext: string): string {
     const cleaned = ext.replace(/[^A-Za-z0-9.]/g, "").slice(0, 17);
     return cleaned.startsWith(".") ? cleaned : ".bin";
   }
 
+  function validateDimensions(
+    mimetype: string,
+    dimensions: { width?: number | null; height?: number | null },
+  ): { width: number; height: number } | undefined {
+    const parsed = attachmentDimensionsSchema.safeParse(dimensions);
+    if (!parsed.success) {
+      throw httpError(
+        400,
+        "INVALID_ATTACHMENT_DIMENSIONS",
+        "Attachment width and height must be positive integer dimensions.",
+      );
+    }
+
+    if (parsed.data.width === undefined || parsed.data.width === null) {
+      return undefined;
+    }
+
+    if (!mimetype.startsWith("image/") && !mimetype.startsWith("video/")) {
+      throw httpError(
+        400,
+        "INVALID_ATTACHMENT_DIMENSIONS",
+        "Dimensions are supported only for image and video attachments.",
+      );
+    }
+
+    return { width: parsed.data.width, height: parsed.data.height! };
+  }
+
+  function mergeDimensions(
+    metadata: Record<string, unknown> | null | undefined,
+    dimensions: { width: number; height: number } | undefined,
+  ): Record<string, unknown> {
+    return { ...(metadata || {}), ...(dimensions || {}) };
+  }
+
   return {
     async initiateUpload(db, userId, input) {
+      if (!isSupportedDiscussionUploadMimeType(input.mimeType)) {
+        throw httpError(
+          415,
+          "UNSUPPORTED_MEDIA_TYPE",
+          "Choose a supported image, video, or document file.",
+        );
+      }
+
+      if (input.fileSize > DISCUSSION_CONSTANTS.MAX_ATTACHMENT_SIZE_BYTES) {
+        throw httpError(
+          413,
+          "PAYLOAD_TOO_LARGE",
+          "The selected file is too large.",
+        );
+      }
+
+      const dimensions = validateDimensions(input.mimeType, input);
+
       const id = crypto.randomUUID();
-      const ext = path.extname(input.fileName) || ".bin";
+      const ext = resolveExtension(input.fileName, input.mimeType);
       const storageKey = discussionUploadStorageKey(
-        `${id}${sanitizeExtension(ext)}`,
+        `${id}${ext}`,
       );
       const kind =
         input.kind || getAttachmentKind(input.mimeType, input.fileName);
@@ -110,7 +182,10 @@ export function createAttachmentsService(
         mimeType: input.mimeType,
         fileSize: input.fileSize,
         status: "uploading",
-        metadata: { initiatedAt: new Date().toISOString() },
+        metadata: {
+          initiatedAt: new Date().toISOString(),
+          ...dimensions,
+        },
       });
 
       return {
@@ -124,6 +199,22 @@ export function createAttachmentsService(
     },
 
     async uploadFile(db, attachmentId, userId, file) {
+      if (!isSupportedDiscussionUploadMimeType(file.mimetype)) {
+        throw httpError(
+          415,
+          "UNSUPPORTED_MEDIA_TYPE",
+          "Choose a supported image, video, or document file.",
+        );
+      }
+
+      if (file.data.length > DISCUSSION_CONSTANTS.MAX_ATTACHMENT_SIZE_BYTES) {
+        throw httpError(
+          413,
+          "PAYLOAD_TOO_LARGE",
+          "The selected file is too large.",
+        );
+      }
+
       const existing = await attachmentsRepo.findAttachmentById(
         db,
         attachmentId,
@@ -144,7 +235,17 @@ export function createAttachmentsService(
         );
       }
 
-      const ext = sanitizeExtension(path.extname(file.filename));
+      const dimensions = validateDimensions(file.mimetype, file);
+      const existingDimensions = getAttachmentDimensionFields(existing.metadata);
+      const persistedDimensions =
+        dimensions ||
+        (existingDimensions.width !== null && existingDimensions.height !== null
+          ? {
+              width: existingDimensions.width,
+              height: existingDimensions.height,
+            }
+          : undefined);
+      const ext = resolveExtension(file.filename, file.mimetype);
       const sanitizedName = `${attachmentId}${ext}`;
       await uploadStore.putFromBuffer({
         fileName: sanitizedName,
@@ -163,10 +264,15 @@ export function createAttachmentsService(
             mime_type: file.mimetype,
             file_size: file.data.length,
             status: "ready",
-            metadata: JSON.stringify({
-              ...(existing.metadata || {}),
-              uploadedAt: new Date().toISOString(),
-            }),
+            metadata: JSON.stringify(
+              mergeDimensions(
+                {
+                  ...(existing.metadata || {}),
+                  uploadedAt: new Date().toISOString(),
+                },
+                persistedDimensions,
+              ),
+            ),
           })
           .where("id", "=", attachmentId)
           .execute();
@@ -253,8 +359,26 @@ export function createAttachmentsService(
     },
 
     async processUpload(db, userId, file) {
+      if (!isSupportedDiscussionUploadMimeType(file.mimetype)) {
+        throw httpError(
+          415,
+          "UNSUPPORTED_MEDIA_TYPE",
+          "Choose a supported image, video, or document file.",
+        );
+      }
+
+      if (file.data.length > DISCUSSION_CONSTANTS.MAX_ATTACHMENT_SIZE_BYTES) {
+        throw httpError(
+          413,
+          "PAYLOAD_TOO_LARGE",
+          "The selected file is too large.",
+        );
+      }
+
+      const dimensions = validateDimensions(file.mimetype, file);
+
       const id = crypto.randomUUID();
-      const ext = sanitizeExtension(path.extname(file.filename));
+      const ext = resolveExtension(file.filename, file.mimetype);
       const sanitizedName = `${id}${ext}`;
       const storageKey = discussionUploadStorageKey(sanitizedName);
       const kind = getAttachmentKind(file.mimetype, file.filename);
@@ -278,7 +402,10 @@ export function createAttachmentsService(
           mimeType: file.mimetype,
           fileSize: file.data.length,
           status: "ready",
-          metadata: { uploadedAt: new Date().toISOString() },
+          metadata: {
+            uploadedAt: new Date().toISOString(),
+            ...dimensions,
+          },
         });
       } catch (error) {
         await uploadStore.remove(sanitizedName);
@@ -295,6 +422,8 @@ export function createAttachmentsService(
         mimeType: file.mimetype,
         size: file.data.length,
         status: "ready",
+        width: dimensions?.width ?? null,
+        height: dimensions?.height ?? null,
       };
     },
 

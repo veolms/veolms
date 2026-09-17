@@ -25,6 +25,14 @@ export function registerErrorHandler(app: FastifyInstance): void {
 
   // `TError` defaults to `unknown`, which would leave `error` unusable below.
   app.setErrorHandler<FastifyError>((error, request, reply) => {
+    if (reply.sent || reply.raw.headersSent) {
+      request.log.error(
+        { err: error },
+        "Error occurred after response was already sent",
+      );
+      return;
+    }
+
     if (hasZodFastifySchemaValidationErrors(error)) {
       return reply.code(400).send(
         httpError(

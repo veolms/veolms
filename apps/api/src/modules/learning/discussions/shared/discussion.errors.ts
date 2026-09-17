@@ -4,6 +4,9 @@ export const DiscussionErrors = {
   notFound(resource: string = "Discussion thread") {
     return httpError(404, "NOT_FOUND", `${resource} not found`);
   },
+  noteNotFound() {
+    return httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
+  },
   unauthorized() {
     return httpError(401, "UNAUTHORIZED", "Authentication required");
   },
@@ -18,6 +21,19 @@ export const DiscussionErrors = {
     message: string = "You do not have permission to perform this action",
   ) {
     return httpError(403, "FORBIDDEN", message);
+  },
+  commentsDisabled() {
+    return httpError(
+      403,
+      "FORBIDDEN",
+      "Comments are disabled for this course.",
+    );
+  },
+  qaDisabled() {
+    return httpError(403, "FORBIDDEN", "Q&A is disabled for this course.");
+  },
+  notesDisabled() {
+    return httpError(403, "FORBIDDEN", "Notes are disabled for this course.");
   },
   suspended(reason: string, scope?: string) {
     return httpError(

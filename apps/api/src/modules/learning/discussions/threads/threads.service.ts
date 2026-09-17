@@ -1,4 +1,7 @@
-import type { DatabaseExecutor, LearningAttachmentTable } from "@veolms/database";
+import type {
+  DatabaseExecutor,
+  LearningAttachmentTable,
+} from "@veolms/database";
 import type { Selectable } from "kysely";
 import type {
   CreateLearningThreadRequest,
@@ -25,9 +28,14 @@ import {
 } from "../shared/discussion.utils.ts";
 import {
   createDiscussionAccess,
+  type DiscussionAccess,
   type DiscussionActor,
 } from "../shared/discussion.access.ts";
-import type { ThreadsRepository, ThreadRowWithAuthor } from "./threads.repository.ts";
+import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
+import type {
+  ThreadsRepository,
+  ThreadRowWithAuthor,
+} from "./threads.repository.ts";
 
 type LearningAttachmentRow = Selectable<LearningAttachmentTable>;
 
@@ -96,9 +104,9 @@ export interface ThreadsService {
 
 export function createThreadsService(
   threadsRepo: ThreadsRepository,
+  courseAccess: DiscussionAccess = createDiscussionAccess(),
 ): ThreadsService {
   const outbox = createDiscussionOutbox();
-  const courseAccess = createDiscussionAccess();
 
   function mapThreadRow(
     row: ThreadRowWithAuthor,
@@ -131,7 +139,7 @@ export function createThreadsService(
         id: row.userId,
         displayName: row.authorName || "Anonymous Learner",
         username: row.authorUsername || `user-${row.userId.slice(0, 8)}`,
-        avatarUrl: null,
+        avatarUrl: row.authorAvatarUrl,
         role: mapAuthorRole(row.authorRole),
       },
       kind: row.kind,
@@ -152,6 +160,7 @@ export function createThreadsService(
         fileUrl: a.file_url,
         mimeType: a.mime_type,
         fileSize: Number(a.file_size || 0),
+        ...getAttachmentDimensionFields(a.metadata),
         metadata: a.metadata
           ? typeof a.metadata === "string"
             ? JSON.parse(a.metadata)
@@ -197,6 +206,15 @@ export function createThreadsService(
         input.courseId,
       );
 
+      const threadKind =
+        input.kind === "qna" ? "question" : input.kind || "comment";
+
+      await courseAccess.assertThreadKindEnabled(
+        db,
+        input.courseId,
+        threadKind,
+      );
+
       // Validate lesson hierarchy
       if (input.lessonId) {
         const lesson = await db
@@ -214,8 +232,6 @@ export function createThreadsService(
         }
       }
 
-      const threadKind =
-        input.kind === "qna" ? "question" : input.kind || "comment";
       await courseAccess.assertNotSuspended(
         db,
         input.userId,
@@ -411,42 +427,68 @@ export function createThreadsService(
       let likedThreadIds = new Set<string>();
       let bookmarkedThreadIds = new Set<string>();
       let followedThreadIds = new Set<string>();
+      const attachmentsByThreadId = new Map<string, LearningAttachmentRow[]>();
 
-      if (query.currentUserId && page.length > 0) {
+      if (page.length > 0) {
         const threadIds = page.map((r) => r.id);
-        const [likes, bookmarks, follows] = await Promise.all([
+        const [engagements, attachmentRows] = await Promise.all([
+          query.currentUserId
+            ? Promise.all([
+                db
+                  .selectFrom("learning_likes")
+                  .select("target_id")
+                  .where("user_id", "=", query.currentUserId)
+                  .where("target_type", "=", "thread")
+                  .where("target_id", "in", threadIds)
+                  .execute(),
+                db
+                  .selectFrom("learning_bookmarks")
+                  .select("thread_id")
+                  .where("user_id", "=", query.currentUserId)
+                  .where("thread_id", "in", threadIds)
+                  .execute(),
+                db
+                  .selectFrom("learning_follows")
+                  .select("thread_id")
+                  .where("user_id", "=", query.currentUserId)
+                  .where("thread_id", "in", threadIds)
+                  .execute(),
+              ])
+            : Promise.resolve([[], [], []]),
           db
-            .selectFrom("learning_likes")
-            .select("target_id")
-            .where("user_id", "=", query.currentUserId)
+            .selectFrom("learning_attachments")
+            .selectAll()
             .where("target_type", "=", "thread")
             .where("target_id", "in", threadIds)
-            .execute(),
-          db
-            .selectFrom("learning_bookmarks")
-            .select("thread_id")
-            .where("user_id", "=", query.currentUserId)
-            .where("thread_id", "in", threadIds)
-            .execute(),
-          db
-            .selectFrom("learning_follows")
-            .select("thread_id")
-            .where("user_id", "=", query.currentUserId)
-            .where("thread_id", "in", threadIds)
+            .where("status", "=", "ready")
             .execute(),
         ]);
 
+        const [likes, bookmarks, follows] = engagements;
         likedThreadIds = new Set(likes.map((l) => l.target_id));
         bookmarkedThreadIds = new Set(bookmarks.map((b) => b.thread_id));
         followedThreadIds = new Set(follows.map((f) => f.thread_id));
+
+        for (const attachment of attachmentRows) {
+          const targetId = attachment.target_id;
+          if (!targetId) continue;
+          const group = attachmentsByThreadId.get(targetId) ?? [];
+          group.push(attachment);
+          attachmentsByThreadId.set(targetId, group);
+        }
       }
 
       const threads = page.map((row) =>
-        mapThreadRow(row, query.currentUserId, [], {
-          likedThreadIds,
-          bookmarkedThreadIds,
-          followedThreadIds,
-        }),
+        mapThreadRow(
+          row,
+          query.currentUserId,
+          attachmentsByThreadId.get(row.id) ?? [],
+          {
+            likedThreadIds,
+            bookmarkedThreadIds,
+            followedThreadIds,
+          },
+        ),
       );
 
       const last = page.at(-1);

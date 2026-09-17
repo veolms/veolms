@@ -11,7 +11,59 @@ const UPLOAD_DIRECTORY = join(process.cwd(), ".data", "discussion-uploads");
 const OBJECT_PREFIX = "protected/discussion-uploads";
 export const DISCUSSION_UPLOAD_URL_PREFIX = "/api/v1/discussion-uploads";
 
-const MIME_EXTENSIONS: Readonly<Record<string, string>> = {
+export const DISCUSSION_ALLOWED_MIME_TYPES = [
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "application/json",
+] as const;
+
+export const DISCUSSION_ALLOWED_EXTENSIONS_BY_MIME: Readonly<
+  Record<string, readonly string[]>
+> = {
+  "image/gif": [".gif"],
+  "image/jpeg": [".jpg", ".jpeg"],
+  "image/png": [".png"],
+  "image/webp": [".webp"],
+  "video/mp4": [".mp4"],
+  "video/quicktime": [".mov"],
+  "video/webm": [".webm"],
+  "application/pdf": [".pdf"],
+  "application/msword": [".doc"],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
+    ".docx",
+  ],
+  "application/vnd.ms-excel": [".xls"],
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [
+    ".xlsx",
+  ],
+  "application/vnd.ms-powerpoint": [".ppt"],
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": [
+    ".pptx",
+  ],
+  "text/plain": [".txt", ".text"],
+  "text/markdown": [".md"],
+  "text/csv": [".csv"],
+  "application/json": [".json"],
+};
+
+export const DISCUSSION_DEFAULT_EXTENSION_FOR_MIME: Readonly<
+  Record<string, string>
+> = {
   "image/gif": ".gif",
   "image/jpeg": ".jpg",
   "image/png": ".png",
@@ -19,17 +71,59 @@ const MIME_EXTENSIONS: Readonly<Record<string, string>> = {
   "video/mp4": ".mp4",
   "video/quicktime": ".mov",
   "video/webm": ".webm",
+  "application/pdf": ".pdf",
+  "application/msword": ".doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    ".docx",
+  "application/vnd.ms-excel": ".xls",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+  "application/vnd.ms-powerpoint": ".ppt",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+    ".pptx",
+  "text/plain": ".txt",
+  "text/markdown": ".md",
+  "text/csv": ".csv",
+  "application/json": ".json",
 };
 
 const EXTENSION_MIME_TYPES: Readonly<Record<string, string>> = {
   ...Object.fromEntries(
-    Object.entries(MIME_EXTENSIONS).map(([mimeType, extension]) => [
-      extension,
-      mimeType,
-    ]),
+    Object.entries(DISCUSSION_DEFAULT_EXTENSION_FOR_MIME).map(
+      ([mimeType, extension]) => [extension, mimeType],
+    ),
   ),
   ".jpeg": "image/jpeg",
+  ".text": "text/plain",
 };
+
+export function isSupportedDiscussionUploadMimeType(mimeType: string): boolean {
+  return Object.prototype.hasOwnProperty.call(
+    DISCUSSION_ALLOWED_EXTENSIONS_BY_MIME,
+    mimeType,
+  );
+}
+
+export function isAllowedExtensionForMimeType(
+  extension: string,
+  mimeType: string,
+): boolean {
+  const allowed = DISCUSSION_ALLOWED_EXTENSIONS_BY_MIME[mimeType];
+  if (!allowed) return false;
+  return allowed.includes(extension.toLowerCase());
+}
+
+export function getDiscussionAttachmentDisposition(
+  mimeType: string,
+  originalFileName?: string,
+): string {
+  const safeName = (originalFileName || "attachment")
+    .replace(/["\r\n\\]/g, "_")
+    .trim();
+  const isInlineMedia =
+    mimeType.startsWith("image/") || mimeType.startsWith("video/");
+  const dispositionType = isInlineMedia ? "inline" : "attachment";
+  return `${dispositionType}; filename="${safeName}"`;
+}
 
 const SAFE_FILE_NAME = /^[0-9a-f-]{36}\.[A-Za-z0-9]{1,16}$/i;
 
@@ -119,7 +213,7 @@ export function createDiscussionUploadStore(
 
   return {
     async putFromStream({ mimeType, stream }) {
-      const extension = MIME_EXTENSIONS[mimeType];
+      const extension = DISCUSSION_DEFAULT_EXTENSION_FOR_MIME[mimeType];
       if (!extension) throw new Error("UNSUPPORTED_DISCUSSION_UPLOAD_TYPE");
 
       const fileName = `${randomUUID()}${extension}`;
@@ -138,7 +232,7 @@ export function createDiscussionUploadStore(
         throw new Error("UNSUPPORTED_DISCUSSION_UPLOAD_TYPE");
       }
 
-      if (!MIME_EXTENSIONS[mimeType]) {
+      if (!isSupportedDiscussionUploadMimeType(mimeType)) {
         throw new Error("UNSUPPORTED_DISCUSSION_UPLOAD_TYPE");
       }
 

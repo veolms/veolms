@@ -4,22 +4,120 @@ import type {
   DynamicImportLanguageRegistration,
   HighlighterCore,
 } from "@shikijs/core";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { DiscussionContent } from "./types";
+import type { DiscussionAttachmentItem } from "../discussion-attachments";
+
+const MENTION_PATTERN = /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,30})(?=[^A-Za-z0-9_]|$)/g;
+
+export function renderContentWithMentions(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  const regex = new RegExp(MENTION_PATTERN.source, "g");
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    const prefix = match[1] ?? "";
+    const username = match[2];
+    const matchStart = match.index;
+    const mentionStart = matchStart + prefix.length;
+    const matchEnd = match.index + match[0].length;
+
+    if (mentionStart > lastIndex) {
+      parts.push(text.slice(lastIndex, mentionStart));
+    }
+
+    parts.push(
+      <span
+        key={`mention-${mentionStart}-${username}`}
+        data-mention={username}
+        className="inline-flex items-center rounded bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-1 py-0.5 font-medium text-(--accent)"
+      >
+        @{username}
+      </span>,
+    );
+
+    lastIndex = matchEnd;
+  }
+
+  if (lastIndex === 0) {
+    return text;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts;
+}
+
+export function highlightMentionsInNode(node: React.ReactNode): React.ReactNode {
+  if (typeof node === "string") {
+    return renderContentWithMentions(node);
+  }
+  if (Array.isArray(node)) {
+    return React.Children.map(node, (child) => highlightMentionsInNode(child));
+  }
+  if (React.isValidElement(node)) {
+    const props = node.props as {
+      children?: React.ReactNode;
+      node?: { tagName?: string };
+    };
+    const tagName = props?.node?.tagName?.toLowerCase();
+    if (
+      tagName === "code" ||
+      tagName === "pre" ||
+      tagName === "a" ||
+      tagName === "img" ||
+      tagName === "video" ||
+      node.type === "code" ||
+      node.type === "a" ||
+      node.type === "pre" ||
+      node.type === "img" ||
+      node.type === "video"
+    ) {
+      return node;
+    }
+    if (props && props.children) {
+      return React.cloneElement(
+        node as React.ReactElement<Record<string, unknown>>,
+        undefined,
+        highlightMentionsInNode(props.children),
+      );
+    }
+  }
+  return node;
+}
 
 interface DiscussionMarkdownProps {
   content: DiscussionContent;
   label: string;
+  /** Linked attachments allow safe suppression of legacy generated Markdown. */
+  linkedAttachments?: readonly DiscussionAttachmentItem[];
   className?: string;
 }
 
 export function DiscussionMarkdown({
   content,
   label,
+  linkedAttachments,
   className = "",
 }: DiscussionMarkdownProps) {
+  const isGeneratedAttachmentMarkdown = (
+    url: string | undefined,
+    label: string | undefined,
+  ) =>
+    Boolean(
+      url &&
+        label &&
+        linkedAttachments?.some(
+          (attachment) =>
+            attachment.fileUrl === url && attachment.fileName === label,
+        ),
+    );
+
   return (
     <div
       role="document"
@@ -31,19 +129,23 @@ export function DiscussionMarkdown({
         skipHtml
         urlTransform={safeMarkdownUrl}
         components={{
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              target={href?.startsWith("#") ? undefined : "_blank"}
-              rel={href?.startsWith("#") ? undefined : "noopener noreferrer"}
-              className="font-medium text-(--accent-ink,var(--accent)) underline decoration-[color-mix(in_srgb,var(--accent)_45%,transparent)] underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-            >
-              {children}
-            </a>
-          ),
+          a: ({ href, children }) => {
+            const linkLabel = flattenMarkdownText(children);
+            if (isGeneratedAttachmentMarkdown(href, linkLabel)) return null;
+            return (
+              <a
+                href={href}
+                target={href?.startsWith("#") ? undefined : "_blank"}
+                rel={href?.startsWith("#") ? undefined : "noopener noreferrer"}
+                className="font-medium text-(--accent-ink,var(--accent)) underline decoration-[color-mix(in_srgb,var(--accent)_45%,transparent)] underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+              >
+                {children}
+              </a>
+            );
+          },
           blockquote: ({ children }) => (
             <blockquote className="my-3 border-l-3 border-(--accent) pl-4 text-(--muted)">
-              {children}
+              {highlightMentionsInNode(children)}
             </blockquote>
           ),
           code: ({ className: codeClassName, children }) => {
@@ -78,6 +180,12 @@ export function DiscussionMarkdown({
           ),
           img: ({ src, alt }) => {
             if (!src) return null;
+            const attachmentLabel = alt?.toLowerCase().startsWith("video:")
+              ? alt.slice(6).trim()
+              : alt;
+            if (isGeneratedAttachmentMarkdown(src, attachmentLabel)) {
+              return null;
+            }
             if (alt?.toLowerCase().startsWith("video:")) {
               return (
                 <video
@@ -99,12 +207,12 @@ export function DiscussionMarkdown({
               />
             );
           },
-          li: ({ children }) => <li className="pl-1">{children}</li>,
+          li: ({ children }) => <li className="pl-1">{highlightMentionsInNode(children)}</li>,
           ol: ({ children }) => (
             <ol className="my-2 list-decimal space-y-1 pl-6">{children}</ol>
           ),
           p: ({ children }) => (
-            <p className="my-1.5 first:mt-0 last:mb-0">{children}</p>
+            <p className="my-1.5 first:mt-0 last:mb-0">{highlightMentionsInNode(children)}</p>
           ),
           pre: ({ children }) => <>{children}</>,
           table: ({ children }) => (
@@ -116,12 +224,12 @@ export function DiscussionMarkdown({
           ),
           td: ({ children }) => (
             <td className="border-t px-3 py-2 [border-color:color-mix(in_srgb,var(--text)_10%,transparent)]">
-              {children}
+              {highlightMentionsInNode(children)}
             </td>
           ),
           th: ({ children }) => (
             <th className="bg-(--hover) px-3 py-2 font-semibold text-(--text)">
-              {children}
+              {highlightMentionsInNode(children)}
             </th>
           ),
           ul: ({ children }) => (
@@ -133,6 +241,19 @@ export function DiscussionMarkdown({
       </ReactMarkdown>
     </div>
   );
+}
+
+function flattenMarkdownText(node: React.ReactNode): string | undefined {
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (Array.isArray(node)) {
+    const parts = node
+      .map(flattenMarkdownText)
+      .filter((part): part is string => part !== undefined);
+    return parts.length > 0 ? parts.join("") : undefined;
+  }
+  return undefined;
 }
 
 interface HighlightedCodeBlockProps {

@@ -28,6 +28,7 @@ import {
   createDiscussionAccess,
   type DiscussionActor,
 } from "../shared/discussion.access.ts";
+import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import type { ThreadsRepository } from "../threads/threads.repository.ts";
 import type { RepliesRepository, ReplyRowWithAuthor } from "./replies.repository.ts";
 
@@ -122,7 +123,7 @@ export function createRepliesService({
         username:
           (row.authorUsername || row.authorEmail || "user").split("@")[0] ||
           "user",
-        avatarUrl: null,
+        avatarUrl: row.authorAvatarUrl,
         role: mapAuthorRole(row.authorRole),
       },
       content: row.content,
@@ -138,6 +139,7 @@ export function createRepliesService({
         fileUrl: a.file_url,
         mimeType: a.mime_type,
         fileSize: Number(a.file_size || 0),
+        ...getAttachmentDimensionFields(a.metadata),
         metadata: a.metadata
           ? typeof a.metadata === "string"
             ? JSON.parse(a.metadata)

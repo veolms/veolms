@@ -1,0 +1,573 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { renderHook, waitFor, act } from "@testing-library/react";
+import type {
+  LearningNote,
+  LearningThread,
+  LearningThreadsListResponse,
+  LearningNotesListResponse,
+  LearningReply,
+  LearningRepliesListResponse,
+} from "@veolms/contracts";
+import React from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  flattenReplyPages,
+  useLessonThreads,
+  useThreadReplies,
+  useUserNotes,
+} from "../../src/services/learning-interactions/learning-interactions.queries";
+import { learningInteractionsService } from "../../src/services/learning-interactions/learning-interactions.service";
+import { learningInteractionKeys } from "../../src/services/learning-interactions/learning-interactions.keys";
+import {
+  insertOptimisticNoteInCaches,
+  insertOptimisticThreadInLessonCaches,
+} from "../../src/services/learning-interactions/creation-cache-updaters";
+
+function createWrapper(queryClient: QueryClient) {
+  return function Wrapper({ children }: { children: React.ReactNode }) {
+    return React.createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      children,
+    );
+  };
+}
+
+const thread = (id: string) =>
+  ({
+    id,
+    academyId: "academy-1",
+    courseId: "course-1",
+    lessonId: "lesson-1",
+    userId: "user-1",
+    author: {
+      id: "user-1",
+      displayName: "User",
+      username: "user",
+      role: "Student",
+    },
+    kind: "comment",
+    content: id,
+    plainText: id,
+    visibility: "public",
+    status: "active",
+    isLocked: false,
+    likesCount: 0,
+    repliesCount: 0,
+    isLiked: false,
+    isOwn: false,
+    createdAt: "2026-09-15T10:00:00.000Z",
+    updatedAt: "2026-09-15T10:00:00.000Z",
+  }) as unknown as LearningThread;
+
+const note = (id: string) =>
+  ({
+    id,
+    userId: "user-1",
+    courseId: "course-1",
+    lessonId: "lesson-1",
+    authorName: "User",
+    authorUsername: "user",
+    content: id,
+    plainText: id,
+    visibility: "public",
+    tags: [],
+    likesCount: 0,
+    repliesCount: 0,
+    isLiked: false,
+    isOwn: false,
+    attachments: [],
+    createdAt: "2026-09-15T10:00:00.000Z",
+    updatedAt: "2026-09-15T10:00:00.000Z",
+  }) as unknown as LearningNote;
+
+const reply = (id: string, createdAt = "2026-09-15T10:00:00.000Z") =>
+  ({
+    id,
+    threadId: "thread-1",
+    userId: "user-1",
+    author: {
+      id: "user-1",
+      displayName: "User",
+      username: "user",
+      role: "Student",
+    },
+    content: id,
+    plainText: id,
+    likesCount: 0,
+    isLiked: false,
+    isOwn: false,
+    isAccepted: false,
+    createdAt,
+    updatedAt: createdAt,
+  }) as unknown as LearningReply;
+
+describe("learning interaction cursor pagination", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("fetches lesson thread pages with the server cursor", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const listThreads = vi
+      .spyOn(learningInteractionsService, "listLessonThreads")
+      .mockImplementation(async (_courseId, _lessonId, query) =>
+        (query?.cursor
+          ? {
+              threads: [thread("thread-2")],
+              nextCursor: null,
+            }
+          : {
+              threads: [thread("thread-1")],
+              nextCursor: "cursor-2",
+            }) as LearningThreadsListResponse,
+      );
+
+    const { result } = renderHook(
+      () =>
+        useLessonThreads("course-1", "lesson-1", {
+          kind: "comment",
+          status: "all",
+          sort: "latest",
+          limit: 20,
+        }),
+      { wrapper: createWrapper(queryClient) },
+    );
+
+    await waitFor(() => expect(result.current.data?.pages).toHaveLength(1));
+    expect(listThreads).toHaveBeenNthCalledWith(
+      1,
+      "course-1",
+      "lesson-1",
+      expect.objectContaining({ limit: 20 }),
+    );
+    expect(listThreads.mock.calls[0]?.[2]).not.toHaveProperty("cursor");
+    expect(result.current.hasNextPage).toBe(true);
+    await act(async () => {
+      await result.current.fetchNextPage();
+    });
+
+    expect(listThreads).toHaveBeenLastCalledWith(
+      "course-1",
+      "lesson-1",
+      expect.objectContaining({ cursor: "cursor-2", limit: 20 }),
+    );
+    await waitFor(() =>
+      expect(
+        result.current.data?.pages.flatMap((page) => page.threads),
+      ).toHaveLength(2),
+    );
+    expect(result.current.hasNextPage).toBe(false);
+  });
+
+  it("fetches Notes pages with the server cursor", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const listNotes = vi
+      .spyOn(learningInteractionsService, "listNotes")
+      .mockImplementation(async (query) =>
+        (query?.cursor
+          ? { notes: [note("note-2")], nextCursor: null }
+          : { notes: [note("note-1")], nextCursor: "cursor-2" }) as
+          LearningNotesListResponse,
+      );
+
+    const { result } = renderHook(
+      () =>
+        useUserNotes({
+          courseId: "course-1",
+          lessonId: "lesson-1",
+          limit: 20,
+        }),
+      { wrapper: createWrapper(queryClient) },
+    );
+
+    await waitFor(() => expect(result.current.data?.pages).toHaveLength(1));
+    expect(listNotes).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ limit: 20 }),
+    );
+    expect(listNotes.mock.calls[0]?.[0]).not.toHaveProperty("cursor");
+    expect(result.current.hasNextPage).toBe(true);
+    await act(async () => {
+      await result.current.fetchNextPage();
+    });
+
+    expect(listNotes).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cursor: "cursor-2", limit: 20 }),
+    );
+    await waitFor(() =>
+      expect(result.current.data?.pages.flatMap((page) => page.notes)).toHaveLength(
+        2,
+      ),
+    );
+    expect(result.current.hasNextPage).toBe(false);
+  });
+
+  it("fetches reply pages with limit 20 and keeps the cursor out of the key", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const listReplies = vi
+      .spyOn(learningInteractionsService, "listReplies")
+      .mockImplementation(async (_threadId, query) =>
+        (query?.cursor
+          ? {
+              replies: [reply("reply-2")],
+              nextCursor: null,
+              totalCount: 2,
+            }
+          : {
+              replies: [reply("reply-1")],
+              nextCursor: "reply-cursor-2",
+              totalCount: 2,
+            }) as LearningRepliesListResponse,
+      );
+
+    const { result } = renderHook(
+      () => useThreadReplies("thread-1", { limit: 50 }),
+      { wrapper: createWrapper(queryClient) },
+    );
+
+    await waitFor(() => expect(result.current.data?.pages).toHaveLength(1));
+    expect(listReplies).toHaveBeenNthCalledWith(
+      1,
+      "thread-1",
+      expect.objectContaining({ limit: 20 }),
+    );
+    expect(listReplies.mock.calls[0]?.[1]).not.toHaveProperty("cursor");
+    expect(result.current.hasNextPage).toBe(true);
+
+    await act(async () => {
+      await result.current.fetchNextPage();
+    });
+
+    expect(listReplies).toHaveBeenLastCalledWith(
+      "thread-1",
+      expect.objectContaining({ cursor: "reply-cursor-2", limit: 20 }),
+    );
+    await waitFor(() =>
+      expect(result.current.data?.pages.flatMap((page) => page.replies)).toHaveLength(2),
+    );
+    expect(result.current.hasNextPage).toBe(false);
+    expect(
+      queryClient.getQueryData(
+        learningInteractionKeys.threadReplies("thread-1", {
+          cursor: "different-cursor",
+        }),
+      ),
+    ).toBeDefined();
+    expect(
+      learningInteractionKeys.threadReplies("thread-1", { cursor: "a" }),
+    ).toEqual(learningInteractionKeys.threadReplies("thread-1", { cursor: "b" }));
+  });
+
+  it("flattens replies newest-first, dedupes identities, and keeps accepted answers first", () => {
+    const pendingReply = {
+      ...reply("client-reply", "2026-09-15T10:05:00.000Z"),
+      id: "client-reply",
+      clientId: "client-reply",
+      serverId: undefined,
+      creationStatus: "pending" as const,
+      localSequence: 1,
+    };
+    const data = {
+      pages: [
+        {
+          replies: [reply("reply-1", "2026-09-15T10:00:00.000Z"), pendingReply],
+          nextCursor: "cursor-2",
+          totalCount: 3,
+        },
+        {
+          replies: [
+            reply("reply-2", "2026-09-15T10:02:00.000Z"),
+            { ...reply("reply-1"), clientId: "old-client" },
+          ],
+          nextCursor: null,
+          totalCount: 3,
+        },
+      ],
+      pageParams: [null, "cursor-2"],
+    };
+
+    expect(flattenReplyPages(data, "thread-1").map((item) => item.id)).toEqual([
+      "client-reply",
+      "reply-2",
+      "reply-1",
+    ]);
+  });
+
+  it("places rapid optimistic replies newest-first above normal replies", () => {
+    const optimisticReplies = [1, 2, 3, 4].map((localSequence) => ({
+      ...reply(`client-reply-${localSequence}`),
+      id: `client-reply-${localSequence}`,
+      clientId: `client-reply-${localSequence}`,
+      serverId: undefined,
+      creationStatus: "pending" as const,
+      localSequence,
+    }));
+
+    const data = {
+      pages: [
+        {
+          replies: [
+            reply("server-old", "2026-09-15T09:00:00.000Z"),
+            ...optimisticReplies,
+          ],
+          nextCursor: "cursor-2",
+          totalCount: 5,
+        },
+        {
+          replies: [reply("server-new", "2026-09-15T10:00:00.000Z")],
+          nextCursor: null,
+          totalCount: 5,
+        },
+      ],
+      pageParams: [null, "cursor-2"],
+    };
+
+    expect(flattenReplyPages(data, "thread-1").map((item) => item.id)).toEqual([
+      "client-reply-4",
+      "client-reply-3",
+      "client-reply-2",
+      "client-reply-1",
+      "server-new",
+      "server-old",
+    ]);
+  });
+
+  it("keeps an accepted answer first while sorting normal replies newest-first", () => {
+    const acceptedReply = {
+      ...reply("accepted", "2026-09-15T08:00:00.000Z"),
+      isAccepted: true,
+    };
+    const optimisticReply = {
+      ...reply("client-reply", "2026-09-15T10:00:00.000Z"),
+      id: "client-reply",
+      clientId: "client-reply",
+      serverId: undefined,
+      creationStatus: "pending" as const,
+      localSequence: 1,
+    };
+
+    expect(
+      flattenReplyPages(
+        {
+          replies: [
+            acceptedReply,
+            reply("normal-old", "2026-09-15T09:00:00.000Z"),
+            optimisticReply,
+            reply("normal-new", "2026-09-15T09:30:00.000Z"),
+          ],
+          nextCursor: null,
+          totalCount: 4,
+        },
+        "thread-1",
+      ).map((item) => item.id),
+    ).toEqual(["accepted", "client-reply", "normal-new", "normal-old"]);
+  });
+
+  it("keeps reconciled replies in order without duplicating the server entity", () => {
+    const pendingReply = {
+      ...reply("client-reply", "2026-09-15T10:00:00.000Z"),
+      id: "client-reply",
+      clientId: "client-reply",
+      serverId: undefined,
+      creationStatus: "pending" as const,
+      localSequence: 2,
+    };
+    const reconciledReply = {
+      ...reply("server-reply", "2026-09-15T10:00:00.000Z"),
+      id: "server-reply",
+      clientId: "client-reply",
+      serverId: "server-reply",
+      creationStatus: "confirmed" as const,
+      localSequence: 2,
+    };
+
+    const replies = flattenReplyPages(
+      {
+        pages: [
+          {
+            replies: [
+              pendingReply,
+              reply("server-old", "2026-09-15T09:00:00.000Z"),
+            ],
+            nextCursor: "cursor-2",
+            totalCount: 2,
+          },
+          {
+            replies: [reconciledReply],
+            nextCursor: null,
+            totalCount: 2,
+          },
+        ],
+        pageParams: [null, "cursor-2"],
+      },
+      "thread-1",
+    );
+
+    expect(replies.map((item) => item.id)).toEqual([
+      "server-reply",
+      "server-old",
+    ]);
+    expect(replies[0]).toMatchObject({
+      clientId: "client-reply",
+      serverId: "server-reply",
+      creationStatus: "confirmed",
+    });
+  });
+
+  it("uses a deterministic stable-id tie-breaker for equal timestamps", () => {
+    const data = {
+      replies: [
+        reply("reply-a", "2026-09-15T10:00:00.000Z"),
+        reply("reply-c", "2026-09-15T10:00:00.000Z"),
+        reply("reply-b", "2026-09-15T10:00:00.000Z"),
+      ],
+      nextCursor: null,
+      totalCount: 3,
+    };
+
+    expect(flattenReplyPages(data, "thread-1").map((item) => item.id)).toEqual([
+      "reply-c",
+      "reply-b",
+      "reply-a",
+    ]);
+  });
+
+  it("inserts optimistic entities only into the first loaded page", () => {
+    const queryClient = new QueryClient();
+    const noteKey = learningInteractionKeys.notes({
+      courseId: "course-1",
+      lessonId: "lesson-1",
+      limit: 20,
+    });
+    const threadKey = learningInteractionKeys.lessonThreads(
+      "course-1",
+      "lesson-1",
+      { kind: "all", status: "all", sort: "latest", limit: 20 },
+    );
+    const optimisticNote = {
+      ...note("client-note"),
+      id: "client-note",
+      clientId: "client-note",
+      serverId: undefined,
+      creationStatus: "pending" as const,
+      localSequence: 1,
+    };
+    const optimisticThread = {
+      ...thread("client-thread"),
+      id: "client-thread",
+      clientId: "client-thread",
+      serverId: undefined,
+      creationStatus: "pending" as const,
+      localSequence: 1,
+    };
+
+    queryClient.setQueryData(noteKey, {
+      pages: [
+        { notes: [], nextCursor: "note-cursor-2" },
+        { notes: [note("note-page-2")], nextCursor: null },
+      ],
+      pageParams: [null, "note-cursor-2"],
+    });
+    queryClient.setQueryData(threadKey, {
+      pages: [
+        { threads: [], nextCursor: "thread-cursor-2" },
+        { threads: [thread("thread-page-2")], nextCursor: null },
+      ],
+      pageParams: [null, "thread-cursor-2"],
+    });
+
+    insertOptimisticNoteInCaches(
+      queryClient,
+      { courseId: "course-1", lessonId: "lesson-1" },
+      optimisticNote,
+    );
+    insertOptimisticThreadInLessonCaches(
+      queryClient,
+      { courseId: "course-1", lessonId: "lesson-1" },
+      optimisticThread,
+    );
+
+    const notes = queryClient.getQueryData(noteKey) as any;
+    const threads = queryClient.getQueryData(threadKey) as any;
+    expect(notes.pages[0].notes).toHaveLength(1);
+    expect(notes.pages[1].notes).toHaveLength(1);
+    expect(notes.pages[1].notes[0].id).toBe("note-page-2");
+    expect(threads.pages[0].threads).toHaveLength(1);
+    expect(threads.pages[1].threads).toHaveLength(1);
+    expect(threads.pages[1].threads[0].id).toBe("thread-page-2");
+  });
+
+  it("uses the canonical limit-20 fallback keys for optimistic inserts", () => {
+    const queryClient = new QueryClient();
+    const optimisticNote = {
+      ...note("client-note"),
+      id: "client-note",
+      clientId: "client-note",
+      serverId: undefined,
+      creationStatus: "pending" as const,
+      localSequence: 1,
+    };
+    const optimisticThread = {
+      ...thread("client-thread"),
+      id: "client-thread",
+      clientId: "client-thread",
+      serverId: undefined,
+      creationStatus: "pending" as const,
+      localSequence: 1,
+    };
+
+    insertOptimisticNoteInCaches(
+      queryClient,
+      { courseId: "course-1", lessonId: "lesson-1" },
+      optimisticNote,
+    );
+    insertOptimisticThreadInLessonCaches(
+      queryClient,
+      { courseId: "course-1", lessonId: "lesson-1" },
+      optimisticThread,
+    );
+
+    const notes = queryClient.getQueryData(
+      learningInteractionKeys.notes({
+        courseId: "course-1",
+        lessonId: "lesson-1",
+        limit: 20,
+      }),
+    ) as any;
+    const threads = queryClient.getQueryData(
+      learningInteractionKeys.lessonThreads(
+        "course-1",
+        "lesson-1",
+        { kind: "all", status: "all", sort: "latest", limit: 20 },
+      ),
+    ) as any;
+
+    expect(notes.pages[0].notes[0].id).toBe("client-note");
+    expect(threads.pages[0].threads[0].id).toBe("client-thread");
+    expect(
+      queryClient.getQueryData(
+        learningInteractionKeys.notes({
+          courseId: "course-1",
+          lessonId: "lesson-1",
+          limit: 50,
+        }),
+      ),
+    ).toBeUndefined();
+    expect(
+      queryClient.getQueryData(
+        learningInteractionKeys.lessonThreads(
+          "course-1",
+          "lesson-1",
+          { kind: "all", status: "all", sort: "latest", limit: 100 },
+        ),
+      ),
+    ).toBeUndefined();
+  });
+});

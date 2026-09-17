@@ -1,4 +1,8 @@
-import type { Database, DatabaseExecutor, LearningThreadTable } from "@veolms/database";
+import type {
+  Database,
+  DatabaseExecutor,
+  LearningThreadTable,
+} from "@veolms/database";
 import type {
   DiscussionEntryKind,
   DiscussionVisibility,
@@ -42,6 +46,7 @@ export interface ThreadRowWithAuthor {
   updatedAt: Date;
   authorName: string | null;
   authorUsername: string | null;
+  authorAvatarUrl: string | null;
   authorRole: string | null;
 }
 
@@ -331,6 +336,7 @@ export function createThreadsRepository(): ThreadsRepository {
           "t.updated_at as updatedAt",
           "u.display_name as authorName",
           "u.username as authorUsername",
+          "u.avatar_data_url as authorAvatarUrl",
           authorRoleSql("t.user_id"),
         ])
         .where("t.id", "=", threadId)
@@ -367,6 +373,7 @@ export function createThreadsRepository(): ThreadsRepository {
           "t.updated_at as updatedAt",
           "u.display_name as authorName",
           "u.username as authorUsername",
+          "u.avatar_data_url as authorAvatarUrl",
           authorRoleSql("t.user_id"),
         ]);
 

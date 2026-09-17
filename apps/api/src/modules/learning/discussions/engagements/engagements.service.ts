@@ -119,12 +119,7 @@ export function createEngagementsService({
           if (!note) {
             throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
           }
-          if (note.visibility === "private" && note.userId !== actor.userId) {
-            throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
-          }
-          if (note.userId !== actor.userId) {
-            await courseAccess.assertCanAccessCourse(trx, actor, note.courseId);
-          }
+          await courseAccess.assertCanAccessNote(trx, actor, note);
           await courseAccess.assertNotSuspended(
             trx,
             actor.userId,
