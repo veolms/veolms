@@ -15,7 +15,10 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "./hooks/useDebounce";
 import { useBackDismiss } from "./navigation/useBackDismiss";
+
+const THEMED_SELECT_MENU_MAX_WIDTH = 300;
 
 export interface ThemedSelectOptionExtra {
   readonly flag?: ReactNode;
@@ -48,6 +51,8 @@ export interface ThemedSelectProps<Value extends string = string> {
   contentClassName?: string;
   searchable?: boolean;
   searchPlaceholder?: string;
+  searchDebounceMs?: number;
+  menuMinWidth?: number;
   defaultLimit?: number;
   action?: ThemedSelectAction;
   compactOnMobile?: boolean;
@@ -83,6 +88,8 @@ export function ThemedSelect<Value extends string>({
   contentClassName = "",
   searchable = false,
   searchPlaceholder = "Search...",
+  searchDebounceMs = DEFAULT_DEBOUNCE_DELAY_MS,
+  menuMinWidth,
   defaultLimit,
   action,
   compactOnMobile = false,
@@ -95,10 +102,17 @@ export function ThemedSelect<Value extends string>({
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [position, setPosition] = useState<MenuPosition | null>(null);
+  const debouncedSearchQuery = useDebounce(searchQuery, searchDebounceMs);
+  // Emptying or reopening the menu must reveal the complete option set
+  // immediately; only active typing should wait for the debounce window.
+  const effectiveSearchQuery = searchQuery.trim() ? debouncedSearchQuery : "";
 
-  const foundIndex = options.findIndex(([optionValue]) => optionValue === value);
+  const foundIndex = options.findIndex(
+    ([optionValue]) => optionValue === value,
+  );
   const selectedIndex = foundIndex >= 0 ? foundIndex : -1;
-  const selectedOption = selectedIndex >= 0 ? options[selectedIndex] : undefined;
+  const selectedOption =
+    selectedIndex >= 0 ? options[selectedIndex] : undefined;
   const selectedLabel =
     selectedOption?.[1] ?? (value || searchPlaceholder || "Select...");
   const selectedFlag = selectedOption?.[2]?.flag;
@@ -108,7 +122,7 @@ export function ThemedSelect<Value extends string>({
   const menuId = id ? `${id}-menu` : undefined;
 
   const filteredOptions = useMemo(() => {
-    if (!searchable || !searchQuery.trim()) {
+    if (!searchable || !effectiveSearchQuery.trim()) {
       if (defaultLimit && defaultLimit > 0 && options.length > defaultLimit) {
         const firstOption = options[0];
         const hasHeaderOption = Boolean(firstOption && firstOption[0] === "");
@@ -127,19 +141,52 @@ export function ThemedSelect<Value extends string>({
       }
       return options;
     }
-    const query = searchQuery.trim().toLowerCase();
+    const query = effectiveSearchQuery.trim().toLowerCase();
     return options.filter(([val, label, extra]) => {
       const matchLabel = label.toLowerCase().includes(query);
       const matchVal = val.toLowerCase().includes(query);
       const matchExtraLabel = extra?.label?.toLowerCase().includes(query);
+      const matchSubtitle = extra?.subtitle?.toLowerCase().includes(query);
       const matchKeywords = extra?.searchKeywords
         ?.toLowerCase()
         .includes(query);
       return Boolean(
-        matchLabel || matchVal || matchExtraLabel || matchKeywords,
+        matchLabel ||
+        matchVal ||
+        matchExtraLabel ||
+        matchSubtitle ||
+        matchKeywords,
       );
     });
-  }, [options, searchable, searchQuery, defaultLimit, value]);
+  }, [options, searchable, effectiveSearchQuery, defaultLimit, value]);
+
+  const measureNaturalMenuWidth = useCallback(
+    (trigger: HTMLButtonElement) => {
+      const context = document.createElement("canvas").getContext("2d");
+      if (!context) return 0;
+
+      const triggerStyle = window.getComputedStyle(trigger);
+      context.font = triggerStyle.font;
+
+      const longestOptionWidth = options.reduce((longest, [, label, extra]) => {
+        const visibleLabel = extra?.label ?? label;
+        return Math.max(longest, context.measureText(visibleLabel).width);
+      }, 0);
+      const searchWidth = searchable
+        ? context.measureText(searchPlaceholder).width + 88
+        : 0;
+      const actionWidth = action
+        ? context.measureText(action.label).width + 54
+        : 0;
+
+      // Include item padding, the selected indicator, and an optional flag so
+      // labels have room to render before the viewport clamp is applied.
+      return Math.ceil(
+        Math.max(longestOptionWidth + 54, searchWidth, actionWidth),
+      );
+    },
+    [action, options, searchPlaceholder, searchable],
+  );
 
   const calculatePosition = useCallback((): MenuPosition | null => {
     const trigger = triggerRef.current;
@@ -159,15 +206,20 @@ export function ThemedSelect<Value extends string>({
     );
     const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
     const spaceAbove = rect.top - viewportPadding;
-    const useAbove =
-      spaceBelow < desiredHeight && spaceAbove > spaceBelow;
+    const useAbove = spaceBelow < desiredHeight && spaceAbove > spaceBelow;
     const maxHeight = Math.max(
       80,
       Math.min(desiredHeight, useAbove ? spaceAbove - gap : spaceBelow - gap),
     );
-    const minWidth = searchable ? 180 : 120;
+    const desiredWidth = Math.max(
+      rect.width,
+      searchable ? 180 : 120,
+      menuMinWidth ?? 0,
+      measureNaturalMenuWidth(trigger),
+    );
     const width = Math.min(
-      Math.max(rect.width, minWidth),
+      desiredWidth,
+      THEMED_SELECT_MENU_MAX_WIDTH,
       window.innerWidth - viewportPadding * 2,
     );
     let left = rect.left;
@@ -182,7 +234,13 @@ export function ThemedSelect<Value extends string>({
       maxHeight,
       side: useAbove ? "top" : "bottom",
     };
-  }, [action, filteredOptions.length, searchable]);
+  }, [
+    action,
+    filteredOptions.length,
+    measureNaturalMenuWidth,
+    menuMinWidth,
+    searchable,
+  ]);
 
   const openMenu = () => {
     if (disabled) return;
@@ -194,8 +252,12 @@ export function ThemedSelect<Value extends string>({
       if (searchable && searchInputRef.current) {
         searchInputRef.current.focus({ preventScroll: true });
       } else {
-        const focusIdx = selectedIndex >= 0 ? selectedIndex : 0;
-        itemRefs.current[focusIdx]?.focus({ preventScroll: true });
+        const selectedItem = itemRefs.current.find(
+          (item) => item?.dataset.value === value,
+        );
+        (selectedItem ?? itemRefs.current[0])?.focus({
+          preventScroll: true,
+        });
       }
     });
   };
@@ -234,7 +296,11 @@ export function ThemedSelect<Value extends string>({
       const pos = calculatePosition();
       if (pos) setPosition(pos);
     };
-    const handleScroll = () => {
+    const handleScroll = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Node && contentRef.current?.contains(target)) {
+        return;
+      }
       closeMenu();
     };
     document.addEventListener("pointerdown", closeFromOutside, true);
@@ -479,11 +545,11 @@ export function ThemedSelect<Value extends string>({
                 />
                 <input
                   ref={searchInputRef}
-                  type="text"
+                  type="search"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={searchPlaceholder}
-                  className="themed-select__search-input"
+                  className="themed-select__search-input native-search-clear-hidden"
                   aria-label={searchPlaceholder}
                 />
                 {searchQuery && (
@@ -517,6 +583,7 @@ export function ThemedSelect<Value extends string>({
                         type="button"
                         role="option"
                         aria-selected={isChecked}
+                        data-value={optionValue}
                         data-state={isChecked ? "checked" : "unchecked"}
                         className="themed-select__item"
                         key={optionValue}

@@ -52,6 +52,7 @@ import { NotificationsPage } from "./notifications/NotificationsPage";
 import { QuizAnalyticsPage } from "./quizzes/QuizAnalyticsPage";
 import { QuizBuilderPage } from "./quizzes/QuizBuilderPage";
 import { QuizDirectAttemptPage } from "./quizzes/QuizDirectAttemptPage";
+import { StudentsPage, StudentDetailsPage } from "./students";
 import { getVisibleCourses } from "./courses/catalogue";
 import type {
   Course,
@@ -161,6 +162,7 @@ import type { NavigateTo } from "./routing/navigation";
 import type { SettingsPageProps } from "./SettingsPage";
 import { isEditingShortcutTarget } from "./keyboardShortcuts";
 import { useGlobalSearchShortcut } from "./searchShortcut";
+import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "./hooks/useDebounce";
 import { useBackDismiss } from "./navigation/useBackDismiss";
 import { useShortcutPlatform } from "./useShortcutPlatform";
 import {
@@ -222,6 +224,7 @@ interface CoursesPageProps {
   courseSlug?: string;
   quizId?: string;
   assignmentId?: string;
+  username?: string;
   miniPlayerCourseId?: string | null;
   learningBackground?: {
     courseSlug?: string;
@@ -535,6 +538,7 @@ export function CoursesPage({
   courseSlug,
   quizId,
   assignmentId,
+  username,
   miniPlayerCourseId = null,
   learningBackground = null,
   learningMotionStageRef,
@@ -640,6 +644,7 @@ export function CoursesPage({
     "",
     isStoredString,
   );
+  const debouncedSearch = useDebounce(search, DEFAULT_DEBOUNCE_DELAY_MS);
   const [statusFilter, setStatusFilter] = useState<CourseStatusFilter>("all");
   const [sort, setSort] = useState<CourseSort>("latest");
   const [wishlisted, setWishlisted] = useState<Set<string>>(() => new Set());
@@ -1281,6 +1286,24 @@ export function CoursesPage({
   ]);
 
   useEffect(() => {
+    if (effectiveRole !== "creator") {
+      const forbiddenPages = [
+        "students",
+        "student-details",
+        "course-create",
+        "quiz-builder",
+      ];
+      if (
+        (page && forbiddenPages.includes(page)) ||
+        requestedSection === "Students" ||
+        requestedSection === "Create Course"
+      ) {
+        onNavigatePage?.("/");
+      }
+    }
+  }, [effectiveRole, onNavigatePage, page, requestedSection]);
+
+  useEffect(() => {
     if (!storedPreferencesReady) return;
     localStorage.setItem("veolms-sidebar-mode", sidebarMode);
     localStorage.setItem(
@@ -1584,18 +1607,38 @@ export function CoursesPage({
     };
   }, [edgeSidebarOpen, onNavigatePage, sidebarMode]);
 
+  const roleFilteredNavigationItems = useMemo(() => {
+    return navigationItems.filter(([label]) => {
+      if (role === "student") {
+        return label !== "Students" && label !== "Dashboard";
+      }
+      if (role === "creator") {
+        return label !== "Home";
+      }
+      return true;
+    });
+  }, [navigationItems, role]);
+
   const navigation = getVisibleOrderedNavigation(
     navigationPreferencesReady && !isPublicNavigation
       ? navigationOrders[role]
       : isPublicNavigation
-        ? getDefaultNavigationOrder(navigationItems)
-        : getInitialNavigationOrder(role, navigationItems, activeUser?.id),
+        ? getDefaultNavigationOrder(roleFilteredNavigationItems)
+        : getInitialNavigationOrder(
+            role,
+            roleFilteredNavigationItems,
+            activeUser?.id,
+          ),
     navigationPreferencesReady && !isPublicNavigation
       ? navigationVisibility[role]
       : isPublicNavigation
-        ? getDefaultNavigationVisibility(navigationItems)
-        : getInitialNavigationVisibility(role, navigationItems, activeUser?.id),
-    navigationItems,
+        ? getDefaultNavigationVisibility(roleFilteredNavigationItems)
+        : getInitialNavigationVisibility(
+            role,
+            roleFilteredNavigationItems,
+            activeUser?.id,
+          ),
+    roleFilteredNavigationItems,
   ).filter(([label]) => label !== "Settings" || !settingsInSidebarDock);
   const updateNavigationScrollFade = () => {
     const nav = navigationRef.current;
@@ -1756,7 +1799,7 @@ export function CoursesPage({
         role: effectiveRole,
         enrollmentFilter,
         statusFilter,
-        search,
+        search: debouncedSearch,
         sort,
       }),
     [
@@ -1764,7 +1807,7 @@ export function CoursesPage({
       allCourses,
       effectiveRole,
       enrollmentFilter,
-      search,
+      debouncedSearch,
       sort,
       statusFilter,
       wishlisted,
@@ -3172,12 +3215,14 @@ export function CoursesPage({
     surfacePage = page,
     surfaceSection = requestedSection,
     surfaceSettingsTab = settingsTab,
+    surfaceUsername = username,
   }: {
     surfaceCourseSlug?: string;
     surfaceDiscussionTab?: string;
     surfacePage?: string;
     surfaceSection?: string | null;
     surfaceSettingsTab?: string;
+    surfaceUsername?: string;
   } = {}): ReactNode => {
     const surfaceActiveSection =
       surfaceSection ?? (surfacePage === "courses" ? "Courses" : activeSection);
@@ -3221,15 +3266,15 @@ export function CoursesPage({
           onSidebarPreferencesChange={setSidebarPreferences}
           sidebarMode={renderedSidebarMode}
           onSidebarModeChange={setSidebarMode}
-          navigationItems={navigationItems}
+          navigationItems={roleFilteredNavigationItems}
           navigationVisibleItems={
             navigationPreferencesReady && !isPublicNavigation
               ? navigationVisibility[role]
               : isPublicNavigation
-                ? getDefaultNavigationVisibility(navigationItems)
+                ? getDefaultNavigationVisibility(roleFilteredNavigationItems)
                 : getInitialNavigationVisibility(
                     role,
-                    navigationItems,
+                    roleFilteredNavigationItems,
                     activeUser?.id,
                   )
           }
@@ -3238,7 +3283,7 @@ export function CoursesPage({
               ...current,
               [role]: ensureRequiredNavigationVisibility(
                 visibleItems,
-                navigationItems,
+                roleFilteredNavigationItems,
               ),
             }))
           }
@@ -3261,6 +3306,9 @@ export function CoursesPage({
       );
     }
     if (surfacePage === "course-create") {
+      if (effectiveRole !== "creator") {
+        return null;
+      }
       return (
         <CourseCreatePage
           onNavigatePage={onNavigatePage}
@@ -3314,6 +3362,9 @@ export function CoursesPage({
       );
     }
     if (surfacePage === "quiz-builder") {
+      if (effectiveRole !== "creator") {
+        return null;
+      }
       return (
         <QuizBuilderPage quizId={quizId} onNavigatePage={onNavigatePage} />
       );
@@ -3332,6 +3383,26 @@ export function CoursesPage({
       surfaceActiveSection === "Quizzes"
     ) {
       return <QuizAnalyticsPage role={role} onNavigatePage={onNavigatePage} />;
+    }
+    if (surfacePage === "student-details") {
+      if (effectiveRole !== "creator") {
+        return null;
+      }
+      return (
+        <StudentDetailsPage
+          username={surfaceUsername}
+          onNavigatePage={onNavigatePage}
+          setNotice={setNotice}
+        />
+      );
+    }
+    if (surfacePage === "students" || surfaceActiveSection === "Students") {
+      if (effectiveRole !== "creator") {
+        return null;
+      }
+      return (
+        <StudentsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+      );
     }
     if (surfacePage === "placeholder") {
       return (

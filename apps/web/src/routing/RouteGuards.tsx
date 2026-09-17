@@ -93,7 +93,7 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     }
 
     if (courseAuthorRouteDenied) {
-      navigate(APP_HOME_PATH, { replace: true });
+      navigate("/", { replace: true });
     }
   }, [
     access.isAuthenticated,

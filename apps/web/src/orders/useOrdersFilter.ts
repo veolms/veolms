@@ -1,4 +1,8 @@
 import { useMemo, useState } from "react";
+import {
+  DEFAULT_DEBOUNCE_DELAY_MS,
+  useDebounceValue,
+} from "../hooks/useDebounce";
 import type {
   OrderItem,
   OrderSummaryMetrics,
@@ -52,6 +56,10 @@ export function useOrdersFilter(
 
   const [activeTab, setActiveTab] = useState<OrderTabId>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearchImmediately] = useDebounceValue(
+    searchQuery.trim(),
+    DEFAULT_DEBOUNCE_DELAY_MS,
+  );
   const [courseFilter, setCourseFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedReceiptOrder, setSelectedReceiptOrder] =
@@ -76,6 +84,7 @@ export function useOrdersFilter(
   const resetFilters = () => {
     setActiveTab("all");
     setSearchQuery("");
+    setDebouncedSearchImmediately("");
     setCourseFilter("all");
     setStatusFilter("all");
   };
@@ -102,8 +111,8 @@ export function useOrdersFilter(
     }
 
     // Filter by Search Query (course name or order ID like #PC-72401)
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
+    if (debouncedSearch) {
+      const query = debouncedSearch.toLowerCase();
       result = result.filter(
         (item) =>
           item.courseTitle.toLowerCase().includes(query) ||
@@ -113,7 +122,7 @@ export function useOrdersFilter(
     }
 
     return result;
-  }, [ordersList, activeTab, courseFilter, statusFilter, searchQuery]);
+  }, [ordersList, activeTab, courseFilter, statusFilter, debouncedSearch]);
 
   return {
     orders: filteredOrders,

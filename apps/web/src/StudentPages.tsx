@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { CSSProperties } from "react";
+import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "./hooks/useDebounce";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
@@ -72,9 +73,7 @@ export function adaptEnrolledCourseToLearningCourse(
     status,
     progress: ec.progress ?? 0,
     enrolledOn: enrolledDateStr,
-    thumbnail:
-      ec.courseThumbnailUrl ||
-      getCourseThumbnail(ec.courseSlug),
+    thumbnail: ec.courseThumbnailUrl || getCourseThumbnail(ec.courseSlug),
   };
 }
 
@@ -272,13 +271,23 @@ function LearningCourseCard({
           {completed ? (
             <>Completed on {course.completedOn}</>
           ) : notStarted ? (
-            <>{course.enrolledOn ? `Enrolled on ${course.enrolledOn}` : "Enrolled"}</>
+            <>
+              {course.enrolledOn
+                ? `Enrolled on ${course.enrolledOn}`
+                : "Enrolled"}
+            </>
           ) : (
             <>
-              {course.lastLesson && <span>Last watched: {course.lastLesson}</span>}
+              {course.lastLesson && (
+                <span>Last watched: {course.lastLesson}</span>
+              )}
               {course.accessed && <time>{course.accessed}</time>}
               {!course.lastLesson && !course.accessed && (
-                <span>{course.enrolledOn ? `Enrolled on ${course.enrolledOn}` : "Enrolled"}</span>
+                <span>
+                  {course.enrolledOn
+                    ? `Enrolled on ${course.enrolledOn}`
+                    : "Enrolled"}
+                </span>
               )}
             </>
           )}
@@ -323,7 +332,12 @@ export function MyCoursesPage({
   onWishlist,
   setNotice,
 }: MyCoursesPageProps) {
-  const { data: enrolledData, isLoading, isError, refetch } = useEnrolledCourses();
+  const {
+    data: enrolledData,
+    isLoading,
+    isError,
+    refetch,
+  } = useEnrolledCourses();
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useSessionStorageState(
     "veolms-my-courses-search",
@@ -331,15 +345,18 @@ export function MyCoursesPage({
     isStoredString,
     LEGACY_MY_COURSES_SEARCH_KEYS,
   );
+  const debouncedSearch = useDebounce(search, DEFAULT_DEBOUNCE_DELAY_MS);
   const [sort, setSort] = useState("recent");
   const [status, setStatus] = useState("all");
 
   const learningCourses = useMemo(() => {
-    return (enrolledData?.courses || []).map(adaptEnrolledCourseToLearningCourse);
+    return (enrolledData?.courses || []).map(
+      adaptEnrolledCourseToLearningCourse,
+    );
   }, [enrolledData?.courses]);
 
   const visibleCourses = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query = debouncedSearch.trim().toLowerCase();
     let result = learningCourses.filter((course) => {
       const selectedStatus = status !== "all" ? status : filter;
       if (selectedStatus !== "all" && course.status !== selectedStatus)
@@ -351,7 +368,7 @@ export function MyCoursesPage({
     if (sort === "progress")
       result = [...result].sort((a, b) => b.progress - a.progress);
     return result;
-  }, [learningCourses, filter, search, sort, status]);
+  }, [learningCourses, filter, debouncedSearch, sort, status]);
 
   return (
     <div className="my-courses-page">

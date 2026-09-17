@@ -79,6 +79,7 @@ import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { adaptCourseOverviewToCurriculum } from "./courseCurriculumAdapter";
 import {
+  getCachedVideoPlaybackBootstrap,
   getVideoPlaybackBootstrap,
   refreshVideoPlaybackToken,
 } from "./videoPlaybackBootstrap";
@@ -860,7 +861,13 @@ export function LearningWorkspace({
   );
   const protectedPlayback = Boolean(courseSlug && !publicPlaybackBootstrap);
   const [playbackBootstrap, setPlaybackBootstrap] =
-    useState<VideoPlaybackBootstrap | null>(null);
+    useState<VideoPlaybackBootstrap | null>(() => {
+      if (!courseSlug || publicPlaybackBootstrap) return null;
+      return getCachedVideoPlaybackBootstrap({
+        courseSlug,
+        lessonNumber: selectedLesson,
+      });
+    });
   const refreshPlaybackToken = useCallback(async () => {
     if (!courseSlug) {
       throw new Error("A course is required to refresh playback access.");
@@ -877,8 +884,15 @@ export function LearningWorkspace({
       return;
     }
 
+    const cached = getCachedVideoPlaybackBootstrap({
+      courseSlug,
+      lessonNumber: selectedLesson,
+    });
+    if (cached) {
+      setPlaybackBootstrap(cached);
+    }
+
     let active = true;
-    setPlaybackBootstrap(null);
     void getVideoPlaybackBootstrap({
       courseSlug,
       lessonNumber: selectedLesson,
@@ -889,7 +903,7 @@ export function LearningWorkspace({
       .catch(() => {
         // The early request is an optimization. The player keeps its normal
         // fallback source and error UI when authorization or the network fails.
-        if (active) setPlaybackBootstrap(null);
+        if (active && !cached) setPlaybackBootstrap(null);
       });
 
     return () => {

@@ -22,7 +22,9 @@ export type ShellPage =
   | "settings"
   | "course-create"
   | "course-overview"
-  | "workspace";
+  | "workspace"
+  | "students"
+  | "student-details";
 
 export interface ShellRouteDescriptor {
   kind: "shell";
@@ -116,10 +118,17 @@ export const routeDescriptors = {
   },
   students: {
     kind: "shell",
-    page: "placeholder",
+    page: "students",
     section: "Students",
     title: "Students",
     description: "Review learners, access, and progress across your academy.",
+  },
+  "student-details": {
+    kind: "shell",
+    page: "student-details",
+    section: "Students",
+    title: "Student profile",
+    description: "Review learner details, enrolled courses, and progress.",
   },
   reviews: {
     kind: "shell",
@@ -315,6 +324,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   "create-course": "/courses/create",
   wishlist: "/wishlist",
   students: "/students",
+  "student-details": "/students/:username",
   reviews: "/reviews",
   quizzes: "/quizzes",
   "quiz-create": "/quizzes/create",
@@ -354,6 +364,7 @@ const canonicalPathsByRouteId = {
   "course-create": "/courses/create",
   wishlist: "/wishlist",
   students: "/students",
+  "student-details": "/students/:username",
   reviews: "/reviews",
   quizzes: "/quizzes",
   "quiz-create": "/quizzes/create",
@@ -443,6 +454,12 @@ export const getEffectiveRouteId = (
 
   if (routeId === "quiz-attempt") {
     return /^\/quizzes\/attempt\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "student-details") {
+    return /^\/students\/[^/]+$/.test(normalizedPath)
       ? routeId
       : "home-fallback";
   }

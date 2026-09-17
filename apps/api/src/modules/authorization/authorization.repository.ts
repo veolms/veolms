@@ -81,7 +81,10 @@ export async function checkUserPermission(
   const matchingAssignments = [...scopedAssignments, ...directRoleAssignments];
 
   if (matchingAssignments.length === 0) {
-    return { allowed: false, reason: "No matching role assignment grants this permission" };
+    return {
+      allowed: false,
+      reason: "No matching role assignment grants this permission",
+    };
   }
 
   // Explicit deny rule overrides any allow rule
@@ -195,13 +198,12 @@ export async function resolveCourseScope(
   courseIdOrSlug: string,
 ): Promise<ResourceScope | null> {
   // Check UUID vs Slug
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-    courseIdOrSlug,
-  );
+  const isUuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      courseIdOrSlug,
+    );
 
-  let query = database
-    .selectFrom("courses")
-    .select(["id"]);
+  let query = database.selectFrom("courses").select(["id"]);
 
   if (isUuid) {
     query = query.where("id", "=", courseIdOrSlug);
