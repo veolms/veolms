@@ -1,9 +1,9 @@
 import type {
   StudentCourseDetail,
   StudentDetailResponse,
+  StudentListItem,
   StudentListQuery,
   StudentListResponse,
-  StudentSummary,
 } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
@@ -19,7 +19,7 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
   async function listStudents(
     query: StudentListQuery,
   ): Promise<StudentListResponse> {
-    const limit = query.limit || 30;
+    const limit = query.limit || 50;
 
     const [rows, totalCount] = await Promise.all([
       studentsRepo.listStudentsPaginated(database, {
@@ -79,7 +79,7 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
       progressByUserId.set(p.user_id, list);
     }
 
-    const students: StudentSummary[] = pageRows.map((user) => {
+    const students: StudentListItem[] = pageRows.map((user) => {
       const userEnrollments = enrollmentsByUserId.get(user.id) ?? [];
       const userProgress = progressByUserId.get(user.id) ?? [];
 
@@ -93,15 +93,10 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
 
       let totalProgressSum = 0;
       let completedCoursesCount = 0;
-      const enrolledCoursesPreview: NonNullable<
-        StudentSummary["enrolledCoursesPreview"]
-      > = [];
 
       for (const enrollment of userEnrollments) {
-        const courseLessonsCount =
-          lessonCounts.get(enrollment.course_id) ?? 0;
-        const cProgressList =
-          progressByCourse.get(enrollment.course_id) ?? [];
+        const courseLessonsCount = lessonCounts.get(enrollment.course_id) ?? 0;
+        const cProgressList = progressByCourse.get(enrollment.course_id) ?? [];
 
         let courseProgressPercent = 0;
         if (courseLessonsCount > 0) {
@@ -124,15 +119,6 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         }
 
         totalProgressSum += courseProgressPercent;
-
-        if (enrolledCoursesPreview.length < 3) {
-          enrolledCoursesPreview.push({
-            id: enrollment.course_id,
-            title: enrollment.course_title,
-            slug: enrollment.course_slug,
-            progressPercent: courseProgressPercent,
-          });
-        }
       }
 
       const enrolledCoursesCount = userEnrollments.length;
@@ -158,20 +144,53 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         username: user.username,
         displayName: user.display_name,
         email: user.email,
-        avatarUrl: user.avatar_data_url,
-        bio: user.bio,
+        avatarUrl: null,
         joinedAt: user.created_at.toISOString(),
         enrolledCoursesCount,
         completedCoursesCount,
         averageProgressPercent,
         lastActiveAt: latestActive?.toISOString() ?? null,
-        enrolledCoursesPreview,
       };
     });
 
     const lastStudent = pageRows[pageRows.length - 1]!;
+    const sortBy = query.sortBy ?? "recent";
     const nextCursor = hasNextPage
-      ? lastStudent.created_at.toISOString()
+      ? studentsRepo.encodeStudentListCursor(
+          sortBy === "recent"
+            ? {
+                sortBy,
+                createdAt: lastStudent.created_at.toISOString(),
+                id: lastStudent.id,
+              }
+            : sortBy === "name"
+              ? {
+                  sortBy,
+                  name: lastStudent.display_name,
+                  id: lastStudent.id,
+                }
+              : sortBy === "courses"
+                ? {
+                    sortBy,
+                    courses: (enrollmentsByUserId.get(lastStudent.id) ?? [])
+                      .length,
+                    id: lastStudent.id,
+                  }
+                : {
+                    sortBy,
+                    progress: (() => {
+                      const progressRows =
+                        progressByUserId.get(lastStudent.id) ?? [];
+                      return progressRows.length > 0
+                        ? progressRows.reduce(
+                            (sum, row) => sum + row.progress_percent,
+                            0,
+                          ) / progressRows.length
+                        : 0;
+                    })(),
+                    id: lastStudent.id,
+                  },
+        )
       : null;
 
     return {
@@ -244,10 +263,8 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         );
       } else if (courseProgressList.length > 0) {
         const avg =
-          courseProgressList.reduce(
-            (acc, p) => acc + p.progress_percent,
-            0,
-          ) / courseProgressList.length;
+          courseProgressList.reduce((acc, p) => acc + p.progress_percent, 0) /
+          courseProgressList.length;
         progressPercent = Math.min(100, Math.round(avg));
       }
 

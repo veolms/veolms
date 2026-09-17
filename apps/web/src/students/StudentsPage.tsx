@@ -9,7 +9,10 @@ import { TrendUpIcon as TrendUp } from "@phosphor-icons/react/TrendUp";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import type { NavigateTo } from "../routing/navigation";
-import { useDebounceValue } from "../hooks/useDebounce";
+import {
+  DEFAULT_DEBOUNCE_DELAY_MS,
+  useDebounceValue,
+} from "../hooks/useDebounce";
 import { useCourses } from "../services/courses";
 import { useStudents } from "../services/students";
 import { StudentsTable } from "./StudentsTable";
@@ -24,7 +27,7 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, searchControls] = useDebounceValue(
     searchQuery.trim(),
-    500,
+    DEFAULT_DEBOUNCE_DELAY_MS,
   );
   const [courseFilter, setCourseFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<
@@ -36,13 +39,14 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
 
   // Load academy courses for the course filter dropdown
   const { data: coursesData } = useCourses();
+  const courseRecords = coursesData?.courses;
   const availableCourses = useMemo(() => {
-    if (!coursesData?.courses) return [];
-    return coursesData.courses.map((c) => ({
+    if (!courseRecords) return [];
+    return courseRecords.map((c) => ({
       id: c.id,
       title: c.title,
     }));
-  }, [coursesData?.courses]);
+  }, [courseRecords]);
 
   // Infinite query for students
   const queryFilter = useMemo(
@@ -51,7 +55,7 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
       courseId: courseFilter !== "all" ? courseFilter : undefined,
       status: statusFilter,
       sortBy,
-      limit: 30,
+      limit: 50,
     }),
     [debouncedSearch, courseFilter, statusFilter, sortBy],
   );
@@ -62,6 +66,8 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
     isError,
     hasNextPage = false,
     isFetchingNextPage,
+    isFetching,
+    isPlaceholderData,
     fetchNextPage,
     refetch,
   } = useStudents(queryFilter);
@@ -116,8 +122,6 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
       avgProgress,
     };
   }, [students]);
-
-
 
   const resetFilters = () => {
     setSearchQuery("");
@@ -291,7 +295,8 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
               Unable to load students
             </h3>
             <p className="mt-1 text-xs text-(--muted) max-w-sm">
-              An error occurred while fetching the learners list. Please check your connection and try again.
+              An error occurred while fetching the learners list. Please check
+              your connection and try again.
             </p>
             <button
               type="button"
@@ -308,6 +313,9 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
             students={students}
             totalCount={totalCount}
             isLoading={isLoading}
+            isTransitioning={
+              isPlaceholderData || (isFetching && !isFetchingNextPage)
+            }
             hasNextPage={hasNextPage}
             isFetchingNextPage={isFetchingNextPage}
             fetchNextPage={fetchNextPage}
@@ -331,7 +339,9 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
                 ? "No learners match your current search query or active filters. Try adjusting your filters or search terms."
                 : "There are no students registered in your academy yet."}
             </p>
-            {(searchQuery || courseFilter !== "all" || statusFilter !== "all") && (
+            {(searchQuery ||
+              courseFilter !== "all" ||
+              statusFilter !== "all") && (
               <button
                 type="button"
                 onClick={resetFilters}

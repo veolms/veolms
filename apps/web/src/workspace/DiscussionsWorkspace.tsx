@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { useDebounce } from "../hooks/useDebounce";
+import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "../hooks/useDebounce";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { ArrowSquareOutIcon as ArrowSquareOut } from "@phosphor-icons/react/ArrowSquareOut";
 import { AtIcon as At } from "@phosphor-icons/react/At";
@@ -247,7 +247,7 @@ export function DiscussionsWorkspace({
   };
   const tablistRef = useRef<HTMLElement>(null);
   const [query, setQuery] = useState("");
-  const debouncedQuery = useDebounce(query, 500);
+  const debouncedQuery = useDebounce(query, DEFAULT_DEBOUNCE_DELAY_MS);
   const [course, setCourse] = useState("all");
   const [status, setStatus] = useState("all");
   const [sort, setSort] = useState("activity");

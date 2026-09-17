@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
-import { useDebounceValue } from "../hooks/useDebounce";
+import {
+  DEFAULT_DEBOUNCE_DELAY_MS,
+  useDebounceValue,
+} from "../hooks/useDebounce";
 import type {
   OrderItem,
   OrderSummaryMetrics,
@@ -55,7 +58,7 @@ export function useOrdersFilter(
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearchImmediately] = useDebounceValue(
     searchQuery.trim(),
-    500,
+    DEFAULT_DEBOUNCE_DELAY_MS,
   );
   const [courseFilter, setCourseFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");

@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { useDebounceValue } from "../hooks/useDebounce";
-import type {
-  OrderHistoryItem,
-  OrderHistoryTabId,
-} from "./orderHistoryData";
+import {
+  DEFAULT_DEBOUNCE_DELAY_MS,
+  useDebounceValue,
+} from "../hooks/useDebounce";
+import type { OrderHistoryItem, OrderHistoryTabId } from "./orderHistoryData";
 import { useOrders } from "../services/orders";
 import { adaptOrderToOrderHistoryItem } from "../orders/orderAdapter";
 
@@ -55,7 +55,7 @@ export function useOrderHistoryFilter(
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearchImmediately] = useDebounceValue(
     searchQuery.trim(),
-    500,
+    DEFAULT_DEBOUNCE_DELAY_MS,
   );
   const [dateRangeFilter, setDateRangeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -139,7 +139,13 @@ export function useOrderHistoryFilter(
     }
 
     return result;
-  }, [ordersList, activeTab, statusFilter, paymentMethodFilter, debouncedSearch]);
+  }, [
+    ordersList,
+    activeTab,
+    statusFilter,
+    paymentMethodFilter,
+    debouncedSearch,
+  ]);
 
   const totalFilteredCount = filteredOrders.length;
   const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));

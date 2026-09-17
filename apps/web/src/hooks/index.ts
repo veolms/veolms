@@ -1,4 +1,5 @@
 export {
+  DEFAULT_DEBOUNCE_DELAY_MS,
   debounce,
   useDebounce,
   useDebounceValue,

@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
-import { useDebounceValue } from "../hooks/useDebounce";
+import {
+  DEFAULT_DEBOUNCE_DELAY_MS,
+  useDebounceValue,
+} from "../hooks/useDebounce";
 import {
   initialCourseMeta,
   initialHighlights,
@@ -60,7 +63,7 @@ export function useReviewsFilter(
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearchImmediately] = useDebounceValue(
     searchQuery.trim(),
-    500,
+    DEFAULT_DEBOUNCE_DELAY_MS,
   );
   const [ratingFilter, setRatingFilter] = useState<RatingFilterOption>("all");
   const [sortBy, setSortBy] = useState<SortOption>("recent");
@@ -179,7 +182,14 @@ export function useReviewsFilter(
     });
 
     return result;
-  }, [reviewsList, activeTab, verifiedOnly, ratingFilter, debouncedSearch, sortBy]);
+  }, [
+    reviewsList,
+    activeTab,
+    verifiedOnly,
+    ratingFilter,
+    debouncedSearch,
+    sortBy,
+  ]);
 
   return {
     courseMeta: initialCourseMeta,

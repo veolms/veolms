@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useDebounce } from "../hooks/useDebounce";
+import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "../hooks/useDebounce";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
@@ -62,11 +62,7 @@ function statusLabel(status: QuizStatus) {
       : "Draft";
 }
 
-function useInfiniteList<T>(
-  items: readonly T[],
-  initialLimit = 20,
-  step = 20,
-) {
+function useInfiniteList<T>(items: readonly T[], initialLimit = 20, step = 20) {
   const [limit, setLimit] = useState(initialLimit);
 
   useEffect(() => {
@@ -78,10 +74,7 @@ function useInfiniteList<T>(
     setLimit((prev) => Math.min(prev + step, items.length));
   }, [items.length, step]);
 
-  const displayedItems = useMemo(
-    () => items.slice(0, limit),
-    [items, limit],
-  );
+  const displayedItems = useMemo(() => items.slice(0, limit), [items, limit]);
 
   return {
     displayedItems,
@@ -188,7 +181,9 @@ function QuizPageHeader({
           {description}
         </p>
       </div>
-      {action ? <div className="shrink-0 pt-2 pb-0.5 sm:py-0">{action}</div> : null}
+      {action ? (
+        <div className="shrink-0 pt-2 pb-0.5 sm:py-0">{action}</div>
+      ) : null}
     </header>
   );
 }
@@ -303,8 +298,16 @@ function InstructorOverview({
   const courseOptions: readonly ThemedSelectOption[] = useMemo(() => {
     const list: ThemedSelectOption[] = [["", "All courses"]];
     const sorted = [...(courses.data?.courses ?? [])].sort((a, b) => {
-      const dateA = a.updatedAt ? Date.parse(a.updatedAt) : a.createdAt ? Date.parse(a.createdAt) : 0;
-      const dateB = b.updatedAt ? Date.parse(b.updatedAt) : b.createdAt ? Date.parse(b.createdAt) : 0;
+      const dateA = a.updatedAt
+        ? Date.parse(a.updatedAt)
+        : a.createdAt
+          ? Date.parse(a.createdAt)
+          : 0;
+      const dateB = b.updatedAt
+        ? Date.parse(b.updatedAt)
+        : b.createdAt
+          ? Date.parse(b.createdAt)
+          : 0;
       return dateB - dateA;
     });
     for (const course of sorted) {
@@ -357,8 +360,18 @@ function InstructorOverview({
         <div className="relative grid gap-4 sm:gap-8 lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-center">
           <div>
             <div className="flex size-9 sm:size-11 items-center justify-center rounded-xl bg-(--accent) text-(--on-accent) shadow-lg shadow-(--accent-shadow)/30">
-              <ChartBar size={20} className="sm:hidden" weight="bold" aria-hidden="true" />
-              <ChartBar size={24} className="hidden sm:block" weight="bold" aria-hidden="true" />
+              <ChartBar
+                size={20}
+                className="sm:hidden"
+                weight="bold"
+                aria-hidden="true"
+              />
+              <ChartBar
+                size={24}
+                className="hidden sm:block"
+                weight="bold"
+                aria-hidden="true"
+              />
             </div>
             <h2 className="mt-3 sm:mt-5 max-w-2xl text-xl font-bold tracking-tight text-(--text) sm:text-3xl">
               A clearer view of assessment health.
@@ -386,7 +399,8 @@ function InstructorOverview({
               triggerClassName="!h-9 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-2.5 sm:!px-3.5 !text-xs sm:!text-sm !font-semibold !text-(--text) focus:!border-(--accent)"
             />
             <p className="text-xs text-(--muted)">
-              {assignments.data?.length ?? 0} assigned assessment{assignments.data?.length === 1 ? "" : "s"} in this course
+              {assignments.data?.length ?? 0} assigned assessment
+              {assignments.data?.length === 1 ? "" : "s"} in this course
             </p>
           </div>
         </div>
@@ -515,7 +529,7 @@ function QuizLibrary({
   onNavigatePage?: (destination: string) => void;
 }) {
   const [search, setSearch] = useState("");
-  const debouncedSearch = useDebounce(search, 500);
+  const debouncedSearch = useDebounce(search, DEFAULT_DEBOUNCE_DELAY_MS);
   const [status, setStatus] = useState<QuizStatus | "all">("all");
   const visible = quizzes.filter(
     (quiz) =>
@@ -539,14 +553,20 @@ function QuizLibrary({
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-(--muted)">
               Content library
             </p>
-            <h2 id="quiz-library-title" className="mt-1 text-lg sm:text-xl font-semibold">
+            <h2
+              id="quiz-library-title"
+              className="mt-1 text-lg sm:text-xl font-semibold"
+            >
               All quizzes
             </h2>
             <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-(--muted)">
               Draft, publish, and maintain versioned assessment content.
             </p>
           </div>
-          <Button onClick={() => onNavigatePage?.("/quizzes/create")} className="h-9 sm:h-10 text-xs sm:text-sm">
+          <Button
+            onClick={() => onNavigatePage?.("/quizzes/create")}
+            className="h-9 sm:h-10 text-xs sm:text-sm"
+          >
             <Plus size={16} weight="bold" />
             <span>New quiz</span>
           </Button>
@@ -649,8 +669,16 @@ function InstructorAnalytics() {
 
   const courseOptions: readonly ThemedSelectOption[] = useMemo(() => {
     const sorted = [...(courses.data?.courses ?? [])].sort((a, b) => {
-      const dateA = a.updatedAt ? Date.parse(a.updatedAt) : a.createdAt ? Date.parse(a.createdAt) : 0;
-      const dateB = b.updatedAt ? Date.parse(b.updatedAt) : b.createdAt ? Date.parse(b.createdAt) : 0;
+      const dateA = a.updatedAt
+        ? Date.parse(a.updatedAt)
+        : a.createdAt
+          ? Date.parse(a.createdAt)
+          : 0;
+      const dateB = b.updatedAt
+        ? Date.parse(b.updatedAt)
+        : b.createdAt
+          ? Date.parse(b.createdAt)
+          : 0;
       return dateB - dateA;
     });
     return sorted.map((course) => [course.id, course.title] as const);
@@ -684,7 +712,9 @@ function InstructorAnalytics() {
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-(--muted)">
               Instructor reporting
             </p>
-            <h2 className="mt-1 text-lg sm:text-xl font-semibold">Performance overview</h2>
+            <h2 className="mt-1 text-lg sm:text-xl font-semibold">
+              Performance overview
+            </h2>
             <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-(--muted)">
               Compare outcomes at course, assessment, and student level.
             </p>
@@ -791,6 +821,9 @@ function InstructorAnalytics() {
                   setStudentId(null);
                 }}
                 options={assignmentOptions}
+                searchable
+                searchPlaceholder="Search assessments..."
+                defaultLimit={10}
                 ariaLabel="Select assessment"
                 triggerClassName="!h-9 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-2.5 sm:!px-3.5 !text-xs sm:!text-sm !font-medium !text-(--text) focus:!border-(--accent)"
               />
@@ -950,7 +983,10 @@ function StudentReportPanel({
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-(--muted)">
             Learner report
           </p>
-          <h2 id="student-report-title" className="mt-1 text-lg sm:text-xl font-semibold">
+          <h2
+            id="student-report-title"
+            className="mt-1 text-lg sm:text-xl font-semibold"
+          >
             Quiz history and outcomes
           </h2>
         </div>
@@ -1076,7 +1112,10 @@ function LearnerQuizDashboard({
       >
         <div className="flex flex-col gap-3 border-b border-(--border) p-3 sm:p-7 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 id="assigned-quizzes-title" className="text-lg sm:text-xl font-semibold">
+            <h2
+              id="assigned-quizzes-title"
+              className="text-lg sm:text-xl font-semibold"
+            >
               Your assessments
             </h2>
             <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-(--muted)">
@@ -1261,7 +1300,9 @@ function LearnerQuizCard({
           <p className="text-[0.68rem] uppercase tracking-[0.12em] text-(--muted) font-semibold">
             Best score
           </p>
-          <p className="mt-1 font-bold text-(--text)">{percent(assignment.bestScore)}</p>
+          <p className="mt-1 font-bold text-(--text)">
+            {percent(assignment.bestScore)}
+          </p>
         </div>
         <div>
           <p className="text-[0.68rem] uppercase tracking-[0.12em] text-(--muted) font-semibold">
@@ -1311,7 +1352,9 @@ function QuizLibraryRow({
           <ChartBar size={20} className="hidden sm:block" weight="bold" />
         </div>
         <div className="min-w-0">
-          <p className="truncate font-semibold text-sm sm:text-base">{quiz.title}</p>
+          <p className="truncate font-semibold text-sm sm:text-base">
+            {quiz.title}
+          </p>
           <p className="mt-0.5 sm:mt-1 text-[0.72rem] sm:text-xs text-(--muted)">
             {latest?.questions.length ?? 0} questions · {published} published
             version{published === 1 ? "" : "s"} · Updated{" "}
@@ -1367,7 +1410,9 @@ function StatCard({
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       <div className="flex items-center justify-between gap-1.5 sm:gap-2">
-        <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">{label}</p>
+        <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
+          {label}
+        </p>
         {icon ? (
           <span className="flex size-6 sm:size-7 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-(--accent)">
             {icon}
@@ -1386,7 +1431,9 @@ function StatCard({
         {value}
       </p>
       {detail ? (
-        <p className="mt-0.5 sm:mt-1 truncate text-[0.68rem] sm:text-xs text-(--muted)">{detail}</p>
+        <p className="mt-0.5 sm:mt-1 truncate text-[0.68rem] sm:text-xs text-(--muted)">
+          {detail}
+        </p>
       ) : null}
     </div>
   );
@@ -1418,7 +1465,9 @@ function SectionHeading({
   return (
     <div className="flex items-start justify-between gap-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3 py-2.5 sm:p-7">
       <div>
-        <h2 className="text-base sm:text-lg font-bold tracking-tight text-(--text)">{title}</h2>
+        <h2 className="text-base sm:text-lg font-bold tracking-tight text-(--text)">
+          {title}
+        </h2>
         {description ? (
           <p className="mt-0.5 text-xs text-(--muted)">{description}</p>
         ) : null}
@@ -1448,10 +1497,18 @@ function QuickAction({
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-xs sm:text-sm font-bold text-(--text)">{title}</span>
-        <span className="mt-0.5 block text-[0.72rem] sm:text-xs text-(--muted)">{detail}</span>
+        <span className="block text-xs sm:text-sm font-bold text-(--text)">
+          {title}
+        </span>
+        <span className="mt-0.5 block text-[0.72rem] sm:text-xs text-(--muted)">
+          {detail}
+        </span>
       </span>
-      <ArrowRight className="ml-auto text-(--muted) group-hover:text-(--accent) transition-colors" size={16} weight="bold" />
+      <ArrowRight
+        className="ml-auto text-(--muted) group-hover:text-(--accent) transition-colors"
+        size={16}
+        weight="bold"
+      />
     </button>
   );
 }

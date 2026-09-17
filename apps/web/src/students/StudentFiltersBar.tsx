@@ -103,6 +103,9 @@ export function StudentFiltersBar({
             value={courseFilter}
             onValueChange={onCourseFilterChange}
             options={courseOptions}
+            searchable
+            searchPlaceholder="Search courses..."
+            defaultLimit={8}
             ariaLabel="Filter by course"
             triggerClassName="min-h-9.75! p-0! bg-transparent! shadow-none! border-0! text-xs md:text-sm font-medium text-(--text-secondary) hover:bg-transparent! hover:text-(--text)! focus:outline-none! flex items-center justify-between w-full"
           />
@@ -130,9 +133,7 @@ export function StudentFiltersBar({
             id="students-sort-filter"
             value={sortBy}
             onValueChange={(val) =>
-              onSortByChange(
-                val as "recent" | "name" | "courses" | "progress",
-              )
+              onSortByChange(val as "recent" | "name" | "courses" | "progress")
             }
             options={sortOptions}
             ariaLabel="Sort students"

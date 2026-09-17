@@ -25,7 +25,7 @@ import { quizKeys } from "../services/quizzes/quizzes.keys";
 import {
   useAddQuizQuestion,
   useAssignQuiz,
-  useCreateQuiz,
+  useCreateQuizWithQuestions,
   useDeleteQuiz,
   useDeleteQuizAssignment,
   useDeleteQuizQuestion,
@@ -50,6 +50,14 @@ import { QuizRichTextField } from "./QuizRichTextField";
 import { selectQuizAssignment } from "./quizAssignmentSelection";
 import { AutosaveStatus } from "../lib/autosync";
 import { ConfirmActionModal } from "../shell/ConfirmActionModal";
+import {
+  browserDraftStorageKey,
+  parseQuizBuilderBrowserDraft,
+  toCreateQuizQuestionRequest,
+  type QuizBuilderBrowserDraft,
+  type QuizBuilderQuestionDraft,
+  type QuizBuilderOptionDraft,
+} from "./quizBuilderDraft";
 
 interface Props {
   courseId?: string;
@@ -62,10 +70,16 @@ interface Props {
   onToggleFocusMode?: () => void;
 }
 
-interface OptionDraft {
-  id?: string;
-  text: string;
-  isCorrect: boolean;
+type OptionDraft = QuizBuilderOptionDraft;
+
+interface EditableQuestion {
+  id: string;
+  questionType: QuizQuestionType;
+  prompt: string;
+  points: number;
+  position: number;
+  explanation: string | null;
+  options: readonly OptionDraft[];
 }
 
 const initialOptions = (): OptionDraft[] => [
@@ -151,7 +165,10 @@ function quizErrorMessage(error: unknown) {
     code?: unknown;
     message?: unknown;
     details?: {
-      error?: { message?: string; issues?: Array<{ message?: string; path?: string[] }> };
+      error?: {
+        message?: string;
+        issues?: Array<{ message?: string; path?: string[] }>;
+      };
       message?: string;
       issues?: Array<{ message?: string; path?: string[] }>;
     };
@@ -169,7 +186,8 @@ function quizErrorMessage(error: unknown) {
   if (
     typeof detailsMessage === "string" &&
     detailsMessage.trim() &&
-    detailsMessage !== "Something went wrong on our end. Please try again later."
+    detailsMessage !==
+      "Something went wrong on our end. Please try again later."
   ) {
     return detailsMessage;
   }
@@ -213,6 +231,14 @@ export function QuizAuthoringPanel({
   const [quizTitle, setQuizTitle] = useState(lessonTitle ?? "");
   const [description, setDescription] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [draftQuestions, setDraftQuestions] = useState<
+    QuizBuilderQuestionDraft[]
+  >([]);
+  const draftStorageKey = useMemo(
+    () => browserDraftStorageKey({ courseId, lessonId }),
+    [courseId, lessonId],
+  );
+  const browserDraftHydratedRef = useRef(Boolean(initialQuizId));
   const [prompt, setPrompt] = useState("");
   const [questionType, setQuestionType] =
     useState<QuizQuestionType>("single_choice");
@@ -257,8 +283,6 @@ export function QuizAuthoringPanel({
   const [createSaveStatus, setCreateSaveStatus] = useState<
     "saving" | "saved" | "failed" | null
   >(null);
-  const createDebounceRef = useRef<number | null>(null);
-  const isCreatingRef = useRef(false);
 
   const [questionSaveStatus, setQuestionSaveStatus] = useState<
     "saving" | "saved" | "failed" | null
@@ -266,7 +290,7 @@ export function QuizAuthoringPanel({
   const questionDebounceRef = useRef<number | null>(null);
   const pendingSaveAfterCreateRef = useRef(false);
 
-  const create = useCreateQuiz();
+  const create = useCreateQuizWithQuestions();
   const addQuestion = useAddQuizQuestion();
   const updateQuestion = useUpdateQuizQuestion();
   const deleteQuestion = useDeleteQuizQuestion();
@@ -309,6 +333,78 @@ export function QuizAuthoringPanel({
       quiz.data?.versions.at(-1),
     [quiz.data],
   );
+
+  useEffect(() => {
+    if (initialQuizId) return;
+
+    browserDraftHydratedRef.current = true;
+    let savedDraft: QuizBuilderBrowserDraft | null = null;
+    try {
+      savedDraft = parseQuizBuilderBrowserDraft(
+        window.localStorage.getItem(draftStorageKey),
+      );
+    } catch {
+      // The in-memory editor remains usable when browser storage is unavailable.
+    }
+    if (!savedDraft) return;
+
+    setQuizTitle(savedDraft.title || lessonTitle || "");
+    setDescription(savedDraft.description);
+    setInstructions(savedDraft.instructions);
+    setDraftQuestions(savedDraft.questions);
+    setRequired(savedDraft.assignment.required);
+    setPassPercentage(savedDraft.assignment.passPercentage);
+    setMaxAttempts(savedDraft.assignment.maxAttempts);
+    setTimeLimitMinutes(savedDraft.assignment.timeLimitMinutes);
+    setShuffleQuestions(savedDraft.assignment.shuffleQuestions);
+    setShuffleOptions(savedDraft.assignment.shuffleOptions);
+    setAvailableFrom(savedDraft.assignment.availableFrom);
+    setAvailableUntil(savedDraft.assignment.availableUntil);
+    setFeedbackMode(savedDraft.assignment.feedbackMode);
+  }, [draftStorageKey, initialQuizId, lessonTitle]);
+
+  useEffect(() => {
+    if (!browserDraftHydratedRef.current || quizId) return;
+
+    const draft: QuizBuilderBrowserDraft = {
+      title: quizTitle,
+      description,
+      instructions,
+      questions: draftQuestions,
+      assignment: {
+        required,
+        passPercentage,
+        maxAttempts,
+        timeLimitMinutes,
+        shuffleQuestions,
+        shuffleOptions,
+        availableFrom,
+        availableUntil,
+        feedbackMode,
+      },
+    };
+    try {
+      window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+    } catch {
+      // The in-memory editor remains the source of truth for this session.
+    }
+  }, [
+    description,
+    draftQuestions,
+    draftStorageKey,
+    feedbackMode,
+    instructions,
+    maxAttempts,
+    passPercentage,
+    required,
+    shuffleOptions,
+    shuffleQuestions,
+    timeLimitMinutes,
+    availableFrom,
+    availableUntil,
+    quizId,
+    quizTitle,
+  ]);
 
   useEffect(() => {
     if (!assignment || hasExplicitlyDeletedOrDetachedRef.current) return;
@@ -386,10 +482,6 @@ export function QuizAuthoringPanel({
 
   const handleResetAfterDelete = useCallback(() => {
     hasExplicitlyDeletedOrDetachedRef.current = true;
-    if (createDebounceRef.current) {
-      window.clearTimeout(createDebounceRef.current);
-      createDebounceRef.current = null;
-    }
     if (detailsTimerRef.current) {
       window.clearTimeout(detailsTimerRef.current);
       detailsTimerRef.current = null;
@@ -399,6 +491,12 @@ export function QuizAuthoringPanel({
       assignmentTimerRef.current = null;
     }
     resetEditor();
+    setDraftQuestions([]);
+    try {
+      window.localStorage.removeItem(draftStorageKey);
+    } catch {
+      // Nothing to clear when browser storage is unavailable.
+    }
     lastLoadedQuizIdRef.current = null;
     setQuizId(null);
     setQuizTitle(lessonTitle ?? "");
@@ -416,35 +514,40 @@ export function QuizAuthoringPanel({
       instructions: "",
     };
     if (courseId) {
-      qc.setQueryData(
-        quizKeys.courseAssignments(courseId),
-        (old: unknown) => {
-          if (!old) return old;
-          if (Array.isArray(old)) {
-            return old.filter(
-              (a: { lessonId?: string }) => a.lessonId !== lessonId,
-            );
-          }
-          if (
-            typeof old === "object" &&
-            old !== null &&
-            "assignments" in old &&
-            Array.isArray((old as { assignments: unknown[] }).assignments)
-          ) {
-            return {
-              ...(old as object),
-              assignments: (
-                old as { assignments: { lessonId?: string }[] }
-              ).assignments.filter((a) => a.lessonId !== lessonId),
-            };
-          }
-          return old;
-        },
-      );
+      qc.setQueryData(quizKeys.courseAssignments(courseId), (old: unknown) => {
+        if (!old) return old;
+        if (Array.isArray(old)) {
+          return old.filter(
+            (a: { lessonId?: string }) => a.lessonId !== lessonId,
+          );
+        }
+        if (
+          typeof old === "object" &&
+          old !== null &&
+          "assignments" in old &&
+          Array.isArray((old as { assignments: unknown[] }).assignments)
+        ) {
+          return {
+            ...(old as object),
+            assignments: (
+              old as { assignments: { lessonId?: string }[] }
+            ).assignments.filter((a) => a.lessonId !== lessonId),
+          };
+        }
+        return old;
+      });
     }
     onQuizDeleted?.();
     onBack?.();
-  }, [lessonTitle, onBack, onQuizDeleted, courseId, lessonId, qc]);
+  }, [
+    draftStorageKey,
+    lessonTitle,
+    onBack,
+    onQuizDeleted,
+    courseId,
+    lessonId,
+    qc,
+  ]);
 
   const handleDeleteQuiz = () => {
     if (!quizId || deleteQuizMutation.isPending) return;
@@ -493,96 +596,83 @@ export function QuizAuthoringPanel({
     ],
   );
 
-  const executeCreateQuiz = useCallback(
-    (
-      overrideTitle?: string,
-      overrideDesc?: string,
-      overrideInstr?: string,
-      onCreated?: (newQuiz: NonNullable<typeof quiz.data>) => void,
-    ) => {
-      const title =
-        (overrideTitle !== undefined ? overrideTitle : quizTitle).trim() ||
-        lessonTitle?.trim();
-      if (!title || isCreatingRef.current || create.isPending) return;
-      isCreatingRef.current = true;
+  const persistBrowserDraft = useCallback(
+    (onSaved?: (newQuiz: NonNullable<typeof quiz.data>) => void) => {
+      if (quizId || create.isPending) return;
+
+      const title = quizTitle.trim() || lessonTitle?.trim();
+      if (!title) return;
+
+      const questions = draftQuestions.map((question) =>
+        question.id === editingQuestionId
+          ? {
+              ...question,
+              questionType,
+              prompt,
+              points,
+              explanation,
+              options,
+            }
+          : question,
+      );
+      setDraftQuestions(questions);
       setCreateSaveStatus("saving");
-      const desc = (
-        overrideDesc !== undefined ? overrideDesc : description
-      ).trim();
-      const instr = (
-        overrideInstr !== undefined ? overrideInstr : instructions
-      ).trim();
+
       create.mutate(
         {
           title,
-          description: desc || null,
-          instructions: instr || null,
+          description: description.trim() || null,
+          instructions: instructions.trim() || null,
+          questions: questions.map((question, position) =>
+            toCreateQuizQuestionRequest(question, position),
+          ),
         },
         {
           onSuccess: (next) => {
-            isCreatingRef.current = false;
             setCreateSaveStatus("saved");
-            qc.setQueryData(quizKeys.detail(next.id), next);
+            setDetailsSaveStatus("saved");
+            try {
+              window.localStorage.removeItem(draftStorageKey);
+            } catch {
+              // Nothing to clear when browser storage is unavailable.
+            }
+            setDraftQuestions([]);
             lastLoadedQuizIdRef.current = next.id;
             setQuizId(next.id);
             lastSavedDetailsRef.current = {
               title,
-              description: desc,
-              instructions: instr,
+              description: description.trim(),
+              instructions: instructions.trim(),
             };
             setTimeout(() => {
               setCreateSaveStatus((curr) => (curr === "saved" ? null : curr));
+              setDetailsSaveStatus((curr) => (curr === "saved" ? null : curr));
             }, 2000);
-            if (effectiveCourseId && effectiveLessonId && !assignment) {
-              const versionId = next.versions?.[0]?.id;
-              if (versionId) {
-                assign.mutate({
-                  courseId: effectiveCourseId,
-                  lessonId: effectiveLessonId,
-                  payload: {
-                    quizVersionId: versionId,
-                    ...assignmentPayload(),
-                  },
-                });
-              }
-            }
-            onCreated?.(next);
+            onSaved?.(next);
           },
           onError: () => {
-            isCreatingRef.current = false;
             setCreateSaveStatus("failed");
           },
         },
       );
     },
     [
-      quizTitle,
+      create,
       description,
+      draftQuestions,
+      draftStorageKey,
+      editingQuestionId,
+      explanation,
       instructions,
       lessonTitle,
-      create,
-      effectiveCourseId,
-      effectiveLessonId,
-      assignment,
-      assign,
-      assignmentPayload,
+      options,
+      points,
+      prompt,
+      questionType,
+      quizId,
+      quizTitle,
+      quiz,
     ],
-  );
-
-  const scheduleCreateDebounce = useCallback(
-    (overrideTitle?: string, overrideDesc?: string, overrideInstr?: string) => {
-      if (createDebounceRef.current) {
-        window.clearTimeout(createDebounceRef.current);
-      }
-      const t =
-        (overrideTitle !== undefined ? overrideTitle : quizTitle).trim() ||
-        lessonTitle?.trim();
-      if (!t) return;
-      createDebounceRef.current = window.setTimeout(() => {
-        executeCreateQuiz(overrideTitle, overrideDesc, overrideInstr);
-      }, 1000);
-    },
-    [quizTitle, lessonTitle, executeCreateQuiz],
   );
 
   const flushDetailsPersistence = useCallback(
@@ -665,18 +755,46 @@ export function QuizAuthoringPanel({
       overrideExpl?: string,
       overrideQuestionId?: string,
     ) => {
+      if (questionDebounceRef.current !== null) {
+        window.clearTimeout(questionDebounceRef.current);
+        questionDebounceRef.current = null;
+      }
       const targetQuestionId = overrideQuestionId ?? editingQuestionId;
       if (!targetQuestionId) return;
-      if (targetQuestionId.startsWith("temp-q-")) {
-        pendingSaveAfterCreateRef.current = true;
-        return;
-      }
       const qType = overrideType ?? questionType;
       const qOptions = overrideOptions ?? options;
-      const qPrompt = (overridePrompt !== undefined ? overridePrompt : prompt).trim();
+      const qPromptValue =
+        overridePrompt !== undefined ? overridePrompt : prompt;
+      const qPrompt = qPromptValue.trim();
       const rawPoints = overridePoints !== undefined ? overridePoints : points;
-      const qPoints = Number.isFinite(rawPoints) && rawPoints > 0 ? rawPoints : 1;
-      const qExpl = (overrideExpl !== undefined ? overrideExpl : explanation).trim();
+      const qPoints =
+        Number.isFinite(rawPoints) && rawPoints > 0 ? rawPoints : 1;
+      const qExplValue =
+        overrideExpl !== undefined ? overrideExpl : explanation;
+      const qExpl = qExplValue.trim();
+
+      if (targetQuestionId.startsWith("temp-q-")) {
+        if (!quizId) {
+          setDraftQuestions((current) =>
+            current.map((question) =>
+              question.id === targetQuestionId
+                ? {
+                    ...question,
+                    questionType: qType,
+                    prompt: qPromptValue,
+                    points: qPoints,
+                    explanation: qExplValue,
+                    options: qOptions,
+                  }
+                : question,
+            ),
+          );
+          setQuestionSaveStatus("saved");
+        } else {
+          pendingSaveAfterCreateRef.current = true;
+        }
+        return;
+      }
 
       if (
         !quizId ||
@@ -739,6 +857,16 @@ export function QuizAuthoringPanel({
       overrideExpl?: string,
     ) => {
       if (!editingQuestionId) return;
+      if (!quizId && editingQuestionId.startsWith("temp-q-")) {
+        flushQuestionSave(
+          overrideType,
+          overrideOptions,
+          overridePrompt,
+          overridePoints,
+          overrideExpl,
+        );
+        return;
+      }
       if (questionDebounceRef.current) {
         window.clearTimeout(questionDebounceRef.current);
       }
@@ -752,7 +880,7 @@ export function QuizAuthoringPanel({
         );
       }, 700);
     },
-    [editingQuestionId, flushQuestionSave],
+    [editingQuestionId, flushQuestionSave, quizId],
   );
 
   const selectType = (nextType: QuizQuestionType) => {
@@ -770,7 +898,9 @@ export function QuizAuthoringPanel({
         /^Option\s*\d+$/i.test(existingText) ||
         existingText.toLowerCase() === "true" ||
         existingText.toLowerCase() === "false";
-      nextOptions = [{ text: isPlaceholder ? "" : existingText, isCorrect: true }];
+      nextOptions = [
+        { text: isPlaceholder ? "" : existingText, isCorrect: true },
+      ];
       setOptions(nextOptions);
     } else if (
       options.length < 2 ||
@@ -801,7 +931,7 @@ export function QuizAuthoringPanel({
   };
 
   const editQuestion = useCallback(
-    (question: NonNullable<typeof version>["questions"][number]) => {
+    (question: EditableQuestion) => {
       if (updateQuestion.error) {
         updateQuestion.reset();
       }
@@ -822,9 +952,7 @@ export function QuizAuthoringPanel({
     [updateQuestion],
   );
 
-  const handleToggleExpandQuestion = (
-    question: NonNullable<typeof version>["questions"][number],
-  ) => {
+  const handleToggleExpandQuestion = (question: EditableQuestion) => {
     if (editingQuestionId === question.id) {
       flushQuestionSave();
       setEditingQuestionId(null);
@@ -838,74 +966,18 @@ export function QuizAuthoringPanel({
 
   const handleAddNewQuestion = () => {
     if (!quizId) {
-      const title =
-        quizTitle.trim() || lessonTitle?.trim() || "Untitled Assessment";
-      if (isCreatingRef.current || create.isPending) return;
-      isCreatingRef.current = true;
-      setCreateSaveStatus("saving");
-      create.mutate(
-        {
-          title,
-          description: description.trim() || null,
-          instructions: instructions.trim() || null,
-        },
-        {
-          onSuccess: (next) => {
-            isCreatingRef.current = false;
-            setCreateSaveStatus("saved");
-            setQuizId(next.id);
-            lastSavedDetailsRef.current = {
-              title,
-              description: description.trim(),
-              instructions: instructions.trim(),
-            };
-            if (effectiveCourseId && effectiveLessonId && !assignment) {
-              const versionId = next.versions?.[0]?.id;
-              if (versionId) {
-                assign.mutate({
-                  courseId: effectiveCourseId,
-                  lessonId: effectiveLessonId,
-                  payload: {
-                    quizVersionId: versionId,
-                    ...assignmentPayload(),
-                  },
-                });
-              }
-            }
-            addQuestion.mutate(
-              {
-                id: next.id,
-                payload: {
-                  questionType: "single_choice",
-                  prompt: "Question 1",
-                  points: 1,
-                  explanation: null,
-                  options: initialOptions().map((opt, position) => ({
-                    text: opt.text,
-                    isCorrect: opt.isCorrect,
-                    position,
-                  })),
-                },
-              },
-              {
-                onSuccess: (updatedQuiz) => {
-                  const latestVersion =
-                    updatedQuiz.versions.find((item) => !item.publishedAt) ??
-                    updatedQuiz.versions.at(-1);
-                  const newQ = latestVersion?.questions.at(-1);
-                  if (newQ) {
-                    editQuestion(newQ);
-                  }
-                },
-              },
-            );
-          },
-          onError: () => {
-            isCreatingRef.current = false;
-            setCreateSaveStatus("failed");
-          },
-        },
-      );
+      const nextIdx = draftQuestions.length + 1;
+      const newQuestion: QuizBuilderQuestionDraft = {
+        id: `temp-q-${Date.now()}`,
+        questionType: "single_choice",
+        prompt: `Question ${nextIdx}`,
+        points: 1,
+        position: draftQuestions.length,
+        explanation: "",
+        options: initialOptions(),
+      };
+      setDraftQuestions((current) => [...current, newQuestion]);
+      editQuestion(newQuestion);
       return;
     }
 
@@ -1079,7 +1151,19 @@ export function QuizAuthoringPanel({
   };
 
   const publishAndAssign = () => {
-    if (!quizId || !version) return;
+    if (!quizId) {
+      if (create.isPending || !draftQuestions.length) return;
+      persistBrowserDraft((createdQuiz) => {
+        publish.mutate(
+          createdQuiz.id,
+          effectiveCourseId && effectiveLessonId
+            ? { onSuccess: assignPublishedVersion }
+            : undefined,
+        );
+      });
+      return;
+    }
+    if (!version) return;
     if (
       version.publishedAt &&
       quiz.data &&
@@ -1100,8 +1184,16 @@ export function QuizAuthoringPanel({
   const courseOptions: readonly ThemedSelectOption<string>[] = useMemo(() => {
     const courses = myCourses.data?.courses ?? [];
     const sorted = [...courses].sort((a, b) => {
-      const dateA = a.updatedAt ? Date.parse(a.updatedAt) : a.createdAt ? Date.parse(a.createdAt) : 0;
-      const dateB = b.updatedAt ? Date.parse(b.updatedAt) : b.createdAt ? Date.parse(b.createdAt) : 0;
+      const dateA = a.updatedAt
+        ? Date.parse(a.updatedAt)
+        : a.createdAt
+          ? Date.parse(a.createdAt)
+          : 0;
+      const dateB = b.updatedAt
+        ? Date.parse(b.updatedAt)
+        : b.createdAt
+          ? Date.parse(b.createdAt)
+          : 0;
       return dateB - dateA;
     });
     const titleCounts = new Map<string, number>();
@@ -1124,15 +1216,15 @@ export function QuizAuthoringPanel({
     courseEditor.data?.sections ?? courseOverview.data?.sections;
   const isLessonsLoading = Boolean(
     effectiveCourseId &&
-      !courseSections &&
-      (courseEditor.isLoading ||
-        (courseOverview.isLoading && !courseEditor.isError)),
+    !courseSections &&
+    (courseEditor.isLoading ||
+      (courseOverview.isLoading && !courseEditor.isError)),
   );
   const isLessonsError = Boolean(
     effectiveCourseId &&
-      !courseSections &&
-      courseEditor.isError &&
-      (courseOverview.isError || !courseOverview.data),
+    !courseSections &&
+    courseEditor.isError &&
+    (courseOverview.isError || !courseOverview.data),
   );
 
   const lessonOptions: readonly ThemedSelectOption<string>[] = useMemo(() => {
@@ -1215,7 +1307,12 @@ export function QuizAuthoringPanel({
     updateQuiz.error ||
     quiz.error;
   const errorMessage = quizErrorMessage(anyError);
-  const savingQuestion = addQuestion.isPending || updateQuestion.isPending;
+  const editableQuestions: readonly EditableQuestion[] = quizId
+    ? (version?.questions ?? [])
+    : draftQuestions;
+  const canPersistBrowserDraft = Boolean(
+    quizTitle.trim() || lessonTitle?.trim(),
+  );
 
   // Render: Unified Quiz Authoring Panel
   return (
@@ -1274,6 +1371,9 @@ export function QuizAuthoringPanel({
                       }
                     }}
                     options={quizOptions}
+                    searchable
+                    searchPlaceholder="Search quizzes..."
+                    defaultLimit={5}
                     ariaLabel="Select active quiz"
                     triggerClassName="!h-8.5 sm:!h-9 !rounded-[8px] sm:!rounded-[9px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--surface-strong)_70%,var(--canvas))] !px-2.5 sm:!px-3 !text-xs sm:!text-sm !font-semibold !text-(--text) shadow-[var(--card-compact-shadow)] hover:!border-[color-mix(in_srgb,var(--text)_25%,transparent)]"
                   />
@@ -1292,7 +1392,11 @@ export function QuizAuthoringPanel({
                 className="h-8.5 sm:h-9 px-3 sm:px-3.5 inline-flex items-center justify-center gap-1.5 rounded-[8px] sm:rounded-[9px] border border-[color-mix(in_srgb,var(--text)_20%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_85%,var(--canvas))] text-xs sm:text-sm font-semibold text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)_100%,transparent)] hover:border-[color-mix(in_srgb,var(--text)_35%,transparent)] shadow-[var(--card-compact-shadow)] transition-all cursor-pointer disabled:pointer-events-none disabled:opacity-40"
                 title="Detach quiz from this lesson"
               >
-                <X size={14} weight="bold" className="shrink-0 text-(--muted)" />
+                <X
+                  size={14}
+                  weight="bold"
+                  className="shrink-0 text-(--muted)"
+                />
                 <span>Detach</span>
               </button>
             )}
@@ -1312,7 +1416,11 @@ export function QuizAuthoringPanel({
                   : "No quiz loaded to delete"
               }
             >
-              <Trash size={14} weight="bold" className="shrink-0 text-red-400 group-hover:text-white" />
+              <Trash
+                size={14}
+                weight="bold"
+                className="shrink-0 text-red-400 group-hover:text-white"
+              />
               <span>Delete quiz</span>
             </button>
 
@@ -1330,7 +1438,9 @@ export function QuizAuthoringPanel({
                     ? "Exit focus mode (show topbar and bottom navigation) [Esc]"
                     : "Focus mode (hide topbar and bottom bar for more workspace)"
                 }
-                aria-label={isFocusMode ? "Exit focus mode" : "Enter focus mode"}
+                aria-label={
+                  isFocusMode ? "Exit focus mode" : "Enter focus mode"
+                }
                 aria-pressed={isFocusMode}
               >
                 {isFocusMode ? (
@@ -1361,7 +1471,7 @@ export function QuizAuthoringPanel({
 
       {!quizId || quiz.data || lastLoadedQuizIdRef.current ? (
         <div className="space-y-3 sm:space-y-5">
-          {/* Card 1: Quiz Details with Debounced Auto-Save */}
+          {/* Card 1: Quiz Details */}
           <div
             className="rounded-[14px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-2.5 sm:p-6"
             style={{ boxShadow: "var(--card-shadow)" }}
@@ -1372,13 +1482,20 @@ export function QuizAuthoringPanel({
                   Assessment details
                 </h3>
                 <p className="mt-0.5 text-xs text-(--muted)">
-                  Title, description, and student instructions auto-save as you
-                  type.
+                  {quizId
+                    ? "Title, description, and student instructions auto-save as you type."
+                    : "Your draft stays in this browser until you save or publish the quiz."}
                 </p>
               </div>
-              <AutoSaveIndicator
-                status={quizId ? detailsSaveStatus : createSaveStatus}
-              />
+              {quizId ? (
+                <AutoSaveIndicator status={detailsSaveStatus} />
+              ) : createSaveStatus ? (
+                <AutoSaveIndicator status={createSaveStatus} />
+              ) : (
+                <span role="status" className="text-xs text-(--muted)">
+                  Saved in this browser
+                </span>
+              )}
             </div>
 
             <div className="space-y-3 sm:space-y-4">
@@ -1391,32 +1508,17 @@ export function QuizAuthoringPanel({
                   onChange={(event) => {
                     setQuizTitle(event.target.value);
                     if (quizId) {
-                      scheduleAutoSaveDetails(
-                        event.target.value,
-                        undefined,
-                        undefined,
-                      );
-                    } else {
-                      scheduleCreateDebounce(event.target.value, undefined);
+                      scheduleAutoSaveDetails(event.target.value);
                     }
                   }}
                   onBlur={() => {
                     if (quizId) {
                       flushDetailsPersistence();
-                    } else if (quizTitle.trim()) {
-                      if (createDebounceRef.current) {
-                        window.clearTimeout(createDebounceRef.current);
-                      }
-                      executeCreateQuiz();
                     }
                   }}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" && !quizId && quizTitle.trim()) {
+                    if (event.key === "Enter" && !quizId) {
                       event.preventDefault();
-                      if (createDebounceRef.current) {
-                        window.clearTimeout(createDebounceRef.current);
-                      }
-                      executeCreateQuiz();
                     }
                   }}
                   className={`${inputClass} w-full`}
@@ -1435,23 +1537,12 @@ export function QuizAuthoringPanel({
                   onChange={(event) => {
                     setDescription(event.target.value);
                     if (quizId) {
-                      scheduleAutoSaveDetails(
-                        undefined,
-                        event.target.value,
-                        undefined,
-                      );
-                    } else {
-                      scheduleCreateDebounce(undefined, event.target.value);
+                      scheduleAutoSaveDetails(undefined, event.target.value);
                     }
                   }}
                   onBlur={() => {
                     if (quizId) {
                       flushDetailsPersistence();
-                    } else if (quizTitle.trim()) {
-                      if (createDebounceRef.current) {
-                        window.clearTimeout(createDebounceRef.current);
-                      }
-                      executeCreateQuiz();
                     }
                   }}
                   rows={2}
@@ -1490,15 +1581,16 @@ export function QuizAuthoringPanel({
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3 sm:mb-4">
               <div>
                 <h3 className="text-sm sm:text-base font-bold text-(--text) tracking-tight">
-                  Questions ({version?.questions.length ?? 0})
+                  Questions ({editableQuestions.length})
                 </h3>
                 <p className="mt-0.5 text-xs text-(--muted)">
-                  Each question can be edited in place. Click any question to expand or collapse.
+                  Each question can be edited in place. Click any question to
+                  expand or collapse.
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <span className="rounded-full bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] px-2.5 py-0.5 sm:py-1 text-[0.7rem] sm:text-[0.72rem] font-semibold text-(--text-secondary)">
-                  {version?.questions.reduce((sum, q) => sum + q.points, 0) ?? 0}{" "}
+                  {editableQuestions.reduce((sum, q) => sum + q.points, 0)}{" "}
                   total points
                 </span>
                 <span className="rounded-full bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] px-2.5 py-0.5 sm:py-1 text-[0.7rem] sm:text-[0.72rem] font-semibold text-(--text-secondary)">
@@ -1508,7 +1600,7 @@ export function QuizAuthoringPanel({
             </div>
 
             <div className="space-y-2 sm:space-y-2.5">
-              {version?.questions.map((question, index) => {
+              {editableQuestions.map((question, index) => {
                 const isCurrentlyEditing = editingQuestionId === question.id;
                 const typeMeta = getQuestionTypeMeta(question.questionType);
                 const correctCount = question.options.filter(
@@ -1552,7 +1644,8 @@ export function QuizAuthoringPanel({
                           {typeMeta.label}
                         </span>
                         <span className="rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] px-1.5 sm:px-2 py-0.5 text-[0.7rem] font-semibold text-(--accent)">
-                          {question.points} {question.points === 1 ? "pt" : "pts"}
+                          {question.points}{" "}
+                          {question.points === 1 ? "pt" : "pts"}
                         </span>
                         <span className="hidden md:inline-block text-[0.72rem] text-(--muted)">
                           {question.questionType === "short_answer"
@@ -1568,7 +1661,11 @@ export function QuizAuthoringPanel({
                               setEditingQuestionId(null);
                             }
                             if (question.id.startsWith("temp-q-")) {
-                              if (quizId) {
+                              if (!quizId) {
+                                setDraftQuestions((current) =>
+                                  current.filter((q) => q.id !== question.id),
+                                );
+                              } else {
                                 qc.setQueryData(
                                   quizKeys.detail(quizId),
                                   (prev: any) => {
@@ -1622,7 +1719,8 @@ export function QuizAuthoringPanel({
                         {/* Question prompt */}
                         <div>
                           <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                            Question prompt <span className="text-(--accent)">*</span>
+                            Question prompt{" "}
+                            <span className="text-(--accent)">*</span>
                           </span>
                           <QuizRichTextField
                             label="Question prompt"
@@ -1788,7 +1886,9 @@ export function QuizAuthoringPanel({
                                 Correct Answer (Learner Input Box)
                               </span>
                               <p className="mt-0.5 text-[0.72rem] text-(--muted)">
-                                Learners will see a text input box to type their response. Enter the correct answer below (graded case-insensitively).
+                                Learners will see a text input box to type their
+                                response. Enter the correct answer below (graded
+                                case-insensitively).
                               </p>
                             </div>
 
@@ -1800,8 +1900,15 @@ export function QuizAuthoringPanel({
                                   onChange={(event) => {
                                     const val = event.target.value;
                                     const nextOpts = [
-                                      { ...(options[0] ?? {}), text: val, isCorrect: true },
-                                      ...options.slice(1).map((o) => ({ ...o, isCorrect: true })),
+                                      {
+                                        ...(options[0] ?? {}),
+                                        text: val,
+                                        isCorrect: true,
+                                      },
+                                      ...options.slice(1).map((o) => ({
+                                        ...o,
+                                        isCorrect: true,
+                                      })),
                                     ];
                                     setOptions(nextOpts);
                                     scheduleAutoSaveQuestion(
@@ -1820,7 +1927,8 @@ export function QuizAuthoringPanel({
                               {options.length > 1 && (
                                 <div className="pt-1.5 space-y-2">
                                   <span className="block text-[0.72rem] font-semibold text-(--text-secondary)">
-                                    Alternative accepted answers (optional variations):
+                                    Alternative accepted answers (optional
+                                    variations):
                                   </span>
                                   {options.slice(1).map((option, altIndex) => {
                                     const realIndex = altIndex + 1;
@@ -1832,14 +1940,15 @@ export function QuizAuthoringPanel({
                                         <input
                                           value={option.text}
                                           onChange={(event) => {
-                                            const nextOpts = options.map((item, idx) =>
-                                              idx === realIndex
-                                                ? {
-                                                    ...item,
-                                                    text: event.target.value,
-                                                    isCorrect: true,
-                                                  }
-                                                : item,
+                                            const nextOpts = options.map(
+                                              (item, idx) =>
+                                                idx === realIndex
+                                                  ? {
+                                                      ...item,
+                                                      text: event.target.value,
+                                                      isCorrect: true,
+                                                    }
+                                                  : item,
                                             );
                                             setOptions(nextOpts);
                                             scheduleAutoSaveQuestion(
@@ -1893,7 +2002,10 @@ export function QuizAuthoringPanel({
                                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-(--accent) hover:underline cursor-pointer"
                                 >
                                   <Plus size={13} weight="bold" />
-                                  <span>+ Add another acceptable variation (optional)</span>
+                                  <span>
+                                    + Add another acceptable variation
+                                    (optional)
+                                  </span>
                                 </button>
                               </div>
                             </div>
@@ -1960,13 +2072,14 @@ export function QuizAuthoringPanel({
                                   <input
                                     value={option.text}
                                     onChange={(event) => {
-                                      const nextOpts = options.map((item, itemIndex) =>
-                                        itemIndex === optIndex
-                                          ? {
-                                              ...item,
-                                              text: event.target.value,
-                                            }
-                                          : item,
+                                      const nextOpts = options.map(
+                                        (item, itemIndex) =>
+                                          itemIndex === optIndex
+                                            ? {
+                                                ...item,
+                                                text: event.target.value,
+                                              }
+                                            : item,
                                       );
                                       setOptions(nextOpts);
                                       scheduleAutoSaveQuestion(
@@ -1987,7 +2100,8 @@ export function QuizAuthoringPanel({
                                     }
                                     onClick={() => {
                                       const nextOpts = options.filter(
-                                        (_, itemIndex) => itemIndex !== optIndex,
+                                        (_, itemIndex) =>
+                                          itemIndex !== optIndex,
                                       );
                                       setOptions(nextOpts);
                                       scheduleAutoSaveQuestion(
@@ -2032,10 +2146,15 @@ export function QuizAuthoringPanel({
                 );
               })}
 
-              {!version?.questions?.length && (
+              {!editableQuestions.length && (
                 <div className="py-7 sm:py-9 text-center text-xs sm:text-sm text-(--muted) border border-dashed border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                  <p className="font-semibold text-(--text-secondary)">No questions added yet.</p>
-                  <p className="mt-1 text-xs text-(--muted)">Click &quot;Add question&quot; below to add your first assessment question.</p>
+                  <p className="font-semibold text-(--text-secondary)">
+                    No questions added yet.
+                  </p>
+                  <p className="mt-1 text-xs text-(--muted)">
+                    Click &quot;Add question&quot; below to add your first
+                    assessment question.
+                  </p>
                 </div>
               )}
             </div>
@@ -2045,7 +2164,7 @@ export function QuizAuthoringPanel({
               <button
                 type="button"
                 onClick={handleAddNewQuestion}
-                disabled={isCreatingRef.current}
+                disabled={create.isPending}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[color-mix(in_srgb,var(--accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))] px-3 py-1.5 text-xs font-semibold text-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] hover:border-(--accent) transition-all cursor-pointer disabled:opacity-50"
               >
                 <Plus size={13} weight="bold" />
@@ -2066,10 +2185,19 @@ export function QuizAuthoringPanel({
                 </h3>
                 <p className="mt-0.5 text-xs text-(--muted)">
                   Attach this quiz to a course lesson and configure assessment
-                  delivery rules. Changes auto-save as you type.
+                  delivery rules.{" "}
+                  {quizId
+                    ? "Changes auto-save as you type."
+                    : "Changes are kept in this browser until you save the quiz."}
                 </p>
               </div>
-              <AutoSaveIndicator status={assignmentSaveStatus} />
+              {quizId ? (
+                <AutoSaveIndicator status={assignmentSaveStatus} />
+              ) : (
+                <span role="status" className="text-xs text-(--muted)">
+                  Saved in this browser
+                </span>
+              )}
             </div>
 
             {/* Target Course & Lesson Pickers (when in standalone mode) */}
@@ -2112,6 +2240,9 @@ export function QuizAuthoringPanel({
                         setSelectedLessonId(val);
                       }}
                       options={lessonOptions}
+                      searchable
+                      searchPlaceholder="Search lessons..."
+                      defaultLimit={10}
                       disabled={
                         !effectiveCourseId ||
                         isLessonsLoading ||
@@ -2163,8 +2294,8 @@ export function QuizAuthoringPanel({
                           className="shrink-0"
                         />
                         <span className="truncate">
-                          This quiz is currently assigned to this lesson. Delivery
-                          rules are active and auto-saving.
+                          This quiz is currently assigned to this lesson.
+                          Delivery rules are active and auto-saving.
                         </span>
                       </div>
                       <button
@@ -2364,6 +2495,16 @@ export function QuizAuthoringPanel({
                 </div>
 
                 <div className="pt-2 sm:pt-3 flex flex-wrap items-center gap-3">
+                  {!quizId ? (
+                    <Button
+                      onClick={() => persistBrowserDraft()}
+                      disabled={!canPersistBrowserDraft || create.isPending}
+                      motion="static"
+                      className="h-9.5 sm:h-10 border border-(--accent)/35 bg-(--accent)/10 px-4 sm:px-5 text-xs sm:text-sm text-(--accent) shadow-none hover:bg-(--accent)/20"
+                    >
+                      {create.isPending ? "Saving quiz..." : "Save draft"}
+                    </Button>
+                  ) : null}
                   {assignment && assignment.quizId === quizId ? (
                     <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-3.5 py-2 text-xs sm:text-sm font-semibold text-emerald-500">
                       <CheckCircle size={16} weight="bold" />
@@ -2373,20 +2514,22 @@ export function QuizAuthoringPanel({
                     <Button
                       onClick={publishAndAssign}
                       disabled={
-                        !version ||
-                        !version.questions.length ||
+                        !editableQuestions.length ||
+                        create.isPending ||
                         publish.isPending ||
                         assign.isPending
                       }
                       className="h-9.5 sm:h-10 px-4 sm:px-5 font-semibold text-xs sm:text-sm"
                     >
-                      {publish.isPending || assign.isPending ? (
+                      {create.isPending ||
+                      publish.isPending ||
+                      assign.isPending ? (
                         <>
                           <CircleNotch
                             size={15}
                             className="animate-spin mr-2"
                           />
-                          Assigning...
+                          {create.isPending ? "Saving quiz..." : "Assigning..."}
                         </>
                       ) : version?.publishedAt ? (
                         "Assign to lesson"
@@ -2405,26 +2548,40 @@ export function QuizAuthoringPanel({
                   etc.).
                 </p>
                 {!version?.publishedAt && (
-                  <div className="mt-3">
+                  <div className="mt-3 flex flex-wrap justify-center gap-2">
+                    {!quizId ? (
+                      <Button
+                        onClick={() => persistBrowserDraft()}
+                        disabled={!canPersistBrowserDraft || create.isPending}
+                        motion="static"
+                        className="h-9 border border-(--accent)/35 bg-(--accent)/10 px-4 text-xs text-(--accent) shadow-none hover:bg-(--accent)/20"
+                      >
+                        {create.isPending ? "Saving quiz..." : "Save draft"}
+                      </Button>
+                    ) : null}
                     <Button
                       onClick={publishAndAssign}
                       disabled={
-                        !version ||
-                        !version.questions.length ||
+                        !editableQuestions.length ||
+                        create.isPending ||
                         publish.isPending
                       }
                       className="h-9 px-4 text-xs font-semibold"
                     >
-                      {publish.isPending ? (
+                      {create.isPending || publish.isPending ? (
                         <>
                           <CircleNotch
                             size={14}
                             className="animate-spin mr-1.5"
                           />
-                          Publishing...
+                          {create.isPending
+                            ? "Saving quiz..."
+                            : "Publishing..."}
                         </>
-                      ) : (
+                      ) : quizId ? (
                         "Publish version without attaching"
+                      ) : (
+                        "Save & publish version"
                       )}
                     </Button>
                   </div>
@@ -2490,7 +2647,8 @@ export function QuizAuthoringPanel({
             </p>
             {deleteQuizMutation.isError && (
               <p className="text-red-400 font-medium pt-1">
-                Failed to delete: {deleteQuizMutation.error?.message || "Something went wrong."}
+                Failed to delete:{" "}
+                {deleteQuizMutation.error?.message || "Something went wrong."}
               </p>
             )}
           </div>
@@ -2524,7 +2682,9 @@ export function QuizAuthoringPanel({
             </p>
             {deleteAssignmentMutation.isError && (
               <p className="text-red-400 font-medium pt-1">
-                Failed to detach: {deleteAssignmentMutation.error?.message || "Something went wrong."}
+                Failed to detach:{" "}
+                {deleteAssignmentMutation.error?.message ||
+                  "Something went wrong."}
               </p>
             )}
           </div>

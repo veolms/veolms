@@ -29,11 +29,29 @@ export const studentSummarySchema = z.strictObject({
 export type StudentSummary = z.infer<typeof studentSummarySchema>;
 
 /**
+ * Lean representation used by the paginated student list.
+ * Keep list rows small because this payload is retained by the infinite query.
+ */
+export const studentListItemSchema = z.strictObject({
+  id: z.string().uuid(),
+  username: z.string(),
+  displayName: z.string(),
+  email: z.string().email().nullable().optional(),
+  avatarUrl: z.string().nullable().optional(),
+  joinedAt: z.string().or(z.date()),
+  enrolledCoursesCount: z.number().int().nonnegative(),
+  completedCoursesCount: z.number().int().nonnegative(),
+  averageProgressPercent: z.number().min(0).max(100),
+  lastActiveAt: z.string().or(z.date()).nullable().optional(),
+});
+export type StudentListItem = z.infer<typeof studentListItemSchema>;
+
+/**
  * Query parameters for cursor-based paginated student lists.
  */
 export const studentListQuerySchema = z.object({
   cursor: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(30),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
   search: z.string().trim().optional(),
   courseId: z.string().uuid().optional(),
   status: z
@@ -51,7 +69,7 @@ export type StudentListQuery = z.infer<typeof studentListQuerySchema>;
  * Response envelope for cursor-based student lists.
  */
 export const studentListResponseSchema = z.strictObject({
-  students: z.array(studentSummarySchema),
+  students: z.array(studentListItemSchema),
   nextCursor: z.string().nullable(),
   totalCount: z.number().int().nonnegative(),
 });

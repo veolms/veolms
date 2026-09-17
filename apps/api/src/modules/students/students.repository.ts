@@ -12,6 +12,78 @@ export interface ListStudentsOptions {
   sortBy?: "recent" | "name" | "courses" | "progress";
 }
 
+export type StudentListSort = NonNullable<ListStudentsOptions["sortBy"]>;
+
+export type StudentListCursor =
+  | { sortBy: "recent"; createdAt: string; id: string }
+  | { sortBy: "name"; name: string; id: string }
+  | { sortBy: "courses"; courses: number; id: string }
+  | { sortBy: "progress"; progress: number; id: string };
+
+const studentListSorts: readonly StudentListSort[] = [
+  "recent",
+  "name",
+  "courses",
+  "progress",
+];
+
+/**
+ * Cursors are opaque to clients but include the complete sort position so
+ * every supported ordering can seek without skipping or duplicating rows.
+ */
+export function encodeStudentListCursor(cursor: StudentListCursor): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+export function decodeStudentListCursor(
+  value: string | undefined,
+): StudentListCursor | null {
+  if (!value) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(
+      Buffer.from(value, "base64url").toString("utf8"),
+    );
+    if (!parsed || typeof parsed !== "object") return null;
+
+    const cursor = parsed as Record<string, unknown>;
+    if (
+      typeof cursor.sortBy !== "string" ||
+      !studentListSorts.includes(cursor.sortBy as StudentListSort) ||
+      typeof cursor.id !== "string" ||
+      cursor.id.length === 0
+    )
+      return null;
+
+    if (cursor.sortBy === "recent") {
+      return typeof cursor.createdAt === "string" &&
+        !Number.isNaN(new Date(cursor.createdAt).getTime())
+        ? { sortBy: "recent", createdAt: cursor.createdAt, id: cursor.id }
+        : null;
+    }
+
+    if (cursor.sortBy === "name") {
+      return typeof cursor.name === "string"
+        ? { sortBy: "name", name: cursor.name, id: cursor.id }
+        : null;
+    }
+
+    if (cursor.sortBy === "courses") {
+      return typeof cursor.courses === "number" &&
+        Number.isFinite(cursor.courses)
+        ? { sortBy: "courses", courses: cursor.courses, id: cursor.id }
+        : null;
+    }
+
+    return typeof cursor.progress === "number" &&
+      Number.isFinite(cursor.progress)
+      ? { sortBy: "progress", progress: cursor.progress, id: cursor.id }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Lists student records with cursor-based pagination and search/filters.
  * Fetches limit + 1 rows to allow the service to determine whether a next page exists.
@@ -20,6 +92,20 @@ export async function listStudentsPaginated(
   database: StudentsExecutor,
   options: ListStudentsOptions,
 ) {
+  const sortBy = options.sortBy ?? "recent";
+  const enrolledCoursesSort = sql<number>`(
+    select count(*)::int
+    from enrollments as e_sort
+    inner join courses as c_sort on c_sort.id = e_sort.course_id
+    where e_sort.user_id = u.id
+      and c_sort.deleted_at is null
+  )`;
+  const progressSort = sql<number>`(
+    select coalesce(avg(lp_sort.progress_percent), 0)::float
+    from learning_progress as lp_sort
+    where lp_sort.user_id = u.id
+  )`;
+
   let query = database
     .selectFrom("users as u")
     .select([
@@ -27,8 +113,6 @@ export async function listStudentsPaginated(
       "u.username",
       "u.display_name",
       "u.email",
-      "u.avatar_data_url",
-      "u.bio",
       "u.created_at",
       "u.updated_at",
     ])
@@ -112,15 +196,52 @@ export async function listStudentsPaginated(
     );
   }
 
-  if (options.cursor) {
-    const cursorDate = new Date(options.cursor);
-    if (!Number.isNaN(cursorDate.getTime())) {
-      query = query.where("u.created_at", "<", cursorDate);
+  const cursor = decodeStudentListCursor(options.cursor);
+  if (cursor?.sortBy === sortBy) {
+    if (cursor.sortBy === "recent") {
+      const cursorDate = new Date(cursor.createdAt);
+      query = query.where((eb) =>
+        eb.or([
+          eb("u.created_at", "<", cursorDate),
+          eb.and([
+            eb("u.created_at", "=", cursorDate),
+            eb("u.id", "<", cursor.id),
+          ]),
+        ]),
+      );
+    } else if (cursor.sortBy === "name") {
+      query = query.where((eb) =>
+        eb.or([
+          eb("u.display_name", ">", cursor.name),
+          eb.and([
+            eb("u.display_name", "=", cursor.name),
+            eb("u.id", ">", cursor.id),
+          ]),
+        ]),
+      );
+    } else if (cursor.sortBy === "courses") {
+      query = query.where(
+        sql<boolean>`(
+          ${enrolledCoursesSort} < ${cursor.courses}
+          or (${enrolledCoursesSort} = ${cursor.courses} and u.id < ${cursor.id})
+        )`,
+      );
+    } else {
+      query = query.where(
+        sql<boolean>`(
+          ${progressSort} < ${cursor.progress}
+          or (${progressSort} = ${cursor.progress} and u.id < ${cursor.id})
+        )`,
+      );
     }
   }
 
-  if (options.sortBy === "name") {
+  if (sortBy === "name") {
     query = query.orderBy("u.display_name", "asc").orderBy("u.id", "asc");
+  } else if (sortBy === "courses") {
+    query = query.orderBy(enrolledCoursesSort, "desc").orderBy("u.id", "desc");
+  } else if (sortBy === "progress") {
+    query = query.orderBy(progressSort, "desc").orderBy("u.id", "desc");
   } else {
     query = query.orderBy("u.created_at", "desc").orderBy("u.id", "desc");
   }
@@ -230,20 +351,7 @@ export async function listEnrollmentsForUserIds(
   return await database
     .selectFrom("enrollments as e")
     .innerJoin("courses as c", "c.id", "e.course_id")
-    .select([
-      "e.user_id",
-      "e.id as enrollment_id",
-      "e.course_id",
-      "e.status as enrollment_status",
-      "e.source as enrollment_source",
-      "e.created_at as enrolled_at",
-      "e.access_expires_at",
-      "c.slug as course_slug",
-      "c.title as course_title",
-      "c.short_description as course_description",
-      "c.thumbnail_url as course_thumbnail_url",
-      "c.difficulty",
-    ])
+    .select(["e.user_id", "e.course_id", "e.created_at as enrolled_at"])
     .where("e.user_id", "in", userIds)
     .where("c.deleted_at", "is", null)
     .orderBy("e.created_at", "desc")

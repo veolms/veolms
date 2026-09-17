@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+/** Shared default delay for responsive search and filtering interactions. */
+export const DEFAULT_DEBOUNCE_DELAY_MS = 300;
+
 export interface DebounceOptions {
   /**
    * Specify invoking on the leading edge of the timeout.
@@ -44,12 +47,12 @@ export interface DebouncedFunction<TArgs extends unknown[], TReturn = void> {
  * milliseconds have elapsed since the last time the debounced function was invoked.
  *
  * @param func The function to debounce.
- * @param delayMs The delay in milliseconds. Defaults to 500ms.
+ * @param delayMs The delay in milliseconds. Defaults to DEFAULT_DEBOUNCE_DELAY_MS.
  * @param options Debounce configuration options.
  */
 export function debounce<TArgs extends unknown[], TReturn = void>(
   func: (...args: TArgs) => TReturn,
-  delayMs = 500,
+  delayMs = DEFAULT_DEBOUNCE_DELAY_MS,
   options: DebounceOptions = {},
 ): DebouncedFunction<TArgs, TReturn> {
   const { leading = false, trailing = true, maxWait } = options;
@@ -76,7 +79,10 @@ export function debounce<TArgs extends unknown[], TReturn = void>(
     return result;
   }
 
-  function startTimer(pendingFunc: () => void, wait: number): ReturnType<typeof setTimeout> {
+  function startTimer(
+    pendingFunc: () => void,
+    wait: number,
+  ): ReturnType<typeof setTimeout> {
     return setTimeout(pendingFunc, wait);
   }
 
@@ -166,7 +172,10 @@ export function debounce<TArgs extends unknown[], TReturn = void>(
     return timeoutId !== null;
   }
 
-  const debounced = function (this: unknown, ...args: TArgs): TReturn | undefined {
+  const debounced = function (
+    this: unknown,
+    ...args: TArgs
+  ): TReturn | undefined {
     const time = Date.now();
     const isInvoking = shouldInvoke(time);
 
@@ -203,24 +212,25 @@ export function debounce<TArgs extends unknown[], TReturn = void>(
  * Automatically cancels pending timers when the component unmounts.
  *
  * @param callback The function to debounce.
- * @param delayMs Delay in milliseconds. Defaults to 500ms.
+ * @param delayMs Delay in milliseconds. Defaults to DEFAULT_DEBOUNCE_DELAY_MS.
  * @param options Optional debounce settings (leading, trailing, maxWait).
  */
 export function useDebouncedCallback<TArgs extends unknown[], TReturn = void>(
   callback: (...args: TArgs) => TReturn,
-  delayMs = 500,
+  delayMs = DEFAULT_DEBOUNCE_DELAY_MS,
   options: DebounceOptions = {},
 ): DebouncedFunction<TArgs, TReturn> {
   const callbackRef = useRef(callback);
   callbackRef.current = callback;
+  const { leading, trailing, maxWait } = options;
 
   const debounced = useMemo(() => {
     return debounce<TArgs, TReturn>(
       (...args: TArgs) => callbackRef.current(...args),
       delayMs,
-      options,
+      { leading, trailing, maxWait },
     );
-  }, [delayMs, options.leading, options.trailing, options.maxWait]);
+  }, [delayMs, leading, trailing, maxWait]);
 
   useEffect(() => {
     return () => {
@@ -248,13 +258,13 @@ export interface DebounceControl {
  * Enterprise React hook that returns a debounced copy of a value alongside control helpers.
  *
  * @param value The value to debounce.
- * @param delayMs The delay in milliseconds. Defaults to 500ms.
+ * @param delayMs The delay in milliseconds. Defaults to DEFAULT_DEBOUNCE_DELAY_MS.
  * @param options Options including `immediateIfEmpty` and `maxWait`.
  * @returns [debouncedValue, controls] tuple.
  */
 export function useDebounceValue<T>(
   value: T,
-  delayMs = 500,
+  delayMs = DEFAULT_DEBOUNCE_DELAY_MS,
   options: UseDebounceValueOptions = {},
 ): [T, DebounceControl] {
   const { immediateIfEmpty = true, ...debounceOpts } = options;
@@ -309,14 +319,10 @@ export function useDebounceValue<T>(
   );
 
   const controls: DebounceControl = useMemo(() => {
-    const callable = ((val: unknown) => {
-      setValueImmediately(val);
-    }) as DebounceControl;
-    callable.flush = flush;
-    callable.cancel = cancel;
-    callable.isPending = isPending;
-    callable.setValueImmediately = setValueImmediately;
-    return callable;
+    return Object.assign(
+      ((val: unknown) => setValueImmediately(val)) as DebounceControl,
+      { flush, cancel, isPending, setValueImmediately },
+    );
   }, [flush, cancel, isPending, setValueImmediately]);
 
   return [debouncedValue, controls];
@@ -324,18 +330,18 @@ export function useDebounceValue<T>(
 
 /**
  * Simple enterprise React hook for debouncing any state or input value.
- * Uses 500ms default delay.
+ * Uses DEFAULT_DEBOUNCE_DELAY_MS unless a feature passes a custom delay.
  *
  * @example
- * const debouncedSearch = useDebounce(searchQuery, 500);
+ * const debouncedSearch = useDebounce(searchQuery);
  *
  * @param value The value to debounce.
- * @param delayMs Delay in milliseconds. Defaults to 500ms.
+ * @param delayMs Delay in milliseconds. Defaults to DEFAULT_DEBOUNCE_DELAY_MS.
  * @param options Optional debounce settings.
  */
 export function useDebounce<T>(
   value: T,
-  delayMs = 500,
+  delayMs = DEFAULT_DEBOUNCE_DELAY_MS,
   options?: UseDebounceValueOptions,
 ): T {
   const [debounced] = useDebounceValue(value, delayMs, options);

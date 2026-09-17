@@ -6,8 +6,11 @@ import type {
 } from "@veolms/contracts";
 
 export const studentsService = {
-  listStudents: (params?: StudentListQuery): Promise<StudentListResponse> => {
-    return api.get<StudentListResponse>("/students", { params });
+  listStudents: (
+    params?: StudentListQuery,
+    signal?: AbortSignal,
+  ): Promise<StudentListResponse> => {
+    return api.get<StudentListResponse>("/students", { params, signal });
   },
 
   getStudentByUsername: (username: string): Promise<StudentDetailResponse> => {

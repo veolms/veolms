@@ -1,7 +1,10 @@
 import type { NotificationCategory } from "@veolms/contracts";
 import { useMemo, useState } from "react";
 
-import { useDebounceValue } from "../hooks/useDebounce";
+import {
+  DEFAULT_DEBOUNCE_DELAY_MS,
+  useDebounceValue,
+} from "../hooks/useDebounce";
 
 import {
   useArchiveNotification,
@@ -60,7 +63,7 @@ export function useNotificationsFilter(
   const [sortBy, setSortBy] = useState("latest");
   const [debouncedSearch, setDebouncedSearchImmediately] = useDebounceValue(
     searchQuery.trim(),
-    500,
+    DEFAULT_DEBOUNCE_DELAY_MS,
   );
 
   const filters = useMemo(() => {

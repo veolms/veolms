@@ -162,7 +162,7 @@ import type { NavigateTo } from "./routing/navigation";
 import type { SettingsPageProps } from "./SettingsPage";
 import { isEditingShortcutTarget } from "./keyboardShortcuts";
 import { useGlobalSearchShortcut } from "./searchShortcut";
-import { useDebounce } from "./hooks/useDebounce";
+import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "./hooks/useDebounce";
 import { useBackDismiss } from "./navigation/useBackDismiss";
 import { useShortcutPlatform } from "./useShortcutPlatform";
 import {
@@ -644,7 +644,7 @@ export function CoursesPage({
     "",
     isStoredString,
   );
-  const debouncedSearch = useDebounce(search, 500);
+  const debouncedSearch = useDebounce(search, DEFAULT_DEBOUNCE_DELAY_MS);
   const [statusFilter, setStatusFilter] = useState<CourseStatusFilter>("all");
   const [sort, setSort] = useState<CourseSort>("latest");
   const [wishlisted, setWishlisted] = useState<Set<string>>(() => new Set());
@@ -1624,12 +1624,20 @@ export function CoursesPage({
       ? navigationOrders[role]
       : isPublicNavigation
         ? getDefaultNavigationOrder(roleFilteredNavigationItems)
-        : getInitialNavigationOrder(role, roleFilteredNavigationItems, activeUser?.id),
+        : getInitialNavigationOrder(
+            role,
+            roleFilteredNavigationItems,
+            activeUser?.id,
+          ),
     navigationPreferencesReady && !isPublicNavigation
       ? navigationVisibility[role]
       : isPublicNavigation
         ? getDefaultNavigationVisibility(roleFilteredNavigationItems)
-        : getInitialNavigationVisibility(role, roleFilteredNavigationItems, activeUser?.id),
+        : getInitialNavigationVisibility(
+            role,
+            roleFilteredNavigationItems,
+            activeUser?.id,
+          ),
     roleFilteredNavigationItems,
   ).filter(([label]) => label !== "Settings" || !settingsInSidebarDock);
   const updateNavigationScrollFade = () => {

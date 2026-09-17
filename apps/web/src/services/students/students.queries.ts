@@ -1,4 +1,8 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+} from "@tanstack/react-query";
 import type {
   StudentDetailResponse,
   StudentListQuery,
@@ -10,26 +14,30 @@ import { studentsService } from "./students.service";
 
 /**
  * Infinite-scrolling query for academy students.
- * Uses cursor-based pagination with a default of 30 items per page.
+ * Uses cursor-based pagination with a default of 50 lean items per page.
  */
 export function useStudents(
   filter?: Omit<StudentListQuery, "cursor">,
   options?: { enabled?: boolean },
 ) {
-  const limit = filter?.limit ?? 30;
+  const limit = filter?.limit ?? 50;
 
   return useInfiniteQuery<StudentListResponse, ApiError>({
     queryKey: studentKeys.list(filter),
-    queryFn: ({ pageParam }) =>
-      studentsService.listStudents({
-        ...filter,
-        cursor: pageParam as string | undefined,
-        limit,
-      }),
+    queryFn: ({ pageParam, signal }) =>
+      studentsService.listStudents(
+        {
+          ...filter,
+          cursor: pageParam as string | undefined,
+          limit,
+        },
+        signal,
+      ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: options?.enabled ?? true,
-    staleTime: 30 * 1000,
+    placeholderData: keepPreviousData,
+    staleTime: 60 * 1000,
   });
 }
 
