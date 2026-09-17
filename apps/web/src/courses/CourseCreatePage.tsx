@@ -1,4 +1,10 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  memo,
+} from "react";
 import { useLocation } from "react-router";
 import { createPortal } from "react-dom";
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
@@ -16,47 +22,45 @@ import {
 } from "./CourseDescriptionEditor";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { ToastNotification } from "../ToastNotification";
-import {
-  ArrowLeft,
-  ArrowUpRight,
-  BookOpen,
-  CaretDown,
-  CaretLeft,
-  CaretRight,
-  Certificate,
-  ChartBar,
-  ChatCircleText,
-  Check,
-  CheckCircle,
-  CircleNotch,
-  CornersIn,
-  CornersOut,
-  Clock,
-  DotsSixVertical,
-  DownloadSimple,
-  Eye,
-  EyeSlash,
-  FileText,
-  Image as ImageIcon,
-  Info,
-  Lightning,
-  ListBullets,
-  LockKey,
-  NotePencil,
-  PencilSimple,
-  PlayCircle,
-  Plus,
-  PuzzlePiece,
-  Question,
-  Tag,
-  Trash,
-  UploadSimple,
-  UserPlus,
-  Video,
-  WarningCircle,
-  X,
-  XCircle,
-} from "@phosphor-icons/react";
+import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/ArrowUpRight";
+import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
+import { CaretLeftIcon as CaretLeft } from "@phosphor-icons/react/CaretLeft";
+import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
+import { CertificateIcon as Certificate } from "@phosphor-icons/react/Certificate";
+import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
+import { ChatCircleTextIcon as ChatCircleText } from "@phosphor-icons/react/ChatCircleText";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
+import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
+import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
+import { DotsSixVerticalIcon as DotsSixVertical } from "@phosphor-icons/react/DotsSixVertical";
+import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
+import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
+import { EyeSlashIcon as EyeSlash } from "@phosphor-icons/react/EyeSlash";
+import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
+import { ImageIcon } from "@phosphor-icons/react/Image";
+import { InfoIcon as Info } from "@phosphor-icons/react/Info";
+import { LightningIcon as Lightning } from "@phosphor-icons/react/Lightning";
+import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullets";
+import { LockKeyIcon as LockKey } from "@phosphor-icons/react/LockKey";
+import { NotePencilIcon as NotePencil } from "@phosphor-icons/react/NotePencil";
+import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
+import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
+import { PuzzlePieceIcon as PuzzlePiece } from "@phosphor-icons/react/PuzzlePiece";
+import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
+import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
+import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
+import { UploadSimpleIcon as UploadSimple } from "@phosphor-icons/react/UploadSimple";
+import { UserPlusIcon as UserPlus } from "@phosphor-icons/react/UserPlus";
+import { VideoIcon as Video } from "@phosphor-icons/react/Video";
+import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import { XIcon as X } from "@phosphor-icons/react/X";
+import { XCircleIcon as XCircle } from "@phosphor-icons/react/XCircle";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import type { ComponentType } from "react";
 import ISO6391 from "iso-639-1";
 import { ThemedSelect } from "../ThemedSelect";
@@ -69,7 +73,6 @@ import {
 } from "../keyboardShortcuts";
 import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
-import { useCourseQuizAssignments } from "../services/quizzes/quizzes.queries";
 import {
   coursesService,
   useCategories,
@@ -123,11 +126,147 @@ import type {
   CourseOverviewPricingProps,
 } from "./CourseOverviewPage";
 import type { Course, CourseLevel, CourseCategory } from "./catalogue";
-import type { CourseSection, Lesson } from "../learning/courseContent";
+import type { Lesson } from "../learning/courseContent";
 import { formatDuration, resolveCourseDurationSeconds } from "./courseAdapter";
 import { mediaService } from "../services/media";
 
 const EMPTY_CATEGORIES: Category[] = [];
+
+function getLessonDescriptionPreview(description: string) {
+  return description
+    .replace(/^[#\s>*-]+/gm, "")
+    .replace(/[`*_[\]()]/g, "")
+    .trim();
+}
+
+function LessonDescriptionPreview({
+  description,
+  onEdit,
+}: {
+  description: string;
+  onEdit: () => void;
+}) {
+  const hasDescription = description.trim().length > 0;
+  const preview = hasDescription
+    ? getLessonDescriptionPreview(description)
+    : "No description added yet.";
+
+  return (
+    <div className="flex flex-col gap-2 mb-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-(--text-secondary) text-[0.84rem] font-semibold">
+          Lesson Description
+        </span>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="inline-flex min-h-8 items-center gap-1.5 rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] px-2.5 text-xs font-semibold text-(--accent-ink,var(--accent)) transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+          aria-label="Edit description"
+        >
+          <PencilSimple size={14} weight="bold" />
+          Edit Description
+        </button>
+      </div>
+      <p
+        data-lesson-description-preview
+        className={`m-0 whitespace-pre-line line-clamp-4 overflow-hidden text-sm leading-6 sm:text-[15px] ${hasDescription ? "text-(--text-secondary)" : "italic text-(--muted)"}`}
+      >
+        {preview}
+      </p>
+    </div>
+  );
+}
+
+interface LessonSnapshot {
+  title: string;
+  description: string;
+  contentType: "video" | "document" | "quiz";
+  contentMediaId?: string | null;
+  isPublished?: boolean;
+  isPreview?: boolean;
+}
+
+interface CurriculumLessonItem {
+  id: string;
+  title: string;
+  isEditingTitle?: boolean;
+  contentTypeSelected?: boolean;
+  pendingContentType?: "video" | "document" | "quiz";
+  description: string;
+  contentType: "video" | "document" | "quiz";
+  contentMediaId?: string | null;
+  durationSeconds?: number;
+  isExpanded: boolean;
+  isPublished?: boolean;
+  isPreview?: boolean;
+  isPendingCreation?: boolean;
+  initialState?: LessonSnapshot;
+  resources: LessonResourceItem[];
+}
+
+interface CurriculumSectionItem {
+  id: string;
+  title: string;
+  isExpanded: boolean;
+  isEditingTitle?: boolean;
+  isPendingCreation?: boolean;
+  lessons: CurriculumLessonItem[];
+}
+
+interface MemoizedLessonCardProps {
+  lesson: CurriculumLessonItem;
+  sectionId: string;
+  lessonIndex: number;
+  isDragged: boolean;
+  isDragEnabled: boolean;
+  isSaving: boolean;
+  isDeleting: boolean;
+  isSectionReordering: boolean;
+  isReorderPending: boolean;
+  isFocusMode: boolean;
+  isResourceBusy: boolean;
+  render: (state: {
+    isExpanded: boolean;
+    setExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+    isEditorOpen: boolean;
+    setEditorOpen: React.Dispatch<React.SetStateAction<boolean>>;
+    isQuizOpen: boolean;
+    setQuizOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  }) => React.ReactElement;
+}
+
+const MemoizedLessonCard = memo(
+  function MemoizedLessonCard({ lesson, render }: MemoizedLessonCardProps) {
+    const [isExpanded, setExpanded] = useState(lesson.isExpanded);
+    const [isEditorOpen, setEditorOpen] = useState(false);
+    const [isQuizOpen, setQuizOpen] = useState(false);
+
+    useEffect(() => {
+      setExpanded(lesson.isExpanded);
+    }, [lesson.isExpanded]);
+
+    return render({
+      isExpanded,
+      setExpanded,
+      isEditorOpen,
+      setEditorOpen,
+      isQuizOpen,
+      setQuizOpen,
+    });
+  },
+  (previous, next) =>
+    previous.lesson === next.lesson &&
+    previous.sectionId === next.sectionId &&
+    previous.lessonIndex === next.lessonIndex &&
+    previous.isDragged === next.isDragged &&
+    previous.isDragEnabled === next.isDragEnabled &&
+    previous.isSaving === next.isSaving &&
+    previous.isDeleting === next.isDeleting &&
+    previous.isSectionReordering === next.isSectionReordering &&
+    previous.isReorderPending === next.isReorderPending &&
+    previous.isFocusMode === next.isFocusMode &&
+    previous.isResourceBusy === next.isResourceBusy,
+);
 
 export type CourseWizardStepId =
   "basics" | "curriculum" | "access-rules" | "pricing" | "extras" | "publish";
@@ -156,6 +295,18 @@ export const WIZARD_STEPS: readonly WizardStepDefinition[] = [
 export const WIZARD_STEP_IDS: readonly CourseWizardStepId[] = WIZARD_STEPS.map(
   ({ id }) => id,
 );
+
+function getAdjacentWizardSteps(
+  activeStep: CourseWizardStepId,
+): Set<CourseWizardStepId> {
+  const index = WIZARD_STEP_IDS.indexOf(activeStep);
+  const mounted = new Set<CourseWizardStepId>([activeStep]);
+  const previous = WIZARD_STEP_IDS[index - 1];
+  const following = WIZARD_STEP_IDS[index + 1];
+  if (previous) mounted.add(previous);
+  if (following) mounted.add(following);
+  return mounted;
+}
 
 type ThumbnailUploadStatus =
   | "idle"
@@ -1342,7 +1493,22 @@ export interface BuildLocalPreviewParams {
   accessRulesDraft: AccessRulesFormState;
   enableCertificate: boolean;
   manualIncludesDraft: Array<{ id: string; text: string }>;
-  editorData?: CourseEditorDataResponse | null;
+  editorDefaults?: {
+    course?: {
+      slug?: string;
+      status?: "draft" | "published" | "archived";
+      creatorId?: string | null;
+      thumbnailMediaId?: string | null;
+      trailerMediaId?: string | null;
+      createdAt?: string;
+      updatedAt?: string;
+      publishedAt?: string | null;
+      totalDurationSeconds?: number;
+    } | null;
+    accessRules?: { id?: string } | null;
+    pricing?: { id?: string } | null;
+    settings?: { id?: string; estimatedDuration?: number | null } | null;
+  } | null;
   totalDurationSeconds?: number;
   now?: string;
 }
@@ -1366,7 +1532,7 @@ export function buildLocalPreviewData({
   accessRulesDraft,
   enableCertificate,
   manualIncludesDraft,
-  editorData,
+  editorDefaults,
   totalDurationSeconds,
   now = new Date().toISOString(),
 }: BuildLocalPreviewParams): CourseEditorDataResponse | null {
@@ -1398,29 +1564,29 @@ export function buildLocalPreviewData({
 
   const courseData: CourseEditorDataResponse["course"] = {
     id: currentCourseId,
-    slug: editorData?.course?.slug || "",
+    slug: editorDefaults?.course?.slug || "",
     title: courseTitle.trim(),
     shortDescription: shortDescription.trim() || null,
     description: courseDescription.trim() || null,
     difficulty: difficultyLevel ? difficultyLevel : null,
-    status: isPublished ? "published" : editorData?.course?.status || "draft",
-    creatorId: editorData?.course?.creatorId || null,
+    status: isPublished ? "published" : editorDefaults?.course?.status || "draft",
+    creatorId: editorDefaults?.course?.creatorId || null,
     categoryId: categoryId || null,
     thumbnailMediaId:
       thumbnailMediaId !== undefined
         ? thumbnailMediaId
-        : editorData?.course?.thumbnailMediaId || null,
+        : editorDefaults?.course?.thumbnailMediaId || null,
     trailerMediaId:
-      trailerMediaId ?? (editorData?.course?.trailerMediaId || null),
+      trailerMediaId ?? (editorDefaults?.course?.trailerMediaId || null),
     instructorAlias: instructorAlias.trim() || null,
     version: courseVersion,
-    createdAt: editorData?.course?.createdAt || now,
-    updatedAt: editorData?.course?.updatedAt || now,
-    publishedAt: editorData?.course?.publishedAt || null,
+    createdAt: editorDefaults?.course?.createdAt || now,
+    updatedAt: editorDefaults?.course?.updatedAt || now,
+    publishedAt: editorDefaults?.course?.publishedAt || null,
     totalSections: totalSectionsCount,
     totalLessons: totalLessonsCount,
     totalDurationSeconds:
-      totalDurationSeconds ?? editorData?.course?.totalDurationSeconds ?? 0,
+      totalDurationSeconds ?? editorDefaults?.course?.totalDurationSeconds ?? 0,
   };
 
   const sectionsData: CourseEditorDataResponse["sections"] = sections.map(
@@ -1454,7 +1620,7 @@ export function buildLocalPreviewData({
   );
 
   const accessRulesData: CourseEditorDataResponse["accessRules"] = {
-    id: editorData?.accessRules?.id || "preview-access-rules",
+    id: editorDefaults?.accessRules?.id || "preview-access-rules",
     courseId: currentCourseId,
     accessType: (accessRulesDraft.accessType as AccessType) || "everyone",
     durationType: isFixedDuration ? "fixed_duration" : "lifetime",
@@ -1462,7 +1628,7 @@ export function buildLocalPreviewData({
   };
 
   const pricingData: CourseEditorDataResponse["pricing"] = {
-    id: editorData?.pricing?.id || "preview-pricing",
+    id: editorDefaults?.pricing?.id || "preview-pricing",
     courseId: currentCourseId,
     pricingType: pricingPayload.pricingType,
     price: pricingPayload.price,
@@ -1471,7 +1637,7 @@ export function buildLocalPreviewData({
   };
 
   const settingsData: CourseEditorDataResponse["settings"] = {
-    id: editorData?.settings?.id || "preview-settings",
+    id: editorDefaults?.settings?.id || "preview-settings",
     courseId: currentCourseId,
     allowQa: accessRulesDraft.enableQA,
     allowComments: accessRulesDraft.enableComments,
@@ -1480,7 +1646,7 @@ export function buildLocalPreviewData({
     certificateEnabled: enableCertificate,
     showInstructorName: showInstructorName !== false,
     language: language || "en",
-    estimatedDuration: editorData?.settings?.estimatedDuration ?? null,
+    estimatedDuration: editorDefaults?.settings?.estimatedDuration ?? null,
   };
 
   const includesData: CourseEditorDataResponse["includes"] = manualIncludesDraft
@@ -1491,8 +1657,7 @@ export function buildLocalPreviewData({
       text: inc.text.trim(),
       icon: null,
       position: index,
-      createdAt:
-        editorData?.includes?.find((i) => i.id === inc.id)?.createdAt || now,
+      createdAt: now,
       updatedAt: now,
     }));
 
@@ -2491,12 +2656,10 @@ export function CourseCreatePage({
   const [slideDirection, setSlideDirection] = useState<"right" | "left">(
     "right",
   );
-  // Tracks which wizard tabs have been mounted. Starts with only the initial
-  // tab so the first tab renders instantly; others are added progressively in
-  // the background (via requestIdleCallback) or on-demand when the user
-  // navigates to them.
+  // Keep the active wizard panel and its immediate neighbors warm for smooth
+  // tab navigation. Heavy lesson editors are mounted only when opened below.
   const [mountedTabs, setMountedTabs] = useState<Set<CourseWizardStepId>>(
-    () => new Set<CourseWizardStepId>([initialStep]),
+    () => getAdjacentWizardSteps(initialStep),
   );
 
   const tabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
@@ -2637,49 +2800,9 @@ export function CourseCreatePage({
     }
   }, [activeStep]);
 
-  // Progressively mount the remaining wizard tabs in the background so they
-  // are ready when the user navigates to them without delaying the first render.
   useEffect(() => {
-    const remaining = WIZARD_STEP_IDS.filter(
-      (id) => !mountedTabs.has(id),
-    );
-    if (remaining.length === 0) return;
-
-    const handles: number[] = [];
-    const mountNext = (ids: CourseWizardStepId[]) => {
-      if (ids.length === 0) return;
-      const [next, ...rest] = ids;
-      const schedule =
-        typeof requestIdleCallback === "function"
-          ? requestIdleCallback
-          : (cb: () => void) => setTimeout(cb, 16) as unknown as number;
-      const cancel =
-        typeof cancelIdleCallback === "function"
-          ? cancelIdleCallback
-          : clearTimeout;
-      const handle = schedule(() => {
-        setMountedTabs((prev) => {
-          if (prev.has(next!)) return prev;
-          const next_ = new Set(prev);
-          next_.add(next!);
-          return next_;
-        });
-        mountNext(rest);
-      });
-      handles.push(handle as number);
-    };
-    mountNext(remaining as CourseWizardStepId[]);
-
-    return () => {
-      const cancel =
-        typeof cancelIdleCallback === "function"
-          ? cancelIdleCallback
-          : clearTimeout;
-      handles.forEach((h) => cancel(h));
-    };
-    // Only run once on mount — remaining is derived from the initial mountedTabs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setMountedTabs(getAdjacentWizardSteps(activeStep));
+  }, [activeStep]);
 
   useEffect(() => {
     const navigateWizardTab = (event: KeyboardEvent) => {
@@ -3334,15 +3457,6 @@ export function CourseCreatePage({
   } = useCourseValidation(currentCourseId, {
     enabled: activeStep === "publish",
   });
-  const { data: courseQuizAssignments = [] } =
-    useCourseQuizAssignments(currentCourseId);
-  const lessonsWithQuizzes = useMemo(() => {
-    const set = new Set<string>();
-    for (const a of courseQuizAssignments) {
-      if (a.lessonId) set.add(a.lessonId);
-    }
-    return set;
-  }, [courseQuizAssignments]);
   const createCourseMutation = useCreateCourse();
   const updateBasicsMutation = useUpdateCourseBasics();
   const createSectionMutation = useCreateSection();
@@ -3557,42 +3671,6 @@ export function CourseCreatePage({
   };
 
   // Curriculum Data interfaces
-  interface LessonSnapshot {
-    title: string;
-    description: string;
-    contentType: "video" | "document" | "quiz";
-    contentMediaId?: string | null;
-    isPublished?: boolean;
-    isPreview?: boolean;
-  }
-
-  interface CurriculumLessonItem {
-    id: string;
-    title: string;
-    isEditingTitle?: boolean;
-    contentTypeSelected?: boolean;
-    pendingContentType?: "video" | "document" | "quiz";
-    description: string;
-    contentType: "video" | "document" | "quiz";
-    contentMediaId?: string | null;
-    durationSeconds?: number;
-    isExpanded: boolean;
-    isPublished?: boolean;
-    isPreview?: boolean;
-    isPendingCreation?: boolean;
-    initialState?: LessonSnapshot;
-    resources: LessonResourceItem[];
-  }
-
-  interface CurriculumSectionItem {
-    id: string;
-    title: string;
-    isExpanded: boolean;
-    isEditingTitle?: boolean;
-    isPendingCreation?: boolean;
-    lessons: CurriculumLessonItem[];
-  }
-
   const getLessonInitialState = (les: CurriculumLessonItem): LessonSnapshot => {
     return (
       les.initialState || {
@@ -3627,6 +3705,8 @@ export function CourseCreatePage({
   const [sections, setSections] = useState<CurriculumSectionItem[]>([]);
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
+  const lessonTitleDraftsRef = useRef<Map<string, string>>(new Map());
+
   const isCollapsingSectionRef = useRef(false);
   const inFlightLessonSavesRef = useRef<Map<string, Promise<boolean>>>(
     new Map(),
@@ -6301,7 +6381,6 @@ export function CourseCreatePage({
         };
       }),
     );
-
     setCreatingLessonSectionId(sectionId);
     let targetCourseId = currentCourseId;
 
@@ -6668,23 +6747,62 @@ export function CourseCreatePage({
   };
 
   const handleStartEditLessonTitle = (sectionId: string, lessonId: string) => {
+    const currentSections = sectionsRef.current || sections;
+    const lesson = currentSections
+      .find((section) => section.id === sectionId)
+      ?.lessons.find((item) => item.id === lessonId);
+    if (!lesson || lesson.isPendingCreation) return;
+
+    lessonTitleDraftsRef.current.set(lessonId, lesson.title);
+    clearCurriculumItemStatus(lessonId);
     setSections((prev) =>
       prev.map((section) =>
         section.id !== sectionId
           ? section
           : {
               ...section,
-              lessons: section.lessons.map((lesson) =>
-                lesson.id === lessonId
-                  ? { ...lesson, isEditingTitle: true }
-                  : lesson,
+              lessons: section.lessons.map((item) =>
+                item.id === lessonId
+                  ? { ...item, isEditingTitle: true }
+                  : item,
               ),
             },
       ),
     );
   };
 
+  const handleCancelEditLessonTitle = (
+    sectionId: string,
+    lessonId: string,
+  ) => {
+    const originalTitle = lessonTitleDraftsRef.current.get(lessonId);
+    lessonTitleDraftsRef.current.delete(lessonId);
+    setSections((prev) => {
+      const next = prev.map((section) =>
+        section.id !== sectionId
+          ? section
+          : {
+              ...section,
+              lessons: section.lessons.map((lesson) =>
+                lesson.id === lessonId
+                  ? {
+                      ...lesson,
+                      ...(originalTitle !== undefined
+                        ? { title: originalTitle }
+                        : {}),
+                      isEditingTitle: false,
+                    }
+                  : lesson,
+              ),
+            },
+      );
+      sectionsRef.current = next;
+      return next;
+    });
+  };
+
   const handleLessonTitleBlur = async (sectionId: string, lessonId: string) => {
+    lessonTitleDraftsRef.current.delete(lessonId);
     await handleLessonFieldBlur(sectionId, lessonId);
     setSections((prev) =>
       prev.map((section) =>
@@ -6700,6 +6818,21 @@ export function CourseCreatePage({
             },
       ),
     );
+  };
+
+  const handleCancelLessonDescriptionEdit = (
+    sectionId: string,
+    lessonId: string,
+  ) => {
+    const currentSections = sectionsRef.current || sections;
+    const lesson = currentSections
+      .find((section) => section.id === sectionId)
+      ?.lessons.find((item) => item.id === lessonId);
+    if (!lesson) return;
+
+    handleUpdateLesson(sectionId, lessonId, {
+      description: lesson.initialState?.description || "",
+    });
   };
 
   const handleLessonDiscreteChange = async (
@@ -6816,50 +6949,18 @@ export function CourseCreatePage({
   const handleToggleLessonExpand = async (
     sectionId: string,
     lessonId: string,
-  ) => {
+    nextExpanded = true,
+  ): Promise<boolean> => {
     const currentSections = sectionsRef.current || sections;
     const sec = currentSections.find((s) => s.id === sectionId);
     const les = sec?.lessons.find((l) => l.id === lessonId);
-    if (!les) return;
+    if (!les) return false;
 
-    // 1. When the lesson is being COLLAPSED:
-    if (les.isExpanded) {
-      if (isLessonDirty(les)) {
-        await handleSaveLesson(sectionId, lessonId);
-        return;
-      }
-      // If clean, collapse immediately
-      setSections((prev) => {
-        const next = prev.map((s) => {
-          if (s.id !== sectionId) return s;
-          return {
-            ...s,
-            lessons: s.lessons.map((l) =>
-              l.id === lessonId ? { ...l, isExpanded: false } : l,
-            ),
-          };
-        });
-        sectionsRef.current = next;
-        return next;
-      });
-      return;
+    if (!nextExpanded && isLessonDirty(les)) {
+      return await handleSaveLesson(sectionId, lessonId);
     }
 
-    // 2. When the lesson is being EXPANDED:
-    // Preserve current behavior exactly: do not save anything, expand immediately
-    setSections((prev) => {
-      const next = prev.map((s) => {
-        if (s.id !== sectionId) return s;
-        return {
-          ...s,
-          lessons: s.lessons.map((l) =>
-            l.id === lessonId ? { ...l, isExpanded: true } : l,
-          ),
-        };
-      });
-      sectionsRef.current = next;
-      return next;
-    });
+    return true;
   };
 
   const handleToggleSectionExpand = async (sectionId: string) => {
@@ -7177,31 +7278,6 @@ export function CourseCreatePage({
     thumbnail: thumbnail || "/assets/instructor-poster.jpg",
     lifecycleStatus: isPublished ? "published" : "draft",
   };
-
-  const previewSections: CourseSection[] =
-    sections.length > 0
-      ? sections.map((sec, secIdx) => ({
-          id: secIdx + 1,
-          title: sec.title.trim() || "Title",
-          progress: `0/${sec.lessons.length}`,
-          lessons:
-            sec.lessons.length > 0
-              ? sec.lessons.map((les, lesIdx) => [
-                  lesIdx + 1,
-                  les.title.trim() || `Lesson ${lesIdx + 1}`,
-                  "05:00",
-                  "todo",
-                ])
-              : [
-                  [
-                    1,
-                    `Introduction to ${sec.title.trim() || "Title"}`,
-                    "05:00",
-                    "todo",
-                  ],
-                ],
-        }))
-      : [];
 
   const previewInclusions: string[] = useMemo(() => {
     return manualIncludesDraft
@@ -7570,7 +7646,24 @@ export function CourseCreatePage({
               : undefined,
         };
 
+  const editorCourseSlug = editorData?.course?.slug;
+  const editorCourseStatus = editorData?.course?.status;
+  const editorCourseCreatorId = editorData?.course?.creatorId;
+  const editorCourseThumbnailMediaId = editorData?.course?.thumbnailMediaId;
+  const editorCourseTrailerMediaId = editorData?.course?.trailerMediaId;
+  const editorCourseCreatedAt = editorData?.course?.createdAt;
+  const editorCourseUpdatedAt = editorData?.course?.updatedAt;
+  const editorCoursePublishedAt = editorData?.course?.publishedAt;
+  const editorCourseTotalDurationSeconds =
+    editorData?.course?.totalDurationSeconds;
+  const editorAccessRulesId = editorData?.accessRules?.id;
+  const editorPricingId = editorData?.pricing?.id;
+  const editorSettingsId = editorData?.settings?.id;
+  const editorEstimatedDuration = editorData?.settings?.estimatedDuration;
+
   const localPreviewData = useMemo<CourseEditorDataResponse | null>(() => {
+    if (!isPreviewModalOpen) return null;
+
     return buildLocalPreviewData({
       currentCourseId,
       courseTitle,
@@ -7584,16 +7677,38 @@ export function CourseCreatePage({
       courseVersion,
       isPublished,
       thumbnailMediaId,
-      trailerMediaId: editorData?.course?.trailerMediaId || null,
+      trailerMediaId: editorCourseTrailerMediaId || null,
       sections,
       pricingDraft,
       accessRulesDraft,
       enableCertificate: extras.enableCertificate,
       manualIncludesDraft,
-      editorData,
-      totalDurationSeconds: courseDurationSeconds,
+      editorDefaults: {
+        course: {
+          slug: editorCourseSlug,
+          status: editorCourseStatus,
+          creatorId: editorCourseCreatorId,
+          thumbnailMediaId: editorCourseThumbnailMediaId,
+          trailerMediaId: editorCourseTrailerMediaId,
+          createdAt: editorCourseCreatedAt,
+          updatedAt: editorCourseUpdatedAt,
+          publishedAt: editorCoursePublishedAt,
+          totalDurationSeconds: editorCourseTotalDurationSeconds,
+        },
+        accessRules: { id: editorAccessRulesId },
+        pricing: { id: editorPricingId },
+        settings: {
+          id: editorSettingsId,
+          estimatedDuration: editorEstimatedDuration,
+        },
+      },
+      totalDurationSeconds: resolveCourseDurationSeconds(
+        editorCourseTotalDurationSeconds,
+        editorEstimatedDuration,
+      ),
     });
   }, [
+    isPreviewModalOpen,
     currentCourseId,
     courseTitle,
     shortDescription,
@@ -7606,13 +7721,24 @@ export function CourseCreatePage({
     courseVersion,
     isPublished,
     thumbnailMediaId,
-    editorData,
+    editorCourseSlug,
+    editorCourseStatus,
+    editorCourseCreatorId,
+    editorCourseThumbnailMediaId,
+    editorCourseTrailerMediaId,
+    editorCourseCreatedAt,
+    editorCourseUpdatedAt,
+    editorCoursePublishedAt,
+    editorCourseTotalDurationSeconds,
+    editorAccessRulesId,
+    editorPricingId,
+    editorSettingsId,
+    editorEstimatedDuration,
     sections,
     accessRulesDraft,
     pricingDraft,
     extras.enableCertificate,
     manualIncludesDraft,
-    courseDurationSeconds,
   ]);
 
   // Explicit non-reconciliation: when local preview data is available from wizard state,
@@ -8710,14 +8836,14 @@ export function CourseCreatePage({
       await flushPricingPersistence();
     }
 
-    // Eagerly mark destination as mounted so its content renders before the
-    // swipe animation begins — covers the case where background loading
-    // hasn't reached this tab yet.
-    setMountedTabs((prev) => {
-      if (prev.has(destination)) return prev;
-      const next = new Set(prev);
-      next.add(destination);
-      return next;
+    // Prepare the destination before the active step changes so a skipped tab
+    // never renders an empty panel during persistence or swipe setup.
+    setMountedTabs((current) => {
+      const next = getAdjacentWizardSteps(destination);
+      next.add(activeStep);
+      const hasSameTabs =
+        next.size === current.size && [...next].every((id) => current.has(id));
+      return hasSameTabs ? current : next;
     });
 
     if (!isStepDirty(activeStep)) {
@@ -10199,40 +10325,101 @@ export function CourseCreatePage({
                             : "px-4 py-0"
                         }`}
                       >
-                        <div className="flex flex-col gap-2.5">
-                          {sec.lessons.map((les, lesIndex) => (
-                            <div
-                              key={les.id}
-                              className={`border rounded-[10px] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
-                                draggedLessonState?.sectionId === sec.id &&
-                                draggedLessonState?.lessonIndex === lesIndex
-                                  ? "opacity-35 border-dashed border-(--accent)"
-                                  : "border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
-                              }`}
-                              draggable={
-                                dragEnabledLessonId === les.id &&
-                                !les.isPendingCreation &&
-                                !reorderingLessonsSectionId &&
-                                !reorderLessonsMutation.isPending
-                              }
-                              onDragStart={(e) =>
-                                handleLessonDragStart(e, sec.id, lesIndex, les)
-                              }
-                              onDragOver={(e) =>
-                                handleLessonDragOver(e, sec.id, lesIndex)
-                              }
-                              onDragEnd={handleLessonDragEnd}
-                            >
+                        {sec.isExpanded && (
+                          <div className="flex flex-col gap-2.5">
+                            {sec.lessons.map((les, lesIndex) => (
+                              <MemoizedLessonCard
+                                key={les.id}
+                                lesson={les}
+                                sectionId={sec.id}
+                                lessonIndex={lesIndex}
+                                isDragged={
+                                  draggedLessonState?.sectionId === sec.id &&
+                                  draggedLessonState?.lessonIndex === lesIndex
+                                }
+                                isDragEnabled={
+                                  dragEnabledLessonId === les.id
+                                }
+                                isSaving={savingLessonId === les.id}
+                                isDeleting={deletingLessonId === les.id}
+                                isSectionReordering={Boolean(
+                                  reorderingLessonsSectionId,
+                                )}
+                                isReorderPending={
+                                  reorderLessonsMutation.isPending
+                                }
+                                isFocusMode={isCurriculumFocusMode}
+                                isResourceBusy={
+                                  createLessonResourceMutation.isPending ||
+                                  deleteLessonResourceMutation.isPending
+                                }
+                                render={({
+                                  isExpanded,
+                                  setExpanded,
+                                  isEditorOpen,
+                                  setEditorOpen,
+                                  isQuizOpen,
+                                  setQuizOpen,
+                                }) => {
+                                  const toggleLesson = async () => {
+                                    const nextExpanded = !isExpanded;
+                                    if (nextExpanded) setExpanded(true);
+                                    const canToggle =
+                                      await handleToggleLessonExpand(
+                                        sec.id,
+                                        les.id,
+                                        nextExpanded,
+                                      );
+                                    if (!canToggle) {
+                                      setExpanded(isExpanded);
+                                    } else if (!nextExpanded) {
+                                      setExpanded(false);
+                                      setEditorOpen(false);
+                                      setQuizOpen(false);
+                                    }
+                                  };
+
+                                  return (
+                                  <div
+                                    style={{ contain: "layout" }}
+                                    className={`border rounded-[10px] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
+                                      draggedLessonState?.sectionId === sec.id &&
+                                      draggedLessonState?.lessonIndex ===
+                                        lesIndex
+                                        ? "opacity-35 border-dashed border-(--accent)"
+                                        : "border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
+                                    }`}
+                                    draggable={
+                                      dragEnabledLessonId === les.id &&
+                                      !les.isPendingCreation &&
+                                      !reorderingLessonsSectionId &&
+                                      !reorderLessonsMutation.isPending
+                                    }
+                                    onDragStart={(e) =>
+                                      handleLessonDragStart(
+                                        e,
+                                        sec.id,
+                                        lesIndex,
+                                        les,
+                                      )
+                                    }
+                                    onDragOver={(e) =>
+                                      handleLessonDragOver(
+                                        e,
+                                        sec.id,
+                                        lesIndex,
+                                      )
+                                    }
+                                    onDragEnd={handleLessonDragEnd}
+                                  >
                               <>
                                 {/* Lesson Header */}
                                 <div
                                   className="flex items-center justify-between px-4 py-3 select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[10px_12px]"
-                                  onClick={() =>
-                                    handleToggleLessonExpand(sec.id, les.id)
-                                  }
+                                  onClick={() => void toggleLesson()}
                                   title="Click to toggle lesson editor"
                                 >
-                                  <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
+                                  <div className="flex min-w-0 flex-1 items-center gap-3 max-[768px]:w-full max-[768px]:gap-2">
                                     <span
                                       className={`flex items-center justify-center text-(--muted) transition-opacity duration-150 ${
                                         les.isPendingCreation ||
@@ -10282,7 +10469,7 @@ export function CourseCreatePage({
                                     <span className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded text-(--muted) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-[0.72rem] font-medium">
                                       {lesIndex + 1}
                                     </span>
-                                    {les.isExpanded && les.isEditingTitle ? (
+                                    {les.isEditingTitle ? (
                                       <div
                                         className="flex min-w-0 flex-1 items-center gap-2"
                                         onClick={(e) => e.stopPropagation()}
@@ -10290,8 +10477,17 @@ export function CourseCreatePage({
                                         <input
                                           id={`les-title-${les.id}`}
                                           type="text"
+                                          data-fixed-radius
                                           maxLength={120}
                                           value={les.title}
+                                          autoFocus
+                                          style={{
+                                            fontFamily: "inherit",
+                                            fontSize: "0.88rem",
+                                            fontWeight: 600,
+                                            lineHeight: 1.5,
+                                            borderRadius: "6px",
+                                          }}
                                           disabled={
                                             les.isPendingCreation ||
                                             savingLessonId === les.id
@@ -10307,23 +10503,63 @@ export function CourseCreatePage({
                                               les.id,
                                             );
                                           }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                              e.preventDefault();
+                                              e.currentTarget.blur();
+                                            } else if (e.key === "Escape") {
+                                              e.preventDefault();
+                                              handleCancelEditLessonTitle(
+                                                sec.id,
+                                                les.id,
+                                              );
+                                            }
+                                          }}
                                           placeholder="e.g. Introduction to React Hooks"
-                                          className="border border-(--accent) rounded-md px-2 py-0.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                          className="h-7 min-w-0 flex-1 border border-[color-mix(in_srgb,var(--accent)_52%,transparent)] rounded-[6px] px-2 py-0.5 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] font-semibold leading-[1.5] outline-none [font-family:inherit] focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
                                         />
+                                        <button
+                                          type="button"
+                                          aria-label="Cancel lesson title edit"
+                                          title="Cancel title edit"
+                                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] text-(--muted) transition-colors hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:text-(--text)"
+                                          onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                          }}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCancelEditLessonTitle(
+                                              sec.id,
+                                              les.id,
+                                            );
+                                          }}
+                                        >
+                                          <X size={14} />
+                                        </button>
                                       </div>
                                     ) : (
-                                      <span
-                                        className="text-(--text) text-[0.88rem] font-semibold max-[768px]:flex-1 max-[768px]:min-w-0 max-[768px]:break-words cursor-text"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleStartEditLessonTitle(
-                                            sec.id,
-                                            les.id,
-                                          );
-                                        }}
-                                      >
-                                        {les.title}
-                                      </span>
+                                      <div className="group/title flex min-w-0 flex-1 items-center gap-1.5">
+                                        <span className="min-w-0 flex-1 truncate whitespace-nowrap text-(--text) text-[0.88rem] font-semibold cursor-pointer">
+                                          {les.title}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          aria-label="Edit lesson title"
+                                          title="Edit lesson title"
+                                          disabled={les.isPendingCreation}
+                                          className="mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border border-transparent bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-(--muted) opacity-0 transition-[opacity,color,background-color] duration-150 group-hover/title:opacity-100 group-focus-within/title:opacity-100 hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:text-(--text) focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) disabled:cursor-not-allowed disabled:opacity-30"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleStartEditLessonTitle(
+                                              sec.id,
+                                              les.id,
+                                            );
+                                          }}
+                                        >
+                                          <PencilSimple size={14} weight="bold" />
+                                        </button>
+                                      </div>
                                     )}
                                   </div>
                                   <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
@@ -10369,23 +10605,17 @@ export function CourseCreatePage({
                                       </span>
                                     )}
                                     {les.contentType === "video" ? (
-                                      <span className="inline-flex items-center gap-1.25 text-(--accent-ink,var(--accent)) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                                        <PlayCircle size={13} weight="fill" />{" "}
-                                        Video
+                                      <span
+                                        className="inline-flex shrink-0 items-center justify-center text-(--accent-ink,var(--accent))"
+                                        aria-label="Video lesson"
+                                        title="Video lesson"
+                                      >
+                                        <PlayCircle size={17} weight="fill" />
                                       </span>
                                     ) : (
                                       <span className="inline-flex items-center gap-1.25 text-(--accent-ink,var(--accent)) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_24%,transparent)]">
                                         <FileText size={13} weight="fill" />{" "}
                                         Document
-                                      </span>
-                                    )}
-                                    {lessonsWithQuizzes.has(les.id) && (
-                                      <span
-                                        className="inline-flex items-center gap-1.25 text-[color-mix(in_srgb,#8b5cf6_90%,var(--text))] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#8b5cf6_12%,transparent)] border border-[color-mix(in_srgb,#8b5cf6_28%,transparent)]"
-                                        title="This lesson includes an attached quiz assessment"
-                                      >
-                                        <PuzzlePiece size={13} weight="fill" className="text-[#8b5cf6]" />{" "}
-                                        + Quiz
                                       </span>
                                     )}
                                     <button
@@ -10413,21 +10643,18 @@ export function CourseCreatePage({
                                     <button
                                       type="button"
                                       className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 [&>svg]:transition-transform [&>svg]:duration-200 ${
-                                        les.isExpanded
+                                        isExpanded
                                           ? "is-expanded [&>svg]:rotate-180"
                                           : ""
                                       }`}
                                       aria-label={
-                                        les.isExpanded
+                                        isExpanded
                                           ? "Collapse lesson editor"
                                           : "Expand lesson editor"
                                       }
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleToggleLessonExpand(
-                                          sec.id,
-                                          les.id,
-                                        );
+                                        void toggleLesson();
                                       }}
                                     >
                                       <CaretDown size={15} />
@@ -10435,7 +10662,11 @@ export function CourseCreatePage({
                                   </div>
                                 </div>
 
-                                {les.isPendingCreation ? (
+                                {isExpanded && (
+                                  <div
+                                    aria-hidden={false}
+                                  >
+                                    {les.isPendingCreation ? (
                                   <div className="flex min-h-48 items-center justify-center border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-8">
                                     <div className="flex items-center gap-2 text-(--muted) text-[0.86rem] font-semibold">
                                       <CircleNotch
@@ -10527,7 +10758,7 @@ export function CourseCreatePage({
                                 ) : (
                                   <div
                                     className={`grid transition-[grid-template-rows] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                                      les.isExpanded
+                                      isExpanded
                                         ? "is-open grid-rows-[1fr]"
                                         : "grid-rows-[0fr]"
                                     }`}
@@ -10536,63 +10767,89 @@ export function CourseCreatePage({
                                   >
                                     <div
                                       className={`min-h-0 overflow-hidden border-t border-transparent bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] transition-[padding,border-color] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                                        les.isExpanded
+                                        isExpanded
                                           ? "px-5 pt-4 pb-5 border-t-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[768px]:p-[14px_12px_16px]"
                                           : "px-5 py-0 max-[768px]:p-0"
                                       }`}
                                     >
-                                      <div className="grid grid-cols-1 min-[1024px]:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-6 max-[768px]:gap-3.5">
-                                        {/* Left column */}
-                                        <div className="flex flex-col gap-4.5">
-                                          {/* Lesson Description Rich Editor */}
-                                          <div className="flex flex-col gap-2 mb-3">
-                                            <label
-                                              id={`les-desc-label-${les.id}`}
-                                              className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                                            >
-                                              Lesson Description
-                                            </label>
-                                            <div
-                                              className={
-                                                les.isPendingCreation
-                                                  ? "opacity-60 pointer-events-none"
-                                                  : ""
-                                              }
-                                              onBlur={(e) => {
-                                                if (
-                                                  !e.currentTarget.contains(
-                                                    e.relatedTarget as Node,
-                                                  )
-                                                ) {
-                                                  void handleLessonFieldBlur(
-                                                    sec.id,
-                                                    les.id,
-                                                  );
+                                      <div className="grid grid-cols-1 gap-6 max-[768px]:gap-3.5">
+                                        {/* Lesson description stays below the lightweight lesson controls. */}
+                                        <div className="order-2 flex min-w-0 flex-col gap-4.5">
+                                          {isEditorOpen ? (
+                                            <div className="mb-3 flex flex-col gap-2">
+                                              <div className="flex items-center justify-between gap-3">
+                                                <label
+                                                  id={`les-desc-label-${les.id}`}
+                                                  className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                                                >
+                                                  Lesson Description
+                                                </label>
+                                                <button
+                                                  type="button"
+                                                  className="inline-flex min-h-8 items-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-transparent px-2.5 text-xs font-semibold text-(--muted) transition-colors hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+                                                  onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                  }}
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleCancelLessonDescriptionEdit(
+                                                      sec.id,
+                                                      les.id,
+                                                    );
+                                                    setEditorOpen(false);
+                                                  }}
+                                                >
+                                                  Cancel
+                                                </button>
+                                              </div>
+                                              <div
+                                                className={
+                                                  les.isPendingCreation
+                                                    ? "opacity-60 pointer-events-none"
+                                                    : ""
                                                 }
-                                              }}
-                                            >
-                                              <LessonDescriptionEditor
-                                                id={`lesson-description-${les.id}`}
-                                                disabled={les.isPendingCreation}
-                                                value={les.description}
-                                                onChange={(val) =>
-                                                  handleUpdateLesson(
-                                                    sec.id,
-                                                    les.id,
-                                                    {
-                                                      description: val,
-                                                    },
-                                                  )
-                                                }
-                                                placeholder="Add a detailed description of what students will learn in this lesson..."
-                                                maxLength={1500}
-                                              />
+                                                onBlur={(e) => {
+                                                  if (
+                                                    !e.currentTarget.contains(
+                                                      e.relatedTarget as Node,
+                                                    )
+                                                  ) {
+                                                    void handleLessonFieldBlur(
+                                                      sec.id,
+                                                      les.id,
+                                                    );
+                                                  }
+                                                }}
+                                              >
+                                                <LessonDescriptionEditor
+                                                  id={`lesson-description-${les.id}`}
+                                                  disabled={les.isPendingCreation}
+                                                  value={les.description}
+                                                  onChange={(val) =>
+                                                    handleUpdateLesson(
+                                                      sec.id,
+                                                      les.id,
+                                                      {
+                                                        description: val,
+                                                      },
+                                                    )
+                                                  }
+                                                  placeholder="Add a detailed description of what students will learn in this lesson..."
+                                                  maxLength={1500}
+                                                />
+                                              </div>
                                             </div>
-                                          </div>
+                                          ) : (
+                                            <LessonDescriptionPreview
+                                              description={les.description}
+                                              onEdit={() => setEditorOpen(true)}
+                                            />
+                                          )}
                                         </div>
 
                                         {/* Right column */}
-                                        <div className="flex flex-col gap-4.5">
+                                        <div className="order-1 flex min-w-0 flex-col gap-4.5">
                                             {/* Content Type Selector */}
                                             <div className="flex flex-col gap-2 mb-4">
                                               <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
@@ -10880,33 +11137,27 @@ export function CourseCreatePage({
                                         </div>
                                       </div>
 
-                                        {/* Attached Quiz Assessment (Optional) */}
-                                        <div className="mt-5 pt-4 border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
-                                          <details
-                                            open={lessonsWithQuizzes.has(les.id) ? true : undefined}
-                                            className="group rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-3.5 transition-all"
-                                          >
-                                            <summary className="flex cursor-pointer items-center justify-between text-xs font-semibold text-(--text) select-none">
-                                              <div className="flex items-center gap-2">
-                                                <PuzzlePiece
-                                                  size={16}
-                                                  className="text-(--accent)"
-                                                  weight="fill"
-                                                />
-                                                <span>
-                                                  Attached Quiz Assessment (Optional)
-                                                </span>
-                                                {lessonsWithQuizzes.has(les.id) && (
-                                                  <span className="inline-flex items-center gap-1 text-[0.70rem] font-bold text-[#8b5cf6] bg-[color-mix(in_srgb,#8b5cf6_15%,transparent)] px-2 py-0.5 rounded-full border border-[color-mix(in_srgb,#8b5cf6_28%,transparent)]">
-                                                    Quiz attached
-                                                  </span>
-                                                )}
+                                        {/* Quiz authoring stays behind an explicit action so it cannot slow lesson expansion. */}
+                                        <div className="mt-1 border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)] pt-4">
+                                          {isQuizOpen ? (
+                                            <div className="flex flex-col gap-3">
+                                              <div className="flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-2 text-xs font-semibold text-(--text)">
+                                                  <PuzzlePiece
+                                                    size={16}
+                                                    className="text-(--accent)"
+                                                    weight="fill"
+                                                  />
+                                                  <span>Quiz Assessment</span>
+                                                </div>
+                                                <button
+                                                  type="button"
+                                                  className="inline-flex min-h-8 items-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-transparent px-2.5 text-xs font-semibold text-(--muted) transition-colors hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:text-(--text)"
+                                                  onClick={() => setQuizOpen(false)}
+                                                >
+                                                  Close
+                                                </button>
                                               </div>
-                                              <span className="text-[0.72rem] text-(--accent) group-open:rotate-180 transition-transform">
-                                                ▼
-                                              </span>
-                                            </summary>
-                                            <div className="mt-3 pt-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
                                               {currentCourseId &&
                                               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
                                                 les.id,
@@ -10931,15 +11182,31 @@ export function CourseCreatePage({
                                                 </div>
                                               )}
                                             </div>
-                                          </details>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              disabled={les.isPendingCreation}
+                                              className="inline-flex min-h-9 items-center gap-2 rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] px-3 text-xs font-semibold text-(--accent-ink,var(--accent)) transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] disabled:cursor-not-allowed disabled:opacity-50"
+                                              onClick={() => setQuizOpen(true)}
+                                            >
+                                              <PuzzlePiece size={15} weight="fill" />
+                                              Add Quiz
+                                            </button>
+                                          )}
                                         </div>
                                     </div>
                                   </div>
                                 )}
+                                  </div>
+                                )}
                               </>
                             </div>
-                          ))}
-                        </div>
+                                  );
+                                }}
+                              />
+                            ))}
+                          </div>
+                        )}
 
                         {/* Add Lesson Action */}
                         <div className="mt-3.5">

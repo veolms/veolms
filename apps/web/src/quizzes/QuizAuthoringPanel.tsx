@@ -93,6 +93,23 @@ const inputClass =
 const textareaClass =
   "rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-2.5 sm:px-3.5 py-2 sm:py-2.5 text-xs sm:text-sm text-(--text) outline-none transition-all placeholder:text-(--muted) focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20";
 
+function QuizAuthoringLoadingSkeleton() {
+  return (
+    <div
+      role="status"
+      aria-label="Loading quiz section"
+      className="rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-5"
+    >
+      <div className="animate-pulse motion-reduce:animate-none space-y-3">
+        <div className="h-4 w-40 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+        <div className="h-9 w-full rounded-[10px] bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+        <div className="h-24 w-full rounded-[10px] bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+      </div>
+      <span className="sr-only">Loading quiz data…</span>
+    </div>
+  );
+}
+
 const QUESTION_TYPES: readonly {
   type: QuizQuestionType;
   label: string;
@@ -213,8 +230,9 @@ export function QuizAuthoringPanel({
   isFocusMode = false,
   onToggleFocusMode,
 }: Props) {
+  const isEmbeddedAuthoring = Boolean(courseId && lessonId);
   const quizzes = useMyQuizzes();
-  const myCourses = useMyCourses();
+  const myCourses = useMyCourses({ enabled: !isEmbeddedAuthoring });
   const [selectedCourseId, setSelectedCourseId] = useState<string>("");
   const [selectedLessonId, setSelectedLessonId] = useState<string>("");
 

@@ -77,7 +77,9 @@
     [data-course-overview] select,
     [data-course-overview] [role="listitem"],
     .delete-modal-card
-  ):not([class~="rounded-full"]):not(.page-tabs__indicator) {
+  ):not([data-fixed-radius]):not([data-control-radius-preview]):not(
+    [class~="rounded-full"]
+  ):not(.page-tabs__indicator) {
   border-radius: var(--control-radius-structured) !important;
 }
 

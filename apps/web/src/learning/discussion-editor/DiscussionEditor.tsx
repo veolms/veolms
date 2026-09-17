@@ -10,6 +10,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type MutableRefObject,
 } from "react";
 import { createMentionCompletionSource } from "./mentions";
@@ -33,7 +34,7 @@ export interface DiscussionEditorController extends DiscussionEditorCommands {
   getMarkdown(): string;
 }
 
-interface DiscussionEditorProps {
+export interface DiscussionEditorProps {
   value: DiscussionDraft;
   documentId: string;
   resetToken?: number;
@@ -42,6 +43,8 @@ interface DiscussionEditorProps {
   invalid?: boolean;
   autoFocus?: boolean;
   autoGrow?: boolean;
+  /** Maximum editor height. Numbers are interpreted as CSS pixels. */
+  maxHeight?: CSSProperties["maxHeight"];
   className?: string;
   courseId?: string;
   mentionsEnabled?: boolean;
@@ -61,6 +64,7 @@ export function DiscussionEditor({
   invalid = false,
   autoFocus = false,
   autoGrow = false,
+  maxHeight,
   className = "",
   courseId,
   mentionsEnabled = true,
@@ -70,6 +74,13 @@ export function DiscussionEditor({
   onAttachmentError,
   onAttachmentSelected,
 }: DiscussionEditorProps) {
+  const editorStyle =
+    maxHeight === undefined
+      ? undefined
+      : ({
+          "--atomic-editor-max-height":
+            typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight,
+        } as CSSProperties);
   const atomicHandleRef = useRef<AtomicCodeMirrorEditorHandle | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const previousResetTokenRef = useRef(resetToken);
@@ -210,6 +221,7 @@ export function DiscussionEditor({
       data-discussion-atomic-editor
       data-auto-grow={autoGrow || undefined}
       className={`learning-discussion-atomic-editor min-h-0 w-full ${className}`}
+      style={editorStyle}
     >
       <AtomicCodeMirrorEditor
         documentId={documentId}
