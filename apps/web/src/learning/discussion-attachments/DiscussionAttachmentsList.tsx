@@ -48,7 +48,11 @@ export function DiscussionAttachmentsList({
     ) {
       dialog.showModal();
     }
-    if (!viewerAttachment && dialog.open && typeof dialog.close === "function") {
+    if (
+      !viewerAttachment &&
+      dialog.open &&
+      typeof dialog.close === "function"
+    ) {
       dialog.close();
     }
   }, [viewerAttachment]);
@@ -185,7 +189,8 @@ export function DiscussionAttachmentsList({
                             );
                           }}
                           onKeyDown={(event) => {
-                            if (event.key !== "Enter" && event.key !== " ") return;
+                            if (event.key !== "Enter" && event.key !== " ")
+                              return;
                             event.preventDefault();
                             setFailedVideoIds((current) => {
                               const next = new Set(current);
@@ -200,14 +205,18 @@ export function DiscussionAttachmentsList({
                           {hasFailed ? (
                             <>
                               <VideoCamera size={28} weight="duotone" />
-                              <span className="text-sm">Unable to load video. Retry</span>
+                              <span className="text-sm">
+                                Unable to load video. Retry
+                              </span>
                             </>
                           ) : (
                             <>
                               <span className="grid size-14 place-items-center rounded-full border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_65%,transparent)] shadow-sm backdrop-blur-xs">
                                 <Play size={28} weight="fill" />
                               </span>
-                              <span className="text-sm font-semibold">Play video</span>
+                              <span className="text-sm font-semibold">
+                                Play video
+                              </span>
                             </>
                           )}
                         </button>
@@ -260,7 +269,7 @@ export function DiscussionAttachmentsList({
               type="button"
               aria-label="Close image preview"
               onClick={closeViewer}
-              className="absolute -top-3 -right-3 grid size-9 place-items-center rounded-full bg-(--surface) text-(--text) shadow-lg transition-colors hover:bg-(--hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+              className="fixed top-4 right-4 z-10 grid size-10 place-items-center rounded-full border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-(--surface) text-(--text) shadow-xl transition-colors hover:bg-(--hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
             >
               <X size={18} weight="bold" />
             </button>
@@ -320,7 +329,10 @@ function AttachmentMetadata({
   return (
     <div className="flex items-center justify-between gap-2 p-2.5 text-xs">
       <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-(--text)" title={attachment.fileName}>
+        <p
+          className="truncate font-medium text-(--text)"
+          title={attachment.fileName}
+        >
           {attachment.fileName}
         </p>
         <p className="mt-0.5 text-(--muted)">
@@ -369,7 +381,10 @@ function GenericAttachmentCard({
         )}
       </div>
       <div className="min-w-0 max-w-[200px] sm:max-w-xs">
-        <p className="truncate text-sm font-medium text-(--text)" title={attachment.fileName}>
+        <p
+          className="truncate text-sm font-medium text-(--text)"
+          title={attachment.fileName}
+        >
           {attachment.fileName}
         </p>
         <p className="mt-0.5 text-xs text-(--muted)">
