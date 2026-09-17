@@ -67,6 +67,8 @@ import {
   useLessonThreads,
   useThreadDetails,
   desiredStateCoordinator,
+  learningInteractionsService,
+  updateNoteBookmarkInCache,
   useUpdateNote,
   useUpdateThread,
   useUserNotes,
@@ -1625,6 +1627,40 @@ function DiscussionInner({
     const threadIdStr = thread ? getServerEntityId(thread) : undefined;
     if (isBackendMode) {
       if (!thread) return false;
+      if (thread.entryKind === "note") {
+        if (!threadIdStr) return false;
+        if (queryClient) {
+          updateNoteBookmarkInCache(
+            queryClient,
+            threadIdStr,
+            bookmarked,
+            threadIdStr,
+          );
+        }
+        try {
+          await learningInteractionsService.toggleNoteBookmark(threadIdStr);
+          if (queryClient) {
+            void queryClient.invalidateQueries({
+              queryKey: ["learning-notes"],
+            });
+            void queryClient.invalidateQueries({
+              queryKey: ["learning-course-notes-overview"],
+            });
+          }
+          return bookmarked;
+        } catch (err: any) {
+          if (queryClient) {
+            updateNoteBookmarkInCache(
+              queryClient,
+              threadIdStr,
+              !bookmarked,
+              threadIdStr,
+            );
+          }
+          setNotice(err?.message || "Failed to update note bookmark.");
+          return !bookmarked;
+        }
+      }
       desiredStateCoordinator.setBookmarked({
         threadId: threadIdStr ?? getClientEntityId(thread),
         pendingTarget: !threadIdStr,

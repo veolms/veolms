@@ -125,8 +125,8 @@ function buildCompletionResult(
   users: readonly UserAutocompleteItem[],
 ): CompletionResult {
   const options: Completion[] = users.map((user) => ({
-    label: user.displayName,
-    displayLabel: user.displayName,
+    label: user.displayName || user.username,
+    displayLabel: user.displayName || user.username,
     detail: `@${user.username}`,
     type: "text",
     // Selecting a suggestion MUST insert '@username '

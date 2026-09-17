@@ -466,7 +466,9 @@ export function createThreadsService(
 
         const [likes, bookmarks, follows] = engagements;
         likedThreadIds = new Set(likes.map((l) => l.target_id));
-        bookmarkedThreadIds = new Set(bookmarks.map((b) => b.thread_id));
+        bookmarkedThreadIds = new Set(
+          bookmarks.flatMap((b) => (b.thread_id ? [b.thread_id] : [])),
+        );
         followedThreadIds = new Set(follows.map((f) => f.thread_id));
 
         for (const attachment of attachmentRows) {
@@ -599,12 +601,6 @@ export function createThreadsService(
 
       await withWriteTransaction(db, async (trx) => {
         await threadsRepo.deleteThread(trx, threadId);
-        await trx
-          .updateTable("learning_attachments")
-          .set({ status: "deleted" })
-          .where("target_type", "=", "thread")
-          .where("target_id", "=", threadId)
-          .execute();
       });
     },
   };

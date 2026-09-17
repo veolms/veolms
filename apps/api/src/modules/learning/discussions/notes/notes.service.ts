@@ -123,6 +123,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
     currentUserId?: string,
     attachments: NoteAttachmentItem[] = [],
     isLiked = false,
+    isBookmarked = false,
   ): LearningNote {
     const isOwn = currentUserId ? row.userId === currentUserId : false;
     return {
@@ -154,6 +155,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
       likesCount: Number(row.likesCount || 0),
       repliesCount: 0,
       isLiked,
+      isBookmarked,
       isOwn,
       attachments: attachments.map((a) => ({
         id: a.id,
@@ -291,7 +293,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
 
       await courseAccess.assertCanAccessNote(db, actor, note);
 
-      const [attachments, likeRow] = await Promise.all([
+      const [attachments, likeRow, bookmarkRow] = await Promise.all([
         db
           .selectFrom("learning_attachments")
           .select([
@@ -315,9 +317,21 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
           .where("target_type", "=", "note")
           .where("target_id", "=", noteId)
           .executeTakeFirst(),
+        db
+          .selectFrom("learning_bookmarks")
+          .select("id")
+          .where("user_id", "=", actor.userId)
+          .where("note_id", "=", noteId)
+          .executeTakeFirst(),
       ]);
 
-      return mapNoteRow(note, actor.userId, attachments, Boolean(likeRow));
+      return mapNoteRow(
+        note,
+        actor.userId,
+        attachments,
+        Boolean(likeRow),
+        Boolean(bookmarkRow),
+      );
     },
 
     async listNotes(db, actor, query) {
@@ -354,17 +368,24 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
       const { page, hasMore } = takePage(rows, query.limit);
 
       let likedNoteIds = new Set<string>();
+      let bookmarkedNoteIds = new Set<string>();
       const attachmentsByNoteId = new Map<string, NoteAttachmentItem[]>();
 
       if (page.length > 0) {
         const noteIds = page.map((n) => n.id);
-        const [likes, attachments] = await Promise.all([
+        const [likes, bookmarks, attachments] = await Promise.all([
           db
             .selectFrom("learning_likes")
             .select("target_id")
             .where("user_id", "=", actor.userId)
             .where("target_type", "=", "note")
             .where("target_id", "in", noteIds)
+            .execute(),
+          db
+            .selectFrom("learning_bookmarks")
+            .select("note_id")
+            .where("user_id", "=", actor.userId)
+            .where("note_id", "in", noteIds)
             .execute(),
           db
             .selectFrom("learning_attachments")
@@ -386,6 +407,9 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
         ]);
 
         likedNoteIds = new Set(likes.map((l) => l.target_id));
+        bookmarkedNoteIds = new Set(
+          bookmarks.flatMap((b) => (b.note_id ? [b.note_id] : [])),
+        );
         for (const att of attachments) {
           if (att.target_id) {
             const list = attachmentsByNoteId.get(att.target_id) || [];
@@ -401,6 +425,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
           actor.userId,
           attachmentsByNoteId.get(row.id) || [],
           likedNoteIds.has(row.id),
+          bookmarkedNoteIds.has(row.id),
         ),
       );
       const last = page.at(-1);
@@ -432,16 +457,23 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
 
       const noteIds = overview.notes.map((n) => n.id);
       let likedNoteIds = new Set<string>();
+      let bookmarkedNoteIds = new Set<string>();
       const attachmentsByNoteId = new Map<string, NoteAttachmentItem[]>();
 
       if (noteIds.length > 0) {
-        const [likes, attachments] = await Promise.all([
+        const [likes, bookmarks, attachments] = await Promise.all([
           db
             .selectFrom("learning_likes")
             .select("target_id")
             .where("user_id", "=", actor.userId)
             .where("target_type", "=", "note")
             .where("target_id", "in", noteIds)
+            .execute(),
+          db
+            .selectFrom("learning_bookmarks")
+            .select("note_id")
+            .where("user_id", "=", actor.userId)
+            .where("note_id", "in", noteIds)
             .execute(),
           db
             .selectFrom("learning_attachments")
@@ -463,6 +495,9 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
         ]);
 
         likedNoteIds = new Set(likes.map((l) => l.target_id));
+        bookmarkedNoteIds = new Set(
+          bookmarks.flatMap((b) => (b.note_id ? [b.note_id] : [])),
+        );
         for (const att of attachments) {
           if (att.target_id) {
             const list = attachmentsByNoteId.get(att.target_id) || [];
@@ -478,6 +513,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
           actor.userId,
           attachmentsByNoteId.get(row.id) || [],
           likedNoteIds.has(row.id),
+          bookmarkedNoteIds.has(row.id),
         ),
       );
       const notesByLessonId = new Map<string, LearningNote[]>();
@@ -577,7 +613,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
           throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
         }
 
-        const [attachments, likeRow] = await Promise.all([
+        const [attachments, likeRow, bookmarkRow] = await Promise.all([
           trx
             .selectFrom("learning_attachments")
             .select([
@@ -601,9 +637,21 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
             .where("target_type", "=", "note")
             .where("target_id", "=", noteId)
             .executeTakeFirst(),
+          trx
+            .selectFrom("learning_bookmarks")
+            .select("id")
+            .where("user_id", "=", actor.userId)
+            .where("note_id", "=", noteId)
+            .executeTakeFirst(),
         ]);
 
-        return mapNoteRow(updated, actor.userId, attachments, Boolean(likeRow));
+        return mapNoteRow(
+          updated,
+          actor.userId,
+          attachments,
+          Boolean(likeRow),
+          Boolean(bookmarkRow),
+        );
       });
     },
 

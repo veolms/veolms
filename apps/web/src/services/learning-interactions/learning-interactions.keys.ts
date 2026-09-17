@@ -34,4 +34,6 @@ export const learningInteractionKeys = {
     [...learningInteractionKeys.all, "moderation", "reports", filters] as const,
   auditLogs: (filters?: Record<string, unknown>) =>
     [...learningInteractionKeys.all, "moderation", "audit-logs", filters] as const,
+  linkPreview: (url: string) =>
+    [...learningInteractionKeys.all, "link-preview", url] as const,
 };

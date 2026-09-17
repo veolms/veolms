@@ -329,6 +329,13 @@ export function useToggleBookmark() {
   });
 }
 
+export function useToggleNoteBookmark() {
+  return useMutation<any, ApiError, string>({
+    mutationFn: (noteId) =>
+      learningInteractionsService.toggleNoteBookmark(noteId),
+  });
+}
+
 export function useToggleFollow() {
   return useMutation<any, ApiError, string>({
     mutationFn: (threadId) =>

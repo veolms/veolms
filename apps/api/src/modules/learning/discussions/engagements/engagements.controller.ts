@@ -19,6 +19,11 @@ export interface EngagementsController {
     reply: FastifyReply,
   ): Promise<void>;
 
+  toggleNoteBookmark(
+    request: FastifyRequest<{ Params: { noteId: string } }>,
+    reply: FastifyReply,
+  ): Promise<void>;
+
   toggleFollow(
     request: FastifyRequest<{ Params: { threadId: string } }>,
     reply: FastifyReply,
@@ -67,6 +72,18 @@ export function createEngagementsController({
         database,
         discussionActor(user),
         threadId,
+      );
+      reply.status(200).send(result);
+    },
+
+    async toggleNoteBookmark(request, reply) {
+      const user = request.user!;
+      const { noteId } = request.params;
+
+      const result = await service.toggleNoteBookmark(
+        database,
+        discussionActor(user),
+        noteId,
       );
       reply.status(200).send(result);
     },

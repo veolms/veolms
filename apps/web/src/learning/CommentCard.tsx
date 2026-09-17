@@ -529,7 +529,7 @@ export const CommentCard = React.memo(function CommentCard({
                       <span>Locked</span>
                     </span>
                   )}
-                  {!isNote && Boolean(comment.isBookmarked) && (
+                  {Boolean(comment.isBookmarked) && (
                     <span
                       data-testid="thread-bookmarked-badge"
                       className="inline-flex items-center gap-1 rounded-md bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-1.5 py-0.5 text-[11px] font-medium text-(--text-secondary)"
@@ -1286,8 +1286,7 @@ export function CommentActionMenu({
     actionLabel === "Q&A"
       ? actionLabel
       : actionLabel[0]?.toUpperCase() + actionLabel.slice(1);
-  const canBookmark =
-    (kind === "comment" || kind === "question") && Boolean(onToggleBookmark);
+  const canBookmark = Boolean(onToggleBookmark);
   const canFollow =
     (kind === "comment" || kind === "question") && Boolean(onToggleFollow);
 
@@ -1312,6 +1311,13 @@ export function CommentActionMenu({
                 onClick={onEdit}
               />
             )}
+            {canBookmark && onToggleBookmark && (
+              <MenuAction
+                Icon={BookmarkSimple}
+                label={isBookmarked ? "Remove bookmark" : "Bookmark"}
+                onClick={onToggleBookmark}
+              />
+            )}
             <MenuDivider />
             {canDelete && (
               <MenuAction
@@ -1324,6 +1330,13 @@ export function CommentActionMenu({
           </>
         ) : (
           <>
+            {canBookmark && onToggleBookmark && (
+              <MenuAction
+                Icon={BookmarkSimple}
+                label={isBookmarked ? "Remove bookmark" : "Bookmark"}
+                onClick={onToggleBookmark}
+              />
+            )}
             <MenuAction
               Icon={ShareNetwork}
               label={`Share ${actionLabel}`}

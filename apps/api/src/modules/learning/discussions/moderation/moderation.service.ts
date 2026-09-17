@@ -370,12 +370,6 @@ export function createModerationService({
           await threadsRepo.setLocked(trx, threadId, false);
         } else if (input.action === "delete") {
           await threadsRepo.deleteThread(trx, threadId);
-          await trx
-            .updateTable("learning_attachments")
-            .set({ status: "deleted" })
-            .where("target_type", "=", "thread")
-            .where("target_id", "=", threadId)
-            .execute();
         }
 
         // Fetch pending reports before updating so we know who to notify
