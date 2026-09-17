@@ -60,7 +60,25 @@ export async function checkUserPermission(
     return eb.or(conditions);
   });
 
-  const matchingAssignments = await query.execute();
+  // Query platform user_roles for platform-scoped role compatibility
+  const userRolesQuery = database
+    .selectFrom("user_roles as ur")
+    .innerJoin("role_permissions as rp", "rp.role_id", "ur.role_id")
+    .innerJoin("permissions as p", "p.id", "rp.permission_id")
+    .select([
+      "rp.effect",
+      sql<string>`'platform'`.as("scope_type"),
+      sql<string | null>`null`.as("course_id"),
+    ])
+    .where("ur.user_id", "=", userId)
+    .where("p.permission_key", "=", permissionKey);
+
+  const [scopedAssignments, directRoleAssignments] = await Promise.all([
+    query.execute(),
+    userRolesQuery.execute(),
+  ]);
+
+  const matchingAssignments = [...scopedAssignments, ...directRoleAssignments];
 
   if (matchingAssignments.length === 0) {
     return { allowed: false, reason: "No matching role assignment grants this permission" };
@@ -114,7 +132,19 @@ export async function getUserEffectivePermissions(
     return eb.or(conditions);
   });
 
-  const rows = await query.execute();
+  const userRolesQuery = database
+    .selectFrom("user_roles as ur")
+    .innerJoin("role_permissions as rp", "rp.role_id", "ur.role_id")
+    .innerJoin("permissions as p", "p.id", "rp.permission_id")
+    .select(["p.permission_key", "rp.effect"])
+    .where("ur.user_id", "=", userId);
+
+  const [scopedRows, directRows] = await Promise.all([
+    query.execute(),
+    userRolesQuery.execute(),
+  ]);
+
+  const rows = [...scopedRows, ...directRows];
 
   const deniedKeys = new Set<string>();
   const allowedKeys = new Set<string>();
