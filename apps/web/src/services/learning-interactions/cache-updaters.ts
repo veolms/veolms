@@ -295,6 +295,69 @@ export function updateNoteLikeInCache(
 }
 
 /**
+ * Directly updates note bookmark status in notes queries and note details query.
+ */
+export function updateNoteBookmarkInCache(
+  queryClient: QueryClient,
+  noteId: string,
+  desiredBookmarked: boolean,
+  serverId?: string,
+): void {
+  // 1. Update notes list queries
+  setNoteQueriesData(
+    queryClient,
+    { queryKey: learningInteractionKeys.notesRoot() },
+    (old) => {
+      if (!old?.notes) return old;
+      let hasChange = false;
+      const nextNotes = old.notes.map((note) => {
+        if (
+          note.id !== noteId &&
+          getClientEntityId(note) !== noteId &&
+          getServerEntityId(note) !== noteId
+        ) {
+          return note;
+        }
+        const currentBookmarked = Boolean(note.isBookmarked);
+        if (currentBookmarked === desiredBookmarked) return note;
+        hasChange = true;
+        return {
+          ...note,
+          isBookmarked: desiredBookmarked,
+        };
+      });
+      return hasChange ? { ...old, notes: nextNotes } : old;
+    },
+  );
+
+  // 2. Update note details query if cached
+  for (const detailId of new Set([noteId, serverId].filter(Boolean))) {
+    queryClient.setQueryData(
+      learningInteractionKeys.noteDetails(detailId!),
+      (old: LearningNoteCacheItem | undefined) => {
+        if (!old) return old;
+        if (
+          old.id !== noteId &&
+          old.id !== serverId &&
+          getClientEntityId(old) !== noteId &&
+          getClientEntityId(old) !== serverId &&
+          getServerEntityId(old) !== noteId &&
+          getServerEntityId(old) !== serverId
+        ) {
+          return old;
+        }
+        const currentBookmarked = Boolean(old.isBookmarked);
+        if (currentBookmarked === desiredBookmarked) return old;
+        return {
+          ...old,
+          isBookmarked: desiredBookmarked,
+        };
+      },
+    );
+  }
+}
+
+/**
  * Directly updates thread bookmark status across all matching cache keys:
  * 1. Specific or all lessonThreads queries
  * 2. Thread details query

@@ -17,6 +17,7 @@ import type {
   LearningThread,
   LearningThreadsListResponse,
   LearningUploadResponse,
+  LinkPreviewResponse,
   ListAuditLogsQuery,
   ListLearningNotesQuery,
   ListLearningRepliesQuery,
@@ -167,6 +168,11 @@ export const learningInteractionsService = {
     return api.post<ToggleBookmarkResponse>(`/threads/${serverId}/bookmark`);
   },
 
+  toggleNoteBookmark(noteId: string): Promise<ToggleBookmarkResponse> {
+    const serverId = requireServerEntityId(noteId);
+    return api.post<ToggleBookmarkResponse>(`/notes/${serverId}/bookmark`);
+  },
+
   toggleFollow(threadId: string): Promise<ToggleFollowResponse> {
     const serverId = requireServerEntityId(threadId);
     return api.post<ToggleFollowResponse>(`/threads/${serverId}/follow`);
@@ -275,6 +281,10 @@ export const learningInteractionsService = {
           ...(event.total && event.total > 0 ? { total: event.total } : {}),
         }),
     });
+  },
+
+  getLinkPreview(url: string): Promise<LinkPreviewResponse> {
+    return api.post<LinkPreviewResponse>("/attachments/link-preview", { url });
   },
 
   // Reporting

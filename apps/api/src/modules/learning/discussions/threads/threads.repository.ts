@@ -446,6 +446,41 @@ export function createThreadsRepository(): ThreadsRepository {
         .where("id", "=", threadId)
         .where("status", "!=", "deleted")
         .execute();
+
+      await db
+        .updateTable("learning_replies")
+        .set({
+          status: "deleted",
+          updated_at: new Date(),
+        })
+        .where("thread_id", "=", threadId)
+        .where("status", "!=", "deleted")
+        .execute();
+
+      await db
+        .updateTable("learning_attachments")
+        .set({ status: "deleted" })
+        .where((eb) =>
+          eb.or([
+            eb.and([
+              eb("target_type", "=", "thread"),
+              eb("target_id", "=", threadId),
+            ]),
+            eb.and([
+              eb("target_type", "=", "reply"),
+              eb(
+                "target_id",
+                "in",
+                eb
+                  .selectFrom("learning_replies")
+                  .select("id")
+                  .where("thread_id", "=", threadId),
+              ),
+            ]),
+          ]),
+        )
+        .where("status", "!=", "deleted")
+        .execute();
     },
 
     async incrementRepliesCount(db, threadId, delta) {

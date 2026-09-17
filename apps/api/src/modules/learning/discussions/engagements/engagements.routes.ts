@@ -80,6 +80,29 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
     controller.toggleBookmark,
   );
 
+  // 2b. POST /notes/:noteId/bookmark - Toggle bookmark/saved for a note
+  app.post(
+    "/notes/:noteId/bookmark",
+    {
+      preHandler: permissions.requireAuthenticated,
+      schema: {
+        operationId: "toggleNoteBookmark",
+        tags: ["Learning Engagements"],
+        summary: "Save or unsave a learning note",
+        params: z.object({ noteId: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Bookmark state toggled",
+            toggleBookmarkResponseSchema,
+          ),
+          401: errorResponse("Unauthorized"),
+          404: errorResponse("Learning note not found"),
+        },
+      },
+    },
+    controller.toggleNoteBookmark,
+  );
+
   // 3. POST /threads/:threadId/follow - Toggle follow
   app.post(
     "/threads/:threadId/follow",

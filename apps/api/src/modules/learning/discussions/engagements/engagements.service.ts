@@ -34,6 +34,12 @@ export interface EngagementsService {
     threadId: string,
   ): Promise<ToggleBookmarkResponse>;
 
+  toggleNoteBookmark(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+    noteId: string,
+  ): Promise<ToggleBookmarkResponse>;
+
   toggleFollow(
     db: DatabaseExecutor,
     actor: DiscussionActor,
@@ -225,6 +231,34 @@ export function createEngagementsService({
       } else {
         await engagementsRepo.addBookmark(db, actor.userId, threadId);
         return { threadId, bookmarked: true };
+      }
+    },
+
+    async toggleNoteBookmark(db, actor, noteId) {
+      const note = await notesRepo.findNoteById(db, noteId);
+      if (!note) {
+        throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
+      }
+      await courseAccess.assertCanAccessNote(db, actor, note);
+      await courseAccess.assertNotSuspended(
+        db,
+        actor.userId,
+        note.courseId,
+        "commenting",
+      );
+
+      const alreadyBookmarked = await engagementsRepo.findNoteBookmark(
+        db,
+        actor.userId,
+        noteId,
+      );
+
+      if (alreadyBookmarked) {
+        await engagementsRepo.removeNoteBookmark(db, actor.userId, noteId);
+        return { noteId, bookmarked: false };
+      } else {
+        await engagementsRepo.addNoteBookmark(db, actor.userId, noteId);
+        return { noteId, bookmarked: true };
       }
     },
 

@@ -21,6 +21,10 @@ import {
 } from "../../../discussion-uploads/index.ts";
 import { DISCUSSION_CONSTANTS } from "../shared/discussion.constants.ts";
 import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
+import {
+  fetchSafeHtml,
+  extractLinkMetadata,
+} from "./attachments.preview.ts";
 import type { AttachmentsRepository } from "./attachments.repository.ts";
 
 export interface AttachmentsService {
@@ -428,24 +432,18 @@ export function createAttachmentsService(
     },
 
     async fetchLinkPreview(url: string) {
-      try {
+      const { html, finalUrl } = await fetchSafeHtml(url);
+      if (!html) {
         const parsed = new URL(url);
         return {
           url,
           title: parsed.hostname,
-          description: `Resource from ${parsed.hostname}`,
+          description: null,
           siteName: parsed.hostname,
           imageUrl: null,
         };
-      } catch {
-        return {
-          url,
-          title: null,
-          description: null,
-          siteName: null,
-          imageUrl: null,
-        };
       }
+      return extractLinkMetadata(html, finalUrl);
     },
   };
 }
