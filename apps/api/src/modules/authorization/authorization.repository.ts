@@ -60,18 +60,25 @@ export async function checkUserPermission(
     return eb.or(conditions);
   });
 
-  const matchingAssignments = await query.execute();
+  // Query platform user_roles for platform-scoped role compatibility
+  const userRolesQuery = database
+    .selectFrom("user_roles as ur")
+    .innerJoin("role_permissions as rp", "rp.role_id", "ur.role_id")
+    .innerJoin("permissions as p", "p.id", "rp.permission_id")
+    .select([
+      "rp.effect",
+      sql<string>`'platform'`.as("scope_type"),
+      sql<string | null>`null`.as("course_id"),
+    ])
+    .where("ur.user_id", "=", userId)
+    .where("p.permission_key", "=", permissionKey);
 
-  if (
-    matchingAssignments.length === 0 &&
-    (await hasLegacyAdminRole(database, userId))
-  ) {
-    // Temporary compatibility for admin accounts seeded before scoped role
-    // assignments were introduced. The admin role already grants every
-    // permission through role_permissions; treat its legacy platform link as
-    // a platform-scoped assignment until those accounts are migrated.
-    return { allowed: true };
-  }
+  const [scopedAssignments, directRoleAssignments] = await Promise.all([
+    query.execute(),
+    userRolesQuery.execute(),
+  ]);
+
+  const matchingAssignments = [...scopedAssignments, ...directRoleAssignments];
 
   if (matchingAssignments.length === 0) {
     return { allowed: false, reason: "No matching role assignment grants this permission" };
@@ -89,21 +96,6 @@ export async function checkUserPermission(
   }
 
   return { allowed: false, reason: "Permission not granted" };
-}
-
-async function hasLegacyAdminRole(
-  database: Executor,
-  userId: string,
-): Promise<boolean> {
-  const row = await database
-    .selectFrom("user_roles as ur")
-    .innerJoin("roles as r", "r.id", "ur.role_id")
-    .select("ur.user_id")
-    .where("ur.user_id", "=", userId)
-    .where("r.name", "=", "admin")
-    .executeTakeFirst();
-
-  return row !== undefined;
 }
 
 export async function getUserEffectivePermissions(
@@ -140,17 +132,19 @@ export async function getUserEffectivePermissions(
     return eb.or(conditions);
   });
 
-  const rows = await query.execute();
+  const userRolesQuery = database
+    .selectFrom("user_roles as ur")
+    .innerJoin("role_permissions as rp", "rp.role_id", "ur.role_id")
+    .innerJoin("permissions as p", "p.id", "rp.permission_id")
+    .select(["p.permission_key", "rp.effect"])
+    .where("ur.user_id", "=", userId);
 
-  if (rows.length === 0 && (await hasLegacyAdminRole(database, userId))) {
-    // Keep the temporary legacy-admin compatibility in sync with
-    // checkUserPermission so the UI exposes the admin editing capabilities.
-    const allPermissions = await database
-      .selectFrom("permissions")
-      .select("permission_key")
-      .execute();
-    return allPermissions.map((permission) => permission.permission_key);
-  }
+  const [scopedRows, directRows] = await Promise.all([
+    query.execute(),
+    userRolesQuery.execute(),
+  ]);
+
+  const rows = [...scopedRows, ...directRows];
 
   const deniedKeys = new Set<string>();
   const allowedKeys = new Set<string>();
