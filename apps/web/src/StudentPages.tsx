@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { CSSProperties } from "react";
+import { useDebounce } from "./hooks/useDebounce";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
@@ -331,6 +332,7 @@ export function MyCoursesPage({
     isStoredString,
     LEGACY_MY_COURSES_SEARCH_KEYS,
   );
+  const debouncedSearch = useDebounce(search, 500);
   const [sort, setSort] = useState("recent");
   const [status, setStatus] = useState("all");
 
@@ -339,7 +341,7 @@ export function MyCoursesPage({
   }, [enrolledData?.courses]);
 
   const visibleCourses = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query = debouncedSearch.trim().toLowerCase();
     let result = learningCourses.filter((course) => {
       const selectedStatus = status !== "all" ? status : filter;
       if (selectedStatus !== "all" && course.status !== selectedStatus)
@@ -351,7 +353,7 @@ export function MyCoursesPage({
     if (sort === "progress")
       result = [...result].sort((a, b) => b.progress - a.progress);
     return result;
-  }, [learningCourses, filter, search, sort, status]);
+  }, [learningCourses, filter, debouncedSearch, sort, status]);
 
   return (
     <div className="my-courses-page">

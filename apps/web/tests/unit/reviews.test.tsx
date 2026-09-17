@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ReviewsPage } from "../../src/reviews/ReviewsPage.tsx";
@@ -61,7 +61,7 @@ describe("ReviewsPage", () => {
     expect(screen.getAllByText("Ashi Singh")[0]).toBeInTheDocument();
   });
 
-  it("allows searching reviews by text query", () => {
+  it("allows searching reviews by text query", async () => {
     render(<ReviewsPage />);
 
     const searchInput = screen.getByPlaceholderText("Search reviews...");
@@ -69,16 +69,23 @@ describe("ReviewsPage", () => {
     expect(screen.getAllByText("Anurag Singh")[0]).toBeInTheDocument();
 
     fireEvent.change(searchInput, { target: { value: "lengthy" } });
+    await waitFor(
+      () => {
+        expect(
+          screen.queryByText(
+            "Very detailed course, but could include more real-world production projects.",
+          ),
+        ).not.toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
     expect(screen.getAllByText("Anurag Singh")[0]).toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        "Very detailed course, but could include more real-world production projects.",
-      ),
-    ).not.toBeInTheDocument();
 
     // Clear search
     fireEvent.change(searchInput, { target: { value: "" } });
-    expect(screen.getAllByText("Ashi Singh")[0]).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByText("Ashi Singh")[0]).toBeInTheDocument();
+    });
   });
 
   it("allows toggling the verified learners filter", () => {

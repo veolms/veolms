@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useDebounceValue } from "../hooks/useDebounce";
 import type {
   OrderHistoryItem,
   OrderHistoryTabId,
@@ -52,6 +53,10 @@ export function useOrderHistoryFilter(
 
   const [activeTab, setActiveTab] = useState<OrderHistoryTabId>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearchImmediately] = useDebounceValue(
+    searchQuery.trim(),
+    500,
+  );
   const [dateRangeFilter, setDateRangeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [paymentMethodFilter, setPaymentMethodFilter] = useState("all");
@@ -72,6 +77,7 @@ export function useOrderHistoryFilter(
   const resetFilters = () => {
     setActiveTab("all");
     setSearchQuery("");
+    setDebouncedSearchImmediately("");
     setDateRangeFilter("all");
     setStatusFilter("all");
     setPaymentMethodFilter("all");
@@ -120,8 +126,8 @@ export function useOrderHistoryFilter(
     }
 
     // Filter by Search Query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
+    if (debouncedSearch) {
+      const query = debouncedSearch.toLowerCase();
       result = result.filter(
         (item) =>
           item.orderNumber.toLowerCase().includes(query) ||
@@ -133,7 +139,7 @@ export function useOrderHistoryFilter(
     }
 
     return result;
-  }, [ordersList, activeTab, statusFilter, paymentMethodFilter, searchQuery]);
+  }, [ordersList, activeTab, statusFilter, paymentMethodFilter, debouncedSearch]);
 
   const totalFilteredCount = filteredOrders.length;
   const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { OrderHistoryPage } from "../../src/order-history/OrderHistoryPage.tsx";
@@ -246,7 +246,7 @@ describe("OrderHistoryPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("filters orders by search query across Order ID, invoice, and course title", () => {
+  it("filters orders by search query across Order ID, invoice, and course title", async () => {
     render(<OrderHistoryPage />);
 
     const searchInput = screen.getByPlaceholderText(
@@ -255,27 +255,39 @@ describe("OrderHistoryPage", () => {
 
     // Search by title
     fireEvent.change(searchInput, { target: { value: "Python" } });
+    await waitFor(
+      () => {
+        expect(
+          screen.queryByText("The Ultimate TypeScript Course"),
+        ).not.toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
     expect(
       screen.getAllByText("Python for Data Science")[0],
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText("The Ultimate TypeScript Course"),
-    ).not.toBeInTheDocument();
 
     // Search by Invoice ID
     fireEvent.change(searchInput, { target: { value: "INV-240520-0891" } });
+    await waitFor(
+      () => {
+        expect(
+          screen.queryByText("Python for Data Science"),
+        ).not.toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
     expect(
       screen.getAllByText("UI/UX Design Fundamentals")[0],
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText("Python for Data Science"),
-    ).not.toBeInTheDocument();
 
     // Clear search
     fireEvent.change(searchInput, { target: { value: "" } });
-    expect(
-      screen.getAllByText("The Ultimate TypeScript Course")[0],
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getAllByText("The Ultimate TypeScript Course")[0],
+      ).toBeInTheDocument();
+    });
   });
 
   it("filters orders by status dropdown select", () => {

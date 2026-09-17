@@ -4,6 +4,7 @@ import { CircleIcon as Circle } from "@phosphor-icons/react/Circle";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { RefObject } from "react";
+import { useDebounce } from "../hooks/useDebounce";
 import { ExpandableSearch } from "../ExpandableSearch";
 import { CourseThumbnailPlaceholder } from "../courses/CourseThumbnailPlaceholder";
 import {
@@ -122,7 +123,8 @@ export function Curriculum({
     false,
     isStoredBoolean,
   );
-  const activeLessonSearch = searchOpen ? lessonSearch : "";
+  const debouncedLessonSearch = useDebounce(lessonSearch, 500);
+  const activeLessonSearch = searchOpen ? debouncedLessonSearch : "";
   const lessonSearchInputId = `learning-curriculum-search-${useId().replaceAll(":", "")}`;
   const activeLessonRef = useRef<HTMLButtonElement>(null);
   const currentSectionRef = useRef<HTMLElement>(null);

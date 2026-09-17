@@ -47,6 +47,7 @@ describe("React Router framework route configuration", () => {
       "course-create": "courses/create",
       wishlist: "wishlist",
       students: "students",
+      "student-details": "students/:username",
       reviews: "reviews",
       quizzes: "quizzes",
       discussions: "discussions",
@@ -385,12 +386,22 @@ describe("framework route descriptors", () => {
   });
 
   it("keeps deferred product surfaces on the shared empty state", () => {
-    for (const routeId of ["students", "analytics", "messages"]) {
+    for (const routeId of ["analytics", "messages"]) {
       expect(getRouteDescriptor(routeId)).toMatchObject({
         kind: "shell",
         page: "placeholder",
       });
     }
+
+    expect(getRouteDescriptor("students")).toMatchObject({
+      kind: "shell",
+      page: "students",
+    });
+
+    expect(getRouteDescriptor("student-details")).toMatchObject({
+      kind: "shell",
+      page: "student-details",
+    });
 
     expect(getRouteDescriptor("course-create")).toMatchObject({
       kind: "shell",

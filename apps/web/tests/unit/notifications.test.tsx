@@ -230,10 +230,15 @@ describe("NotificationsPage", () => {
     fireEvent.change(screen.getByPlaceholderText("Search notifications..."), {
       target: { value: "PostgreSQL" },
     });
-    await waitFor(() =>
-      expect(screen.getByText("Certificate earned")).toBeInTheDocument(),
+    await waitFor(
+      () => {
+        expect(
+          screen.queryByText("New course published"),
+        ).not.toBeInTheDocument();
+      },
+      { timeout: 2000 },
     );
-    expect(screen.queryByText("New course published")).not.toBeInTheDocument();
+    expect(screen.getByText("Certificate earned")).toBeInTheDocument();
   });
 
   it("marks all notifications as read through the mutation", () => {

@@ -236,7 +236,7 @@ describe("Curriculum", () => {
     expect(screen.getByText("4/5")).toBeVisible();
   });
 
-  it("toggles sections, filters lessons, and delegates lesson selection and close", () => {
+  it("toggles sections, filters lessons, and delegates lesson selection and close", async () => {
     const onSelectLesson = vi.fn();
     const onOpenCourseOverview = vi.fn();
     const onClose = vi.fn();
@@ -297,11 +297,16 @@ describe("Curriculum", () => {
       },
     );
 
-    expect(
-      lessonListQueries.queryByRole("button", {
-        name: /Section 1: Introduction/,
-      }),
-    ).not.toBeInTheDocument();
+    await waitFor(
+      () => {
+        expect(
+          lessonListQueries.queryByRole("button", {
+            name: /Section 1: Introduction/,
+          }),
+        ).not.toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
     expect(
       screen.getByRole("button", { name: /Section 2: User Research/ }),
     ).toBeInTheDocument();
@@ -317,11 +322,10 @@ describe("Curriculum", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Search lessons" }));
 
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: /10\.\s*Usability Testing\s*11:39/,
-      }),
-    );
+    const lessonButton = await screen.findByRole("button", {
+      name: /10\.\s*Usability Testing\s*11:39/,
+    });
+    fireEvent.click(lessonButton);
     expect(onSelectLesson).toHaveBeenCalledWith(10);
     expect(onClose).toHaveBeenCalledTimes(1);
   }, 30_000);

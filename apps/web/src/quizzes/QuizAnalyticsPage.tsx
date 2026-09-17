@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useDebounce } from "../hooks/useDebounce";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
@@ -514,11 +515,12 @@ function QuizLibrary({
   onNavigatePage?: (destination: string) => void;
 }) {
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 500);
   const [status, setStatus] = useState<QuizStatus | "all">("all");
   const visible = quizzes.filter(
     (quiz) =>
       (status === "all" || quiz.status === status) &&
-      quiz.title.toLowerCase().includes(search.trim().toLowerCase()),
+      quiz.title.toLowerCase().includes(debouncedSearch.trim().toLowerCase()),
   );
   const {
     displayedItems: displayedLibraryQuizzes,

@@ -15,7 +15,10 @@ export function useCreateQuiz() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: CreateQuizRequest) => quizzesService.create(payload),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: quizKeys.mine() }),
+    onSuccess: (data) => {
+      qc.setQueryData(quizKeys.detail(data.id), data);
+      void qc.invalidateQueries({ queryKey: quizKeys.mine() });
+    },
   });
 }
 export function useUpdateQuiz() {

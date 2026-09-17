@@ -708,7 +708,10 @@ export function createCourseService({
     userRoles?: readonly string[],
   ) {
     const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const isInstructor = userRoles?.includes("instructor");
+    const isInstructor =
+      userRoles?.includes(INSTRUCTOR_ROLE) ||
+      userRoles?.includes("instructor") ||
+      userRoles?.includes("creator");
     const course = await courseRepo.findCourseById(database, courseId);
     if (!course) {
       throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");

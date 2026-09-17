@@ -22,6 +22,8 @@ import {
 describe("route access policy", () => {
   it("restricts course authoring to creator-capable roles", () => {
     expect(isCourseAuthorPath("/courses/create?edit=course-id")).toBe(true);
+    expect(isCourseAuthorPath("/students")).toBe(true);
+    expect(isCourseAuthorPath("/students/alice")).toBe(true);
     expect(hasCourseAuthorRole(["student"])).toBe(false);
     expect(hasCourseAuthorRole(["INSTRUCTOR"])).toBe(true);
     expect(hasCourseAuthorRole(["admin"])).toBe(true);
@@ -29,10 +31,22 @@ describe("route access policy", () => {
       shouldRedirectFromCourseAuthorPath("/courses/create", ["student"]),
     ).toBe(true);
     expect(
+      shouldRedirectFromCourseAuthorPath("/students", ["student"]),
+    ).toBe(true);
+    expect(
+      shouldRedirectFromCourseAuthorPath("/students/alice", ["student"]),
+    ).toBe(true);
+    expect(
       shouldRedirectFromCourseAuthorPath("/courses/create", undefined),
     ).toBe(true);
     expect(
       shouldRedirectFromCourseAuthorPath("/courses/create", [
+        "student",
+        "creator",
+      ]),
+    ).toBe(false);
+    expect(
+      shouldRedirectFromCourseAuthorPath("/students", [
         "student",
         "creator",
       ]),

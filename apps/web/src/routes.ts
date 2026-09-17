@@ -16,6 +16,10 @@ export default [
     }),
     route("wishlist", marker, { id: "wishlist", caseSensitive: true }),
     route("students", marker, { id: "students", caseSensitive: true }),
+    route("students/:username", marker, {
+      id: "student-details",
+      caseSensitive: true,
+    }),
     route("reviews", marker, { id: "reviews", caseSensitive: true }),
     route("quizzes", marker, { id: "quizzes", caseSensitive: true }),
     route("quizzes/create", marker, { id: "quiz-create", caseSensitive: true }),

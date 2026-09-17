@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useDebounceValue } from "../hooks/useDebounce";
 import {
   initialCourseMeta,
   initialHighlights,
@@ -57,6 +58,10 @@ export function useReviewsFilter(
     useState<readonly ReviewItem[]>(initialReviewsList);
   const [activeTab, setActiveTab] = useState<ReviewTabId>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearchImmediately] = useDebounceValue(
+    searchQuery.trim(),
+    500,
+  );
   const [ratingFilter, setRatingFilter] = useState<RatingFilterOption>("all");
   const [sortBy, setSortBy] = useState<SortOption>("recent");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
@@ -122,6 +127,7 @@ export function useReviewsFilter(
   const resetFilters = () => {
     setActiveTab("all");
     setSearchQuery("");
+    setDebouncedSearchImmediately("");
     setRatingFilter("all");
     setSortBy("recent");
     setVerifiedOnly(false);
@@ -153,8 +159,8 @@ export function useReviewsFilter(
     }
 
     // Filter by Search Query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
+    if (debouncedSearch) {
+      const query = debouncedSearch.toLowerCase();
       result = result.filter(
         (item) =>
           item.authorName.toLowerCase().includes(query) ||
@@ -173,7 +179,7 @@ export function useReviewsFilter(
     });
 
     return result;
-  }, [reviewsList, activeTab, verifiedOnly, ratingFilter, searchQuery, sortBy]);
+  }, [reviewsList, activeTab, verifiedOnly, ratingFilter, debouncedSearch, sortBy]);
 
   return {
     courseMeta: initialCourseMeta,

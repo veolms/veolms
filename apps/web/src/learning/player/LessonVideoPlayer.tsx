@@ -756,7 +756,13 @@ export function LessonVideoPlayer({
       keepControlsVisibleUntilFirstPlay
       keepPosterVisibleUntilFirstPlay
       onEvent={handleEvent}
-      onErrorOverlayClose={presentation === "mini" ? onMiniClose : undefined}
+      onErrorOverlayClose={
+        presentation === "mini"
+          ? onMiniClose
+          : onMinimize
+            ? minimizePlayerFromControl
+            : undefined
+      }
       lockLandscapeOnFullscreen
       mediaProps={{
         muted: restoreAutoplayRef.current !== null ? true : muted,

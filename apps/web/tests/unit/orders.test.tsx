@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { OrdersPage } from "../../src/orders/OrdersPage.tsx";
@@ -280,7 +280,7 @@ describe("OrdersPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("filters orders by search query across course title and order ID", () => {
+  it("filters orders by search query across course title and order ID", async () => {
     render(<OrdersPage />);
 
     const searchInput = screen.getByPlaceholderText(
@@ -289,19 +289,33 @@ describe("OrdersPage", () => {
 
     // Search by title
     fireEvent.change(searchInput, { target: { value: "node" } });
-    expect(
-      screen.getAllByText("Complete Backend with Node.js")[0],
-    ).toBeInTheDocument();
+    await waitFor(
+      () => {
+        expect(
+          screen.getAllByText("Complete Backend with Node.js")[0],
+        ).toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
 
     // Search by Order ID
     fireEvent.change(searchInput, { target: { value: "#PC-70984" } });
-    expect(screen.getAllByText("UI/UX Design Mastery")[0]).toBeInTheDocument();
+    await waitFor(
+      () => {
+        expect(
+          screen.getAllByText("UI/UX Design Mastery")[0],
+        ).toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
 
     // Clear search
     fireEvent.change(searchInput, { target: { value: "" } });
-    expect(
-      screen.getAllByText("The Ultimate TypeScript Course")[0],
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getAllByText("The Ultimate TypeScript Course")[0],
+      ).toBeInTheDocument();
+    });
   });
 
   it("filters orders by course and status dropdown selects", () => {

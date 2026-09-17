@@ -62,17 +62,33 @@ export async function checkUserPermission(
 
   const matchingAssignments = await query.execute();
 
+  // If no scoped role assignment is found, fallback to checking platform-level user_roles
+  let legacyAssignments: Array<{ effect: string }> = [];
   if (matchingAssignments.length === 0) {
+    legacyAssignments = await database
+      .selectFrom("user_roles as ur")
+      .innerJoin("role_permissions as rp", "rp.role_id", "ur.role_id")
+      .innerJoin("permissions as p", "p.id", "rp.permission_id")
+      .select(["rp.effect"])
+      .where("ur.user_id", "=", userId)
+      .where("p.permission_key", "=", permissionKey)
+      .execute();
+  }
+
+  const allAssignments =
+    matchingAssignments.length > 0 ? matchingAssignments : legacyAssignments;
+
+  if (allAssignments.length === 0) {
     return { allowed: false, reason: "No matching role assignment grants this permission" };
   }
 
   // Explicit deny rule overrides any allow rule
-  const hasDeny = matchingAssignments.some((a) => a.effect === "deny");
+  const hasDeny = allAssignments.some((a) => a.effect === "deny");
   if (hasDeny) {
     return { allowed: false, reason: "Permission explicitly denied by policy" };
   }
 
-  const hasAllow = matchingAssignments.some((a) => a.effect === "allow");
+  const hasAllow = allAssignments.some((a) => a.effect === "allow");
   if (hasAllow) {
     return { allowed: true };
   }
@@ -115,11 +131,20 @@ export async function getUserEffectivePermissions(
   });
 
   const rows = await query.execute();
+  const legacyRows = await database
+    .selectFrom("user_roles as ur")
+    .innerJoin("role_permissions as rp", "rp.role_id", "ur.role_id")
+    .innerJoin("permissions as p", "p.id", "rp.permission_id")
+    .select(["p.permission_key", "rp.effect"])
+    .where("ur.user_id", "=", userId)
+    .execute();
+
+  const allRows = [...rows, ...legacyRows];
 
   const deniedKeys = new Set<string>();
   const allowedKeys = new Set<string>();
 
-  for (const row of rows) {
+  for (const row of allRows) {
     if (row.effect === "deny") {
       deniedKeys.add(row.permission_key);
     } else if (row.effect === "allow") {

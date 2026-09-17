@@ -3011,4 +3011,44 @@ describe("LessonVideoPlayer adapter", () => {
       screen.queryByRole("dialog", { name: /lecture completed/i }),
     ).not.toBeInTheDocument();
   });
+
+  it("shows collapse minimize button during video loading and error states", async () => {
+    const engine = new RecordingFakeVideoEngine(90);
+    let motionTarget: HTMLElement | null = null;
+    const onMinimize = vi.fn();
+    const { container } = render(
+      <LessonVideoPlayer
+        {...playerProps(firstMedia, engine)}
+        onMinimize={onMinimize}
+        minimizeMotionTarget={() => motionTarget}
+      />,
+    );
+
+    const player = screen.getByRole("region", {
+      name: "Lesson video player for Designing for real users",
+    });
+    motionTarget = player.parentElement;
+
+    const minimizeLayer = container.querySelector(
+      "[data-learning-player-minimize-layer]",
+    );
+    expect(minimizeLayer).toBeInTheDocument();
+    expect(minimizeLayer).toHaveClass("visible");
+
+    const minimizeButton = screen.getByRole("button", { name: "Minimize" });
+    expect(minimizeButton).toBeInTheDocument();
+
+    // Trigger error state
+    act(() => {
+      engine.emitError();
+    });
+
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(minimizeLayer).toHaveClass("visible");
+    expect(minimizeLayer).toHaveClass("z-50");
+
+    // Minimize works while error is active
+    fireEvent.click(minimizeButton);
+    await waitFor(() => expect(onMinimize).toHaveBeenCalledOnce());
+  });
 });

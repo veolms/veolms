@@ -23,6 +23,7 @@ function areLoadValuesEqual(
   seen: WeakMap<object, WeakSet<object>>,
 ): boolean {
   if (Object.is(left, right)) return true;
+  if (typeof left === "function" && typeof right === "function") return true;
   if (
     left === null ||
     right === null ||
@@ -89,6 +90,12 @@ export function areVideoSourcesLoadEquivalent(
   left: VideoSource,
   right: VideoSource,
 ): boolean {
+  if (left === right) return true;
+  if (left.id === right.id && left.src === right.src) {
+    const { startTime: _leftStartTime, ...leftRest } = left;
+    const { startTime: _rightStartTime, ...rightRest } = right;
+    return areLoadObjectsEqual(leftRest, rightRest);
+  }
   return areLoadObjectsEqual(left, right);
 }
 

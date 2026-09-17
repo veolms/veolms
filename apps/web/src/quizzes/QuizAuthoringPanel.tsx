@@ -41,6 +41,7 @@ import {
 } from "../services/quizzes/quizzes.queries";
 import {
   useCourseEditor,
+  useCourseOverview,
   useMyCourses,
 } from "../services/courses/courses.queries";
 import { ThemedSelect, type ThemedSelectOption } from "../ThemedSelect";
@@ -203,8 +204,12 @@ export function QuizAuthoringPanel({
   const effectiveLessonId = lessonId || selectedLessonId || null;
 
   const courseEditor = useCourseEditor(effectiveCourseId);
+  const courseOverview = useCourseOverview(effectiveCourseId, {
+    enabled: Boolean(effectiveCourseId && !courseEditor.data),
+  });
   const assignments = useCourseQuizAssignments(effectiveCourseId);
   const [quizId, setQuizId] = useState<string | null>(initialQuizId);
+  const lastLoadedQuizIdRef = useRef<string | null>(null);
   const [quizTitle, setQuizTitle] = useState(lessonTitle ?? "");
   const [description, setDescription] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -340,28 +345,32 @@ export function QuizAuthoringPanel({
 
   useEffect(() => {
     if (!quiz.data || quiz.data.id !== quizId) return;
-    setQuizTitle(quiz.data.title);
-    setDescription(quiz.data.description ?? "");
-    const currentVersion =
-      quiz.data.versions.find((item) => !item.publishedAt) ??
-      quiz.data.versions.at(-1);
-    const instr = currentVersion?.instructions ?? "";
-    setInstructions(instr);
-    lastSavedDetailsRef.current = {
-      title: quiz.data.title,
-      description: quiz.data.description ?? "",
-      instructions: instr,
-    };
 
-    if (
-      !courseId &&
-      quiz.data.assignments &&
-      quiz.data.assignments.length > 0
-    ) {
-      const primaryAssignment = quiz.data.assignments[0];
-      if (primaryAssignment) {
-        setSelectedCourseId((prev) => prev || primaryAssignment.courseId);
-        setSelectedLessonId((prev) => prev || primaryAssignment.lessonId);
+    if (lastLoadedQuizIdRef.current !== quizId) {
+      lastLoadedQuizIdRef.current = quizId;
+      setQuizTitle(quiz.data.title);
+      setDescription(quiz.data.description ?? "");
+      const currentVersion =
+        quiz.data.versions.find((item) => !item.publishedAt) ??
+        quiz.data.versions.at(-1);
+      const instr = currentVersion?.instructions ?? "";
+      setInstructions(instr);
+      lastSavedDetailsRef.current = {
+        title: quiz.data.title,
+        description: quiz.data.description ?? "",
+        instructions: instr,
+      };
+
+      if (
+        !courseId &&
+        quiz.data.assignments &&
+        quiz.data.assignments.length > 0
+      ) {
+        const primaryAssignment = quiz.data.assignments[0];
+        if (primaryAssignment) {
+          setSelectedCourseId((prev) => prev || primaryAssignment.courseId);
+          setSelectedLessonId((prev) => prev || primaryAssignment.lessonId);
+        }
       }
     }
   }, [quiz.data, quizId, courseId]);
@@ -390,6 +399,7 @@ export function QuizAuthoringPanel({
       assignmentTimerRef.current = null;
     }
     resetEditor();
+    lastLoadedQuizIdRef.current = null;
     setQuizId(null);
     setQuizTitle(lessonTitle ?? "");
     setDescription("");
@@ -512,6 +522,8 @@ export function QuizAuthoringPanel({
           onSuccess: (next) => {
             isCreatingRef.current = false;
             setCreateSaveStatus("saved");
+            qc.setQueryData(quizKeys.detail(next.id), next);
+            lastLoadedQuizIdRef.current = next.id;
             setQuizId(next.id);
             lastSavedDetailsRef.current = {
               title,
@@ -1108,12 +1120,26 @@ export function QuizAuthoringPanel({
     return [["", "Select a course..."] as const, ...list];
   }, [myCourses.data?.courses]);
 
-  const courseSections = courseEditor.data?.sections;
+  const courseSections =
+    courseEditor.data?.sections ?? courseOverview.data?.sections;
+  const isLessonsLoading = Boolean(
+    effectiveCourseId &&
+      !courseSections &&
+      (courseEditor.isLoading ||
+        (courseOverview.isLoading && !courseEditor.isError)),
+  );
+  const isLessonsError = Boolean(
+    effectiveCourseId &&
+      !courseSections &&
+      courseEditor.isError &&
+      (courseOverview.isError || !courseOverview.data),
+  );
+
   const lessonOptions: readonly ThemedSelectOption<string>[] = useMemo(() => {
-    if (!selectedCourseId) {
+    if (!effectiveCourseId) {
       return [["", "Select a course first"] as const];
     }
-    if (!courseSections) {
+    if (isLessonsLoading) {
       if (selectedLessonId) {
         return [
           [selectedLessonId, "Attached lesson..."] as const,
@@ -1122,11 +1148,19 @@ export function QuizAuthoringPanel({
       }
       return [["", "Loading lessons..."] as const];
     }
+    if (isLessonsError) {
+      return [["", "Failed to load lessons (click to retry)"] as const];
+    }
+    if (!courseSections || courseSections.length === 0) {
+      return [["", "No sections in this course"] as const];
+    }
     const options: ThemedSelectOption<string>[] = [
       ["", "Select a lesson..."] as const,
     ];
+    let totalLessons = 0;
     courseSections.forEach((sec, secIdx) => {
       (sec.lessons ?? []).forEach((les, lesIdx) => {
+        totalLessons++;
         const typeBadge =
           les.contentType === "quiz"
             ? "Quiz"
@@ -1139,8 +1173,17 @@ export function QuizAuthoringPanel({
         ]);
       });
     });
+    if (totalLessons === 0) {
+      return [["", "No lessons in this course"] as const];
+    }
     return options;
-  }, [courseSections, selectedCourseId, selectedLessonId]);
+  }, [
+    courseSections,
+    effectiveCourseId,
+    isLessonsError,
+    isLessonsLoading,
+    selectedLessonId,
+  ]);
 
   const quizOptions: readonly ThemedSelectOption[] = useMemo(() => {
     const list: ThemedSelectOption[] = [];
@@ -1223,6 +1266,12 @@ export function QuizAuthoringPanel({
                       hasExplicitlyDeletedOrDetachedRef.current = false;
                       resetEditor();
                       setQuizId(val || null);
+                      if (!val) {
+                        lastLoadedQuizIdRef.current = null;
+                        setQuizTitle(lessonTitle ?? "");
+                        setDescription("");
+                        setInstructions("");
+                      }
                     }}
                     options={quizOptions}
                     ariaLabel="Select active quiz"
@@ -1303,14 +1352,14 @@ export function QuizAuthoringPanel({
         </div>
       </div>
 
-      {quiz.isLoading ? (
+      {quiz.isLoading && !quiz.data && !lastLoadedQuizIdRef.current ? (
         <div className="my-8 flex items-center justify-center gap-2 text-sm text-(--muted)">
           <CircleNotch size={18} className="animate-spin text-(--accent)" />
           <span>Loading quiz details...</span>
         </div>
       ) : null}
 
-      {!quizId || quiz.data ? (
+      {!quizId || quiz.data || lastLoadedQuizIdRef.current ? (
         <div className="space-y-3 sm:space-y-5">
           {/* Card 1: Quiz Details with Debounced Auto-Save */}
           <div
@@ -2055,13 +2104,38 @@ export function QuizAuthoringPanel({
                     <ThemedSelect
                       value={selectedLessonId}
                       onValueChange={(val) => {
+                        if (isLessonsError) {
+                          courseEditor.refetch();
+                          courseOverview.refetch();
+                          return;
+                        }
                         setSelectedLessonId(val);
                       }}
                       options={lessonOptions}
-                      disabled={!selectedCourseId || lessonOptions.length === 0}
+                      disabled={
+                        !effectiveCourseId ||
+                        isLessonsLoading ||
+                        (!isLessonsError &&
+                          Boolean(courseSections) &&
+                          courseSections!.every(
+                            (s) => (s.lessons ?? []).length === 0,
+                          ))
+                      }
                       ariaLabel="Target lesson"
                       triggerClassName="!h-9.5 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-3 sm:!px-3.5 !text-xs sm:!text-sm !font-medium !text-(--text) focus:!border-(--accent)"
                     />
+                    {isLessonsError ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          courseEditor.refetch();
+                          courseOverview.refetch();
+                        }}
+                        className="mt-1.5 text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline cursor-pointer inline-flex items-center gap-1"
+                      >
+                        Failed to load lessons. Click to retry.
+                      </button>
+                    ) : null}
                   </label>
                 </div>
               </div>
