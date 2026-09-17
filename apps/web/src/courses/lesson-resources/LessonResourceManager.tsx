@@ -1,11 +1,11 @@
 import {
   CircleNotch,
   FileText,
-  Plus,
+  UploadSimple,
   WarningCircle,
   X,
 } from "@phosphor-icons/react";
-import { useRef, useState, type ChangeEvent } from "react";
+import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import type {
   CreateLessonResourceRequest,
   LessonResource,
@@ -58,15 +58,14 @@ export function LessonResourceManager({
     null,
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isDragActive, setIsDragActive] = useState(false);
 
   const chooseResource = () => {
     if (!courseId || disabled || isUploading) return;
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
+  const handleFile = async (file: File | undefined) => {
     if (!file) return;
 
     setErrorMessage(null);
@@ -125,6 +124,40 @@ export function LessonResourceManager({
     }
   };
 
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    await handleFile(file);
+  };
+
+  const handleDragEnter = (event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    if (courseId && !disabled && !isUploading) setIsDragActive(true);
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    if (courseId && !disabled && !isUploading) {
+      event.dataTransfer.dropEffect = "copy";
+      setIsDragActive(true);
+    }
+  };
+
+  const handleDragLeave = (event: DragEvent<HTMLButtonElement>) => {
+    if (
+      !event.currentTarget.contains(event.relatedTarget as Node | null)
+    ) {
+      setIsDragActive(false);
+    }
+  };
+
+  const handleDrop = (event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    setIsDragActive(false);
+    if (!courseId || disabled || isUploading) return;
+    void handleFile(event.dataTransfer.files?.[0]);
+  };
+
   const handleRemove = async (resource: LessonResourceItem) => {
     if (disabled || isUploading || deletingResourceId) return;
 
@@ -146,38 +179,58 @@ export function LessonResourceManager({
 
   return (
     <section className="mb-3 flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-3 max-[768px]:flex-col max-[768px]:items-start">
+      <div className="flex items-center justify-between gap-3">
         <label className="flex items-center gap-1.5 text-(--text-secondary) text-[0.84rem] font-semibold">
           Lesson Resources
         </label>
-        <div className="flex items-center gap-2 max-[768px]:w-full">
-          <button
-            type="button"
-            disabled={!courseId || disabled || isUploading}
-            onClick={chooseResource}
-            style={{
-              fontSize: "0.84rem",
-              fontWeight: 600,
-            }}
-            className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) px-3 text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
-          >
-            {isUploading ? (
-              <CircleNotch size={15} className="animate-spin" />
-            ) : (
-              <Plus size={15} weight="bold" />
-            )}
-            {isUploading ? "Adding..." : "Add Resource"}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={RESOURCE_ACCEPT}
-            onChange={(event) => void handleFileChange(event)}
-            className="sr-only"
-            aria-label="Choose a lesson resource"
-          />
-        </div>
       </div>
+
+      <button
+        type="button"
+        disabled={!courseId || disabled || isUploading}
+        onClick={chooseResource}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        aria-label="Choose a lesson resource"
+        aria-busy={isUploading}
+        className={`group flex min-h-24 w-full items-center justify-center gap-3 rounded-[10px] border border-dashed px-4 py-3 text-left transition-[border-color,background-color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) disabled:cursor-not-allowed disabled:opacity-60 ${
+          isDragActive
+            ? "border-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_12%,transparent)]"
+            : "border-[color-mix(in_srgb,var(--text)_18%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] hover:border-[color-mix(in_srgb,var(--accent)_52%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))]"
+        }`}
+      >
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
+          {isUploading ? (
+            <CircleNotch size={18} className="animate-spin" />
+          ) : (
+            <UploadSimple size={18} weight="bold" />
+          )}
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-[0.82rem] font-semibold text-(--text)">
+            {isUploading
+              ? "Uploading resource..."
+              : isDragActive
+                ? "Drop resource to upload"
+                : "Drag and drop a resource here"}
+          </span>
+          <span className="mt-0.5 block truncate text-[0.72rem] text-(--muted)">
+            {isUploading
+              ? "Your upload is in progress."
+              : "or click to browse · PDF, DOCX, ZIP, images, and more"}
+          </span>
+        </span>
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={RESOURCE_ACCEPT}
+        onChange={(event) => void handleFileChange(event)}
+        className="sr-only"
+        aria-label="Choose a lesson resource"
+      />
 
       {isUploading && uploadFileName && (
         <div

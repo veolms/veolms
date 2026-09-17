@@ -16,6 +16,7 @@
 .learning-discussion-atomic-editor .atomic-cm-editor,
 .learning-discussion-atomic-editor .cm-editor {
   min-height: 100%;
+  max-height: var(--atomic-editor-max-height, 50vh);
   background: transparent;
 }
 
@@ -25,8 +26,11 @@
 
 .learning-discussion-atomic-editor .cm-scroller {
   min-height: 100%;
+  max-height: var(--atomic-editor-max-height, 50vh);
   overflow: auto;
-  overscroll-behavior: contain;
+  /* Keep native scroll chaining: the editor consumes wheel input while it
+   * can scroll, then the page takes over at either vertical boundary. */
+  overscroll-behavior: auto;
   scrollbar-width: none;
 }
 
@@ -66,19 +70,28 @@
 
   height: auto;
   min-height: var(--discussion-editor-auto-grow-min-height);
-  max-height: var(--discussion-editor-auto-grow-max-height);
+  max-height: var(
+    --atomic-editor-max-height,
+    var(--discussion-editor-auto-grow-max-height)
+  );
 }
 
 .learning-discussion-atomic-editor[data-auto-grow="true"] .atomic-cm-editor,
 .learning-discussion-atomic-editor[data-auto-grow="true"] .cm-editor {
   height: auto;
   min-height: var(--discussion-editor-auto-grow-min-height);
-  max-height: var(--discussion-editor-auto-grow-max-height);
+  max-height: var(
+    --atomic-editor-max-height,
+    var(--discussion-editor-auto-grow-max-height)
+  );
 }
 
 .learning-discussion-atomic-editor[data-auto-grow="true"] .cm-scroller {
   min-height: var(--discussion-editor-auto-grow-min-height);
-  max-height: var(--discussion-editor-auto-grow-max-height);
+  max-height: var(
+    --atomic-editor-max-height,
+    var(--discussion-editor-auto-grow-max-height)
+  );
   overflow-y: auto;
 }
 
