@@ -143,7 +143,7 @@ export function CommentComposer({
     window.setTimeout(() => editorController?.focus(), 0);
   };
 
-  const detectedUrl = extractFirstUrl(draft.content);
+  const detectedUrl = extractFirstUrl(draft.markdown);
   const [dismissedUrl, setDismissedUrl] = useState<string | null>(null);
   const activeUrl = detectedUrl && detectedUrl !== dismissedUrl ? detectedUrl : null;
   const { data: linkPreview } = useLinkPreview(activeUrl);
