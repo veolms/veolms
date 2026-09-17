@@ -1,7 +1,11 @@
 import crypto from "node:crypto";
 
 import type { Database } from "@veolms/database";
-import type { ProfileUpdateRequest } from "@veolms/contracts";
+import type {
+  AvatarUploadCompleteRequest,
+  AvatarUploadPresignRequest,
+  ProfileUpdateRequest,
+} from "@veolms/contracts";
 import { buildDicebearSvgUrl, DEFAULT_AVATAR_STYLE } from "@veolms/contracts";
 import type { S3StorageService } from "@veolms/storage";
 import { sql, type Kysely } from "kysely";
@@ -20,12 +24,40 @@ import type { OtpService } from "../otp/otp.service.ts";
 import type { SessionService } from "../session/session.service.ts";
 import { normalizePhoneNumber } from "../shared/auth.utils.ts";
 import {
+  AVATAR_CONTENT_TYPES,
+  AVATAR_UPLOAD_MAX_BYTES,
+  avatarCdnUrl,
+  avatarOriginalKey,
+  detectImageContentType,
   isStoredAvatarUrl,
+  removeAvatarVariants,
+  removeOtherAvatarOriginals,
   removeAvatar,
   storeAvatarBuffer,
   storeAvatarFromUrl,
 } from "../../avatars/index.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
+
+const AVATAR_VALIDATION_RANGE = "bytes=0-31";
+
+async function readObjectPrefix(
+  body: AsyncIterable<Uint8Array>,
+  maxBytes: number,
+): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let remaining = maxBytes;
+
+  for await (const chunk of body) {
+    if (remaining <= 0) break;
+    const bytes = Buffer.from(chunk).subarray(0, remaining);
+    if (bytes.length > 0) {
+      chunks.push(bytes);
+      remaining -= bytes.length;
+    }
+  }
+
+  return Buffer.concat(chunks);
+}
 
 export interface AuthServiceOptions {
   database: Kysely<Database>;
@@ -48,6 +80,37 @@ export function createAuthService({
    * own CDN, so this is just the deterministic default URL for a new user. */
   function defaultAvatarUrl(seed: string): string {
     return buildDicebearSvgUrl(DEFAULT_AVATAR_STYLE, seed);
+  }
+
+  function requireAvatarStorage(): S3StorageService {
+    if (!storage) {
+      throw new AppError(
+        500,
+        "CONFIG_ERROR",
+        "AuthService requires storage to upload an avatar photo.",
+      );
+    }
+    return storage;
+  }
+
+  function validateAvatarUpload(input: {
+    contentType: string;
+    fileSize: number;
+  }): void {
+    if (!AVATAR_CONTENT_TYPES.has(input.contentType)) {
+      throw new AppError(
+        400,
+        "INVALID_AVATAR_FILE",
+        "Choose a JPEG, PNG, WebP, or GIF image.",
+      );
+    }
+    if (input.fileSize > AVATAR_UPLOAD_MAX_BYTES) {
+      throw new AppError(
+        413,
+        "AVATAR_FILE_TOO_LARGE",
+        "The avatar file must be 2 MB or smaller.",
+      );
+    }
   }
 
   function findUserById(userId: string) {
@@ -130,33 +193,33 @@ export function createAuthService({
     return userRepository.usernameExists(database, username);
   }
 
-const avatarMutationLocks = new Map<string, Promise<unknown>>();
+  const avatarMutationLocks = new Map<string, Promise<unknown>>();
 
-async function withAvatarLock<T>(
-  userId: string,
-  fn: () => Promise<T>,
-): Promise<T> {
-  const previous = avatarMutationLocks.get(userId) ?? Promise.resolve();
-  let resolveCurrent: () => void;
-  const current = new Promise<void>((resolve) => {
-    resolveCurrent = resolve;
-  });
-  const chain = previous.then(
-    () => current,
-    () => current,
-  );
-  avatarMutationLocks.set(userId, chain);
+  async function withAvatarLock<T>(
+    userId: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const previous = avatarMutationLocks.get(userId) ?? Promise.resolve();
+    let resolveCurrent: () => void;
+    const current = new Promise<void>((resolve) => {
+      resolveCurrent = resolve;
+    });
+    const chain = previous.then(
+      () => current,
+      () => current,
+    );
+    avatarMutationLocks.set(userId, chain);
 
-  try {
-    await previous.catch(() => {});
-    return await fn();
-  } finally {
-    resolveCurrent!();
-    if (avatarMutationLocks.get(userId) === chain) {
-      avatarMutationLocks.delete(userId);
+    try {
+      await previous.catch(() => {});
+      return await fn();
+    } finally {
+      resolveCurrent!();
+      if (avatarMutationLocks.get(userId) === chain) {
+        avatarMutationLocks.delete(userId);
+      }
     }
   }
-}
 
   async function updateProfile(userId: string, input: ProfileUpdateRequest) {
     const username = input.username?.trim().toLowerCase();
@@ -170,7 +233,11 @@ async function withAvatarLock<T>(
     const performUpdate = async () => {
       const currentUser = await userRepository.findUserById(database, userId);
       if (!currentUser) {
-        throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+        throw new AppError(
+          404,
+          "USER_NOT_FOUND",
+          "User account was not found.",
+        );
       }
 
       const linkedinUrl =
@@ -216,7 +283,8 @@ async function withAvatarLock<T>(
             }
           : {}),
         ...(input.linkedinUrl !== undefined ? { linkedinUrl } : {}),
-        ...(input.linkedinPublic !== undefined || input.linkedinUrl !== undefined
+        ...(input.linkedinPublic !== undefined ||
+        input.linkedinUrl !== undefined
           ? {
               linkedinPublic: Boolean(
                 (input.linkedinPublic ?? currentUser.linkedin_public) &&
@@ -236,20 +304,23 @@ async function withAvatarLock<T>(
         ...(input.websitePublic !== undefined || input.websiteUrl !== undefined
           ? {
               websitePublic: Boolean(
-                (input.websitePublic ?? currentUser.website_public) && websiteUrl,
+                (input.websitePublic ?? currentUser.website_public) &&
+                websiteUrl,
               ),
             }
           : {}),
       });
 
       if (!user) {
-        throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+        throw new AppError(
+          404,
+          "USER_NOT_FOUND",
+          "User account was not found.",
+        );
       }
 
-      // Moving away from an R2-hosted avatar (e.g. onto a DiceBear pick, or
-      // clearing it) leaves the old object orphaned in storage unless we clean
-      // it up here. A fresh upload/provider photo overwrites the same fixed
-      // key in place, so no cleanup is needed on that path.
+      // Remove the stored avatar files when the profile changes to a DiceBear
+      // avatar or is cleared.
       if (
         storage &&
         input.avatarDataUrl !== undefined &&
@@ -726,34 +797,122 @@ async function withAvatarLock<T>(
     return user as SessionUser;
   }
 
-  /** Stores a manually uploaded photo in R2 and persists the served URL,
-   * reusing the same fixed per-user key an OAuth-downloaded photo would use
-   * — so re-uploading just overwrites the previous one in place. */
-  async function uploadAvatarPhoto(
+  /** Issues a direct-to-storage upload URL for the user's flat avatar key. */
+  async function presignAvatarUpload(
     userId: string,
-    data: Buffer,
-    contentType: string,
+    input: AvatarUploadPresignRequest,
   ) {
-    if (!storage) {
-      throw new AppError(
-        500,
-        "CONFIG_ERROR",
-        "AuthService requires storage to upload an avatar photo.",
-      );
-    }
+    validateAvatarUpload(input);
+    const avatarStorage = requireAvatarStorage();
+    await avatarStorage.ensureBucketCors();
+    const uploadUrl = await avatarStorage.getPresignedPutUrl(
+      avatarOriginalKey(userId, input.contentType),
+      input.contentType,
+      input.fileSize,
+    );
+
+    return { uploadUrl };
+  }
+
+  /** Confirms the direct upload, then stores the canonical CDN variant URL. */
+  async function completeAvatarUpload(
+    userId: string,
+    input: AvatarUploadCompleteRequest,
+  ) {
+    validateAvatarUpload(input);
+    const avatarStorage = requireAvatarStorage();
 
     return withAvatarLock(userId, async () => {
-      const avatarDataUrl = await storeAvatarBuffer(
-        storage,
+      const storageKey = avatarOriginalKey(userId, input.contentType);
+      const discardUploadedAvatar = async (): Promise<void> => {
+        await avatarStorage.deleteObject(storageKey).catch(() => undefined);
+      };
+      const metadata = await avatarStorage.headObject(storageKey);
+      if (!metadata) {
+        await discardUploadedAvatar();
+        throw new AppError(
+          400,
+          "FILE_NOT_FOUND",
+          "File could not be found in storage.",
+        );
+      }
+
+      if (
+        metadata.contentLength !== undefined &&
+        metadata.contentLength !== input.fileSize
+      ) {
+        await discardUploadedAvatar();
+        throw new AppError(
+          400,
+          "FILE_SIZE_MISMATCH",
+          "Uploaded file size does not match presigned size.",
+        );
+      }
+
+      if (
+        metadata.contentType !== undefined &&
+        metadata.contentType !== input.contentType
+      ) {
+        await discardUploadedAvatar();
+        throw new AppError(
+          400,
+          "INVALID_AVATAR_FILE",
+          "Uploaded avatar content type does not match the presigned upload.",
+        );
+      }
+
+      try {
+        const object = await avatarStorage.getObject(storageKey, {
+          range: AVATAR_VALIDATION_RANGE,
+        });
+        if (!object) {
+          throw new AppError(
+            400,
+            "FILE_NOT_FOUND",
+            "File could not be found in storage.",
+          );
+        }
+
+        const detectedType = detectImageContentType(
+          await readObjectPrefix(object.body, 32),
+        );
+        if (detectedType !== input.contentType) {
+          throw new AppError(
+            400,
+            "INVALID_AVATAR_FILE",
+            "Uploaded avatar bytes do not match the selected image type.",
+          );
+        }
+      } catch (error) {
+        await discardUploadedAvatar();
+        throw error;
+      }
+
+      const avatarDataUrl = avatarCdnUrl(avatarStorage, userId);
+      if (!avatarDataUrl) {
+        throw new AppError(
+          503,
+          "CDN_NOT_CONFIGURED",
+          "Avatar CDN delivery is not configured.",
+        );
+      }
+
+      await removeAvatarVariants(avatarStorage, userId);
+      await removeOtherAvatarOriginals(
+        avatarStorage,
         userId,
-        data,
-        contentType,
+        input.contentType,
       );
+
       const user = await userRepository.updateUserProfile(database, userId, {
         avatarDataUrl,
       });
       if (!user) {
-        throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+        throw new AppError(
+          404,
+          "USER_NOT_FOUND",
+          "User account was not found.",
+        );
       }
 
       const roles = await getUserRoles(userId);
@@ -774,7 +933,8 @@ async function withAvatarLock<T>(
     countUsers,
     usernameExists,
     updateProfile,
-    uploadAvatarPhoto,
+    presignAvatarUpload,
+    completeAvatarUpload,
     sendPhoneVerificationOtp,
     verifyPhoneNumber,
     sendEmailVerificationOtp,

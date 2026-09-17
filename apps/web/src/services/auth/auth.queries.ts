@@ -8,6 +8,9 @@ import type { ApiError } from "../../lib/api-error";
 import { authStore } from "../../store/auth.store";
 import { authKeys } from "./auth.keys";
 import { authService } from "./auth.service";
+import { interactionCreationCoordinator } from "../learning-interactions/interaction-creation-coordinator";
+import { desiredStateCoordinator } from "../learning-interactions/desired-state-coordinator";
+import { optimisticDeletionCoordinator } from "../learning-interactions/optimistic-deletion-coordinator";
 
 export function currentUserQueryOptions(queryClient: QueryClient) {
   return {
@@ -29,6 +32,9 @@ export function currentUserQueryOptions(queryClient: QueryClient) {
         authStore.setUser(profile);
       } else {
         authStore.clearAuth();
+        desiredStateCoordinator.reset();
+        interactionCreationCoordinator.reset();
+        optimisticDeletionCoordinator.reset();
       }
 
       return profile;

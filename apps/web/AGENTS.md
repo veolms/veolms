@@ -111,9 +111,9 @@ Always import DTO request/response types and schemas from `@veolms/contracts`. D
 ## 2. Required UI & Component Architecture
 
 - Organize code by feature or product module, not by file type alone.
-- Keep React components, hooks, utilities, tests, and exceptional styles close to the feature that owns them.
+- Keep React components, hooks, utilities, and exceptional styles close to the feature that owns them.
 - Build features from small, focused components with one clear responsibility.
-- Split large React, TypeScript, and JavaScript files before they become difficult to understand, test, or review.
+- Split large React, TypeScript, and JavaScript files before they become difficult to understand or review.
 - Extract repeated UI patterns into reusable components. Do not copy the same markup or long Tailwind class lists across multiple screens.
 - Keep feature-specific behavior inside the feature. Move code into shared modules only when it is genuinely reused by multiple features.
 - Prefer explicit component APIs and typed variants over scattered conditional class strings.
@@ -172,10 +172,10 @@ When an exception is necessary:
 
 - Preserve existing UI, behavior, accessibility, responsiveness, and performance unless the task explicitly changes them.
 - Avoid monolithic components and catch-all feature files.
-- Keep state and side effects as close as possible to the feature that owns them; extract focused hooks when logic becomes independently testable or reusable.
+- Keep state and side effects as close as possible to the feature that owns them; extract focused hooks when logic becomes independently reusable or maintainable.
 - Use semantic names based on product behavior, not visual accidents or temporary implementation details.
 - Avoid hidden coupling between features, broad selectors, and imports that cause one module's styling or behavior to leak into another.
-- Add or update focused tests for changed behavior. Run the relevant typecheck, lint, and tests before completing the work.
+- Do not create, restore, or update unit-test cases for frontend work. Validate changes with the relevant typecheck, lint, build, and existing Playwright E2E checks when applicable.
 
 ## Manual commit verification
 

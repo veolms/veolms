@@ -1,8 +1,29 @@
 import { sql, type Kysely, type Selectable } from "kysely";
-import type { Database, ImageJobTable, Json } from "./schema.ts";
+import type {
+  Database,
+  DatabaseExecutor,
+  ImageJobTable,
+  Json,
+} from "./schema.ts";
 
-export async function enqueueImageJob(db: Kysely<Database>, values: { id: string; media_id: string }): Promise<void> {
-  await db.insertInto("image_jobs").values({ ...values, status: "queued", attempts: 0 }).onConflict((oc) => oc.column("media_id").doUpdateSet({ status: "queued", error_message: null, completed_at: null, updated_at: new Date() })).execute();
+export async function enqueueImageJob(
+  db: DatabaseExecutor,
+  values: { id: string; media_id: string },
+): Promise<void> {
+  await db
+    .insertInto("image_jobs")
+    .values({ ...values, status: "queued", attempts: 0 })
+    .onConflict((oc) =>
+      oc
+        .column("media_id")
+        .doUpdateSet({
+          status: "queued",
+          error_message: null,
+          completed_at: null,
+          updated_at: new Date(),
+        }),
+    )
+    .execute();
 }
 
 export async function claimNextQueuedImageJob(db: Kysely<Database>): Promise<Selectable<ImageJobTable> | null> {

@@ -48,6 +48,8 @@ export const learningThreadAttachmentSummarySchema = z.object({
   fileUrl: z.string().min(1),
   mimeType: z.string().min(1),
   fileSize: z.number().int().nonnegative(),
+  width: z.number().int().positive().nullable().optional(),
+  height: z.number().int().positive().nullable().optional(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 export type LearningThreadAttachmentSummary = z.infer<

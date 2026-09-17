@@ -18,7 +18,8 @@ export const toggleLikeResponseSchema = z.object({
 export type ToggleLikeResponse = z.infer<typeof toggleLikeResponseSchema>;
 
 export const toggleBookmarkResponseSchema = z.object({
-  threadId: z.uuid(),
+  threadId: z.uuid().optional(),
+  noteId: z.uuid().optional(),
   bookmarked: z.boolean(),
 });
 export type ToggleBookmarkResponse = z.infer<

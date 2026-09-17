@@ -1,16 +1,59 @@
-import type { DiscussionEditorCommands } from "./commands";
 import {
-  localDiscussionAttachmentStorage,
-  type DiscussionAttachmentStorage,
-} from "./image-storage";
+  createLocalComposerAttachment,
+  type LocalComposerAttachment,
+} from "../../services/learning-interactions/attachment-model";
 
-const MAX_IMAGE_BYTES = 1_500_000;
-const MAX_VIDEO_BYTES = 50_000_000;
+const MAX_ATTACHMENT_BYTES = 50_000_000;
 
 export interface DiscussionAttachmentResult {
-  inserted: boolean;
+  accepted: boolean;
   message: string | null;
+  attachment?: LocalComposerAttachment;
 }
+
+const ALLOWED_MIME_PATTERNS = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "application/json",
+];
+
+const ALLOWED_EXTENSIONS = [
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".gif",
+  ".webp",
+  ".mp4",
+  ".mov",
+  ".webm",
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
+  ".txt",
+  ".text",
+  ".md",
+  ".csv",
+  ".json",
+];
 
 export function getClipboardMediaFiles(
   clipboardData: DataTransfer | null,
@@ -18,58 +61,41 @@ export function getClipboardMediaFiles(
   if (!clipboardData) return [];
 
   const itemFiles = Array.from(clipboardData.items)
-    .filter(
-      (item) =>
-        item.kind === "file" &&
-        (item.type.startsWith("image/") || item.type.startsWith("video/")),
-    )
+    .filter((item) => item.kind === "file")
     .map((item) => item.getAsFile())
     .filter((file): file is File => Boolean(file));
 
   if (itemFiles.length > 0) return itemFiles;
-  return Array.from(clipboardData.files).filter(
-    (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
-  );
+  return Array.from(clipboardData.files);
 }
 
-export async function insertDiscussionAttachment(
-  commands: DiscussionEditorCommands,
+export async function selectDiscussionAttachment(
   file: File,
-  storage: DiscussionAttachmentStorage = localDiscussionAttachmentStorage,
 ): Promise<DiscussionAttachmentResult> {
   const validationMessage = validateAttachment(file);
-  if (validationMessage) return { inserted: false, message: validationMessage };
+  if (validationMessage) return { accepted: false, message: validationMessage };
 
-  try {
-    const stored = await storage.upload(file);
-    const escapedName = escapeMarkdownLabel(
-      file.name ||
-        stored.fileName ||
-        (stored.mediaType === "image" ? "Image" : "Video"),
-    );
-    const alt =
-      stored.mediaType === "video" ? `video: ${escapedName}` : escapedName;
-    commands.insertMarkdown(`\n![${alt}](${stored.url})\n`);
-    return { inserted: true, message: null };
-  } catch {
-    return {
-      inserted: false,
-      message: `That ${file.type.startsWith("video/") ? "video" : "image"} could not be uploaded. Please try again.`,
-    };
+  return {
+    accepted: true,
+    message: null,
+    attachment: await createLocalComposerAttachment(file),
+  };
+}
+
+function validateAttachment(file: File): string | null {
+  const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
+  const mimeType = file.type.toLowerCase();
+
+  const isMimeAllowed = ALLOWED_MIME_PATTERNS.includes(mimeType);
+  const isExtAllowed = ALLOWED_EXTENSIONS.includes(ext);
+
+  if (!isMimeAllowed && !isExtAllowed) {
+    return "Choose a supported image, video, document, or code file.";
   }
-}
 
-function validateAttachment(file: File) {
-  const isImage = file.type.startsWith("image/");
-  const isVideo = file.type.startsWith("video/");
-  if (!isImage && !isVideo) return "Choose an image or video file.";
-  if (isImage && file.size > MAX_IMAGE_BYTES)
-    return "Images must be smaller than 1.5 MB.";
-  if (isVideo && file.size > MAX_VIDEO_BYTES)
-    return "Videos must be smaller than 50 MB.";
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    return "Files must be smaller than 50 MB.";
+  }
+
   return null;
-}
-
-function escapeMarkdownLabel(value: string) {
-  return value.replace(/[\\\[\]]/g, "\\$&");
 }

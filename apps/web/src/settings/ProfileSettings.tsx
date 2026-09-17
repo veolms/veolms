@@ -29,7 +29,7 @@ import {
   CountryCodeSelect,
   getDefaultCountry,
 } from "../auth/CountryCodeSelect";
-import "../auth/auth.css";
+import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
 import { OtpCodeInput } from "../auth/OtpCodeInput";
 import {
   DEFAULT_COUNTRY_ID,
@@ -57,10 +57,17 @@ import {
   useVerifyPhoneNumber,
 } from "../services/auth";
 import { authStore, useAuthStore, type AuthUser } from "../store/auth.store";
-import { DICEBEAR_BASE_URL, type ProfileUpdateRequest } from "@veolms/contracts";
+import {
+  DICEBEAR_BASE_URL,
+  type ProfileUpdateRequest,
+} from "@veolms/contracts";
 import { CircularCheckbox } from "../components/CircularCheckbox";
 import { AutosaveStatus, useAutosync } from "../lib/autosync";
-import { authKeys, authService } from "../services/auth";
+import {
+  authKeys,
+  authService,
+  resolveAvatarUploadContentType,
+} from "../services/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { getRoleDisplayName, getUserRoles } from "../shell/workspaceRole";
 
@@ -88,6 +95,7 @@ export interface ProfileSettingsProps {
 const toEditableProfile = (profile: ProfileIdentity): EditableProfile => ({
   displayName: profile.displayName,
   avatarDataUrl: profile.avatarDataUrl,
+  avatarSrcSet: profile.avatarSrcSet,
   username: profile.username ?? "",
   bio: profile.bio ?? "",
   mobileNumber: profile.mobileNumber ?? "",
@@ -108,6 +116,7 @@ const profileIdentityFromUser = (
 ): ProfileIdentity => ({
   displayName: user?.displayName ?? "",
   avatarDataUrl: user?.avatarDataUrl ?? null,
+  avatarSrcSet: user?.avatarSrcSet ?? [],
   username: user?.username ?? "",
   bio: user?.bio ?? "",
   email: user?.email ?? "",
@@ -928,7 +937,7 @@ export function ProfileSettings({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
+    if (!resolveAvatarUploadContentType(file)) {
       setPhotoError("Choose an image file and try again.");
       return;
     }
@@ -948,7 +957,11 @@ export function ProfileSettings({
         if (authStore.getState().user?.id !== activeUserId) return;
         authStore.setUser(updated);
         queryClient.setQueryData(authKeys.me(), updated);
-        mergeFromServer({ avatarDataUrl: updated.avatarDataUrl });
+        setAvatarFailed(false);
+        mergeFromServer({
+          avatarDataUrl: updated.avatarDataUrl,
+          avatarSrcSet: updated.avatarSrcSet,
+        });
       })
       .catch((error: unknown) => {
         if (authStore.getState().user?.id !== activeUserId) return;
@@ -974,11 +987,15 @@ export function ProfileSettings({
           onError={() => setAvatarFailed(true)}
         />
       ) : showAvatar ? (
-        <img
+        <ResponsiveAvatar
           src={draftProfile.avatarDataUrl ?? undefined}
+          srcSet={draftProfile.avatarSrcSet}
+          sizes="116px"
           alt=""
           width={160}
           height={160}
+          loading="eager"
+          fetchPriority="high"
           onError={() => setAvatarFailed(true)}
         />
       ) : (
@@ -1856,7 +1873,11 @@ export function ProfileSettings({
           seed={activeUser?.id ?? ""}
           onClose={() => setAvatarPickerOpen(false)}
           onSelect={(avatarUrl) => {
-            update((current) => ({ ...current, avatarDataUrl: avatarUrl }));
+            update((current) => ({
+              ...current,
+              avatarDataUrl: avatarUrl,
+              avatarSrcSet: [],
+            }));
             setPhotoError("");
           }}
         />

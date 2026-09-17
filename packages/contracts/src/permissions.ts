@@ -76,7 +76,7 @@ export const permissionSchema = z.enum(
  * Standard system role keys
  */
 export const systemRoleKeys = [
-  "platform_admin",
+  "admin",
   "course_manager",
   "content_editor",
   "thumbnail_editor",
@@ -202,7 +202,6 @@ export const roleAssignmentSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
   roleId: z.string().uuid(),
-  roleKey: z.string().nullable().optional(),
   roleName: z.string(),
   scopeType: scopeTypeSchema,
   courseId: z.string().uuid().nullable().optional(),

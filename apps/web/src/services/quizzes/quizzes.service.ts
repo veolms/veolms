@@ -17,6 +17,7 @@ import {
   type BulkQuizAnswersRequest,
   type CreateQuizQuestionRequest,
   type CreateQuizRequest,
+  type CreateQuizWithQuestionsRequest,
   type UpdateQuizAssignmentRequest,
   type UpdateQuizQuestionRequest,
   type UpdateQuizRequest,
@@ -31,6 +32,10 @@ export const quizzesService = {
     ),
   create: async (payload: CreateQuizRequest) =>
     quizSchema.parse(await api.post<unknown>("/quizzes", payload)),
+  createWithQuestions: async (payload: CreateQuizWithQuestionsRequest) =>
+    quizSchema.parse(
+      await api.post<unknown>("/quizzes/complete", payload),
+    ),
   update: async (id: string, payload: UpdateQuizRequest) =>
     quizSchema.parse(
       await api.patch<unknown>(`/quizzes/${encodeURIComponent(id)}`, payload),

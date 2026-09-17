@@ -5,9 +5,6 @@ export const discussionService = {
   uploadAttachment(file: File): Promise<DiscussionUploadResponse> {
     const formData = new FormData();
     formData.append("file", file, file.name);
-    return api.post<DiscussionUploadResponse>(
-      "/dev/discussion-uploads",
-      formData,
-    );
+    return api.post<DiscussionUploadResponse>("/attachments/upload", formData);
   },
 };

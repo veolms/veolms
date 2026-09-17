@@ -1,5 +1,7 @@
 import type { Database, DatabaseExecutor } from "@veolms/database";
 import type { ExpressionBuilder } from "kysely";
+import type { DiscussionVisibility } from "@veolms/contracts";
+import { findSettingsByCourseId } from "../../../courses/configuration/configuration.repository.ts";
 import { createAccessService } from "../../../access/index.ts";
 import { ADMIN_ROLE } from "../../../auth/index.ts";
 import { httpError } from "../../../../lib/errors.ts";
@@ -47,6 +49,12 @@ export interface ThreadAccessTarget {
   isLocked?: boolean;
 }
 
+export interface NoteAccessTarget {
+  userId: string;
+  courseId: string;
+  visibility: DiscussionVisibility;
+}
+
 export interface DiscussionAccess {
   canAccessCourse(
     db: DatabaseExecutor,
@@ -58,6 +66,23 @@ export interface DiscussionAccess {
     actor: DiscussionActor,
     courseId: string,
   ): Promise<void>;
+  assertNotesEnabled(
+    db: DatabaseExecutor,
+    courseId: string,
+  ): Promise<void>;
+  assertCommentsEnabled(
+    db: DatabaseExecutor,
+    courseId: string,
+  ): Promise<void>;
+  assertQaEnabled(
+    db: DatabaseExecutor,
+    courseId: string,
+  ): Promise<void>;
+  assertThreadKindEnabled(
+    db: DatabaseExecutor,
+    courseId: string,
+    kind: string,
+  ): Promise<void>;
   assertCanAccessThreadCourse(
     db: DatabaseExecutor,
     actor: DiscussionActor,
@@ -67,6 +92,12 @@ export interface DiscussionAccess {
     db: DatabaseExecutor,
     actor: DiscussionActor,
     thread: ThreadAccessTarget,
+  ): Promise<void>;
+  assertCanAccessNote(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+    note: NoteAccessTarget,
+    maskedNotFoundError?: unknown,
   ): Promise<void>;
   assertThreadIsActive(thread: ThreadAccessTarget): void;
   assertReplyIsActive(reply: { status?: string }): void;
@@ -84,7 +115,7 @@ export interface DiscussionAccess {
   listCourseParticipantIds(
     db: DatabaseExecutor,
     courseId: string,
-  ): Promise<string[]>;
+  ): Promise<readonly string[] | "all">;
   canModerateCourse(
     db: DatabaseExecutor,
     actor: DiscussionActor,
@@ -173,6 +204,47 @@ export function createDiscussionAccess(): DiscussionAccess {
       }
     },
 
+    async assertNotesEnabled(db, courseId) {
+      const settings = await findSettingsByCourseId(db, courseId);
+      if (settings && settings.allow_notes === false) {
+        throw DiscussionErrors.notesDisabled();
+      }
+    },
+
+    async assertCommentsEnabled(db, courseId) {
+      const settings = await findSettingsByCourseId(db, courseId);
+      if (settings && settings.allow_comments === false) {
+        throw DiscussionErrors.commentsDisabled();
+      }
+    },
+
+    async assertQaEnabled(db, courseId) {
+      const settings = await findSettingsByCourseId(db, courseId);
+      if (settings && settings.allow_qa === false) {
+        throw DiscussionErrors.qaDisabled();
+      }
+    },
+
+    async assertThreadKindEnabled(db, courseId, kind) {
+      const normalized = kind === "qna" ? "question" : kind;
+      if (normalized === "question") {
+        const settings = await findSettingsByCourseId(db, courseId);
+        if (settings && settings.allow_qa === false) {
+          throw DiscussionErrors.qaDisabled();
+        }
+      } else if (normalized === "comment") {
+        const settings = await findSettingsByCourseId(db, courseId);
+        if (settings && settings.allow_comments === false) {
+          throw DiscussionErrors.commentsDisabled();
+        }
+      } else if (normalized === "note") {
+        const settings = await findSettingsByCourseId(db, courseId);
+        if (settings && settings.allow_notes === false) {
+          throw DiscussionErrors.notesDisabled();
+        }
+      }
+    },
+
     async assertCanAccessThreadCourse(db, actor, courseId) {
       const allowed = await canAccessCourse(db, actor, courseId);
       if (!allowed) {
@@ -196,6 +268,22 @@ export function createDiscussionAccess(): DiscussionAccess {
         if (!staff) {
           throw DiscussionErrors.notFound("Discussion thread");
         }
+      }
+    },
+
+    async assertCanAccessNote(db, actor, note, maskedNotFoundError) {
+      const isOwner = note.userId === actor.userId;
+      if (isOwner) {
+        return;
+      }
+
+      if (note.visibility === "private") {
+        throw maskedNotFoundError ?? DiscussionErrors.noteNotFound();
+      }
+
+      const allowed = await canAccessCourse(db, actor, note.courseId);
+      if (!allowed) {
+        throw DiscussionErrors.courseAccessDenied();
       }
     },
 
@@ -278,14 +366,66 @@ export function createDiscussionAccess(): DiscussionAccess {
     },
 
     async listCourseParticipantIds(db, courseId) {
-      const memberIds = await access.listActiveUserIdsForCourse(db, courseId);
-      const ids = new Set(memberIds);
       const course = await db
-        .selectFrom("courses")
-        .select("creator_id")
-        .where("id", "=", courseId)
+        .selectFrom("courses as c")
+        .leftJoin("course_access_rules as ar", "ar.course_id", "c.id")
+        .leftJoin("course_pricing as p", "p.course_id", "c.id")
+        .select((eb) => [
+          "c.id",
+          "c.creator_id",
+          "c.status",
+          isOpenCourseAccess(eb).as("isOpen"),
+        ])
+        .where("c.id", "=", courseId)
+        .where("c.deleted_at", "is", null)
         .executeTakeFirst();
-      if (course?.creator_id) ids.add(course.creator_id);
+
+      if (course && course.status === "published" && course.isOpen) {
+        return "all";
+      }
+
+      const ids = new Set<string>();
+      if (course?.creator_id) {
+        ids.add(course.creator_id);
+      }
+
+      const grantMemberIds = await access.listActiveUserIdsForCourse(db, courseId);
+      for (const id of grantMemberIds) ids.add(id);
+
+      const now = new Date();
+      const enrollments = await db
+        .selectFrom("enrollments")
+        .select("user_id")
+        .where("course_id", "=", courseId)
+        .where("status", "=", "active")
+        .where((eb) =>
+          eb.or([
+            eb("access_expires_at", "is", null),
+            eb("access_expires_at", ">", now),
+          ]),
+        )
+        .execute();
+      for (const row of enrollments) ids.add(row.user_id);
+
+      const roles = await db
+        .selectFrom("role_assignments")
+        .select("user_id")
+        .where((eb) =>
+          eb.or([
+            eb("course_id", "=", courseId),
+            eb("scope_type", "=", "platform"),
+          ]),
+        )
+        .execute();
+      for (const row of roles) ids.add(row.user_id);
+
+      const threadAuthors = await db
+        .selectFrom("learning_threads")
+        .select("user_id")
+        .where("course_id", "=", courseId)
+        .execute();
+      for (const row of threadAuthors) ids.add(row.user_id);
+
       return [...ids];
     },
 
@@ -330,3 +470,14 @@ export function discussionActor(user: {
 }): DiscussionActor {
   return { userId: user.id, roles: user.roles };
 }
+
+export async function assertCanAccessNote(
+  db: DatabaseExecutor,
+  actor: DiscussionActor,
+  note: NoteAccessTarget,
+  maskedNotFoundError?: unknown,
+): Promise<void> {
+  const access = createDiscussionAccess();
+  return access.assertCanAccessNote(db, actor, note, maskedNotFoundError);
+}
+

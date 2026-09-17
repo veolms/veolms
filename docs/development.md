@@ -135,15 +135,32 @@ domain. `.m3u8` files are public, while non-manifest objects in
 `CDN_PRIVATE_FOLDERS` require the short-lived `veo_token` issued by the API.
 `CDN_TOKEN_TTL_SECONDS` controls normal protected-media URLs and
 `CDN_HLS_TOKEN_TTL_SECONDS` controls protected HLS segment URLs.
-New direct uploads use `public/...` or `protected/...` keys. Existing legacy
+New direct uploads use `public/...` or `protected/...` keys. Course thumbnail
+assets use a flat per-asset layout:
+
+```text
+public/thumbnails/<mediaId>/original.<extension>
+public/thumbnails/<mediaId>/full.webp
+public/thumbnails/<mediaId>/<width>.webp
+```
+
+Protected thumbnails use the same layout below `protected/`. Existing legacy
 `thumbnails/...`, `media/...`, and `transcoded/...` keys remain supported by
 the Worker defaults. Newly generated HLS output uses
 `public/transcoded/<mediaId>/` or `protected/transcoded/<mediaId>/`; the
 manifest is `master.m3u8` inside that prefix.
-Profile avatars use `public/avatars/<userId>`, while authenticated discussion
-attachments use `protected/discussion-uploads/<fileName>`. The API still reads
-legacy avatar keys for compatibility, but discussion attachments use only the
-protected path.
+Profile avatars use CDN-served flat per-user keys:
+
+```text
+public/avatars/<userId>/original.<extension>
+public/avatars/<userId>/<width>.webp
+```
+
+The API stores the 160px CDN URL and returns the 45px, 96px, and 160px source
+set. The CDN/image-transform Worker creates missing WebP variants. Manual
+avatar uploads use `POST /auth/me/avatar/presign`, a browser `PUT` to the
+returned storage URL, and `POST /auth/me/avatar/complete`. Authenticated
+discussion attachments use `protected/discussion-uploads/<fileName>`.
 
 ## Development UI deployment
 

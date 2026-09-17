@@ -125,7 +125,7 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/attachments/link-preview",
     {
-      preHandler: permissions.authenticate,
+      preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "getLearningLinkPreview",
         tags: ["Learning Attachments"],
@@ -134,6 +134,7 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse("Link preview metadata", linkPreviewResponseSchema),
           400: errorResponse("Invalid URL"),
+          401: errorResponse("Unauthorized"),
         },
       },
     },

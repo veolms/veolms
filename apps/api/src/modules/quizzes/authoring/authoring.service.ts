@@ -3,6 +3,7 @@ import type { Database, DatabaseExecutor } from "@veolms/database";
 import type {
   CreateQuizQuestionRequest,
   CreateQuizRequest,
+  CreateQuizWithQuestionsRequest,
   UpdateQuizQuestionRequest,
   UpdateQuizRequest,
 } from "@veolms/contracts";
@@ -113,6 +114,70 @@ export function createAuthoringService(options: QuizServiceOptions) {
         published_at: null,
       });
     });
+    return getQuiz(actor, quizId);
+  }
+
+  async function createQuizWithQuestions(
+    actor: QuizActor,
+    payload: CreateQuizWithQuestionsRequest,
+  ) {
+    for (const question of payload.questions) {
+      validateQuestionPayload(question);
+    }
+
+    const now = new Date();
+    const quizId = crypto.randomUUID();
+    const versionId = crypto.randomUUID();
+    const questionRows = payload.questions.map((question, position) => ({
+      id: crypto.randomUUID(),
+      quiz_version_id: versionId,
+      question_type: question.questionType,
+      prompt: question.prompt,
+      points: question.points,
+      position: question.position ?? position,
+      configuration: {},
+      explanation: question.explanation ?? null,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+    }));
+    const optionRows = payload.questions.flatMap((question, questionIndex) =>
+      question.options.map((option, position) => ({
+        id: option.id ?? crypto.randomUUID(),
+        question_id: questionRows[questionIndex]!.id,
+        option_text: option.text,
+        is_correct: option.isCorrect,
+        weight: option.weight ?? (option.isCorrect ? 1 : 0),
+        position: option.position ?? position,
+        created_at: now,
+        updated_at: now,
+      })),
+    );
+
+    await database.transaction().execute(async (trx) => {
+      await repo.insertQuiz(trx, {
+        id: quizId,
+        academy_id: await academyId(),
+        creator_id: actor.id,
+        title: payload.title,
+        description: payload.description ?? null,
+        status: "draft",
+        created_at: now,
+        updated_at: now,
+        deleted_at: null,
+      });
+      await repo.insertVersion(trx, {
+        id: versionId,
+        quiz_id: quizId,
+        version_number: 1,
+        instructions: payload.instructions ?? null,
+        created_at: now,
+        published_at: null,
+      });
+      await repo.insertQuestions(trx, questionRows);
+      await repo.insertOptions(trx, optionRows);
+    });
+
     return getQuiz(actor, quizId);
   }
 
@@ -503,6 +568,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
 
   return {
     createQuiz,
+    createQuizWithQuestions,
     listMine,
     getQuiz,
     updateQuiz,

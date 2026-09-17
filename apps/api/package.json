@@ -10,7 +10,7 @@
     "purge:quiz-attempts": "node --env-file-if-exists=../../.env src/jobs/quiz-attempt-reaper.ts",
     "notifications:process": "node --env-file-if-exists=../../.env src/jobs/notification-worker.ts",
     "notifications:watch": "node --env-file-if-exists=../../.env src/jobs/notification-worker.ts --watch",
-    "instructor:cli": "node --env-file-if-exists=../../.env src/cli/instructor.ts",
+    "user:cli": "node --env-file-if-exists=../../.env src/cli/user.ts",
     "import:youtube": "node --env-file-if-exists=../../.env src/cli/import-youtube.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit"

@@ -86,3 +86,58 @@
   min-height: var(--discussion-editor-auto-grow-min-height);
   padding-block: 0.625rem;
 }
+
+/* Mention autocomplete dropdown styling */
+.cm-tooltip-autocomplete {
+  background: var(--surface) !important;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent) !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.25) !important;
+  padding: 0.25rem !important;
+  min-width: 13rem !important;
+  max-width: 22rem !important;
+  overflow: hidden !important;
+  z-index: 50 !important;
+}
+
+.cm-tooltip-autocomplete > ul {
+  max-height: 12rem !important;
+  font-family: inherit !important;
+  font-size: 0.875rem !important;
+  list-style: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.cm-tooltip-autocomplete > ul > li {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 0.375rem 0.625rem !important;
+  border-radius: 0.5rem !important;
+  color: var(--text) !important;
+  cursor: pointer !important;
+  gap: 0.75rem !important;
+  transition: background-color 0.1s ease !important;
+}
+
+.cm-tooltip-autocomplete > ul > li[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent) 15%, transparent) !important;
+  color: var(--accent) !important;
+}
+
+.cm-completionLabel {
+  font-weight: 500 !important;
+  color: inherit !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.cm-completionDetail {
+  font-size: 0.75rem !important;
+  color: var(--muted) !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-style: normal !important;
+  flex-shrink: 0 !important;
+}

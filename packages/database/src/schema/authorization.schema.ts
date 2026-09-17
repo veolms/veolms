@@ -13,7 +13,6 @@ export interface PermissionTable {
 
 export interface RoleTable {
   id: string;
-  role_key: string | null;
   name: string;
   description: string | null;
   is_system: Generated<boolean>;

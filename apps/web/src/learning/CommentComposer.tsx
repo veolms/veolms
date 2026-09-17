@@ -5,6 +5,7 @@ import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/Pape
 import { useEffect, useRef, useState } from "react";
 import { CommentFormattingToolbar } from "./CommentFormattingToolbar";
 import { CommentPublishingOptions } from "./CommentPublishingOptions";
+import { DiscussionAvatar } from "./DiscussionAvatar";
 import {
   type DiscussionEntryKind,
   type DiscussionVisibility,
@@ -15,6 +16,19 @@ import {
   type DiscussionEditorController,
 } from "./discussion-editor/DiscussionEditor";
 import type { DiscussionFormattingState } from "./discussion-editor/commands";
+import type { InteractionCapabilities } from "./discussionFeed";
+import {
+  AttachmentComposerPreview,
+} from "./discussion-attachments";
+import { LinkPreviewCard } from "./LinkPreviewCard";
+import {
+  revokeLocalAttachmentPreview,
+  type LocalComposerAttachment,
+} from "../services/learning-interactions/attachment-model";
+import {
+  extractFirstUrl,
+  useLinkPreview,
+} from "../services/learning-interactions";
 
 interface CommentComposerProps {
   draft: DiscussionDraft;
@@ -23,14 +37,20 @@ interface CommentComposerProps {
   visibility: DiscussionVisibility;
   invalid: boolean;
   canSubmit: boolean;
+  capabilities?: InteractionCapabilities;
   editing?: boolean;
+  isSubmitting?: boolean;
+  attachments?: LocalComposerAttachment[];
+  onAttachmentsChange?: (attachments: LocalComposerAttachment[]) => void;
   onDraftChange: (value: DiscussionDraft) => void;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
-  onSubmit: () => void;
+  onSubmit: (onLocallyAccepted?: () => void) => Promise<boolean> | void;
   onClose: () => void;
+  courseId?: string;
   autoFocus?: boolean;
   presentation?: "inline" | "drawer";
+  avatar?: string | null;
 }
 
 export function CommentComposer({
@@ -40,27 +60,72 @@ export function CommentComposer({
   visibility,
   invalid,
   canSubmit,
+  capabilities,
   editing = false,
+  isSubmitting = false,
+  attachments: attachmentsProp,
+  onAttachmentsChange: onAttachmentsChangeProp,
   onDraftChange,
   onEntryKindChange,
   onVisibilityChange,
   onSubmit,
   onClose,
+  courseId,
   autoFocus = false,
   presentation = "inline",
+  avatar,
 }: CommentComposerProps) {
   const reviewHeadingRef = useRef<HTMLDivElement>(null);
   const [editorController, setEditorController] =
     useState<DiscussionEditorController | null>(null);
+  const [editorResetToken, setEditorResetToken] = useState(0);
   const [formattingState, setFormattingState] =
     useState<DiscussionFormattingState>(EMPTY_FORMATTING_STATE);
-  const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [composerStep, setComposerStep] = useState<"compose" | "publish">(
     "compose",
   );
   const [transitionDirection, setTransitionDirection] = useState<
     "forward" | "back"
   >("forward");
+  const [internalAttachments, setInternalAttachments] = useState<
+    LocalComposerAttachment[]
+  >([]);
+  const internalAttachmentsRef = useRef(internalAttachments);
+  useEffect(() => {
+    internalAttachmentsRef.current = internalAttachments;
+  }, [internalAttachments]);
+  useEffect(
+    () => () => {
+      internalAttachmentsRef.current.forEach(revokeLocalAttachmentPreview);
+    },
+    [],
+  );
+  const effectiveAttachments = attachmentsProp ?? internalAttachments;
+  const setEffectiveAttachments = (
+    next:
+      | LocalComposerAttachment[]
+      | ((prev: LocalComposerAttachment[]) => LocalComposerAttachment[]),
+  ) => {
+    if (onAttachmentsChangeProp) {
+      const resolved =
+        typeof next === "function" ? next(effectiveAttachments) : next;
+      onAttachmentsChangeProp(resolved);
+    } else {
+      setInternalAttachments(next);
+    }
+  };
+
+  const handleAttachmentSelected = (attachment: LocalComposerAttachment) => {
+    setEffectiveAttachments((prev) => [...prev, attachment]);
+  };
+
+  const handleRemoveAttachment = (id: string) => {
+    const attachment = effectiveAttachments.find((item) => item.id === id);
+    if (attachment) revokeLocalAttachmentPreview(attachment);
+    setEffectiveAttachments((prev) => prev.filter((a) => a.id !== id));
+  };
+
   useEffect(() => {
     if (composerStep !== "publish") return;
     reviewHeadingRef.current?.focus({ preventScroll: true });
@@ -76,6 +141,24 @@ export function CommentComposer({
     setTransitionDirection("back");
     setComposerStep("compose");
     window.setTimeout(() => editorController?.focus(), 0);
+  };
+
+  const detectedUrl = extractFirstUrl(draft.markdown);
+  const [dismissedUrl, setDismissedUrl] = useState<string | null>(null);
+  const activeUrl = detectedUrl && detectedUrl !== dismissedUrl ? detectedUrl : null;
+  const { data: linkPreview } = useLinkPreview(activeUrl);
+
+  const resetAfterLocalSubmit = () => {
+    // This callback is invoked only when the local optimistic create is
+    // accepted; mutation settlement must never alter a newer draft.
+    setEditorResetToken((current) => current + 1);
+    setComposerStep("compose");
+    setTransitionDirection("back");
+    setFormattingState(EMPTY_FORMATTING_STATE);
+    setAttachmentError(null);
+    setInternalAttachments([]);
+    setDismissedUrl(null);
+    onAttachmentsChangeProp?.([]);
   };
 
   return (
@@ -105,24 +188,46 @@ export function CommentComposer({
           >
             <DiscussionEditor
               documentId={documentId}
+              resetToken={editorResetToken}
               value={draft}
               label={getEditorLabel(entryKind, editing)}
-              placeholderText="Write something…"
+              placeholderText={
+                capabilities && !capabilities.allowComments
+                  ? capabilities.allowQa && !capabilities.allowNotes
+                    ? "Ask a question…"
+                    : !capabilities.allowQa && capabilities.allowNotes
+                      ? "Write a note…"
+                      : "Write something…"
+                  : "Write something…"
+              }
               invalid={invalid}
               autoFocus={autoFocus}
               className={presentation === "drawer" ? "min-h-full" : "min-h-34"}
+              courseId={courseId}
+              mentionsEnabled={entryKind !== "note"}
               onChange={onDraftChange}
               onControllerChange={setEditorController}
               onFormattingStateChange={setFormattingState}
-              onAttachmentNotice={setAttachmentNotice}
+              onAttachmentError={setAttachmentError}
+              onAttachmentSelected={handleAttachmentSelected}
             />
-            {attachmentNotice && (
-              <div
-                role="status"
-                className="absolute top-15 right-3 left-3 z-10 rounded-lg bg-(--surface-elevated,var(--surface)) px-3 py-2 text-xs text-(--text-secondary) shadow-[0_12px_34px_rgba(0,0,0,0.3),0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)] sm:left-auto sm:max-w-72"
-              >
-                {attachmentNotice}
+            <AttachmentComposerPreview
+              attachments={effectiveAttachments}
+              onRemove={handleRemoveAttachment}
+            />
+            {linkPreview && (
+              <div className="px-3 pb-2.5">
+                <LinkPreviewCard
+                  preview={linkPreview}
+                  onRemove={() => setDismissedUrl(detectedUrl)}
+                  compact
+                />
               </div>
+            )}
+            {attachmentError && (
+              <p role="alert" className="px-3 pb-2 text-xs text-red-500">
+                {attachmentError}
+              </p>
             )}
           </div>
 
@@ -130,11 +235,7 @@ export function CommentComposer({
             data-comment-toolbar
             className="flex shrink-0 items-center gap-1.5 bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] px-2.5 py-2.5 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_8%,transparent)] sm:gap-2 sm:px-3"
           >
-            <img
-              src="/assets/sofia-avatar-160.webp"
-              alt=""
-              className="size-9 shrink-0 rounded-full object-cover sm:size-10"
-            />
+            <DiscussionAvatar src={avatar} className="size-9 sm:size-10" />
             {editorController && (
               <CommentFormattingToolbar
                 editor={editorController}
@@ -145,7 +246,7 @@ export function CommentComposer({
               type="button"
               aria-label="Next: choose publishing options"
               title="Next"
-              disabled={!canSubmit}
+              disabled={!canSubmit || isSubmitting}
               onClick={openPublishingOptions}
               className="grid size-10 shrink-0 place-items-center rounded-full bg-(--accent) text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_62%,transparent)] transition-[background-color,opacity] hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:size-11"
             >
@@ -166,15 +267,20 @@ export function CommentComposer({
             <CommentPublishingOptions
               entryKind={entryKind}
               visibility={visibility}
+              capabilities={capabilities}
               onEntryKindChange={onEntryKindChange}
               onVisibilityChange={onVisibilityChange}
             />
           </div>
-          <div className="mt-auto flex shrink-0 items-center justify-end gap-2 bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] px-3 py-2.5 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_8%,transparent)] sm:px-4">
+          <div
+            data-comment-publish-actions
+            className="flex shrink-0 items-center justify-end gap-2 px-4 py-3 sm:px-5 sm:py-3.5"
+          >
             <button
               type="button"
               onClick={returnToEditor}
-              className="inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-(--text-secondary) transition-colors hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+              disabled={isSubmitting}
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
             >
               <ArrowLeft size={18} weight="bold" aria-hidden="true" />
               Back
@@ -182,12 +288,14 @@ export function CommentComposer({
             <button
               type="button"
               aria-label={
-                editing
-                  ? "Save changes"
-                  : `Post ${getEntryKindLabel(entryKind)}`
+                isSubmitting
+                  ? "Saving…"
+                  : editing
+                    ? "Save changes"
+                    : `Post ${getEntryKindLabel(entryKind)}`
               }
-              disabled={!canSubmit}
-              onClick={onSubmit}
+              disabled={!canSubmit || isSubmitting}
+              onClick={() => onSubmit(resetAfterLocalSubmit)}
               className="inline-flex h-10 items-center gap-2 rounded-lg bg-(--accent) px-4 text-sm font-semibold text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_55%,transparent)] transition-colors hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
             >
               {editing ? (
@@ -195,7 +303,7 @@ export function CommentComposer({
               ) : (
                 <PaperPlaneTilt size={19} weight="fill" aria-hidden="true" />
               )}
-              {editing ? "Save changes" : "Post"}
+              {isSubmitting ? "Saving…" : editing ? "Save changes" : "Post"}
             </button>
           </div>
         </div>

@@ -1,8 +1,11 @@
+import type { AvatarImageVariant } from "@veolms/contracts";
+
 export type ProfileRole = "student" | "creator";
 
 export interface ProfilePreferences {
   displayName: string;
   avatarDataUrl: string | null;
+  avatarSrcSet: readonly AvatarImageVariant[];
   username?: string;
   bio?: string;
   mobileNumber?: string;
@@ -28,6 +31,7 @@ export const getDefaultProfileIdentity = (
   displayName: "",
   email: "",
   avatarDataUrl: null,
+  avatarSrcSet: [],
   username: "",
   bio: "",
   mobileNumber: "",

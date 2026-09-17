@@ -178,13 +178,12 @@ export function createModerationService({
         if (!note) {
           throw httpError(404, "TARGET_NOT_FOUND", "Reported note not found");
         }
-        const isOwner = note.userId === actor.userId;
-        if (!isOwner) {
-          if (note.visibility === "private") {
-            throw httpError(404, "TARGET_NOT_FOUND", "Reported note not found");
-          }
-          await courseAccess.assertCanAccessCourse(db, actor, note.courseId);
-        }
+        await courseAccess.assertCanAccessNote(
+          db,
+          actor,
+          note,
+          httpError(404, "TARGET_NOT_FOUND", "Reported note not found"),
+        );
         courseId = note.courseId;
       }
 
@@ -371,12 +370,6 @@ export function createModerationService({
           await threadsRepo.setLocked(trx, threadId, false);
         } else if (input.action === "delete") {
           await threadsRepo.deleteThread(trx, threadId);
-          await trx
-            .updateTable("learning_attachments")
-            .set({ status: "deleted" })
-            .where("target_type", "=", "thread")
-            .where("target_id", "=", threadId)
-            .execute();
         }
 
         // Fetch pending reports before updating so we know who to notify

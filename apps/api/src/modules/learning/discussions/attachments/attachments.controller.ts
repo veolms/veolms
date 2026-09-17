@@ -23,10 +23,7 @@ export interface AttachmentsController {
     reply: FastifyReply,
   ): Promise<void>;
 
-  uploadAttachment(
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ): Promise<void>;
+  uploadAttachment(request: FastifyRequest, reply: FastifyReply): Promise<void>;
 
   getLinkPreview(
     request: FastifyRequest<{ Body: CreateLinkPreviewRequest }>,
@@ -44,7 +41,11 @@ export function createAttachmentsController({
   return {
     async initiateUpload(request, reply) {
       const user = request.user!;
-      const result = await service.initiateUpload(database, user.id, request.body);
+      const result = await service.initiateUpload(
+        database,
+        user.id,
+        request.body,
+      );
       reply.status(201).send(result);
     },
 
@@ -58,11 +59,17 @@ export function createAttachmentsController({
       }
 
       const buffer = await multipartFile.toBuffer();
-      const attachment = await service.uploadFile(database, attachmentId, user.id, {
-        filename: multipartFile.filename,
-        mimetype: multipartFile.mimetype,
-        data: buffer,
-      });
+      const attachment = await service.uploadFile(
+        database,
+        attachmentId,
+        user.id,
+        {
+          filename: multipartFile.filename,
+          mimetype: multipartFile.mimetype,
+          data: buffer,
+          ...readMultipartDimensions(multipartFile.fields),
+        },
+      );
 
       reply.status(200).send(attachment);
     },
@@ -70,7 +77,11 @@ export function createAttachmentsController({
     async completeUpload(request, reply) {
       const user = request.user!;
       const { attachmentId } = request.body;
-      const attachment = await service.completeUpload(database, attachmentId, user.id);
+      const attachment = await service.completeUpload(
+        database,
+        attachmentId,
+        user.id,
+      );
       reply.status(200).send(attachment);
     },
 
@@ -87,6 +98,7 @@ export function createAttachmentsController({
         filename: multipartFile.filename,
         mimetype: multipartFile.mimetype,
         data: buffer,
+        ...readMultipartDimensions(multipartFile.fields),
       });
 
       reply.status(201).send(result);
@@ -98,4 +110,24 @@ export function createAttachmentsController({
       reply.status(200).send(preview);
     },
   };
+}
+
+function readMultipartDimensions(fields: unknown): {
+  width?: number;
+  height?: number;
+} {
+  if (!fields || typeof fields !== "object") return {};
+  const record = fields as Record<string, unknown>;
+  return {
+    width: readMultipartNumber(record.width),
+    height: readMultipartNumber(record.height),
+  };
+}
+
+function readMultipartNumber(field: unknown): number | undefined {
+  if (!field || typeof field !== "object") return undefined;
+  const value = (field as { value?: unknown }).value;
+  if (typeof value === "number") return value;
+  if (typeof value === "string") return Number(value);
+  return undefined;
 }

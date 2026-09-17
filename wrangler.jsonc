@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dev",
+  "compatibility_date": "2024-11-01",
+  "assets": {
+    "directory": "./apps/web/build/client",
+    "not_found_handling": "single-page-application",
+    "html_handling": "auto-trailing-slash"
+  }
+}

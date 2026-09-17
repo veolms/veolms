@@ -85,11 +85,14 @@ export function MenuDivider() {
 interface CourseActionMenuProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Dismisses this transient menu when its owning surface begins scrolling. */
+  dismissOnScroll?: boolean;
   ariaLabel: string;
   menuLabel?: string;
   children: ReactNode;
   className?: string;
   triggerClassName?: string;
+  triggerVisualClassName?: string;
   menuClassName?: string;
   dataMenu?: string;
   anchorPoint?: { x: number; y: number } | null;
@@ -98,11 +101,13 @@ interface CourseActionMenuProps {
 export function CourseActionMenu({
   open,
   onOpenChange,
+  dismissOnScroll = false,
   ariaLabel,
   menuLabel = ariaLabel,
   children,
   className = "relative z-30 ml-auto shrink-0",
   triggerClassName = "size-10",
+  triggerVisualClassName = "size-9",
   menuClassName = "",
   dataMenu,
   anchorPoint,
@@ -281,20 +286,24 @@ export function CourseActionMenu({
         updateMenuPlacement();
       });
     };
+    const dismissFromScroll = () => dismissMenuThen(() => {});
+    const handleScroll = dismissOnScroll ? dismissFromScroll : reposition;
 
     document.addEventListener("pointerdown", closeFromOutside);
     document.addEventListener("keydown", closeFromKeyboard);
     window.addEventListener("resize", reposition);
-    window.addEventListener("scroll", reposition, true);
+    // Capture sees both the Learning Space scrollport and window scrolling;
+    // this listener exists only while this particular menu is open.
+    window.addEventListener("scroll", handleScroll, true);
 
     return () => {
       document.removeEventListener("pointerdown", closeFromOutside);
       document.removeEventListener("keydown", closeFromKeyboard);
       window.removeEventListener("resize", reposition);
-      window.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("scroll", handleScroll, true);
       if (repositionFrame) window.cancelAnimationFrame(repositionFrame);
     };
-  }, [dismissMenuThen, open, updateMenuPlacement]);
+  }, [dismissMenuThen, dismissOnScroll, open, updateMenuPlacement]);
 
   const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (
@@ -373,7 +382,7 @@ export function CourseActionMenu({
           }}
         >
           <span
-            className={`relative z-10 flex size-9 items-center justify-center rounded-full text-(--text-secondary) transition-colors duration-150 group-hover/action:text-(--text) ${menuKeyboardFocus ? "text-(--text)" : ""}`}
+            className={`relative z-10 flex ${triggerVisualClassName} items-center justify-center rounded-full text-(--text-secondary) transition-colors duration-150 group-hover/action:text-(--text) ${menuKeyboardFocus ? "text-(--text)" : ""}`}
           >
             <span
               key={menuPressPulse}

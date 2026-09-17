@@ -12,6 +12,7 @@
     "dev:web": "pnpm --filter @veolms/web dev",
     "dev:web:lan": "pnpm --filter @veolms/web dev --host",
     "dev:webweb": "pnpm --filter @veolms/web preview",
+    "preview:web": "pnpm --filter @veolms/web preview -- --port 4173",
     "preview:web:lan": "pnpm --filter @veolms/web preview -- --host 0.0.0.0 --port 4173",
     "generate:video-thumbnails": "pnpm --filter @veolms/web generate:video-thumbnails",
     "dev:api": "pnpm --filter @veolms/api dev",
@@ -19,11 +20,12 @@
     "purge:course-deletions": "pnpm --filter @veolms/api purge:course-deletions",
     "notifications:process": "pnpm --filter @veolms/api notifications:process",
     "notifications:watch": "pnpm --filter @veolms/api notifications:watch",
-    "instructor:cli": "pnpm --filter @veolms/api instructor:cli",
+    "user:cli": "pnpm --filter @veolms/api user:cli",
     "import:youtube": "pnpm --filter @veolms/api import:youtube",
     "build": "turbo run build",
     "build:web": "pnpm --filter @veolms/web build",
     "build:api": "pnpm --filter @veolms/api build",
+    "deploy:web": "pnpm build:web && wrangler deploy",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -61,6 +63,7 @@
     "prettier": "^3.9.6",
     "turbo": "^2.10.8",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "typescript-eslint": "^8.65.0"
+    "typescript-eslint": "^8.65.0",
+    "wrangler": "^4.131.2"
   }
 }

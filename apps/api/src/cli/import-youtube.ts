@@ -8,7 +8,7 @@ import os from "node:os";
 import { spawn } from "node:child_process";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { createDatabase } from "@veolms/database";
+import { createDatabase, enqueueImageJob } from "@veolms/database";
 import { config } from "../config.ts";
 import { createServices } from "../services/index.ts";
 import { createMediaService } from "../modules/media/index.ts";
@@ -2341,8 +2341,9 @@ ${bold("Examples:")}
 
       if (thumbData) {
         const thumbStat = await fsp.stat(thumbData.filePath);
-        thumbnailMediaId = crypto.randomUUID();
-        const storageKey = `public/image/${instructor.id}/${thumbnailMediaId}.jpg`;
+        const uploadedThumbnailMediaId = crypto.randomUUID();
+        thumbnailMediaId = uploadedThumbnailMediaId;
+        const storageKey = `public/thumbnails/${uploadedThumbnailMediaId}/original.jpg`;
 
         await services.storage.uploadFile(
           storageKey,
@@ -2350,17 +2351,30 @@ ${bold("Examples:")}
           thumbData.mimeType,
         );
 
-        await mediaRepo.insertMediaAsset(database, {
-          id: thumbnailMediaId,
-          owner_id: instructor.id,
-          type: "image",
-          storage_provider: "s3",
-          storage_key: storageKey,
-          original_filename: "playlist_thumbnail.jpg",
-          mime_type: thumbData.mimeType,
-          size_bytes: thumbStat.size,
-          status: "ready",
-        });
+        try {
+          await database.transaction().execute(async (trx) => {
+            await mediaRepo.insertMediaAsset(trx, {
+              id: uploadedThumbnailMediaId,
+              owner_id: instructor.id,
+              type: "image",
+              storage_provider: "s3",
+              storage_key: storageKey,
+              original_filename: "playlist_thumbnail.jpg",
+              mime_type: thumbData.mimeType,
+              size_bytes: thumbStat.size,
+              status: "uploaded",
+            });
+            await enqueueImageJob(trx, {
+              id: crypto.randomUUID(),
+              media_id: uploadedThumbnailMediaId,
+            });
+          });
+        } catch (error) {
+          await services.storage
+            .deleteObject(storageKey)
+            .catch(() => undefined);
+          throw error;
+        }
 
         console.log(
           `${green("✓")} Thumbnail uploaded (Media ID: ${dim(thumbnailMediaId)})`,
@@ -2420,6 +2434,7 @@ ${bold("Examples:")}
         course_id: courseId,
         allow_qa: true,
         allow_comments: true,
+        allow_notes: true,
         allow_downloads: false,
         certificate_enabled: false,
         show_instructor_name: true,

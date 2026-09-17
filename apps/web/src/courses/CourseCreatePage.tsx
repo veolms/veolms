@@ -42,6 +42,7 @@ import {
   Lightning,
   ListBullets,
   LockKey,
+  NotePencil,
   PencilSimple,
   PlayCircle,
   Plus,
@@ -323,7 +324,8 @@ export type AccessRulesControlKey =
   | "fixedDuration"
   | "enableQA"
   | "enableComments"
-  | "enableDownloads";
+  | "enableDownloads"
+  | "enableNotes";
 
 export const AccessRulesControlStatusIndicator = ({
   status,
@@ -666,6 +668,7 @@ export interface AccessRulesFormState {
   enableQA: boolean;
   enableComments: boolean;
   enableDownloads: boolean;
+  enableNotes: boolean;
 }
 
 export const initialAccessRulesState: AccessRulesFormState = {
@@ -676,6 +679,7 @@ export const initialAccessRulesState: AccessRulesFormState = {
   enableQA: true,
   enableComments: true,
   enableDownloads: false,
+  enableNotes: true,
 };
 
 export const normalizeAccessRulesState = (
@@ -691,6 +695,8 @@ export const normalizeAccessRulesState = (
     raw?.enableComments !== undefined ? Boolean(raw.enableComments) : true,
   enableDownloads:
     raw?.enableDownloads !== undefined ? Boolean(raw.enableDownloads) : false,
+  enableNotes:
+    raw?.enableNotes !== undefined ? Boolean(raw.enableNotes) : true,
 });
 
 export const isAccessRuleConfigEqual = (
@@ -716,7 +722,8 @@ export const isAccessSettingsEqual = (
   return (
     normA.enableQA === normB.enableQA &&
     normA.enableComments === normB.enableComments &&
-    normA.enableDownloads === normB.enableDownloads
+    normA.enableDownloads === normB.enableDownloads &&
+    normA.enableNotes === normB.enableNotes
   );
 };
 
@@ -1469,6 +1476,7 @@ export function buildLocalPreviewData({
     allowQa: accessRulesDraft.enableQA,
     allowComments: accessRulesDraft.enableComments,
     allowDownloads: accessRulesDraft.enableDownloads,
+    allowNotes: accessRulesDraft.enableNotes,
     certificateEnabled: enableCertificate,
     showInstructorName: showInstructorName !== false,
     language: language || "en",
@@ -1978,15 +1986,14 @@ export function CourseWizardSkeleton({
                 <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
                   <div className="flex items-center gap-3.5 min-w-0 pr-3">
                     <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
-                      <DownloadSimple size={20} weight="bold" />
+                      <NotePencil size={20} weight="bold" />
                     </div>
                     <div>
                       <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
-                        Downloads
+                        Notes
                       </strong>
                       <p className="m-0 text-(--muted) text-[0.8rem]">
-                        Allow learners to download lesson resources for offline
-                        access.
+                        Allow learners to take notes while learning.
                       </p>
                     </div>
                   </div>
@@ -2778,9 +2785,11 @@ export function CourseCreatePage({
   const [thumbnailMediaId, setThumbnailMediaId] = useState<
     string | null | undefined
   >(undefined);
+  // The upload state is kept for concurrency, rollback, and server-refresh
+  // protection. The selected file is shown immediately, so upload progress is
+  // intentionally not rendered in the course editor.
   const [thumbnailUploadStatus, setThumbnailUploadStatus] =
     useState<ThumbnailUploadStatus>("idle");
-  const [thumbnailUploadProgress, setThumbnailUploadProgress] = useState(0);
   const [thumbnailUploadError, setThumbnailUploadError] = useState<
     string | null
   >(null);
@@ -2858,7 +2867,6 @@ export function CourseCreatePage({
     thumbnailDirtyRef.current = true;
     setThumbnail(imageUrl);
     setThumbnailUploadError(null);
-    setThumbnailUploadProgress(0);
     setThumbnailUploadStatus("uploading");
 
     const requestIsActive = () =>
@@ -2898,9 +2906,7 @@ export function CourseCreatePage({
       await mediaService.uploadFileToPresignedUrl(
         presigned.uploadUrl,
         file,
-        ({ percent }) => {
-          if (requestIsActive()) setThumbnailUploadProgress(percent);
-        },
+        undefined,
         uploadAbortController.signal,
       );
 
@@ -2935,7 +2941,6 @@ export function CourseCreatePage({
       setThumbnailMediaId(presigned.mediaAssetId);
       setThumbnail(processedThumbnailUrl);
       thumbnailDirtyRef.current = false;
-      setThumbnailUploadProgress(100);
       setThumbnailUploadStatus("idle");
       setThumbnailUploadError(null);
 
@@ -3260,11 +3265,18 @@ export function CourseCreatePage({
 
   const isEditing = Boolean(activeEditId);
   const isCourseTitleFilled = Boolean(courseTitle.trim());
+  const [
+    isInitialCurriculumBootstrapInProgress,
+    setIsInitialCurriculumBootstrapInProgress,
+  ] = useState(false);
+  const isInitialCurriculumBootstrapInProgressRef = useRef(false);
+  isInitialCurriculumBootstrapInProgressRef.current =
+    isInitialCurriculumBootstrapInProgress;
+
   // Downstream tabs and fields are unlocked ONLY after a confirmed server-side
-  // course ID exists. A non-empty title alone (isCourseTitleFilled) is NOT
-  // sufficient — allowing that caused tabs to become clickable before creation
-  // completed, which let concurrent callers each fire their own POST /courses.
-  const isDownstreamUnlocked = Boolean(currentCourseId);
+  // course ID exists AND initial curriculum bootstrap (Introduction section + lesson) has completed.
+  const isDownstreamUnlocked =
+    Boolean(currentCourseId) && !isInitialCurriculumBootstrapInProgress;
 
   useEffect(() => {
     currentCourseIdRef.current = currentCourseId;
@@ -3395,8 +3407,9 @@ export function CourseCreatePage({
   const isPublishSaving = isSavingPublish;
 
   const isInitialCourseCreationPending =
-    !currentCourseId &&
+    (!currentCourseId || isInitialCurriculumBootstrapInProgress) &&
     (createCourseMutation.isPending ||
+      isInitialCurriculumBootstrapInProgress ||
       isSavingBasics ||
       savingBasicsControls.has("title"));
 
@@ -3798,6 +3811,7 @@ export function CourseCreatePage({
     enableQA: number;
     enableComments: number;
     enableDownloads: number;
+    enableNotes: number;
   }>({
     accessType: 0,
     durationMode: 0,
@@ -3805,6 +3819,7 @@ export function CourseCreatePage({
     enableQA: 0,
     enableComments: 0,
     enableDownloads: 0,
+    enableNotes: 0,
   });
   const inFlightAccessControlsRef = useRef<Record<string, number>>({
     accessType: 0,
@@ -3813,6 +3828,7 @@ export function CourseCreatePage({
     enableQA: 0,
     enableComments: 0,
     enableDownloads: 0,
+    enableNotes: 0,
   });
   const fixedDurationDebounceTimerRef = useRef<ReturnType<
     typeof setTimeout
@@ -3940,7 +3956,8 @@ export function CourseCreatePage({
     (inFlightAccessControlsRef.current.fixedDuration ?? 0) > 0 ||
     (inFlightAccessControlsRef.current.enableQA ?? 0) > 0 ||
     (inFlightAccessControlsRef.current.enableComments ?? 0) > 0 ||
-    (inFlightAccessControlsRef.current.enableDownloads ?? 0) > 0;
+    (inFlightAccessControlsRef.current.enableDownloads ?? 0) > 0 ||
+    (inFlightAccessControlsRef.current.enableNotes ?? 0) > 0;
 
   const hasAccessControlFailed =
     accessRulesSaveFailed ||
@@ -4633,6 +4650,10 @@ export function CourseCreatePage({
             s?.allowDownloads !== undefined
               ? Boolean(s.allowDownloads)
               : initialAccessRulesState.enableDownloads,
+          enableNotes:
+            s?.allowNotes !== undefined
+              ? Boolean(s.allowNotes)
+              : initialAccessRulesState.enableNotes,
         });
 
       setServerAccessRules((prev) => ({
@@ -4657,6 +4678,9 @@ export function CourseCreatePage({
         enableDownloads: isAccessControlSaving("enableDownloads")
           ? prev.enableDownloads
           : confirmedAccessRules.enableDownloads,
+        enableNotes: isAccessControlSaving("enableNotes")
+          ? prev.enableNotes
+          : confirmedAccessRules.enableNotes,
       }));
 
       if (
@@ -4686,6 +4710,9 @@ export function CourseCreatePage({
             enableDownloads: isAccessControlSaving("enableDownloads")
               ? prev.enableDownloads
               : confirmedAccessRules.enableDownloads,
+            enableNotes: isAccessControlSaving("enableNotes")
+              ? prev.enableNotes
+              : confirmedAccessRules.enableNotes,
           };
           accessRulesDraftRef.current = next;
           return next;
@@ -5854,6 +5881,77 @@ export function CourseCreatePage({
       );
       if (inFlightAccessControlsRef.current.enableDownloads === 0) {
         markAccessControlSaving("enableDownloads", false);
+      }
+    }
+  };
+
+  const handleToggleNotes = async () => {
+    clearAccessControlStatus("enableNotes");
+    const previousValue = accessRulesDraftRef.current.enableNotes;
+    const nextValue = !previousValue;
+    const version = ++accessControlVersionsRef.current.enableNotes;
+
+    // 1. Optimistic update
+    accessRulesDraftRef.current = {
+      ...accessRulesDraftRef.current,
+      enableNotes: nextValue,
+    };
+    setAccessRules((prev) => ({ ...prev, enableNotes: nextValue }));
+    inFlightAccessControlsRef.current.enableNotes =
+      (inFlightAccessControlsRef.current.enableNotes || 0) + 1;
+    markAccessControlSaving("enableNotes", true);
+
+    try {
+      const targetCourseId = await ensureCourseDraftForAccessRules();
+
+      const res = await upsertSettingsMutation.mutateAsync({
+        courseId: targetCourseId,
+        payload: {
+          allowNotes: nextValue,
+        },
+      });
+
+      if (accessControlVersionsRef.current.enableNotes === version) {
+        const confirmedNotes =
+          res.allowNotes !== undefined ? Boolean(res.allowNotes) : nextValue;
+
+        accessRulesDraftRef.current = {
+          ...accessRulesDraftRef.current,
+          enableNotes: confirmedNotes,
+        };
+        setServerAccessRules((prev) => ({
+          ...prev,
+          enableNotes: confirmedNotes,
+        }));
+        setAccessRules((prev) => ({
+          ...prev,
+          enableNotes: confirmedNotes,
+        }));
+        markAccessControlSaved("enableNotes");
+      }
+    } catch (err: unknown) {
+      if (accessControlVersionsRef.current.enableNotes === version) {
+        markAccessControlFailed("enableNotes");
+        accessRulesDraftRef.current = {
+          ...accessRulesDraftRef.current,
+          enableNotes: previousValue,
+        };
+        setAccessRules((prev) => ({
+          ...prev,
+          enableNotes: previousValue,
+        }));
+        const errorMsg =
+          (err as { message?: string })?.message ||
+          "Failed to update notes setting.";
+        setToastMessage(errorMsg);
+      }
+    } finally {
+      inFlightAccessControlsRef.current.enableNotes = Math.max(
+        0,
+        (inFlightAccessControlsRef.current.enableNotes || 1) - 1,
+      );
+      if (inFlightAccessControlsRef.current.enableNotes === 0) {
+        markAccessControlSaving("enableNotes", false);
       }
     }
   };
@@ -7776,13 +7874,15 @@ export function CourseCreatePage({
 
     // Register the promise SYNCHRONOUSLY before the first await so any
     // concurrent caller that checks immediately after this line will find it.
-    const promise = createCourseMutation.mutateAsync({
-      title,
-      instructorAlias,
-    });
-    inFlightCourseCreationPromiseRef.current = promise;
-    try {
-      const created = await promise;
+    const promise = (async () => {
+      isInitialCurriculumBootstrapInProgressRef.current = true;
+      setIsInitialCurriculumBootstrapInProgress(true);
+
+      const created = await createCourseMutation.mutateAsync({
+        title,
+        instructorAlias,
+      });
+
       // Write the confirmed ID to the ref immediately so all awaiting callers
       // can use it as soon as the shared promise resolves.
       currentCourseIdRef.current = created.id;
@@ -7798,8 +7898,74 @@ export function CourseCreatePage({
           );
         }
       }
+
+      // Prebuild initial section ("Introduction") and initial lesson ("New Lesson 1")
+      try {
+        const createdSection = await createSectionMutation.mutateAsync({
+          courseId: created.id,
+          payload: { title: "Introduction" },
+        });
+
+        const createdLesson = await createLessonMutation.mutateAsync({
+          courseId: created.id,
+          sectionId: createdSection.id,
+          payload: {
+            title: "New Lesson 1",
+            contentType: "video",
+            description: "",
+          },
+        });
+
+        const prebuiltLesson: CurriculumLessonItem = {
+          id: createdLesson.id,
+          title: "New Lesson 1",
+          description: "",
+          contentType: "video",
+          contentTypeSelected: false,
+          isExpanded: true,
+          isPublished: true,
+          isPreview: false,
+          contentMediaId: null,
+          isPendingCreation: false,
+          initialState: {
+            title: "New Lesson 1",
+            description: "",
+            contentType: "video",
+            contentMediaId: null,
+            isPublished: true,
+            isPreview: false,
+          },
+          resources: [],
+        };
+
+        const prebuiltSection: CurriculumSectionItem = {
+          id: createdSection.id,
+          title: createdSection.title || "Introduction",
+          isEditingTitle: false,
+          isExpanded: true,
+          isPendingCreation: false,
+          lessons: [prebuiltLesson],
+        };
+
+        setSections([prebuiltSection]);
+        sectionsRef.current = [prebuiltSection];
+      } catch (bootstrapErr: unknown) {
+        const errorMsg =
+          bootstrapErr instanceof Error
+            ? bootstrapErr.message
+            : "Course created, but default section setup could not be completed.";
+        setToastMessage(errorMsg);
+      }
+
       return created;
+    })();
+
+    inFlightCourseCreationPromiseRef.current = promise;
+    try {
+      return await promise;
     } finally {
+      isInitialCurriculumBootstrapInProgressRef.current = false;
+      setIsInitialCurriculumBootstrapInProgress(false);
       // Clear regardless of success/failure so a failed attempt can be retried.
       inFlightCourseCreationPromiseRef.current = null;
     }
@@ -8325,6 +8491,7 @@ export function CourseCreatePage({
         enableQA: accessRulesDraftRef.current.enableQA,
         enableComments: accessRulesDraftRef.current.enableComments,
         enableDownloads: accessRulesDraftRef.current.enableDownloads,
+        enableNotes: accessRulesDraftRef.current.enableNotes,
       });
 
       setAccessRulesExists(true);
@@ -9437,21 +9604,6 @@ export function CourseCreatePage({
                           </p>
                         </div>
                       )}
-                      {thumbnailUploadStatus !== "idle" &&
-                      thumbnailUploadStatus !== "error" ? (
-                        <p
-                          className="m-0 mt-2 text-(--accent) text-[0.75rem]"
-                          aria-live="polite"
-                        >
-                          {thumbnailUploadStatus === "uploading"
-                            ? `Uploading thumbnail… ${thumbnailUploadProgress}%`
-                            : thumbnailUploadStatus === "confirming"
-                              ? "Confirming thumbnail upload…"
-                              : thumbnailUploadStatus === "processing"
-                                ? "Processing thumbnail…"
-                              : "Saving thumbnail to this course…"}
-                        </p>
-                      ) : null}
                       {thumbnailUploadError ? (
                         <p
                           className="m-0 mt-2 text-red-400 text-[0.75rem]"
@@ -11140,37 +11292,34 @@ export function CourseCreatePage({
                     </div>
                   </div>
 
-                  {/* Toggle 3: Downloads */}
+                  {/* Toggle 3: Notes */}
                   <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
                     <div className="flex items-center gap-3.5 min-w-0 pr-3">
                       <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
-                        <DownloadSimple size={20} weight="bold" />
+                        <NotePencil size={20} weight="bold" />
                       </div>
                       <div className="min-w-0">
                         <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
-                          Downloads
+                          Notes
                         </strong>
                         <p className="m-0 text-(--muted) text-[0.8rem]">
-                          Allow learners to download lesson resources for
-                          offline access.
+                          Allow learners to take notes while learning.
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2.5 shrink-0">
                       <AccessRulesControlStatusIndicator
-                        status={getAccessControlDisplayStatus(
-                          "enableDownloads",
-                        )}
-                        testId="access-rules-status-enableDownloads"
+                        status={getAccessControlDisplayStatus("enableNotes")}
+                        testId="access-rules-status-enableNotes"
                       />
                       <SettingsToggle
-                        checked={accessRules.enableDownloads}
+                        checked={accessRules.enableNotes}
                         disabled={
                           isAccessRulesSaving ||
-                          savingAccessControls.has("enableDownloads")
+                          savingAccessControls.has("enableNotes")
                         }
-                        onChange={handleToggleDownloads}
-                        label="Toggle Downloads"
+                        onChange={handleToggleNotes}
+                        label="Toggle Notes"
                       />
                     </div>
                   </div>

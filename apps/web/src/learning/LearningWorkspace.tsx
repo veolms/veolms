@@ -83,7 +83,11 @@ import {
   getVideoPlaybackBootstrap,
   refreshVideoPlaybackToken,
 } from "./videoPlaybackBootstrap";
-import { Discussion, PrerenderedMobileCommentComposer } from "./Discussion";
+import {
+  Discussion,
+  PrerenderedMobileCommentComposer,
+  type InteractionCapabilities,
+} from "./Discussion";
 import {
   clampLearningCurriculumWidth,
   CURRICULUM_COLLAPSED_STORAGE_KEY,
@@ -337,6 +341,23 @@ export function LearningWorkspace({
   } = useCourseOverview(courseSlug, {
     enabled: isApiRoute,
   });
+  const isInteractionCapabilitiesLoading =
+    isApiRoute && isCourseOverviewLoading && !courseOverview;
+
+  const interactionCapabilities: InteractionCapabilities = useMemo(() => {
+    if (courseOverview?.settings) {
+      return {
+        allowComments: courseOverview.settings.allowComments,
+        allowNotes: courseOverview.settings.allowNotes,
+        allowQa: courseOverview.settings.allowQa,
+      };
+    }
+    return {
+      allowComments: true,
+      allowNotes: true,
+      allowQa: true,
+    };
+  }, [courseOverview?.settings]);
   const publicPreviewLessonNumbers = useMemo(
     () => getPublicPreviewLessonNumbers(courseOverview),
     [courseOverview],
@@ -966,12 +987,14 @@ export function LearningWorkspace({
     lessonSequence,
     nextLessonId,
   ]);
-  const selectedLessonDescription = useMemo(() => {
+
+  const selectedLessonRecord = useMemo(() => {
     if (!adaptedCurriculum) return null;
-    return (
-      adaptedCurriculum.lessonsByNumber.get(selectedLesson)?.description ?? null
-    );
+    return adaptedCurriculum.lessonsByNumber.get(selectedLesson) ?? null;
   }, [adaptedCurriculum, selectedLesson]);
+  const selectedLessonDescription = selectedLessonRecord?.description ?? null;
+  const courseId = courseOverview?.course.id;
+  const backendLessonId = selectedLessonRecord?.id;
   const curriculumShortcutLabel = shortcutPlatform === "mac" ? "⌥+C" : "Alt+C";
 
   useLayoutEffect(() => {
@@ -2526,12 +2549,15 @@ export function LearningWorkspace({
               <Discussion
                 key={discussionPersistenceKey}
                 persistenceKey={discussionPersistenceKey}
+                courseSlug={courseSlug}
+                courseId={courseId}
+                lessonId={backendLessonId}
                 mobileBottomNavigation={mobileBottomNavigation}
                 mobileBottomNavigationHidden={mobileBottomNavigationHidden}
                 lessonDescription={selectedLessonDescription}
-                isLessonDescriptionLoading={
-                  isApiRoute && isCourseOverviewLoading
-                }
+                isLessonDescriptionLoading={isApiRoute && isCourseOverviewLoading}
+                interactionCapabilities={interactionCapabilities}
+                isInteractionCapabilitiesLoading={isInteractionCapabilitiesLoading}
               />
             </article>
           </div>

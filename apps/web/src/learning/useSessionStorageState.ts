@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 type StoredStateValidator<T> = (value: unknown) => value is T;
-const NO_LEGACY_KEYS: readonly string[] = [];
+export const NO_LEGACY_KEYS: readonly string[] = [];
 
 const getSessionStorage = () =>
   typeof window === "undefined" ? null : window.sessionStorage;
@@ -12,6 +12,7 @@ export function useSessionStorageState<T>(
   initialValue: T,
   isValid?: StoredStateValidator<T>,
   legacyKeys: readonly string[] = NO_LEGACY_KEYS,
+  sanitize?: (value: T) => T,
 ): [T, Dispatch<SetStateAction<T>>] {
   // The server cannot see sessionStorage. Use the same deterministic value for
   // SSR and the browser's first render, then restore the tab-local value after
@@ -35,7 +36,12 @@ export function useSessionStorageState<T>(
         return;
       }
       const parsedValue: unknown = JSON.parse(savedValue);
-      setValue(isValid && !isValid(parsedValue) ? initialValue : (parsedValue as T));
+      if (isValid && !isValid(parsedValue)) {
+        setValue(initialValue);
+      } else {
+        const validated = parsedValue as T;
+        setValue(sanitize ? sanitize(validated) : validated);
+      }
     } catch {
       setValue(initialValue);
     }

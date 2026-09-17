@@ -60,35 +60,40 @@ export async function checkUserPermission(
     return eb.or(conditions);
   });
 
-  const matchingAssignments = await query.execute();
+  // Query platform user_roles for platform-scoped role compatibility
+  const userRolesQuery = database
+    .selectFrom("user_roles as ur")
+    .innerJoin("role_permissions as rp", "rp.role_id", "ur.role_id")
+    .innerJoin("permissions as p", "p.id", "rp.permission_id")
+    .select([
+      "rp.effect",
+      sql<string>`'platform'`.as("scope_type"),
+      sql<string | null>`null`.as("course_id"),
+    ])
+    .where("ur.user_id", "=", userId)
+    .where("p.permission_key", "=", permissionKey);
 
-  // If no scoped role assignment is found, fallback to checking platform-level user_roles
-  let legacyAssignments: Array<{ effect: string }> = [];
+  const [scopedAssignments, directRoleAssignments] = await Promise.all([
+    query.execute(),
+    userRolesQuery.execute(),
+  ]);
+
+  const matchingAssignments = [...scopedAssignments, ...directRoleAssignments];
+
   if (matchingAssignments.length === 0) {
-    legacyAssignments = await database
-      .selectFrom("user_roles as ur")
-      .innerJoin("role_permissions as rp", "rp.role_id", "ur.role_id")
-      .innerJoin("permissions as p", "p.id", "rp.permission_id")
-      .select(["rp.effect"])
-      .where("ur.user_id", "=", userId)
-      .where("p.permission_key", "=", permissionKey)
-      .execute();
-  }
-
-  const allAssignments =
-    matchingAssignments.length > 0 ? matchingAssignments : legacyAssignments;
-
-  if (allAssignments.length === 0) {
-    return { allowed: false, reason: "No matching role assignment grants this permission" };
+    return {
+      allowed: false,
+      reason: "No matching role assignment grants this permission",
+    };
   }
 
   // Explicit deny rule overrides any allow rule
-  const hasDeny = allAssignments.some((a) => a.effect === "deny");
+  const hasDeny = matchingAssignments.some((a) => a.effect === "deny");
   if (hasDeny) {
     return { allowed: false, reason: "Permission explicitly denied by policy" };
   }
 
-  const hasAllow = allAssignments.some((a) => a.effect === "allow");
+  const hasAllow = matchingAssignments.some((a) => a.effect === "allow");
   if (hasAllow) {
     return { allowed: true };
   }
@@ -130,21 +135,24 @@ export async function getUserEffectivePermissions(
     return eb.or(conditions);
   });
 
-  const rows = await query.execute();
-  const legacyRows = await database
+  const userRolesQuery = database
     .selectFrom("user_roles as ur")
     .innerJoin("role_permissions as rp", "rp.role_id", "ur.role_id")
     .innerJoin("permissions as p", "p.id", "rp.permission_id")
     .select(["p.permission_key", "rp.effect"])
-    .where("ur.user_id", "=", userId)
-    .execute();
+    .where("ur.user_id", "=", userId);
 
-  const allRows = [...rows, ...legacyRows];
+  const [scopedRows, directRows] = await Promise.all([
+    query.execute(),
+    userRolesQuery.execute(),
+  ]);
+
+  const rows = [...scopedRows, ...directRows];
 
   const deniedKeys = new Set<string>();
   const allowedKeys = new Set<string>();
 
-  for (const row of allRows) {
+  for (const row of rows) {
     if (row.effect === "deny") {
       deniedKeys.add(row.permission_key);
     } else if (row.effect === "allow") {
@@ -190,13 +198,12 @@ export async function resolveCourseScope(
   courseIdOrSlug: string,
 ): Promise<ResourceScope | null> {
   // Check UUID vs Slug
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-    courseIdOrSlug,
-  );
+  const isUuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      courseIdOrSlug,
+    );
 
-  let query = database
-    .selectFrom("courses")
-    .select(["id"]);
+  let query = database.selectFrom("courses").select(["id"]);
 
   if (isUuid) {
     query = query.where("id", "=", courseIdOrSlug);
