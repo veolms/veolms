@@ -77,6 +77,7 @@ const defaultTestThreads = [
 ];
 
 const notesMocks = vi.hoisted(() => ({
+  useLessonInteractionCounts: vi.fn((..._args: any[]) => ({ data: undefined })),
   useUserNotes: vi.fn(),
   useCreateNote: vi.fn(),
   useUpdateNote: vi.fn(),
@@ -95,6 +96,8 @@ vi.mock("../../src/services/auth", () => ({
 }));
 
 vi.mock("../../src/services/learning-interactions", () => ({
+  useLessonInteractionCounts: (...args: any[]) =>
+    notesMocks.useLessonInteractionCounts(...args),
   useUserNotes: (...args: any[]) => notesMocks.useUserNotes(...args),
   useCreateNote: (...args: any[]) => notesMocks.useCreateNote(...args),
   useUpdateNote: (...args: any[]) => notesMocks.useUpdateNote(...args),

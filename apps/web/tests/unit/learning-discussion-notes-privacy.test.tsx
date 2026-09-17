@@ -28,6 +28,7 @@ vi.mock("react-router", async () => {
 });
 
 const mockInteractions = vi.hoisted(() => ({
+  useLessonInteractionCounts: vi.fn((..._args: any[]) => ({ data: undefined })),
   useUserNotes: vi.fn(),
   useCreateNote: vi.fn(),
   useUpdateNote: vi.fn(),

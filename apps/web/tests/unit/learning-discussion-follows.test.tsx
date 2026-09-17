@@ -125,6 +125,7 @@ const mockReplies: LearningReply[] = [
 ];
 
 const mockInteractions = vi.hoisted(() => ({
+  useLessonInteractionCounts: vi.fn((..._args: any[]) => ({ data: undefined })),
   useUserNotes: vi.fn(),
   useCreateNote: vi.fn(),
   useUpdateNote: vi.fn(),
@@ -167,6 +168,8 @@ vi.mock("../../src/services/discussion", () => ({
 }));
 
 vi.mock("../../src/services/learning-interactions", () => ({
+  useLessonInteractionCounts: (...args: any[]) =>
+    mockInteractions.useLessonInteractionCounts(...args),
   useUserNotes: (...args: any[]) => mockInteractions.useUserNotes(...args),
   useCreateNote: (...args: any[]) => mockInteractions.useCreateNote(...args),
   useUpdateNote: (...args: any[]) => mockInteractions.useUpdateNote(...args),

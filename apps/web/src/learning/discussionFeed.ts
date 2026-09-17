@@ -1,6 +1,7 @@
 import type { Comment } from "./CommentCard";
 import type { DiscussionEntryKind } from "./discussion-editor/types";
 import { getClientEntityId } from "../services/learning-interactions/interaction-entities";
+import type { LessonInteractionCounts } from "../services/learning-interactions";
 
 export type DiscussionEntryFilter = "all" | DiscussionEntryKind;
 export type DiscussionFeedSort = "newest" | "top" | "mine";
@@ -26,6 +27,16 @@ export interface InteractionCapabilities {
   allowComments: boolean;
   allowNotes: boolean;
   allowQa: boolean;
+}
+
+export function getDiscussionCountForFilter(
+  counts: LessonInteractionCounts,
+  filter: DiscussionEntryFilter,
+): number {
+  if (filter === "comment") return counts.comments;
+  if (filter === "note") return counts.notes;
+  if (filter === "question") return counts.qna;
+  return counts.total;
 }
 
 export function getEntryTimestamp(entry: Comment): number {

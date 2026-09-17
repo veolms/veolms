@@ -29,6 +29,7 @@ import { DiscussionAvatar } from "./DiscussionAvatar";
 import {
   applyDiscussionFeed,
   DISCUSSION_FEED_SORT_OPTIONS,
+  getDiscussionCountForFilter,
   type DiscussionEntryFilter,
   type DiscussionFeedSort,
   type InteractionCapabilities,
@@ -62,6 +63,7 @@ import {
   useCreateReport,
   useDeleteNote,
   useDeleteThread,
+  useLessonInteractionCounts,
   useLessonThreads,
   useThreadDetails,
   desiredStateCoordinator,
@@ -457,6 +459,19 @@ function DiscussionInner({
   );
   const [feedSort, setFeedSort] = useState<DiscussionFeedSort>("newest");
 
+  const { data: interactionCounts } = useLessonInteractionCounts(
+    courseId,
+    lessonId,
+    {
+      capabilities,
+      mine: feedSort === "mine",
+      enabled: !isInteractionCapabilitiesLoading && enabledKinds.length > 0,
+    },
+  );
+  const discussionCount = interactionCounts
+    ? getDiscussionCountForFilter(interactionCounts, entryFilter)
+    : undefined;
+
   const threadQuery = useMemo(
     () => ({
       kind:
@@ -525,14 +540,14 @@ function DiscussionInner({
 
   const createNoteMutation = useCreateNote();
   const updateNoteMutation = useUpdateNote();
-  const deleteNoteMutation = useDeleteNote();
+  const deleteNoteMutation = useDeleteNote(courseId, lessonId);
 
   const createThreadMutation = useCreateLessonThread(
     courseId ?? "",
     lessonId ?? "",
   );
   const updateThreadMutation = useUpdateThread();
-  const deleteThreadMutation = useDeleteThread();
+  const deleteThreadMutation = useDeleteThread(courseId, lessonId);
   const createReportMutation = useCreateReport();
 
   const currentUserRole = useMemo(() => {
@@ -1719,6 +1734,7 @@ function DiscussionInner({
         entryFilter={entryFilter}
         feedSort={feedSort}
         entries={filteredEntries}
+        discussionCount={discussionCount}
         draftIsTooLong={draftIsTooLong}
         draftAttachmentCount={draftAttachmentCount}
         canSubmitDraft={canSubmitDraft}
@@ -1953,6 +1969,7 @@ interface ThreadSurfaceProps {
   entryFilter: DiscussionEntryFilter;
   feedSort: DiscussionFeedSort;
   entries: Comment[];
+  discussionCount?: number;
   draftIsTooLong: boolean;
   draftAttachmentCount: number;
   canSubmitDraft: boolean;
@@ -2257,6 +2274,7 @@ function ThreadSurface({
   entryFilter,
   feedSort,
   entries,
+  discussionCount,
   draftIsTooLong,
   draftAttachmentCount,
   canSubmitDraft,
@@ -2681,7 +2699,9 @@ function ThreadSurface({
         data-discussion-feed-toolbar
       >
         <p className="min-w-0 truncate text-lg leading-none font-semibold tracking-[-0.02em] text-(--text)">
-          Discussions
+          {discussionCount === undefined
+            ? "Discussions"
+            : `${discussionCount} Discussions`}
         </p>
         <span
           className="shrink-0 text-lg leading-none text-(--text-secondary)"

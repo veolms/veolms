@@ -33,6 +33,13 @@ const uploadAttachment = vi.hoisted(() =>
       : ("image" as const),
   })),
 );
+const discussionCounts = vi.hoisted(() =>
+  vi.fn((..._args: any[]) => ({
+    data: undefined as
+      | { comments: number; qna: number; notes: number; total: number }
+      | undefined,
+  })),
+);
 
 vi.mock("../../src/services/discussion", () => ({
   discussionService: { uploadAttachment },
@@ -59,6 +66,7 @@ vi.mock("../../src/services/auth", () => ({
 }));
 
 vi.mock("../../src/services/learning-interactions", () => ({
+  useLessonInteractionCounts: (...args: any[]) => discussionCounts(...args),
   useUserNotes: () => ({
     data: {
       notes: [
@@ -1554,6 +1562,34 @@ describe("Discussion", () => {
     );
     fireEvent.click(screen.getByRole("option", { name: "Mine" }));
     expect(visibleAuthors()).toEqual(["Ashi Singh"]);
+  });
+
+  it("renders the complete count for the selected root interaction filter", () => {
+    discussionCounts.mockReturnValue({
+      data: { comments: 12, qna: 4, notes: 8, total: 24 },
+    });
+    try {
+      const { container } = render(
+        <Discussion
+          persistenceKey="discussion-feed-count-test"
+          courseId="course-test-id"
+          lessonId="lesson-test-id"
+        />,
+      );
+      const toolbar = container.querySelector(
+        "[data-discussion-feed-toolbar]",
+      );
+
+      expect(toolbar).toHaveTextContent("24 Discussions");
+      fireEvent.click(screen.getByRole("button", { name: "Comments" }));
+      expect(toolbar).toHaveTextContent("12 Discussions");
+      fireEvent.click(screen.getByRole("button", { name: "Notes" }));
+      expect(toolbar).toHaveTextContent("8 Discussions");
+      fireEvent.click(screen.getByRole("button", { name: "Q&As" }));
+      expect(toolbar).toHaveTextContent("4 Discussions");
+    } finally {
+      discussionCounts.mockReturnValue({ data: undefined });
+    }
   });
 
   it("filters the unified feed by entry type", () => {

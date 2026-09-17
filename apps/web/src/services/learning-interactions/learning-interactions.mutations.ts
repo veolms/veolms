@@ -163,6 +163,12 @@ export function useCreateLessonThread(courseId: string, lessonId: string) {
         context.clientId,
         serverThread,
       );
+      void queryClient.invalidateQueries({
+        queryKey: learningInteractionKeys.lessonInteractionCountsRoot(
+          courseId,
+          lessonId,
+        ),
+      });
     },
     onError: (_error, _payload, context) => {
       if (context) {
@@ -214,10 +220,20 @@ export function useUpdateThread(threadId?: string) {
   });
 }
 
-export function useDeleteThread() {
+export function useDeleteThread(courseId?: string, lessonId?: string) {
+  const queryClient = useQueryClient();
   return useMutation<any, ApiError, string>({
     mutationFn: (threadId) =>
       learningInteractionsService.deleteThread(threadId),
+    onSuccess: () => {
+      if (!courseId || !lessonId) return;
+      void queryClient.invalidateQueries({
+        queryKey: learningInteractionKeys.lessonInteractionCountsRoot(
+          courseId,
+          lessonId,
+        ),
+      });
+    },
   });
 }
 
@@ -437,12 +453,18 @@ export function useCreateNote() {
       });
       return { clientId: record.clientId };
     },
-    onSuccess: (serverNote, _payload, context) => {
+    onSuccess: (serverNote, payload, context) => {
       interactionCreationCoordinator.confirmNote(
         queryClient,
         context.clientId,
         serverNote,
       );
+      void queryClient.invalidateQueries({
+        queryKey: learningInteractionKeys.lessonInteractionCountsRoot(
+          payload.courseId,
+          payload.lessonId,
+        ),
+      });
     },
     onError: (_error, _payload, context) => {
       if (context) {
@@ -491,9 +513,19 @@ export function useUpdateNote(noteId?: string) {
   });
 }
 
-export function useDeleteNote() {
+export function useDeleteNote(courseId?: string, lessonId?: string) {
+  const queryClient = useQueryClient();
   return useMutation<any, ApiError, string>({
     mutationFn: (noteId) => learningInteractionsService.deleteNote(noteId),
+    onSuccess: () => {
+      if (!courseId || !lessonId) return;
+      void queryClient.invalidateQueries({
+        queryKey: learningInteractionKeys.lessonInteractionCountsRoot(
+          courseId,
+          lessonId,
+        ),
+      });
+    },
   });
 }
 
