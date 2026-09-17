@@ -4,6 +4,7 @@ import {
   isResponseSerializationError,
 } from "fastify-type-provider-zod";
 
+import type { ValidationIssue } from "@veolms/contracts";
 import { AppError, httpError } from "../lib/errors.ts";
 
 /**
@@ -68,25 +69,57 @@ export function registerErrorHandler(app: FastifyInstance): void {
         );
     }
 
-    if (error instanceof AppError) {
-      if (error.statusCode >= 500) {
+    const appError =
+      error instanceof AppError
+        ? error
+        : typeof error === "object" &&
+            error !== null &&
+            ("statusCode" in error || "status" in error || "code" in error)
+          ? new AppError(
+              Number(
+                (error as { statusCode?: unknown }).statusCode ||
+                  (error as { status?: unknown }).status ||
+                  500,
+              ),
+              String(
+                (error as { code?: unknown }).code ||
+                  (error as { error?: { code?: unknown } }).error?.code ||
+                  "ERROR",
+              ),
+              String(
+                (error as { message?: unknown }).message ||
+                  (error as { error?: { message?: unknown } }).error?.message ||
+                  "An unexpected error occurred.",
+              ),
+              (error as { issues?: ValidationIssue[] }).issues ||
+                (error as { error?: { issues?: ValidationIssue[] } }).error?.issues,
+            )
+          : null;
+
+    if (appError) {
+      if (appError.statusCode >= 500) {
         request.log.error({ err: error }, "Unhandled error");
 
         return reply
-          .code(error.statusCode)
+          .code(appError.statusCode)
           .send(
             httpError(
-              error.statusCode,
-              error.code,
+              appError.statusCode,
+              appError.code,
               "An unexpected error occurred.",
             ),
           );
       }
 
       return reply
-        .code(error.statusCode)
+        .code(appError.statusCode)
         .send(
-          httpError(error.statusCode, error.code, error.message, error.issues),
+          httpError(
+            appError.statusCode,
+            appError.code,
+            appError.message,
+            appError.issues,
+          ),
         );
     }
 

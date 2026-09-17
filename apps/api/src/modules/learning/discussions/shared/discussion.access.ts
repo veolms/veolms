@@ -115,7 +115,7 @@ export interface DiscussionAccess {
   listCourseParticipantIds(
     db: DatabaseExecutor,
     courseId: string,
-  ): Promise<string[]>;
+  ): Promise<readonly string[] | "all">;
   canModerateCourse(
     db: DatabaseExecutor,
     actor: DiscussionActor,
@@ -366,14 +366,66 @@ export function createDiscussionAccess(): DiscussionAccess {
     },
 
     async listCourseParticipantIds(db, courseId) {
-      const memberIds = await access.listActiveUserIdsForCourse(db, courseId);
-      const ids = new Set(memberIds);
       const course = await db
-        .selectFrom("courses")
-        .select("creator_id")
-        .where("id", "=", courseId)
+        .selectFrom("courses as c")
+        .leftJoin("course_access_rules as ar", "ar.course_id", "c.id")
+        .leftJoin("course_pricing as p", "p.course_id", "c.id")
+        .select((eb) => [
+          "c.id",
+          "c.creator_id",
+          "c.status",
+          isOpenCourseAccess(eb).as("isOpen"),
+        ])
+        .where("c.id", "=", courseId)
+        .where("c.deleted_at", "is", null)
         .executeTakeFirst();
-      if (course?.creator_id) ids.add(course.creator_id);
+
+      if (course && course.status === "published" && course.isOpen) {
+        return "all";
+      }
+
+      const ids = new Set<string>();
+      if (course?.creator_id) {
+        ids.add(course.creator_id);
+      }
+
+      const grantMemberIds = await access.listActiveUserIdsForCourse(db, courseId);
+      for (const id of grantMemberIds) ids.add(id);
+
+      const now = new Date();
+      const enrollments = await db
+        .selectFrom("enrollments")
+        .select("user_id")
+        .where("course_id", "=", courseId)
+        .where("status", "=", "active")
+        .where((eb) =>
+          eb.or([
+            eb("access_expires_at", "is", null),
+            eb("access_expires_at", ">", now),
+          ]),
+        )
+        .execute();
+      for (const row of enrollments) ids.add(row.user_id);
+
+      const roles = await db
+        .selectFrom("role_assignments")
+        .select("user_id")
+        .where((eb) =>
+          eb.or([
+            eb("course_id", "=", courseId),
+            eb("scope_type", "=", "platform"),
+          ]),
+        )
+        .execute();
+      for (const row of roles) ids.add(row.user_id);
+
+      const threadAuthors = await db
+        .selectFrom("learning_threads")
+        .select("user_id")
+        .where("course_id", "=", courseId)
+        .execute();
+      for (const row of threadAuthors) ids.add(row.user_id);
+
       return [...ids];
     },
 

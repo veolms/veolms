@@ -12,3 +12,4 @@ export * from "./optimistic-deletion-coordinator";
 export * from "./edit-cache-updaters";
 export * from "./attachment-model";
 export * from "./reply-pagination";
+export * from "./link-preview";

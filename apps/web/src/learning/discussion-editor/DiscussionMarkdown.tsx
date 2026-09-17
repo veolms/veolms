@@ -9,6 +9,11 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { DiscussionContent } from "./types";
 import type { DiscussionAttachmentItem } from "../discussion-attachments";
+import { LinkPreviewCard } from "../LinkPreviewCard";
+import {
+  extractFirstUrl,
+  useLinkPreview,
+} from "../../services/learning-interactions";
 
 const MENTION_PATTERN = /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,30})(?=[^A-Za-z0-9_]|$)/g;
 
@@ -118,6 +123,13 @@ export function DiscussionMarkdown({
         ),
     );
 
+  const rawText =
+    typeof content === "string"
+      ? content
+      : content.plainText || content.markdown || "";
+  const detectedUrl = extractFirstUrl(rawText);
+  const { data: linkPreview } = useLinkPreview(detectedUrl);
+
   return (
     <div
       role="document"
@@ -161,22 +173,22 @@ export function DiscussionMarkdown({
             return <HighlightedCodeBlock code={code} language={language} />;
           },
           h1: ({ children }) => (
-            <h1 className="mt-5 mb-2 text-xl font-bold leading-tight text-(--text)">
+            <h1 className="my-3 text-xl font-bold tracking-tight text-(--text) sm:text-2xl">
               {children}
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 className="mt-4 mb-2 text-lg font-bold leading-tight text-(--text)">
+            <h2 className="my-2.5 text-lg font-bold tracking-tight text-(--text) sm:text-xl">
               {children}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 className="mt-4 mb-1.5 text-base font-semibold text-(--text)">
+            <h3 className="my-2 text-base font-semibold text-(--text) sm:text-lg">
               {children}
             </h3>
           ),
           hr: () => (
-            <hr className="my-4 border-0 border-t [border-color:color-mix(in_srgb,var(--text)_12%,transparent)]" />
+            <hr className="my-4 border-t [border-color:color-mix(in_srgb,var(--text)_12%,transparent)]" />
           ),
           img: ({ src, alt }) => {
             if (!src) return null;
@@ -228,8 +240,8 @@ export function DiscussionMarkdown({
             </td>
           ),
           th: ({ children }) => (
-            <th className="bg-(--hover) px-3 py-2 font-semibold text-(--text)">
-              {highlightMentionsInNode(children)}
+            <th className="border-b px-3 py-2 font-semibold text-(--text) [border-color:color-mix(in_srgb,var(--text)_14%,transparent)]">
+              {children}
             </th>
           ),
           ul: ({ children }) => (
@@ -239,6 +251,12 @@ export function DiscussionMarkdown({
       >
         {content.markdown}
       </ReactMarkdown>
+
+      {linkPreview && (
+        <div className="mt-3">
+          <LinkPreviewCard preview={linkPreview} compact />
+        </div>
+      )}
     </div>
   );
 }

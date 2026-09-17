@@ -27,6 +27,7 @@ export const learningNoteSchema = z.object({
   likesCount: z.number().int().nonnegative().default(0).optional(),
   repliesCount: z.number().int().nonnegative().default(0).optional(),
   isLiked: z.boolean().optional(),
+  isBookmarked: z.boolean().optional(),
   isOwn: z.boolean().optional(),
   attachments: z
     .array(learningThreadAttachmentSummarySchema)
@@ -36,6 +37,14 @@ export const learningNoteSchema = z.object({
   updatedAt: z.string(),
 });
 export type LearningNote = z.infer<typeof learningNoteSchema>;
+
+export const toggleNoteBookmarkResponseSchema = z.object({
+  noteId: z.uuid(),
+  bookmarked: z.boolean(),
+});
+export type ToggleNoteBookmarkResponse = z.infer<
+  typeof toggleNoteBookmarkResponseSchema
+>;
 
 export const createLearningNoteRequestSchema = z.object({
   courseId: z.uuid(),
