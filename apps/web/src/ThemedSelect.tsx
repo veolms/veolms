@@ -103,6 +103,9 @@ export function ThemedSelect<Value extends string>({
   const [searchQuery, setSearchQuery] = useState("");
   const [position, setPosition] = useState<MenuPosition | null>(null);
   const debouncedSearchQuery = useDebounce(searchQuery, searchDebounceMs);
+  // Emptying or reopening the menu must reveal the complete option set
+  // immediately; only active typing should wait for the debounce window.
+  const effectiveSearchQuery = searchQuery.trim() ? debouncedSearchQuery : "";
 
   const foundIndex = options.findIndex(
     ([optionValue]) => optionValue === value,
@@ -119,7 +122,7 @@ export function ThemedSelect<Value extends string>({
   const menuId = id ? `${id}-menu` : undefined;
 
   const filteredOptions = useMemo(() => {
-    if (!searchable || !debouncedSearchQuery.trim()) {
+    if (!searchable || !effectiveSearchQuery.trim()) {
       if (defaultLimit && defaultLimit > 0 && options.length > defaultLimit) {
         const firstOption = options[0];
         const hasHeaderOption = Boolean(firstOption && firstOption[0] === "");
@@ -138,7 +141,7 @@ export function ThemedSelect<Value extends string>({
       }
       return options;
     }
-    const query = debouncedSearchQuery.trim().toLowerCase();
+    const query = effectiveSearchQuery.trim().toLowerCase();
     return options.filter(([val, label, extra]) => {
       const matchLabel = label.toLowerCase().includes(query);
       const matchVal = val.toLowerCase().includes(query);
@@ -155,7 +158,7 @@ export function ThemedSelect<Value extends string>({
         matchKeywords,
       );
     });
-  }, [options, searchable, debouncedSearchQuery, defaultLimit, value]);
+  }, [options, searchable, effectiveSearchQuery, defaultLimit, value]);
 
   const measureNaturalMenuWidth = useCallback(
     (trigger: HTMLButtonElement) => {
