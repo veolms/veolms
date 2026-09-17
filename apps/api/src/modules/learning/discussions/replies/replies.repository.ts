@@ -196,10 +196,10 @@ export function createRepliesRepository(): RepliesRepository {
             (
               r.is_accepted = ${accepted}
               and (
-                r.created_at > ${cursor.createdAt}
+                r.created_at < ${cursor.createdAt}
                 or (
                   r.created_at = ${cursor.createdAt}
-                  and r.id > ${cursor.id}::uuid
+                  and r.id < ${cursor.id}::uuid
                 )
               )
             )
@@ -210,8 +210,8 @@ export function createRepliesRepository(): RepliesRepository {
 
       const rows = await query
         .orderBy("r.is_accepted", "desc")
-        .orderBy("r.created_at", "asc")
-        .orderBy("r.id", "asc")
+        .orderBy("r.created_at", "desc")
+        .orderBy("r.id", "desc")
         .limit(options.limit + 1)
         .execute();
 

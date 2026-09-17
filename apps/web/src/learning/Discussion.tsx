@@ -792,6 +792,28 @@ function DiscussionInner({
     ],
   );
 
+  const allFeedPageSnapshotRef = useRef<Comment[] | null>(null);
+  const allFeedPagePendingRef = useRef(false);
+  const [, setIsAllFeedPagePending] = useState(false);
+
+  const isAllNotesSourceEnabled = Boolean(
+    courseId && lessonId && capabilities.allowNotes,
+  );
+  const isAllThreadsSourceEnabled = Boolean(shouldFetchThreads);
+  const isAllInitialLoading = Boolean(
+    isBackendMode &&
+    entryFilter === "all" &&
+    ((isAllNotesSourceEnabled && isNotesLoading) ||
+      (isAllThreadsSourceEnabled && isThreadsLoading)),
+  );
+
+  const visibleEntries =
+    entryFilter === "all" &&
+    allFeedPagePendingRef.current &&
+    allFeedPageSnapshotRef.current
+      ? allFeedPageSnapshotRef.current
+      : filteredEntries;
+
   const loadMoreDiscussion = useCallback(async () => {
     if (entryFilter === "note") {
       if (hasNextNotesPage && !isFetchingNextNotesPage) {
@@ -800,14 +822,30 @@ function DiscussionInner({
       return;
     }
     if (entryFilter === "all") {
-      await Promise.all([
-        hasNextThreadsPage && !isFetchingNextThreadsPage
-          ? fetchNextThreadsPage()
-          : undefined,
-        hasNextNotesPage && !isFetchingNextNotesPage
-          ? fetchNextNotesPage()
-          : undefined,
-      ]);
+      if (allFeedPagePendingRef.current) return;
+
+      const shouldLoadThreads = Boolean(
+        hasNextThreadsPage && !isFetchingNextThreadsPage,
+      );
+      const shouldLoadNotes = Boolean(
+        hasNextNotesPage && !isFetchingNextNotesPage,
+      );
+      if (!shouldLoadThreads && !shouldLoadNotes) return;
+
+      allFeedPagePendingRef.current = true;
+      allFeedPageSnapshotRef.current = filteredEntries;
+      setIsAllFeedPagePending(true);
+
+      try {
+        const requests: Promise<unknown>[] = [];
+        if (shouldLoadThreads) requests.push(fetchNextThreadsPage());
+        if (shouldLoadNotes) requests.push(fetchNextNotesPage());
+        await Promise.allSettled(requests);
+      } finally {
+        allFeedPagePendingRef.current = false;
+        allFeedPageSnapshotRef.current = null;
+        setIsAllFeedPagePending(false);
+      }
       return;
     }
     if (hasNextThreadsPage && !isFetchingNextThreadsPage) {
@@ -819,9 +857,17 @@ function DiscussionInner({
     fetchNextThreadsPage,
     hasNextNotesPage,
     hasNextThreadsPage,
+    filteredEntries,
     isFetchingNextNotesPage,
     isFetchingNextThreadsPage,
   ]);
+
+  useEffect(() => {
+    if (entryFilter === "all" || !allFeedPagePendingRef.current) return;
+    allFeedPagePendingRef.current = false;
+    allFeedPageSnapshotRef.current = null;
+    setIsAllFeedPagePending(false);
+  }, [entryFilter]);
 
   const hasNextDiscussionPage =
     isBackendMode &&
@@ -1733,7 +1779,7 @@ function DiscussionInner({
         notice={notice}
         entryFilter={entryFilter}
         feedSort={feedSort}
-        entries={filteredEntries}
+        entries={visibleEntries}
         discussionCount={discussionCount}
         draftIsTooLong={draftIsTooLong}
         draftAttachmentCount={draftAttachmentCount}
@@ -1747,6 +1793,7 @@ function DiscussionInner({
         hasNextPage={hasNextDiscussionPage}
         isFetchingNextPage={isFetchingNextDiscussionPage}
         isThreadsLoading={isThreadsLoading}
+        isAllInitialLoading={isAllInitialLoading}
         isThreadsError={isThreadsError}
         onRetryThreads={() => refetchThreads()}
         mobileBottomNavigation={mobileBottomNavigation}
@@ -1981,6 +2028,7 @@ interface ThreadSurfaceProps {
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   isThreadsLoading?: boolean;
+  isAllInitialLoading?: boolean;
   isThreadsError?: boolean;
   onRetryThreads?: () => void;
   mobileBottomNavigation: boolean;
@@ -2286,6 +2334,7 @@ function ThreadSurface({
   hasNextPage = false,
   isFetchingNextPage = false,
   isThreadsLoading = false,
+  isAllInitialLoading = false,
   isThreadsError = false,
   onRetryThreads,
   mobileBottomNavigation,
@@ -2723,7 +2772,17 @@ function ThreadSurface({
         className={`mt-2.5 ${isPhone ? "pb-36" : "pb-4"}`}
         data-discussion-feed-list
       >
-        {entryFilter === "note" && isNotesLoading ? (
+        {isAllInitialLoading ? (
+          <div
+            className="py-12 text-center"
+            data-testid="learning-all-loading"
+          >
+            <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
+            <p className="text-sm font-medium text-(--muted)">
+              Loading discussions…
+            </p>
+          </div>
+        ) : entryFilter === "note" && isNotesLoading ? (
           <div
             className="py-12 text-center"
             data-testid="learning-notes-loading"

@@ -153,7 +153,7 @@ interface CommentCardProps {
   courseId?: string;
 }
 
-export function CommentCard({
+export const CommentCard = React.memo(function CommentCard({
   comment,
   onLike,
   onOpenThread,
@@ -870,7 +870,7 @@ export function CommentCard({
       )}
     </article>
   );
-}
+});
 
 interface ReplyCardProps {
   parentThreadId?: string | number;
