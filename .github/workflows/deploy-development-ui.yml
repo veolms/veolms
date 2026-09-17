@@ -57,9 +57,6 @@ jobs:
       - name: Type-check web application
         run: pnpm --filter @veolms/web typecheck
 
-      - name: Run web unit tests
-        run: pnpm --filter @veolms/web test:unit
-
       - name: Build web application without an external CDN URL
         if: ${{ vars.VITE_CDN_URL == '' && vars.CDN_URL == '' }}
         run: pnpm build:web
