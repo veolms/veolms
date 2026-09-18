@@ -21,6 +21,7 @@ import type {
 } from "react";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
 import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
 import { DotsThreeCircleIcon as DotsThreeCircle } from "@phosphor-icons/react/DotsThreeCircle";
@@ -55,6 +56,7 @@ import { QuizBuilderPage } from "./quizzes/QuizBuilderPage";
 import { QuizDirectAttemptPage } from "./quizzes/QuizDirectAttemptPage";
 import { StudentsPage, StudentDetailsPage } from "./students";
 import { CouponBuilderPage } from "./coupons/CouponBuilderPage";
+import { CouponsAccessDenied } from "./coupons/CouponsAccessDenied";
 import { getVisibleCourses } from "./courses/catalogue";
 import type {
   Course,
@@ -105,6 +107,7 @@ import {
   getUserRoles,
   getVisibleWorkspaceRoles,
   hasAdminRole,
+  isStaffRole,
   resolveWorkspaceRole,
   getWorkspaceRoleStorageKey,
   getRoleDisplayName,
@@ -3338,6 +3341,17 @@ export function CoursesPage({
       );
     }
     if (surfacePage === "coupon-builder") {
+      if (!isAuthReady) {
+        return (
+          <main data-coupon-surface="" className="mx-auto grid w-full max-w-[1320px] place-items-center py-24">
+            <CircleNotch size={28} className="mb-3 animate-spin text-(--accent)" />
+            <p className="text-sm text-(--muted)">Loading coupon builder...</p>
+          </main>
+        );
+      }
+      if (!activeUser || !isStaffRole(userRoles)) {
+        return <CouponsAccessDenied onNavigatePage={onNavigatePage} />;
+      }
       return (
         <CouponBuilderPage
           couponId={couponId}

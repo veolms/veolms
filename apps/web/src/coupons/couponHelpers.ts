@@ -120,24 +120,40 @@ export function couponMoneyToForm(coupon: Coupon) {
   };
 }
 
+const PACKED_COUPON_COPY_V1_PREFIX = "__v1__:";
+
 export function packCouponCopy(title: string, description: string): string | undefined {
   const nextTitle = title.trim();
   const nextDescription = description.trim();
-  if (nextTitle && nextDescription) return `${nextTitle}. ${nextDescription}`;
-  return nextTitle || nextDescription || undefined;
+  if (!nextTitle && !nextDescription) return undefined;
+  return `${PACKED_COUPON_COPY_V1_PREFIX}${JSON.stringify({ t: nextTitle, d: nextDescription })}`;
 }
 
 export function unpackCouponCopy(raw?: string | null): { title: string; description: string } {
   if (!raw?.trim()) return { title: "", description: "" };
-  const splitAt = raw.indexOf(". ");
-  if (splitAt === -1) return { title: raw, description: "" };
+  const str = raw.trim();
+  if (str.startsWith(PACKED_COUPON_COPY_V1_PREFIX)) {
+    try {
+      const parsed = JSON.parse(str.slice(PACKED_COUPON_COPY_V1_PREFIX.length));
+      return {
+        title: typeof parsed?.t === "string" ? parsed.t : "",
+        description: typeof parsed?.d === "string" ? parsed.d : "",
+      };
+    } catch {
+      // Fall back to legacy parsing
+    }
+  }
+  const splitAt = str.indexOf(". ");
+  if (splitAt === -1) return { title: str, description: "" };
   return {
-    title: raw.slice(0, splitAt),
-    description: raw.slice(splitAt + 2),
+    title: str.slice(0, splitAt),
+    description: str.slice(splitAt + 2),
   };
 }
 
 export function couponCampaignTitle(coupon: Coupon) {
+  const { title } = unpackCouponCopy(coupon.description);
+  if (title) return title;
   const description = coupon.description?.trim();
   if (!description) {
     return `${coupon.code} offer`;

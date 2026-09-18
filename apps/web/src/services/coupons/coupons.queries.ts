@@ -7,9 +7,11 @@ import { couponsService } from "./coupons.service";
 export function useCouponsList(options?: {
   courseId?: string | null;
   limit?: number;
+  enabled?: boolean;
 }) {
   const limit = options?.limit ?? 30;
   const courseId = options?.courseId ?? undefined;
+  const enabled = options?.enabled ?? true;
 
   return useInfiniteQuery<CouponListResponse, ApiError>({
     queryKey: couponKeys.list({ courseId, limit }),
@@ -23,6 +25,7 @@ export function useCouponsList(options?: {
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: 30 * 1000,
     refetchInterval: 30_000,
+    enabled,
   });
 }
 

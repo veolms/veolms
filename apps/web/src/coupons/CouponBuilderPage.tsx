@@ -290,7 +290,11 @@ export function CouponBuilderPage({
     const packedDescription = packCouponCopy(cleanTitle, description);
 
     try {
-      if (isEditMode && existingCoupon) {
+      if (isEditMode) {
+        if (!existingCoupon) {
+          setErrorMessage("Could not load coupon details to update.");
+          return;
+        }
         const payload: UpdateCouponRequest = {
           description: packedDescription,
           discountType,

@@ -7,6 +7,17 @@ export const ADMIN_ROLES = new Set([
   "platform administrator",
 ]);
 
+export const STAFF_ROLES = new Set([
+  "admin",
+  "administrator",
+  "creator",
+  "instructor",
+  "platform_admin",
+  "platform administrator",
+  "superadmin",
+  "super_admin",
+]);
+
 export const CREATOR_ROLES = new Set([
   "creator",
   "instructor",
@@ -79,6 +90,15 @@ export function hasAdminRole(
     return false;
   }
   return normalizeRoles(roles).some((role) => ADMIN_ROLES.has(role));
+}
+
+export function isStaffRole(
+  roles: readonly string[] | null | undefined,
+): boolean {
+  if (!roles?.length) {
+    return false;
+  }
+  return normalizeRoles(roles).some((role) => STAFF_ROLES.has(role));
 }
 
 export function getRoleDisplayName(

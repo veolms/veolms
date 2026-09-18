@@ -52,12 +52,6 @@ export function CreateCouponDrawer({
 }: CreateCouponDrawerProps) {
   const isEditMode = Boolean(couponToEdit);
 
-  const defaultStart = toLocalDateTimeValue(new Date(), "start");
-  const defaultEnd = toLocalDateTimeValue(
-    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    "end",
-  );
-
   const [code, setCode] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -66,8 +60,8 @@ export function CreateCouponDrawer({
   const [maxDiscountAmount, setMaxDiscountAmount] = useState<string>("");
   const [minOrderAmount, setMinOrderAmount] = useState<string>("");
 
-  const [startsAt, setStartsAt] = useState(defaultStart);
-  const [expiresAt, setExpiresAt] = useState(defaultEnd);
+  const [startsAt, setStartsAt] = useState("");
+  const [expiresAt, setExpiresAt] = useState("");
 
   const [hasUsageLimit, setHasUsageLimit] = useState(false);
   const [usageLimit, setUsageLimit] = useState<number | "">(500);
@@ -108,6 +102,8 @@ export function CreateCouponDrawer({
   };
 
   useEffect(() => {
+    if (!isOpen) return;
+
     if (couponToEdit) {
       const { title: unpackedTitle, description: unpackedDesc } =
         unpackCouponCopy(couponToEdit.description);
@@ -123,11 +119,17 @@ export function CreateCouponDrawer({
         couponToEdit.minOrderAmount ? String(couponToEdit.minOrderAmount) : "",
       );
 
+      const editDefaultStart = toLocalDateTimeValue(new Date(), "start");
+      const editDefaultEnd = toLocalDateTimeValue(
+        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        "end",
+      );
+
       setStartsAt(
-        isoToLocalDateTimeValue(couponToEdit.startsAt) || defaultStart,
+        isoToLocalDateTimeValue(couponToEdit.startsAt) || editDefaultStart,
       );
       setExpiresAt(
-        isoToLocalDateTimeValue(couponToEdit.expiresAt) || defaultEnd,
+        isoToLocalDateTimeValue(couponToEdit.expiresAt) || editDefaultEnd,
       );
 
       if (couponToEdit.globalUsageLimit) {
@@ -144,6 +146,12 @@ export function CreateCouponDrawer({
       setErrorMessage(null);
     } else {
       // Defaults for new coupon
+      const newDefaultStart = toLocalDateTimeValue(new Date(), "start");
+      const newDefaultEnd = toLocalDateTimeValue(
+        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        "end",
+      );
+
       setCode("DIWALI50");
       setTitle("Diwali Special Offer");
       setDescription("Flat 50% off on all courses this Diwali!");
@@ -151,8 +159,8 @@ export function CreateCouponDrawer({
       setDiscountValue(50);
       setMaxDiscountAmount("");
       setMinOrderAmount("");
-      setStartsAt(defaultStart);
-      setExpiresAt(defaultEnd);
+      setStartsAt(newDefaultStart);
+      setExpiresAt(newDefaultEnd);
       setHasUsageLimit(true);
       setUsageLimit(2000);
       setHasPerUserLimit(true);
@@ -160,7 +168,7 @@ export function CreateCouponDrawer({
       setIsActive(true);
       setErrorMessage(null);
     }
-  }, [couponToEdit, defaultEnd, defaultStart, isOpen]);
+  }, [couponToEdit, isOpen]);
 
   if (!isOpen) return null;
 

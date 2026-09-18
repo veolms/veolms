@@ -13,7 +13,11 @@ export type {
 } from "./couponHelpers";
 export { getCouponStatus } from "./couponHelpers";
 
-export function useCouponsFilter(options?: { courseId?: string | null }) {
+export function useCouponsFilter(options?: {
+  courseId?: string | null;
+  enabled?: boolean;
+}) {
+  const enabled = options?.enabled ?? true;
   const {
     data,
     isLoading,
@@ -23,7 +27,7 @@ export function useCouponsFilter(options?: { courseId?: string | null }) {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useCouponsList({ courseId: options?.courseId, limit: 10 });
+  } = useCouponsList({ courseId: options?.courseId, limit: 10, enabled });
 
   const coupons = useMemo(
     () => data?.pages.flatMap((page) => page.items) ?? [],
@@ -160,6 +164,25 @@ export function useCouponsFilter(options?: { courseId?: string | null }) {
         );
       });
   }, [coupons, now, activeTab, discountTypeFilter, searchQuery, sortBy]);
+
+  useEffect(() => {
+    if (
+      filteredCoupons.length === 0 &&
+      hasNextPage &&
+      !isFetchingNextPage &&
+      !isLoading &&
+      !isError
+    ) {
+      void fetchNextPage();
+    }
+  }, [
+    filteredCoupons.length,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError,
+    fetchNextPage,
+  ]);
 
   return {
     coupons: filteredCoupons,

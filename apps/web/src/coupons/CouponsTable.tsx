@@ -92,18 +92,48 @@ export function CouponsTable({
 
   if (coupons.length === 0) {
     return (
-      <div className="grid place-items-center p-6 sm:p-12 text-center">
-        <span className="flex size-10 sm:size-11 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent)">
-          <Tag size={22} weight="bold" />
-        </span>
-        <h3 className="mt-2.5 sm:mt-3 text-sm font-semibold">No coupons found</h3>
-        <p className="mt-1 max-w-sm text-xs leading-5 text-(--muted)">
-          Create a coupon to start offering discounts, or adjust the filters to
-          see more of your library.
-        </p>
-        <div className="mt-3.5 sm:mt-4">
-          <Button onClick={onCreateNew}>Create coupon</Button>
+      <div className="flex flex-col">
+        <div className="grid place-items-center p-6 sm:p-12 text-center">
+          <span className="flex size-10 sm:size-11 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent)">
+            <Tag size={22} weight="bold" />
+          </span>
+          <h3 className="mt-2.5 sm:mt-3 text-sm font-semibold">
+            {isFetchingNextPage ? "Searching coupons..." : "No coupons found"}
+          </h3>
+          <p className="mt-1 max-w-sm text-xs leading-5 text-(--muted)">
+            {hasNextPage
+              ? "Checking more pages from your library..."
+              : "Create a coupon to start offering discounts, or adjust the filters to see more of your library."}
+          </p>
+          {!hasNextPage && !isFetchingNextPage ? (
+            <div className="mt-3.5 sm:mt-4">
+              <Button onClick={onCreateNew}>Create coupon</Button>
+            </div>
+          ) : null}
         </div>
+
+        {hasNextPage ? (
+          <div
+            ref={observerTarget}
+            className="flex flex-col items-center justify-center p-4 sm:p-6 border-t border-(--border)"
+          >
+            {isFetchingNextPage ? (
+              <div className="flex items-center gap-2.5 text-xs font-medium text-(--muted)">
+                <div className="size-4 animate-spin rounded-full border-2 border-(--accent) border-t-transparent" />
+                <span>Loading more coupons...</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fetchNextPage?.()}
+                className="rounded-xl border border-(--border) bg-(--card-surface) px-4 py-2 text-xs font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
+                style={{ boxShadow: "var(--card-shadow)" }}
+              >
+                Load more coupons
+              </button>
+            )}
+          </div>
+        ) : null}
       </div>
     );
   }

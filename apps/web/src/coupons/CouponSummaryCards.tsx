@@ -39,18 +39,14 @@ function StatCard({
   onClick?: () => void;
 }) {
   const clickable = Boolean(onClick);
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={!clickable}
-      className={`group rounded-[12px] sm:rounded-[16px] border bg-(--card-surface-raised,var(--surface)) p-2.5 sm:p-5 text-left transition-all duration-200 hover:shadow-(--card-hover-shadow) ${
-        active
-          ? "border-(--accent) ring-2 ring-(--accent)/20"
-          : "border-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
-      } ${clickable ? "cursor-pointer" : "cursor-default"}`}
-      style={{ boxShadow: "var(--card-shadow)" }}
-    >
+  const cardClassName = `group rounded-[12px] sm:rounded-[16px] border bg-(--card-surface-raised,var(--surface)) p-2.5 sm:p-5 text-left transition-all duration-200 hover:shadow-(--card-hover-shadow) ${
+    active
+      ? "border-(--accent) ring-2 ring-(--accent)/20"
+      : "border-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
+  } ${clickable ? "cursor-pointer" : "cursor-default"}`;
+
+  const content = (
+    <>
       <div className="flex items-center justify-between gap-1.5 sm:gap-2">
         <p className="truncate text-[0.7rem] sm:text-xs font-semibold tracking-wide text-(--muted) group-hover:text-(--text) transition-colors">
           {label}
@@ -75,7 +71,30 @@ function StatCard({
           {detail}
         </p>
       ) : null}
-    </button>
+    </>
+  );
+
+  if (clickable) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        className={cardClassName}
+        style={{ boxShadow: "var(--card-shadow)" }}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className={cardClassName}
+      style={{ boxShadow: "var(--card-shadow)" }}
+    >
+      {content}
+    </div>
   );
 }
 

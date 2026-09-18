@@ -1,18 +1,19 @@
 import { useEffect } from "react";
 import type { Coupon } from "@veolms/contracts";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
-import { ShieldWarningIcon as ShieldWarning } from "@phosphor-icons/react/ShieldWarning";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
 import { Button } from "../components/Button";
 import { useCurrentUser } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
-import { hasAdminRole, getUserRoles } from "../shell/workspaceRole";
+import { getUserRoles, isStaffRole } from "../shell/workspaceRole";
 import type { NavigateTo } from "../routing/navigation";
 import { useUpdateCoupon } from "../services/coupons";
 import { getApiError } from "../lib/api-error";
 import { CouponSummaryCards } from "./CouponSummaryCards";
 import { CouponFiltersBar } from "./CouponFiltersBar";
 import { CouponsTable } from "./CouponsTable";
+import { CouponsAccessDenied } from "./CouponsAccessDenied";
 import { useCouponsFilter } from "./useCouponsFilter";
 import { surfaceClass } from "./couponHelpers";
 
@@ -24,26 +25,10 @@ export interface CouponsPageProps {
 export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
   const { data: authUser, isFetched: authUserFetched } = useCurrentUser();
   const storeUser = useAuthStore((s) => s.user);
+  const isAuthReady = Boolean(storeUser) || authUserFetched;
   const user = authUserFetched ? authUser : storeUser;
   const userRoles = getUserRoles(user);
-  const isAdmin = hasAdminRole(userRoles);
-  const isAuthorized =
-    !user ||
-    isAdmin ||
-    Boolean(
-      userRoles?.some((role) =>
-        [
-          "admin",
-          "administrator",
-          "creator",
-          "instructor",
-          "platform_admin",
-          "platform administrator",
-          "superadmin",
-          "super_admin",
-        ].includes(role.trim().toLowerCase()),
-      ),
-    );
+  const isAuthorized = Boolean(user && isStaffRole(userRoles));
 
   const {
     coupons,
@@ -64,7 +49,7 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
-  } = useCouponsFilter();
+  } = useCouponsFilter({ enabled: isAuthorized });
 
   const updateMutation = useUpdateCoupon();
 
@@ -110,26 +95,17 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
     }
   };
 
-  if (user && !isAuthorized) {
+  if (!isAuthReady) {
     return (
-      <main data-coupon-surface="" className="mx-auto grid w-full max-w-[1320px] gap-3.5 sm:gap-6">
-        <div className={`${surfaceClass} grid place-items-center p-10 text-center`}>
-          <span className="flex size-11 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent)">
-            <ShieldWarning size={24} weight="bold" />
-          </span>
-          <h2 className="mt-3 text-lg font-semibold">Access denied</h2>
-          <p className="mt-1 max-w-md text-sm text-(--muted)">
-            Coupon management is available to academy administrators and
-            instructors.
-          </p>
-          <div className="mt-4">
-            <Button onClick={() => onNavigatePage?.("/courses")}>
-              Return to courses
-            </Button>
-          </div>
-        </div>
+      <main data-coupon-surface="" className="mx-auto grid w-full max-w-[1320px] place-items-center py-24">
+        <CircleNotch size={28} className="mb-3 animate-spin text-(--accent)" />
+        <p className="text-sm text-(--muted)">Loading promotions workspace...</p>
       </main>
     );
+  }
+
+  if (!isAuthorized) {
+    return <CouponsAccessDenied onNavigatePage={onNavigatePage} />;
   }
 
   return (
