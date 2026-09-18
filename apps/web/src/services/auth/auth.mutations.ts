@@ -32,6 +32,12 @@ import { clearCoursePlayerSessions } from "../../learning/coursePlayerNavigation
 import { authKeys } from "./auth.keys";
 import { authService, type TotpSetupResponse } from "./auth.service";
 import { navigationKeys } from "../navigation";
+import {
+  learningInteractionKeys,
+  desiredStateCoordinator,
+  interactionCreationCoordinator,
+  optimisticDeletionCoordinator,
+} from "../learning-interactions";
 
 function persistAuthenticatedSession(
   queryClient: QueryClient,
@@ -68,6 +74,10 @@ function persistAuthenticatedSession(
   // associated with the newly authenticated account.
   clearCoursePlayerSessions();
   authStore.setUser(data.user);
+  desiredStateCoordinator.reset();
+  interactionCreationCoordinator.reset();
+  optimisticDeletionCoordinator.reset();
+  queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
   queryClient.setQueryData(authKeys.me(), currentUser);
   queryClient.invalidateQueries({ queryKey: navigationKeys.all });
 }
@@ -296,9 +306,13 @@ export function useLogout() {
     mutationFn: () => authService.logout(),
     onSettled: () => {
       authStore.clearAuth();
+      desiredStateCoordinator.reset();
+      interactionCreationCoordinator.reset();
+      optimisticDeletionCoordinator.reset();
       clearCoursePlayerSessions();
       queryClient.setQueryData(authKeys.me(), null);
       queryClient.removeQueries({ queryKey: authKeys.me() });
+      queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
       queryClient.removeQueries({ queryKey: navigationKeys.all });
       queryClient.invalidateQueries({ queryKey: authKeys.me() });
       queryClient.invalidateQueries({ queryKey: navigationKeys.all });
@@ -313,6 +327,9 @@ export function useDeactivateAccount() {
     mutationFn: () => authService.deactivateAccount(),
     onSettled: () => {
       authStore.clearAuth();
+      desiredStateCoordinator.reset();
+      interactionCreationCoordinator.reset();
+      optimisticDeletionCoordinator.reset();
       clearCoursePlayerSessions();
 
       // A deactivated account must not leave protected data in the client

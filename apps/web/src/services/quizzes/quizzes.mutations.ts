@@ -5,6 +5,7 @@ import type {
   BulkQuizAnswersRequest,
   CreateQuizQuestionRequest,
   CreateQuizRequest,
+  CreateQuizWithQuestionsRequest,
   UpdateQuizAssignmentRequest,
   UpdateQuizQuestionRequest,
   UpdateQuizRequest,
@@ -15,7 +16,21 @@ export function useCreateQuiz() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: CreateQuizRequest) => quizzesService.create(payload),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: quizKeys.mine() }),
+    onSuccess: (data) => {
+      qc.setQueryData(quizKeys.detail(data.id), data);
+      void qc.invalidateQueries({ queryKey: quizKeys.mine() });
+    },
+  });
+}
+export function useCreateQuizWithQuestions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateQuizWithQuestionsRequest) =>
+      quizzesService.createWithQuestions(payload),
+    onSuccess: (data) => {
+      qc.setQueryData(quizKeys.detail(data.id), data);
+      void qc.invalidateQueries({ queryKey: quizKeys.mine() });
+    },
   });
 }
 export function useUpdateQuiz() {

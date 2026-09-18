@@ -5,57 +5,55 @@ import type { Database } from "./schema/index.ts";
 export const SYSTEM_ROLES = {
   admin: {
     id: "00000000-0000-4000-8000-000000000000",
-    role_key: "admin",
-    name: "Administrator",
-    description: "Operates the entire VeoLMS platform with full access",
+    name: "admin",
+    description: "System administrator with full platform access",
+    is_system: true,
+  },
+  instructor: {
+    id: "00000000-0000-4000-8000-000000000001",
+    name: "instructor",
+    description: "Course instructor and author",
+    is_system: true,
+  },
+  student: {
+    id: "00000000-0000-4000-8000-000000000002",
+    name: "student",
+    description: "Enrolled student",
     is_system: true,
   },
   course_manager: {
     id: "00000000-0000-4000-8000-000000000003",
-    role_key: "course_manager",
-    name: "Course Manager",
+    name: "course_manager",
     description: "Full course lifecycle and curriculum management",
     is_system: true,
   },
   content_editor: {
     id: "00000000-0000-4000-8000-000000000004",
-    role_key: "content_editor",
-    name: "Content Editor",
+    name: "content_editor",
     description: "Curriculum and lesson content editing",
     is_system: true,
   },
   thumbnail_editor: {
     id: "00000000-0000-4000-8000-000000000005",
-    role_key: "thumbnail_editor",
-    name: "Thumbnail Editor",
+    name: "thumbnail_editor",
     description: "Course and lesson thumbnails only",
-    is_system: true,
-  },
-  instructor: {
-    id: "00000000-0000-4000-8000-000000000006",
-    role_key: "instructor",
-    name: "Instructor",
-    description: "Teaching, curriculum authoring, grading and discussion moderation",
     is_system: true,
   },
   teaching_assistant: {
     id: "00000000-0000-4000-8000-000000000007",
-    role_key: "teaching_assistant",
-    name: "Teaching Assistant",
+    name: "teaching_assistant",
     description: "Grading and discussion moderation",
     is_system: true,
   },
   reviewer: {
     id: "00000000-0000-4000-8000-000000000008",
-    role_key: "reviewer",
-    name: "Reviewer",
+    name: "reviewer",
     description: "Preview draft course content read-only",
     is_system: true,
   },
   analytics_viewer: {
     id: "00000000-0000-4000-8000-000000000009",
-    role_key: "analytics_viewer",
-    name: "Analytics Viewer",
+    name: "analytics_viewer",
     description: "Read-only analytics across courses and revenue",
     is_system: true,
   },
@@ -64,13 +62,7 @@ export const SYSTEM_ROLES = {
 export const ROLES = {
   admin: SYSTEM_ROLES.admin,
   instructor: SYSTEM_ROLES.instructor,
-  student: {
-    id: "00000000-0000-4000-8000-000000000002",
-    name: "student",
-    role_key: "student",
-    description: "Enrolled student",
-    is_system: true,
-  },
+  student: SYSTEM_ROLES.student,
 } as const;
 
 export const STANDARD_FEATURES = [
@@ -205,6 +197,7 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<keyof typeof SYSTEM_ROLES, readonl
     "analytics.revenue.read",
     "course.read",
   ],
+  student: [], // Student content access is governed by active course enrollments, not administrative roles
 };
 
 // Legacy Menus definition for sidenav menu compatibility
@@ -393,20 +386,23 @@ export async function seedRolesAndPermissions(database: Kysely<Database>): Promi
       .execute();
   }
 
-  // 3. Seed System Roles
+  // 3. Seed System Roles (cleaning up any legacy duplicate IDs first)
+  await database
+    .deleteFrom("roles")
+    .where("id", "=", "00000000-0000-4000-8000-000000000006")
+    .execute();
+
   for (const role of Object.values(SYSTEM_ROLES)) {
     await database
       .insertInto("roles")
       .values({
         id: role.id,
-        role_key: role.role_key,
         name: role.name,
         description: role.description,
         is_system: true,
       })
       .onConflict((conflict) =>
         conflict.column("id").doUpdateSet({
-          role_key: role.role_key,
           name: role.name,
           description: role.description,
           is_system: true,

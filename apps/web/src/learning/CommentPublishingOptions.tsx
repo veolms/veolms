@@ -5,15 +5,17 @@ import { GlobeIcon as Globe } from "@phosphor-icons/react/Globe";
 import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { NotepadIcon as Notepad } from "@phosphor-icons/react/Notepad";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
-import { useId, type ReactNode } from "react";
+import { useEffect, useId, type ReactNode } from "react";
 import type {
   DiscussionEntryKind,
   DiscussionVisibility,
 } from "./discussion-editor/types";
+import type { InteractionCapabilities } from "./discussionFeed";
 
 interface CommentPublishingOptionsProps {
   entryKind: DiscussionEntryKind;
   visibility: DiscussionVisibility;
+  capabilities?: InteractionCapabilities;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
 }
@@ -70,13 +72,29 @@ const entryKindOptions: readonly PublishingOption<DiscussionEntryKind>[] = [
 export function CommentPublishingOptions({
   entryKind,
   visibility,
+  capabilities,
   onEntryKindChange,
   onVisibilityChange,
 }: CommentPublishingOptionsProps) {
+  const availableEntryKindOptions = capabilities
+    ? entryKindOptions.filter((option) => {
+        if (option.value === "comment") return capabilities.allowComments;
+        if (option.value === "question") return capabilities.allowQa;
+        if (option.value === "note") return capabilities.allowNotes;
+        return false;
+      })
+    : entryKindOptions;
+
   const availableVisibilityOptions =
     entryKind === "note"
       ? visibilityOptions
       : visibilityOptions.filter((option) => option.value !== "private");
+
+  useEffect(() => {
+    if (entryKind !== "note" && visibility === "private") {
+      onVisibilityChange("public");
+    }
+  }, [entryKind, onVisibilityChange, visibility]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-4 py-5 sm:px-5 sm:py-6">
@@ -89,7 +107,7 @@ export function CommentPublishingOptions({
           role="radiogroup"
           aria-label="Post as"
         >
-          {entryKindOptions.map((option, index) => (
+          {availableEntryKindOptions.map((option, index) => (
             <PublishingRow
               key={option.value}
               name="discussion-entry-kind"

@@ -135,12 +135,25 @@ export async function seedAdminUsers(
       })
       .execute();
 
-    // Assign ONLY the admin role
+    // Assign the admin role in user_roles
     await database
       .insertInto("user_roles")
       .values({
         user_id: admin.id,
         role_id: adminRoleId,
+      })
+      .onConflict((conflict) => conflict.doNothing())
+      .execute();
+
+    // Assign platform-scoped role_assignment
+    await database
+      .insertInto("role_assignments")
+      .values({
+        id: crypto.randomUUID(),
+        user_id: admin.id,
+        role_id: adminRoleId,
+        scope_type: "platform",
+        course_id: null,
       })
       .onConflict((conflict) => conflict.doNothing())
       .execute();

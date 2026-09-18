@@ -775,7 +775,10 @@ export function createCourseService({
     userRoles?: readonly string[],
   ) {
     const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const isInstructor = userRoles?.includes("instructor");
+    const isInstructor =
+      userRoles?.includes(INSTRUCTOR_ROLE) ||
+      userRoles?.includes("instructor") ||
+      userRoles?.includes("creator");
     const course = await courseRepo.findCourseById(database, courseId);
     if (!course) {
       throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
@@ -941,6 +944,7 @@ export function createCourseService({
             allowQa: settings.allow_qa,
             allowComments: settings.allow_comments,
             allowDownloads: settings.allow_downloads,
+            allowNotes: settings.allow_notes,
             certificateEnabled: settings.certificate_enabled,
             showInstructorName: settings.show_instructor_name,
             language: settings.language,
@@ -1164,6 +1168,7 @@ export function createCourseService({
             allowQa: settings.allow_qa,
             allowComments: settings.allow_comments,
             allowDownloads: settings.allow_downloads,
+            allowNotes: settings.allow_notes,
             certificateEnabled: settings.certificate_enabled,
             showInstructorName: settings.show_instructor_name,
             language: settings.language,

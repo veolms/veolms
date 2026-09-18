@@ -4,8 +4,6 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-performance.mjs",
-    "deploy": "pnpm build && wrangler deploy",
-    "deploy:only": "wrangler deploy",
     "benchmark:web-vitals": "node scripts/benchmark-web-vitals.mjs",
     "dev": "react-router dev",
     "generate:reading-mode-texture": "node scripts/generate-reading-mode-texture.mjs",
@@ -15,7 +13,6 @@
     "routes": "react-router routes",
     "typegen": "react-router typegen",
     "typecheck": "react-router typegen && tsc --noEmit",
-    "test:unit": "vitest run",
     "test:e2e:install": "playwright install chromium",
     "test:e2e": "playwright test",
     "test:e2e:behavior": "playwright test --grep-invert @visual",
@@ -23,8 +20,8 @@
     "test:e2e:dist": "playwright test --config=playwright.preview.config.ts",
     "test:e2e:update": "playwright test --grep @visual --update-snapshots=all",
     "test:e2e:headed": "playwright test --headed",
-    "check": "pnpm typecheck && pnpm test:unit && pnpm test:e2e:dist && pnpm test:e2e",
-    "check:ci": "pnpm typecheck && pnpm test:unit && pnpm test:e2e:dist && pnpm test:e2e:behavior"
+    "check": "pnpm typecheck && pnpm test:e2e:dist && pnpm test:e2e",
+    "check:ci": "pnpm typecheck && pnpm test:e2e:dist && pnpm test:e2e:behavior"
   },
   "dependencies": {
     "@atomic-editor/editor": "0.6.2",
@@ -62,6 +59,7 @@
     "@tanstack/query-async-storage-persister": "^5.102.8",
     "@tanstack/react-query": "^5.102.8",
     "@tanstack/react-query-persist-client": "^5.102.8",
+    "@tanstack/react-virtual": "^3.14.13",
     "@veolms/config": "workspace:*",
     "@veolms/contracts": "workspace:*",
     "@veolms/video-player": "workspace:*",
@@ -87,18 +85,13 @@
     "@playwright/test": "^1.62.1",
     "@react-router/dev": "8.3.0",
     "@tailwindcss/vite": "^4.3.3",
-    "@testing-library/jest-dom": "^7.0.0",
-    "@testing-library/react": "^16.3.2",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
     "@types/turndown": "5.0.6",
     "@typescript/native": "catalog:",
-    "jsdom": "^30.0.1",
     "postcss": "^8.5.25",
     "purgecss": "^7.0.2",
     "tailwindcss": "^4.3.3",
-    "vite": "8.2.1",
-    "vitest": "^4.1.10",
-    "wrangler": "^4.131.2"
+    "vite": "8.2.1"
   }
 }

@@ -35,7 +35,15 @@ export function isSettingsPath(pathname: string): boolean {
 
 export function isCourseAuthorPath(pathname: string): boolean {
   const path = pathname.split(/[?#]/, 1)[0] || "/";
-  return normalizeAppPath(path) === "/courses/create";
+  const normalized = normalizeAppPath(path);
+  return (
+    normalized === "/courses/create" ||
+    normalized === "/students" ||
+    normalized.startsWith("/students/") ||
+    normalized === "/quizzes/create" ||
+    (normalized.startsWith("/quizzes/") &&
+      !normalized.startsWith("/quizzes/attempt/"))
+  );
 }
 
 export function hasCourseAuthorRole(

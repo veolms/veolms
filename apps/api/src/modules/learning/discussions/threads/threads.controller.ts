@@ -15,7 +15,7 @@ export interface ThreadsController {
       Body: CreateLearningThreadRequest;
     }>,
     reply: FastifyReply,
-  ): Promise<void>;
+  ): Promise<any>;
 
   listLessonThreads(
     request: FastifyRequest<{
@@ -23,21 +23,21 @@ export interface ThreadsController {
       Querystring: ListLearningThreadsQuery;
     }>,
     reply: FastifyReply,
-  ): Promise<void>;
+  ): Promise<any>;
 
   listHubThreads(
     request: FastifyRequest<{
       Querystring: ListLearningThreadsQuery;
     }>,
     reply: FastifyReply,
-  ): Promise<void>;
+  ): Promise<any>;
 
   getThread(
     request: FastifyRequest<{
       Params: { threadId: string };
     }>,
     reply: FastifyReply,
-  ): Promise<void>;
+  ): Promise<any>;
 
   updateThread(
     request: FastifyRequest<{
@@ -45,14 +45,14 @@ export interface ThreadsController {
       Body: UpdateLearningThreadRequest;
     }>,
     reply: FastifyReply,
-  ): Promise<void>;
+  ): Promise<any>;
 
   deleteThread(
     request: FastifyRequest<{
       Params: { threadId: string };
     }>,
     reply: FastifyReply,
-  ): Promise<void>;
+  ): Promise<any>;
 }
 
 export function createThreadsController({
@@ -81,7 +81,7 @@ export function createThreadsController({
         attachmentIds: body.attachmentIds,
       });
 
-      reply.status(201).send(thread);
+      return reply.status(201).send(thread);
     },
 
     async listLessonThreads(request, reply) {
@@ -97,7 +97,7 @@ export function createThreadsController({
         roles: user.roles,
       });
 
-      reply.status(200).send(result);
+      return reply.status(200).send(result);
     },
 
     async listHubThreads(request, reply) {
@@ -110,7 +110,7 @@ export function createThreadsController({
         roles: user.roles,
       });
 
-      reply.status(200).send(result);
+      return reply.status(200).send(result);
     },
 
     async getThread(request, reply) {
@@ -122,7 +122,7 @@ export function createThreadsController({
         threadId,
         discussionActor(user),
       );
-      reply.status(200).send(thread);
+      return reply.status(200).send(thread);
     },
 
     async updateThread(request, reply) {
@@ -136,7 +136,7 @@ export function createThreadsController({
         discussionActor(user),
         body,
       );
-      reply.status(200).send(thread);
+      return reply.status(200).send(thread);
     },
 
     async deleteThread(request, reply) {
@@ -144,7 +144,7 @@ export function createThreadsController({
       const { threadId } = request.params;
 
       await service.deleteThread(database, threadId, discussionActor(user));
-      reply
+      return reply
         .status(200)
         .send({ message: "Discussion thread deleted successfully." });
     },

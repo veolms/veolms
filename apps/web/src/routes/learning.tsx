@@ -24,6 +24,7 @@ import {
   getCoursePlayerPath,
   getCoursePlayerReturnPath,
   getCoursePlayerSession,
+  getCoursePlayerThread,
   getStoredCourseLessonId,
   migrateCoursePlayerSessionKey,
   upsertCoursePlayerSessionFromRoute,
@@ -84,16 +85,18 @@ export default function LearningRoute() {
   const { courseSlug, lectureSlug } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const outletContext = useOutletContext<AcademyOutletContext>() ?? {};
   const {
-    mobileBottomNavigation,
-    mobileBottomNavigationHidden,
-    navigateTo,
+    mobileBottomNavigation = false,
+    mobileBottomNavigationHidden = false,
+    navigateTo = (dest: any) =>
+      navigate(typeof dest === "string" ? dest : dest.path),
     onLearningPlayerMinimizeGestureChange,
     onMiniPlayerRestoreReady,
-    openLearningMiniPlayer,
-    persistentPlayerMounted,
+    openLearningMiniPlayer = () => {},
+    persistentPlayerMounted = false,
     registerPersistentPlayer,
-  } = useOutletContext<AcademyOutletContext>();
+  } = outletContext;
   const { data: authUser } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
   const activeUser = authUser || storeUser;
@@ -124,6 +127,13 @@ export default function LearningRoute() {
   const isQuizViewRequested = searchParams.get("view") === "quiz";
 
   const canonicalCourseSlug = courseOverview?.course.slug;
+  const hasExplicitLectureSlug = lectureSlug !== undefined;
+  const resolvedExplicitLessonId = hasExplicitLectureSlug
+    ? resolveLessonIdentifier(lectureSlug)
+    : null;
+  const routeLessonId = hasExplicitLectureSlug
+    ? (resolvedExplicitLessonId ?? 1)
+    : (courseSlug ? getStoredCourseLessonId(courseSlug) : 1);
 
   const allApiLessons = useMemo<CourseLesson[]>(() => {
     if (!courseOverview?.sections) return [];
@@ -143,10 +153,7 @@ export default function LearningRoute() {
     return idx >= 0 ? idx + 1 : null;
   }, [targetLessonUuid, allApiLessons]);
 
-  const lessonId = resolvedFromUuid ?? (courseSlug
-    ? (resolveLessonIdentifier(lectureSlug) ??
-      getStoredCourseLessonId(courseSlug))
-    : 1);
+  const lessonId = resolvedFromUuid ?? routeLessonId;
   const apiLesson = allApiLessons[lessonId - 1];
   const quizAssignment = myQuizAssignments?.assignments.find(
     (assignment) =>
@@ -202,12 +209,13 @@ export default function LearningRoute() {
       return;
 
     migrateCoursePlayerSessionKey(courseSlug, canonicalCourseSlug);
+    const threadId = getCoursePlayerThread(location.search);
     const nextPath = getCoursePlayerPath(
       canonicalCourseSlug,
       origin,
       lessonId,
       routeReturnPath,
-      isQuizViewRequested ? "quiz" : undefined,
+      { threadId, view: isQuizViewRequested ? "quiz" : undefined },
     );
     void navigate(nextPath, { replace: true });
   }, [
@@ -215,6 +223,7 @@ export default function LearningRoute() {
     courseSlug,
     isQuizViewRequested,
     lessonId,
+    location.search,
     navigate,
     origin,
     routeReturnPath,
@@ -223,16 +232,17 @@ export default function LearningRoute() {
   const selectLesson = useCallback(
     (nextLessonId: number, view?: "video" | "quiz") => {
       if (!courseSlug) return;
+      const threadId = getCoursePlayerThread(location.search);
       const path = getCoursePlayerPath(
         courseSlug,
         origin,
         nextLessonId,
         getCoursePlayerSession(courseSlug)?.returnPath || routeReturnPath,
-        view,
+        { threadId, view },
       );
       navigateTo(path, { exact: true });
     },
-    [courseSlug, navigateTo, origin, routeReturnPath],
+    [courseSlug, location.search, navigateTo, origin, routeReturnPath],
   );
   const openCourseOverview = useCallback(() => {
     if (!courseSlug) return;

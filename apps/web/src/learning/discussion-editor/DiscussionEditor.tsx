@@ -3,14 +3,17 @@ import {
   type AtomicCodeMirrorEditorHandle,
 } from "@atomic-editor/editor";
 import "@atomic-editor/editor/styles.css";
+import { autocompletion } from "@codemirror/autocomplete";
 import { EditorView, placeholder, ViewPlugin } from "@codemirror/view";
 import {
   useEffect,
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type MutableRefObject,
 } from "react";
+import { createMentionCompletionSource } from "./mentions";
 import { createDiscussionClipboardExtension } from "./clipboard";
 import { DISCUSSION_CODE_LANGUAGES } from "./code-languages";
 import {
@@ -18,51 +21,74 @@ import {
   type DiscussionEditorCommands,
   type DiscussionFormattingState,
 } from "./commands";
-import { insertDiscussionAttachment } from "./attachments";
+import { selectDiscussionAttachment } from "./attachments";
 import { createDiscussionDraft, type DiscussionDraft } from "./types";
 import "./atomic-editor.css";
-import { DISCUSSION_ATTACHMENTS_ENABLED } from "./image-storage";
+import {
+  DISCUSSION_ATTACHMENTS_ENABLED,
+} from "./image-storage";
+import type { LocalComposerAttachment } from "../../services/learning-interactions";
 
 export interface DiscussionEditorController extends DiscussionEditorCommands {
-  attach(file: File): Promise<{ inserted: boolean; message: string | null }>;
+  attach(file: File): Promise<{ accepted: boolean; message: string | null }>;
   getMarkdown(): string;
 }
 
-interface DiscussionEditorProps {
+export interface DiscussionEditorProps {
   value: DiscussionDraft;
   documentId: string;
+  resetToken?: number;
   label: string;
   placeholderText: string;
   invalid?: boolean;
   autoFocus?: boolean;
   autoGrow?: boolean;
+  /** Maximum editor height. Numbers are interpreted as CSS pixels. */
+  maxHeight?: CSSProperties["maxHeight"];
   className?: string;
+  courseId?: string;
+  mentionsEnabled?: boolean;
   onChange: (draft: DiscussionDraft) => void;
   onControllerChange?: (controller: DiscussionEditorController | null) => void;
   onFormattingStateChange?: (state: DiscussionFormattingState) => void;
-  onAttachmentNotice?: (message: string | null) => void;
+  onAttachmentError?: (message: string | null) => void;
+  onAttachmentSelected?: (attachment: LocalComposerAttachment) => void;
 }
 
 export function DiscussionEditor({
   value,
   documentId,
+  resetToken = 0,
   label,
   placeholderText,
   invalid = false,
   autoFocus = false,
   autoGrow = false,
+  maxHeight,
   className = "",
+  courseId,
+  mentionsEnabled = true,
   onChange,
   onControllerChange,
   onFormattingStateChange,
-  onAttachmentNotice,
+  onAttachmentError,
+  onAttachmentSelected,
 }: DiscussionEditorProps) {
+  const editorStyle =
+    maxHeight === undefined
+      ? undefined
+      : ({
+          "--atomic-editor-max-height":
+            typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight,
+        } as CSSProperties);
   const atomicHandleRef = useRef<AtomicCodeMirrorEditorHandle | null>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const previousResetTokenRef = useRef(resetToken);
   const onChangeRef = useLatest(onChange);
   const onControllerChangeRef = useLatest(onControllerChange);
   const onFormattingStateChangeRef = useLatest(onFormattingStateChange);
-  const onAttachmentNoticeRef = useLatest(onAttachmentNotice);
+  const onAttachmentErrorRef = useLatest(onAttachmentError);
+  const onAttachmentSelectedRef = useLatest(onAttachmentSelected);
   const [commands] = useState(() =>
     createDiscussionEditorCommands(() => viewRef.current),
   );
@@ -73,17 +99,30 @@ export function DiscussionEditor({
       attach: async (file) => {
         if (!DISCUSSION_ATTACHMENTS_ENABLED) {
           const message = "Attachments are not available in this deployment.";
-          onAttachmentNoticeRef.current?.(message);
-          return { inserted: false, message };
+          onAttachmentErrorRef.current?.(message);
+          return { accepted: false, message };
         }
-        onAttachmentNoticeRef.current?.("Uploading attachment…");
-        const result = await insertDiscussionAttachment(commands, file);
-        onAttachmentNoticeRef.current?.(result.message);
+        const result = await selectDiscussionAttachment(file);
+        onAttachmentErrorRef.current?.(result.message);
+        if (result.accepted && result.attachment) {
+          onAttachmentSelectedRef.current?.(result.attachment);
+        }
         return result;
       },
     }),
-    [commands, onAttachmentNoticeRef],
+    [commands, onAttachmentErrorRef, onAttachmentSelectedRef],
   );
+
+  const mentionExtensions = useMemo(() => {
+    if (!courseId || mentionsEnabled === false) return [];
+    return [
+      autocompletion({
+        override: [createMentionCompletionSource(courseId)],
+        activateOnTyping: true,
+        defaultKeymap: true,
+      }),
+    ];
+  }, [courseId, mentionsEnabled]);
 
   const extensions = useMemo(
     () => [
@@ -96,6 +135,7 @@ export function DiscussionEditor({
         role: "textbox",
         spellcheck: "true",
       }),
+      ...mentionExtensions,
       ...(DISCUSSION_ATTACHMENTS_ENABLED
         ? [
             createDiscussionClipboardExtension({
@@ -134,6 +174,7 @@ export function DiscussionEditor({
       controller,
       invalid,
       label,
+      mentionExtensions,
       onControllerChangeRef,
       onFormattingStateChangeRef,
       placeholderText,
@@ -146,6 +187,22 @@ export function DiscussionEditor({
     content.setAttribute("aria-label", label);
     content.setAttribute("aria-invalid", invalid ? "true" : "false");
   }, [invalid, label]);
+
+  useEffect(() => {
+    if (previousResetTokenRef.current === resetToken) return;
+    previousResetTokenRef.current = resetToken;
+
+    const view = viewRef.current;
+    if (!view || view.state.doc.length === 0) return;
+
+    view.dispatch({
+      changes: {
+        from: 0,
+        to: view.state.doc.length,
+        insert: "",
+      },
+    });
+  }, [resetToken]);
 
   useEffect(() => {
     const callback = onControllerChangeRef.current;
@@ -164,6 +221,7 @@ export function DiscussionEditor({
       data-discussion-atomic-editor
       data-auto-grow={autoGrow || undefined}
       className={`learning-discussion-atomic-editor min-h-0 w-full ${className}`}
+      style={editorStyle}
     >
       <AtomicCodeMirrorEditor
         documentId={documentId}

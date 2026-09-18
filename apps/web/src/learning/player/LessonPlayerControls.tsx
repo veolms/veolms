@@ -32,6 +32,7 @@ import {
   LEARNING_PLAYER_MINIMIZE_SHORTCUT,
   LEARNING_PLAYER_MINIMIZE_TITLE,
 } from "./learningPlayerShortcuts";
+import { cn } from "../../lib/utils";
 
 const PLAYER_SURFACE_CLASS =
   "bg-(--video-player-control-surface) text-(--video-player-control-text) shadow-(--video-player-control-shadow)";
@@ -409,7 +410,9 @@ export function LessonPlayerControls({
   const MinimizeIcon = playerTheme.icons.minimize;
   const mobileInteraction = usePlayerMobileInteraction();
   const {
+    buffering,
     controlsVisible,
+    error,
     fullscreen,
     lifecycle,
     previewTime,
@@ -417,7 +420,9 @@ export function LessonPlayerControls({
     settingsOpen,
   } = usePlayerState(
     ({ media, ui }) => ({
+      buffering: media.buffering,
       controlsVisible: ui.controlsVisible,
+      error: media.error,
       fullscreen: ui.fullscreen,
       lifecycle: media.lifecycle,
       previewTime: ui.previewTime,
@@ -425,7 +430,9 @@ export function LessonPlayerControls({
       settingsOpen: ui.settingsView !== "closed",
     }),
     (left, right) =>
+      left.buffering === right.buffering &&
       left.controlsVisible === right.controlsVisible &&
+      left.error === right.error &&
       left.fullscreen === right.fullscreen &&
       left.lifecycle === right.lifecycle &&
       left.previewTime === right.previewTime &&
@@ -433,8 +440,12 @@ export function LessonPlayerControls({
       left.settingsOpen === right.settingsOpen,
   );
   const ready = lifecycle === "ready";
+  const hasError = lifecycle === "error" || Boolean(error);
+  const loading = lifecycle !== "ready" || buffering;
   const visible =
     !controlsSuppressed && (controlsVisible || settingsOpen);
+  const minimizeVisible =
+    !controlsSuppressed && (visible || loading || hasError);
   const mobileFullscreen = mobileInteraction && fullscreen;
   const persistentProgressVisible =
     ready && !controlsSuppressed && mobileInteraction && !fullscreen;
@@ -657,6 +668,44 @@ export function LessonPlayerControls({
             timelineHost,
           )
         : null}
+      {onMinimize ? (
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-0 z-50 text-white transition-opacity duration-200 motion-reduce:transition-none",
+            minimizeVisible
+              ? "visible opacity-100"
+              : "invisible opacity-0 [&_*]:!pointer-events-none",
+            controlsSuppressed && "transition-none",
+          )}
+          aria-hidden={minimizeVisible ? undefined : true}
+          inert={minimizeVisible ? undefined : true}
+          data-video-player-control-layer=""
+          data-learning-player-minimize-layer=""
+        >
+          <div
+            className={
+              mobileFullscreen
+                ? fullscreenCoursePanelVisible
+                  ? "absolute inset-0"
+                  : "absolute inset-y-0 left-1/2 w-[min(100%,calc(100dvh*16/9))] max-w-full -translate-x-1/2"
+                : "absolute inset-0"
+            }
+          >
+            <div
+              className={`pointer-events-auto absolute left-2 top-2 ${mobileFullscreen ? "!left-3 sm:!left-3" : ""}`}
+            >
+              <PlayerIconButton
+                label={LEARNING_PLAYER_MINIMIZE_LABEL}
+                title={LEARNING_PLAYER_MINIMIZE_TITLE}
+                aria-keyshortcuts={LEARNING_PLAYER_MINIMIZE_SHORTCUT}
+                className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} !size-9 !rounded-full !bg-transparent !shadow-none drop-shadow-none`}
+                icon={<MinimizeIcon size={22} />}
+                onClick={onMinimize}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div
         className={`pointer-events-none absolute inset-0 ${settingsOpen ? "z-180" : "z-30"} text-white transition-opacity duration-200 motion-reduce:transition-none ${
           visible
@@ -686,21 +735,6 @@ export function LessonPlayerControls({
           }
         >
           {!mobileFullscreen ? mobileVignettes : null}
-
-          {onMinimize ? (
-            <div
-              className={`pointer-events-auto absolute left-2 top-2 ${mobileFullscreen ? "!left-3 sm:!left-3" : ""}`}
-            >
-              <PlayerIconButton
-                label={LEARNING_PLAYER_MINIMIZE_LABEL}
-                title={LEARNING_PLAYER_MINIMIZE_TITLE}
-                aria-keyshortcuts={LEARNING_PLAYER_MINIMIZE_SHORTCUT}
-                className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} !size-9 !rounded-full !bg-transparent !shadow-none drop-shadow-none`}
-                icon={<MinimizeIcon size={22} />}
-                onClick={onMinimize}
-              />
-            </div>
-          ) : null}
 
           <div
             className={`pointer-events-auto absolute right-2 top-2 flex items-center gap-2 ${mobileFullscreen ? "!left-auto !right-3 sm:!left-auto sm:!right-3" : ""}`}

@@ -46,6 +46,24 @@ export interface EngagementsRepository {
     threadId: string,
   ): Promise<void>;
 
+  findNoteBookmark(
+    db: DatabaseExecutor,
+    userId: string,
+    noteId: string,
+  ): Promise<EngagementExistenceRow | undefined>;
+
+  addNoteBookmark(
+    db: DatabaseExecutor,
+    userId: string,
+    noteId: string,
+  ): Promise<void>;
+
+  removeNoteBookmark(
+    db: DatabaseExecutor,
+    userId: string,
+    noteId: string,
+  ): Promise<void>;
+
   findFollow(
     db: DatabaseExecutor,
     userId: string,
@@ -68,7 +86,7 @@ export interface EngagementsRepository {
     db: DatabaseExecutor,
     options: {
       query: string;
-      userIds: readonly string[];
+      userIds?: readonly string[] | "all";
       limit: number;
     },
   ): Promise<UserMention[]>;
@@ -141,6 +159,36 @@ export function createEngagementsRepository(): EngagementsRepository {
         .execute();
     },
 
+    async findNoteBookmark(db, userId, noteId) {
+      return db
+        .selectFrom("learning_bookmarks")
+        .select("id")
+        .where("user_id", "=", userId)
+        .where("note_id", "=", noteId)
+        .executeTakeFirst();
+    },
+
+    async addNoteBookmark(db, userId, noteId) {
+      await db
+        .insertInto("learning_bookmarks")
+        .values({
+          id: sql`gen_random_uuid()`,
+          user_id: userId,
+          thread_id: null,
+          note_id: noteId,
+        })
+        .onConflict((oc) => oc.columns(["user_id", "note_id"]).doNothing())
+        .execute();
+    },
+
+    async removeNoteBookmark(db, userId, noteId) {
+      await db
+        .deleteFrom("learning_bookmarks")
+        .where("user_id", "=", userId)
+        .where("note_id", "=", noteId)
+        .execute();
+    },
+
     async findFollow(db, userId, threadId) {
       return db
         .selectFrom("learning_follows")
@@ -171,19 +219,40 @@ export function createEngagementsRepository(): EngagementsRepository {
     },
 
     async searchUsersForMention(db, { query, userIds, limit }) {
-      if (userIds.length === 0) return [];
+      if (Array.isArray(userIds) && userIds.length === 0) return [];
 
-      const pattern = `%${query}%`;
-      const users = await db
+      const cleanQuery = query.toLowerCase();
+      const pattern = `%${cleanQuery}%`;
+      const prefixPattern = `${cleanQuery}%`;
+      const wordPattern = `% ${cleanQuery}%`;
+
+      let queryBuilder = db
         .selectFrom("users")
-        .select(["id", "display_name", "username"])
-        .where("id", "in", [...userIds])
+        .select(["id", "display_name", "username", "avatar_data_url"])
         .where("username", "is not", null)
         .where((eb) =>
           eb.or([
             eb(sql<string>`lower(display_name)`, "like", pattern),
             eb(sql<string>`lower(username)`, "like", pattern),
           ]),
+        );
+
+      if (Array.isArray(userIds) && userIds.length > 0) {
+        queryBuilder = queryBuilder.where("id", "in", [...userIds]);
+      }
+
+      const users = await queryBuilder
+        .orderBy(
+          sql`CASE
+            WHEN lower(username) = ${cleanQuery} THEN 1
+            WHEN lower(display_name) = ${cleanQuery} THEN 2
+            WHEN lower(username) LIKE ${prefixPattern} THEN 3
+            WHEN lower(display_name) LIKE ${prefixPattern} THEN 4
+            WHEN lower(display_name) LIKE ${wordPattern} THEN 5
+            WHEN lower(username) LIKE ${pattern} THEN 6
+            ELSE 7
+          END`,
+          "asc",
         )
         .orderBy("username", "asc")
         .limit(limit)
@@ -194,9 +263,9 @@ export function createEngagementsRepository(): EngagementsRepository {
         return [
           {
             id: u.id,
-            displayName: u.display_name,
+            displayName: u.display_name || u.username,
             username: u.username,
-            avatarUrl: null,
+            avatarUrl: u.avatar_data_url ?? null,
           },
         ];
       });
