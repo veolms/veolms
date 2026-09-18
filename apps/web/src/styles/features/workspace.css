@@ -1115,14 +1115,17 @@
   gap: 6px;
   margin-bottom: 5px;
   overflow: hidden;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 0.72rem;
+  font-weight: 600;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .discussion-thread--question .discussion-thread__attachment {
+  flex: 0 1 auto;
   max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   color: var(--muted);
   font-size: 0.73rem;
@@ -1134,6 +1137,57 @@
   margin-top: 7px;
   overflow: hidden;
   flex-wrap: nowrap;
+}
+.discussion-thread--question .discussion-thread__context > span:first-child {
+  flex: 0 1 auto;
+  max-width: 42%;
+  min-width: 0;
+}
+.discussion-thread--question .discussion-thread__context small {
+  flex: 0 1 auto;
+  max-width: 30%;
+  min-width: 0;
+}
+.discussion-thread--question .discussion-thread__context > span:not([aria-hidden="true"]),
+.discussion-thread--question .discussion-thread__context small,
+.discussion-thread--question .discussion-thread__attachment {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.discussion-thread--question .discussion-thread__visibility {
+  flex: 0 0 auto;
+  max-width: 18%;
+}
+.discussion-thread--question .discussion-thread__attachment {
+  max-width: 38%;
+}
+.discussion-thread--question .discussion-thread__attachment > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.discussion-thread--question .discussion-thread__status {
+  min-width: 0;
+}
+.discussion-thread--question .discussion-thread__status-label,
+.discussion-thread--question .discussion-thread__lock {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+.discussion-thread--question .discussion-thread__status-label {
+  flex: 1 1 auto;
+}
+.discussion-thread--question .discussion-thread__status-label > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discussion-thread--question .discussion-thread__lock {
+  flex: 0 0 auto;
 }
 .discussion-thread--question .discussion-hub__question-toggle {
   margin-top: 5px;

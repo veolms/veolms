@@ -241,6 +241,8 @@ export const workspaceDiscussionItemSchema = z.object({
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
   author: learningAuthorSchema,
   status: questionFilterStatusSchema.optional(),
+  visibility: discussionVisibilitySchema.optional(),
+  isLocked: z.boolean().optional(),
   repliesCount: z.number().int().nonnegative().default(0),
   likesCount: z.number().int().nonnegative().default(0),
   isLiked: z.boolean().optional(),

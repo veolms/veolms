@@ -21,6 +21,8 @@ export interface DiscussionWorkspaceCard {
   avatar: string;
   isOwn: boolean;
   status: DiscussionWorkspaceStatus;
+  visibility?: WorkspaceDiscussionItem["visibility"];
+  isLocked: boolean;
   replies: number;
   activity: string;
   attachmentSummary: WorkspaceDiscussionItem["attachmentSummary"];
@@ -83,6 +85,8 @@ export function adaptDiscussionWorkspaceItem(
     avatar: item.author.avatarUrl ?? "",
     isOwn: item.isOwn === true,
     status,
+    visibility: item.visibility,
+    isLocked: item.isLocked === true,
     replies: item.repliesCount,
     activity: formatRelativeTime(item.updatedAt || item.createdAt),
     attachmentSummary: item.attachmentSummary,

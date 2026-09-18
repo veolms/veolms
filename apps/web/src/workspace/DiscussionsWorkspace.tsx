@@ -9,6 +9,7 @@ import { ChatTeardropTextIcon as ChatTeardropText } from "@phosphor-icons/react/
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
 import { FunnelIcon as Funnel } from "@phosphor-icons/react/Funnel";
+import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
 import { PaperclipIcon as Paperclip } from "@phosphor-icons/react/Paperclip";
@@ -254,6 +255,13 @@ function getAttachmentLabel(
   return "1 attachment";
 }
 
+function getVisibilityLabel(
+  visibility: DiscussionWorkspaceCard["visibility"],
+): string | null {
+  if (!visibility) return null;
+  return visibility.charAt(0).toUpperCase() + visibility.slice(1);
+}
+
 function DiscussionWorkspaceAttachmentIndicator({
   label,
 }: {
@@ -269,15 +277,16 @@ function DiscussionWorkspaceAttachmentIndicator({
 
 function DiscussionWorkspaceQuestionCard({
   thread,
-  StatusIcon,
   setNotice,
 }: {
   thread: DiscussionWorkspaceCard;
-  StatusIcon: typeof CheckCircle;
   setNotice?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const attachmentLabel = getAttachmentLabel(thread.attachmentSummary);
+  const visibilityLabel = getVisibilityLabel(thread.visibility);
+  const lifecycleStatus = thread.status === "solved" ? "solved" : "open";
+  const LifecycleIcon = statusIcons[lifecycleStatus];
 
   return (
     <article
@@ -291,7 +300,6 @@ function DiscussionWorkspaceQuestionCard({
             src={thread.avatar || null}
             className="discussion-thread__avatar-image"
           />
-          {thread.status !== "open" && <i aria-hidden="true" />}
         </div>
         <div className="discussion-thread__body">
           <div className="discussion-thread__author">
@@ -308,25 +316,51 @@ function DiscussionWorkspaceQuestionCard({
             expanded={expanded}
             onExpandedChange={setExpanded}
           />
-          {(thread.course || thread.lesson || attachmentLabel) && (
+          {(thread.course ||
+            thread.lesson ||
+            attachmentLabel ||
+            visibilityLabel) && (
             <div className="discussion-thread__context">
               {thread.course && <span>{thread.course}</span>}
-              {thread.course && (thread.lesson || attachmentLabel) && (
-                <span aria-hidden="true" />
-              )}
+              {thread.course &&
+                (thread.lesson || attachmentLabel || visibilityLabel) && (
+                  <span aria-hidden="true" />
+                )}
               {thread.lesson && <small>{thread.lesson}</small>}
-              {thread.lesson && attachmentLabel && (
+              {thread.lesson && (attachmentLabel || visibilityLabel) && (
                 <span aria-hidden="true" />
               )}
               {attachmentLabel && (
                 <DiscussionWorkspaceAttachmentIndicator label={attachmentLabel} />
               )}
+              {attachmentLabel && visibilityLabel && (
+                <span aria-hidden="true" />
+              )}
+              {visibilityLabel && (
+                <small className="discussion-thread__visibility">
+                  {visibilityLabel}
+                </small>
+              )}
             </div>
           )}
         </div>
         <div className="discussion-thread__meta">
-          <span className={`discussion-thread__status is-${thread.status}`}>
-            <StatusIcon size={15} weight="fill" /> {statusLabels[thread.status]}
+          <span
+            className={`discussion-thread__status is-${lifecycleStatus}`}
+          >
+            <span className="discussion-thread__status-label">
+              <LifecycleIcon size={15} weight="fill" aria-hidden="true" />
+              <span>{statusLabels[lifecycleStatus]}</span>
+            </span>
+            {thread.isLocked && (
+              <span
+                className="discussion-thread__lock"
+                aria-label="Locked"
+                title="Locked"
+              >
+                <Lock size={12} weight="bold" aria-hidden="true" />
+              </span>
+            )}
           </span>
           <span>
             <ChatTeardropText size={17} /> {thread.replies}{" "}
@@ -672,7 +706,6 @@ export function DiscussionsWorkspace({
                         <DiscussionWorkspaceQuestionCard
                           key={thread.id}
                           thread={thread}
-                          StatusIcon={StatusIcon}
                           setNotice={setNotice}
                         />
                       ) : (
