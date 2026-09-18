@@ -20,7 +20,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
           404,
           "ROUTE_NOT_FOUND",
           `Route ${request.method} ${request.url} does not exist.`,
-        ),
+        ).toJSON(),
       ),
   );
 
@@ -44,7 +44,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
             path: issue.instancePath,
             message: issue.message ?? "Invalid value.",
           })),
-        ),
+        ).toJSON(),
       );
     }
 
@@ -65,7 +65,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
             500,
             "RESPONSE_SERIALIZATION_FAILED",
             "The server produced an invalid response.",
-          ),
+          ).toJSON(),
         );
     }
 
@@ -107,20 +107,13 @@ export function registerErrorHandler(app: FastifyInstance): void {
               appError.statusCode,
               appError.code,
               "An unexpected error occurred.",
-            ),
+            ).toJSON(),
           );
       }
 
       return reply
         .code(appError.statusCode)
-        .send(
-          httpError(
-            appError.statusCode,
-            appError.code,
-            appError.message,
-            appError.issues,
-          ),
-        );
+        .send(appError.toJSON());
     }
 
     request.log.error({ err: error }, "Unhandled error");
@@ -132,7 +125,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
           500,
           "INTERNAL_SERVER_ERROR",
           "An unexpected error occurred.",
-        ),
+        ).toJSON(),
       );
   });
 }
