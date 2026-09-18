@@ -33,6 +33,7 @@
     "test": "turbo run test",
     "db:migrate": "pnpm --filter @veolms/database migrate",
     "db:seed": "pnpm --filter @veolms/database seed",
+    "db:seed:admins": "pnpm --filter @veolms/database seed:admins",
     "db:reset": "pnpm --filter @veolms/database reset",
     "fleet:cli": "pnpm --filter @veolms/fleet-manager cli",
     "fleet:run:daemon": "pnpm --filter @veolms/fleet-manager run:daemon",
