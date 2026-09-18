@@ -11,6 +11,7 @@ import { errorResponse } from "../../../../lib/errors.ts";
 import { jsonResponse } from "../../../../lib/responses.ts";
 import type { RoutePlugin } from "../../../../lib/route-plugin.ts";
 import { createDiscussionPermissions } from "../shared/discussion.permissions.ts";
+import { createAttachmentsRepository } from "../attachments/attachments.repository.ts";
 import { createThreadsController } from "./threads.controller.ts";
 import { createThreadsRepository } from "./threads.repository.ts";
 import { createThreadsService } from "./threads.service.ts";
@@ -18,7 +19,8 @@ import { createThreadsService } from "./threads.service.ts";
 const threadsRoutes: RoutePlugin = async (app, options) => {
   const permissions = createDiscussionPermissions(options);
   const repository = createThreadsRepository();
-  const service = createThreadsService(repository);
+  const attachmentsRepository = createAttachmentsRepository();
+  const service = createThreadsService(repository, attachmentsRepository);
   const controller = createThreadsController({
     database: options.database,
     service,
@@ -79,8 +81,6 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
     controller.createLessonThread,
   );
 
-
-
   // 3. GET /threads - Hub search across discussions and Q&A
   app.get(
     "/threads",
@@ -125,10 +125,6 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
     },
     controller.getDiscussionsWorkspace,
   );
-
-
-
-
 
   // 6. GET /threads/:threadId - Get thread details
   app.get(
@@ -199,4 +195,3 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
 };
 
 export default threadsRoutes;
-

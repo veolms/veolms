@@ -41,7 +41,13 @@ export const discussionTabSchema = z.enum([
 ]);
 export type DiscussionTab = z.infer<typeof discussionTabSchema>;
 
-export const questionFilterStatusSchema = z.enum(["all", "answered", "mentioned", "solved", "open"]);
+export const questionFilterStatusSchema = z.enum([
+  "all",
+  "answered",
+  "mentioned",
+  "solved",
+  "open",
+]);
 export type QuestionFilterStatus = z.infer<typeof questionFilterStatusSchema>;
 
 export const learningAuthorSchema = z.object({
@@ -66,6 +72,16 @@ export const learningThreadAttachmentSummarySchema = z.object({
 });
 export type LearningThreadAttachmentSummary = z.infer<
   typeof learningThreadAttachmentSummarySchema
+>;
+
+export const discussionAttachmentSummarySchema = z.object({
+  count: z.number().int().nonnegative(),
+  hasImages: z.boolean(),
+  hasVideos: z.boolean(),
+  hasFiles: z.boolean(),
+});
+export type DiscussionAttachmentSummary = z.infer<
+  typeof discussionAttachmentSummarySchema
 >;
 
 export const learningThreadSchema = z.object({
@@ -232,13 +248,16 @@ export const workspaceDiscussionItemSchema = z.object({
   isFollowing: z.boolean().optional(),
   isMentioned: z.boolean().optional(),
   isOwn: z.boolean().optional(),
+  attachmentSummary: discussionAttachmentSummarySchema,
   reportDetails: z
     .object({
       targetType: z.enum(["thread", "reply", "note"]),
       targetId: z.uuid(),
       reason: z.string(),
       details: z.string().nullable().optional(),
-      status: z.enum(["pending", "reviewed", "dismissed", "actioned"]).optional(),
+      status: z
+        .enum(["pending", "reviewed", "dismissed", "actioned"])
+        .optional(),
       actionTaken: z.string().nullable().optional(),
     })
     .optional(),

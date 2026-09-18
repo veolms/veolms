@@ -10,15 +10,20 @@ export interface DiscussionWorkspaceCard {
   id: string;
   title: string;
   excerpt: string;
+  content: string;
+  plainText: string;
   courseId: string;
   course: string;
   lessonId?: string;
   lesson: string;
   author: string;
+  authorUsername: string;
   avatar: string;
+  isOwn: boolean;
   status: DiscussionWorkspaceStatus;
   replies: number;
   activity: string;
+  attachmentSummary: WorkspaceDiscussionItem["attachmentSummary"];
   itemType: WorkspaceDiscussionItem["itemType"];
   kind: WorkspaceDiscussionItem["kind"];
 }
@@ -67,15 +72,20 @@ export function adaptDiscussionWorkspaceItem(
     id: item.id,
     title: getTitle(item, excerpt),
     excerpt,
+    content: item.content,
+    plainText: excerpt,
     courseId: item.courseId,
     course: item.courseTitle?.trim() || "",
     ...(item.lessonId ? { lessonId: item.lessonId } : {}),
     lesson: item.lessonTitle?.trim() || "",
     author: item.author.displayName || item.author.username,
+    authorUsername: item.author.username?.trim() || "",
     avatar: item.author.avatarUrl ?? "",
+    isOwn: item.isOwn === true,
     status,
     replies: item.repliesCount,
     activity: formatRelativeTime(item.updatedAt || item.createdAt),
+    attachmentSummary: item.attachmentSummary,
     itemType: item.itemType,
     kind: item.kind,
   };

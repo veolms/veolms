@@ -11,6 +11,7 @@ import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/reac
 import { FunnelIcon as Funnel } from "@phosphor-icons/react/Funnel";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
+import { PaperclipIcon as Paperclip } from "@phosphor-icons/react/Paperclip";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { SealCheckIcon as SealCheck } from "@phosphor-icons/react/SealCheck";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
@@ -31,6 +32,8 @@ import {
 import { ThemedSelect } from "../ThemedSelect";
 import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
 import { DiscussionAvatar } from "../learning/DiscussionAvatar";
+import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
+import type { DiscussionContent } from "../learning/discussion-editor/types";
 import {
   SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
   SearchShortcutHint,
@@ -159,6 +162,195 @@ function DiscussionComposer({
   );
 }
 
+const QUESTION_PREVIEW_MAX_HEIGHT_PX = 48;
+
+function DiscussionWorkspaceQuestionContent({
+  thread,
+  expanded,
+  onExpandedChange,
+}: {
+  thread: DiscussionWorkspaceCard;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+}) {
+  const [needsClamp, setNeedsClamp] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const content = useMemo<DiscussionContent>(
+    () => ({
+      format: "markdown",
+      markdown: thread.content.trim() || thread.plainText,
+      plainText: thread.plainText,
+    }),
+    [thread.content, thread.plainText],
+  );
+
+  useEffect(() => {
+    const node = contentRef.current;
+    if (!node) return undefined;
+
+    const measure = () => {
+      setNeedsClamp(node.scrollHeight > QUESTION_PREVIEW_MAX_HEIGHT_PX + 4);
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [content]);
+
+  return (
+    <div className="discussion-hub__question-content">
+      <div className="relative">
+        <div
+          ref={contentRef}
+          className="discussion-hub__question-markdown overflow-hidden transition-[max-height] duration-300 ease-in-out"
+          style={
+            needsClamp && !expanded
+              ? { maxHeight: `${QUESTION_PREVIEW_MAX_HEIGHT_PX}px` }
+              : undefined
+          }
+        >
+          <DiscussionMarkdown
+            content={content}
+            label={`Question by ${thread.author}`}
+            className="max-w-none"
+          />
+        </div>
+        {needsClamp && !expanded && (
+          <div
+            aria-hidden="true"
+            className="discussion-hub__question-fade pointer-events-none absolute bottom-0 left-0 right-0 h-8"
+          />
+        )}
+      </div>
+      {needsClamp && (
+        <button
+          type="button"
+          className="discussion-hub__question-toggle"
+          onClick={() => onExpandedChange(!expanded)}
+          aria-expanded={expanded}
+        >
+          {expanded ? "Show less" : "Read more"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function getAttachmentLabel(
+  summary: DiscussionWorkspaceCard["attachmentSummary"],
+): string | null {
+  if (summary.count === 0) return null;
+  if (summary.count > 1) return `${summary.count} attachments`;
+  const classifiedTypes = [
+    summary.hasImages,
+    summary.hasVideos,
+    summary.hasFiles,
+  ].filter(Boolean).length;
+  if (classifiedTypes !== 1) return "1 attachment";
+  if (summary.hasImages) return "Image attached";
+  if (summary.hasVideos) return "Video attached";
+  if (summary.hasFiles) return "File attached";
+  return "1 attachment";
+}
+
+function DiscussionWorkspaceAttachmentIndicator({
+  label,
+}: {
+  label: string;
+}) {
+  return (
+    <span className="discussion-thread__attachment inline-flex items-center gap-1.5 text-xs text-(--muted)">
+      <Paperclip size={15} aria-hidden="true" />
+      <span>{label}</span>
+    </span>
+  );
+}
+
+function DiscussionWorkspaceQuestionCard({
+  thread,
+  StatusIcon,
+  setNotice,
+}: {
+  thread: DiscussionWorkspaceCard;
+  StatusIcon: typeof CheckCircle;
+  setNotice?: (message: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const attachmentLabel = getAttachmentLabel(thread.attachmentSummary);
+
+  return (
+    <article
+      className={`discussion-thread discussion-thread--question ${
+        expanded ? "is-expanded" : "is-collapsed"
+      }`}
+    >
+      <div className="discussion-thread__open discussion-thread__open--overview">
+        <div className="discussion-thread__avatar">
+          <DiscussionAvatar
+            src={thread.avatar || null}
+            className="discussion-thread__avatar-image"
+          />
+          {thread.status !== "open" && <i aria-hidden="true" />}
+        </div>
+        <div className="discussion-thread__body">
+          <div className="discussion-thread__author">
+            <span>{thread.isOwn ? "You" : thread.author}</span>
+            {thread.authorUsername && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>@{thread.authorUsername.replace(/^@+/, "")}</span>
+              </>
+            )}
+          </div>
+          <DiscussionWorkspaceQuestionContent
+            thread={thread}
+            expanded={expanded}
+            onExpandedChange={setExpanded}
+          />
+          {(thread.course || thread.lesson || attachmentLabel) && (
+            <div className="discussion-thread__context">
+              {thread.course && <span>{thread.course}</span>}
+              {thread.course && (thread.lesson || attachmentLabel) && (
+                <span aria-hidden="true" />
+              )}
+              {thread.lesson && <small>{thread.lesson}</small>}
+              {thread.lesson && attachmentLabel && (
+                <span aria-hidden="true" />
+              )}
+              {attachmentLabel && (
+                <DiscussionWorkspaceAttachmentIndicator label={attachmentLabel} />
+              )}
+            </div>
+          )}
+        </div>
+        <div className="discussion-thread__meta">
+          <span className={`discussion-thread__status is-${thread.status}`}>
+            <StatusIcon size={15} weight="fill" /> {statusLabels[thread.status]}
+          </span>
+          <span>
+            <ChatTeardropText size={17} /> {thread.replies}{" "}
+            {thread.replies === 1 ? "reply" : "replies"}
+          </span>
+          <time>{thread.activity}</time>
+        </div>
+      </div>
+      <button
+        type="button"
+        className="discussion-thread__more"
+        aria-label="More options for question"
+        onClick={() => {
+          setNotice?.(
+            "Thread actions will be available with connected discussions.",
+          );
+        }}
+      >
+        <DotsThreeVertical size={21} weight="bold" />
+      </button>
+    </article>
+  );
+}
+
 export function DiscussionsWorkspace({
   tab = "q-and-a",
   onNavigatePage,
@@ -192,6 +384,7 @@ export function DiscussionsWorkspace({
       tab: activeTab,
       ...(selectedCourseId !== "all" ? { courseId: selectedCourseId } : {}),
       ...(debouncedQuery.trim() ? { search: debouncedQuery.trim() } : {}),
+      ...(activeTab === "q-and-a" ? { mine: true } : {}),
       status: status as "all" | "answered" | "mentioned" | "solved" | "open",
       sort: sort as "activity" | "replies",
       limit: 20,
@@ -474,67 +667,74 @@ export function DiscussionsWorkspace({
                     </div>
                   ) : cards.length > 0 ? (
                     cards.map((thread) => {
-                    const StatusIcon = statusIcons[thread.status];
-                    return (
-                      <article className="discussion-thread" key={thread.id}>
-                        <button
-                          type="button"
-                          className="discussion-thread__open"
-                          onClick={() => openThread(thread)}
-                        >
-                          <div className="discussion-thread__avatar">
-                            <DiscussionAvatar
-                              src={thread.avatar || null}
-                              className="discussion-thread__avatar-image"
-                            />
-                            {thread.status !== "open" && (
-                              <i aria-hidden="true" />
-                            )}
-                          </div>
-                          <div className="discussion-thread__body">
-                            <span className="discussion-thread__title">
-                              {thread.title}
-                            </span>
-                            <p>{thread.excerpt}</p>
-                            {(thread.course || thread.lesson) && (
-                              <div className="discussion-thread__context">
-                                {thread.course && <span>{thread.course}</span>}
-                                {thread.course && thread.lesson && (
-                                  <span aria-hidden="true" />
-                                )}
-                                {thread.lesson && <small>{thread.lesson}</small>}
-                              </div>
-                            )}
-                          </div>
-                          <div className="discussion-thread__meta">
-                            <span
-                              className={`discussion-thread__status is-${thread.status}`}
-                            >
-                              <StatusIcon size={15} weight="fill" />{" "}
-                              {statusLabels[thread.status]}
-                            </span>
-                            <span>
-                              <ChatTeardropText size={17} /> {thread.replies}{" "}
-                              {thread.replies === 1 ? "reply" : "replies"}
-                            </span>
-                            <time>{thread.activity}</time>
-                          </div>
-                        </button>
-                        <button
-                          type="button"
-                          className="discussion-thread__more"
-                          aria-label={`More options for ${thread.title}`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setNotice?.(
-                              "Thread actions will be available with connected discussions.",
-                            );
-                          }}
-                        >
-                          <DotsThreeVertical size={21} weight="bold" />
-                        </button>
-                      </article>
-                    );
+                      const StatusIcon = statusIcons[thread.status];
+                      return activeTab === "q-and-a" ? (
+                        <DiscussionWorkspaceQuestionCard
+                          key={thread.id}
+                          thread={thread}
+                          StatusIcon={StatusIcon}
+                          setNotice={setNotice}
+                        />
+                      ) : (
+                        <article className="discussion-thread" key={thread.id}>
+                          <button
+                            type="button"
+                            className="discussion-thread__open"
+                            onClick={() => openThread(thread)}
+                          >
+                            <div className="discussion-thread__avatar">
+                              <DiscussionAvatar
+                                src={thread.avatar || null}
+                                className="discussion-thread__avatar-image"
+                              />
+                              {thread.status !== "open" && (
+                                <i aria-hidden="true" />
+                              )}
+                            </div>
+                            <div className="discussion-thread__body">
+                              <span className="discussion-thread__title">
+                                {thread.title}
+                              </span>
+                              <p>{thread.excerpt}</p>
+                              {(thread.course || thread.lesson) && (
+                                <div className="discussion-thread__context">
+                                  {thread.course && <span>{thread.course}</span>}
+                                  {thread.course && thread.lesson && (
+                                    <span aria-hidden="true" />
+                                  )}
+                                  {thread.lesson && <small>{thread.lesson}</small>}
+                                </div>
+                              )}
+                            </div>
+                            <div className="discussion-thread__meta">
+                              <span
+                                className={`discussion-thread__status is-${thread.status}`}
+                              >
+                                <StatusIcon size={15} weight="fill" />{" "}
+                                {statusLabels[thread.status]}
+                              </span>
+                              <span>
+                                <ChatTeardropText size={17} /> {thread.replies}{" "}
+                                {thread.replies === 1 ? "reply" : "replies"}
+                              </span>
+                              <time>{thread.activity}</time>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            className="discussion-thread__more"
+                            aria-label={`More options for ${thread.title}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setNotice?.(
+                                "Thread actions will be available with connected discussions.",
+                              );
+                            }}
+                          >
+                            <DotsThreeVertical size={21} weight="bold" />
+                          </button>
+                        </article>
+                      );
                     })
                   ) : (
                     <div className="discussion-hub__empty">

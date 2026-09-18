@@ -3,9 +3,16 @@ import type {
   AttachmentKind,
   AttachmentStatus,
   AttachmentTargetType,
+  DiscussionAttachmentSummary,
   LearningAttachment,
 } from "@veolms/contracts";
+import { sql } from "kysely";
 import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
+
+export interface ThreadAttachmentSummary {
+  targetId: string;
+  attachmentSummary: DiscussionAttachmentSummary;
+}
 
 export interface AttachmentsRepository {
   createAttachment(
@@ -36,6 +43,11 @@ export interface AttachmentsRepository {
     targetType: AttachmentTargetType,
     targetId: string,
   ): Promise<LearningAttachment[]>;
+
+  listThreadAttachmentSummaries(
+    db: DatabaseExecutor,
+    threadIds: readonly string[],
+  ): Promise<ThreadAttachmentSummary[]>;
 
   linkAttachmentsToTarget(
     db: DatabaseExecutor,
@@ -134,6 +146,47 @@ export function createAttachmentsRepository(): AttachmentsRepository {
             ? row.created_at.toISOString()
             : String(row.created_at),
       }));
+    },
+
+    async listThreadAttachmentSummaries(db, threadIds) {
+      if (threadIds.length === 0) return [];
+
+      const rows = await db
+        .selectFrom("learning_attachments")
+        .select([
+          "target_id as targetId",
+          sql<number>`count(*)::int`.as("count"),
+          sql<boolean>`bool_or(
+            kind in ('image', 'screenshot') or mime_type like 'image/%'
+          )`.as("hasImages"),
+          sql<boolean>`bool_or(mime_type like 'video/%')`.as("hasVideos"),
+          sql<boolean>`bool_or(
+            kind in ('code', 'document')
+            and mime_type not like 'image/%'
+            and mime_type not like 'video/%'
+          )`.as("hasFiles"),
+        ])
+        .where("target_type", "=", "thread")
+        .where("target_id", "in", [...threadIds])
+        .where("status", "=", "ready")
+        .groupBy("target_id")
+        .execute();
+
+      return rows.flatMap((row) =>
+        row.targetId
+          ? [
+              {
+                targetId: row.targetId,
+                attachmentSummary: {
+                  count: Number(row.count),
+                  hasImages: Boolean(row.hasImages),
+                  hasVideos: Boolean(row.hasVideos),
+                  hasFiles: Boolean(row.hasFiles),
+                },
+              },
+            ]
+          : [],
+      );
     },
 
     async linkAttachmentsToTarget(db, attachmentIds, targetType, targetId) {
