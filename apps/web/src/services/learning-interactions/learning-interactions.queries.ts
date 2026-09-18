@@ -10,6 +10,7 @@ import type {
   ListLearningRepliesQuery,
   ListLearningThreadsQuery,
   ListReportsQuery,
+  DiscussionsWorkspaceResponse,
   LearningThreadsListResponse,
   ReportsListResponse,
   UserAutocompleteQuery,
@@ -55,6 +56,9 @@ import type { InteractionCapabilities } from "../../learning/discussionFeed";
 export { flattenReplyPages, getReplyTotalCount } from "./reply-pagination";
 
 type LessonThreadsQuery = Partial<Omit<ListLearningThreadsQuery, "cursor">>;
+type DiscussionsWorkspaceQuery = Partial<
+  Omit<ListLearningThreadsQuery, "cursor">
+>;
 type UserNotesQuery = Partial<Omit<ListLearningNotesQuery, "cursor">>;
 type RepliesQuery = Partial<Omit<ListLearningRepliesQuery, "cursor">>;
 type RepliesInfiniteData = InfiniteData<LearningRepliesCacheResponse>;
@@ -704,6 +708,31 @@ export function useHubThreads(
         }
       : result.data,
   };
+}
+
+export function useDiscussionsWorkspace(
+  query?: DiscussionsWorkspaceQuery,
+  options?: { enabled?: boolean },
+) {
+  const queryKey = learningInteractionKeys.discussionsWorkspace(query);
+  return useInfiniteQuery<
+    DiscussionsWorkspaceResponse,
+    ApiError,
+    InfiniteData<DiscussionsWorkspaceResponse>,
+    typeof queryKey,
+    string | null
+  >({
+    queryKey,
+    queryFn: ({ pageParam }) =>
+      learningInteractionsService.listDiscussionsWorkspace({
+        ...query,
+        ...(pageParam ? { cursor: pageParam } : {}),
+      } as ListLearningThreadsQuery),
+    initialPageParam: null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: options?.enabled ?? true,
+    staleTime: 30 * 1000,
+  });
 }
 
 export function useThreadDetails(

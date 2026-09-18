@@ -28,6 +28,7 @@ import type {
   ModerateReplyRequest,
   ModerateThreadRequest,
   ReportsListResponse,
+  DiscussionsWorkspaceResponse,
   SuspendUserRequest,
   ToggleBookmarkResponse,
   ToggleFollowResponse,
@@ -88,6 +89,14 @@ export const learningInteractionsService = {
     query?: ListLearningThreadsQuery,
   ): Promise<LearningThreadsListResponse> {
     return api.get<LearningThreadsListResponse>("/threads", {
+      params: query,
+    });
+  },
+
+  listDiscussionsWorkspace(
+    query?: ListLearningThreadsQuery,
+  ): Promise<DiscussionsWorkspaceResponse> {
+    return api.get<DiscussionsWorkspaceResponse>("/discussions/workspace", {
       params: query,
     });
   },
