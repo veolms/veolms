@@ -9,6 +9,19 @@ export async function findRefundById(database: Executor, refundId: string) {
     .executeTakeFirst();
 }
 
+export async function findRefundByIdempotencyKey(
+  database: Executor,
+  orderId: string,
+  idempotencyKey: string,
+) {
+  return await database
+    .selectFrom("refunds")
+    .selectAll()
+    .where("order_id", "=", orderId)
+    .where("idempotency_key", "=", idempotencyKey)
+    .executeTakeFirst();
+}
+
 export async function listRefundsByOrderId(
   database: Executor,
   orderId: string,
@@ -34,6 +47,7 @@ export async function insertRefund(
     reason?: string | null;
     status: RefundStatus;
     created_by?: string | null;
+    idempotency_key?: string | null;
     created_at?: Date;
     updated_at?: Date;
   },
@@ -51,6 +65,9 @@ export async function updateRefundStatus(
   updates: {
     gateway_refund_id?: string | null;
     status: RefundStatus;
+    // Pass `null` to release the key so a failed attempt can be retried
+    // under the same key.
+    idempotency_key?: string | null;
     updated_at?: Date;
   },
 ) {

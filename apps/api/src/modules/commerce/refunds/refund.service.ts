@@ -8,6 +8,7 @@ import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import * as refundRepo from "./refund.repository.ts";
+import { toRefundContract } from "./refund.mapper.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
 import { createCourseAccessService } from "../shared/course-access.service.ts";
@@ -52,21 +53,38 @@ export function createRefundService({
     adminUserId: string,
     request: CreateRefundRequest,
   ): Promise<Refund> {
-    const { orderId, orderItemId, amount, reason } = request;
+    const { orderId, orderItemId, amount, reason, idempotencyKey } = request;
     const refundId = crypto.randomUUID();
 
     // 1. Reserve — see the concurrency note above.
-    const {
-      order,
-      targetItem,
-      payment,
-      requestedAmount,
-      totalRefundedAlready,
-    } = await database.transaction().execute(async (trx) => {
+    const reservation = await database.transaction().execute(async (trx) => {
       const order = await orderRepo.findOrderByIdForUpdate(trx, orderId);
       if (!order) {
         throw CommerceErrors.ORDER_NOT_FOUND(orderId);
       }
+
+      // Replay: the same key already produced a refund row for this order.
+      // Checked under the order lock, so a concurrent duplicate blocks here
+      // until the first request's reservation commits and then finds it.
+      // Must run before the status check below — the first request may
+      // already have moved the order to `refunded`.
+      if (idempotencyKey) {
+        const existing = await refundRepo.findRefundByIdempotencyKey(
+          trx,
+          order.id,
+          idempotencyKey,
+        );
+        if (existing) {
+          const sameRequest =
+            existing.order_item_id === (orderItemId ?? null) &&
+            (amount === undefined || existing.amount === amount);
+          if (!sameRequest) {
+            throw CommerceErrors.REFUND_IDEMPOTENCY_KEY_REUSED();
+          }
+          return { kind: "replay" as const, refund: existing };
+        }
+      }
+
       if (order.status !== "paid" && order.status !== "partially_refunded") {
         throw CommerceErrors.REFUND_NOT_ALLOWED(
           "Order is not in a refundable state.",
@@ -133,11 +151,13 @@ export function createRefundService({
         reason: reason ?? null,
         status: "pending",
         created_by: adminUserId,
+        idempotency_key: idempotencyKey ?? null,
         created_at: now,
         updated_at: now,
       });
 
       return {
+        kind: "reserved" as const,
         order,
         targetItem,
         payment,
@@ -146,8 +166,26 @@ export function createRefundService({
       };
     });
 
+    if (reservation.kind === "replay") {
+      return toRefundContract(reservation.refund);
+    }
+
+    const { order, targetItem, payment, requestedAmount, totalRefundedAlready } =
+      reservation;
+
     // 2. Dispatch refund through the PaymentGateway abstraction (outside
     //    the reservation transaction/lock above).
+    //
+    //    With a client key the gateway key is derived from it, so a retry
+    //    after an ambiguous failure (timeout where the gateway did settle)
+    //    hits the gateway's own dedupe instead of issuing a second refund.
+    //    Hashed to stay within any header length limit.
+    const gatewayIdempotencyKey = idempotencyKey
+      ? crypto
+          .createHash("sha256")
+          .update(`refund:${order.id}:${idempotencyKey}`)
+          .digest("hex")
+      : refundId;
     let gatewayResult;
     try {
       gatewayResult = await paymentGateway.refundPayment({
@@ -155,7 +193,7 @@ export function createRefundService({
         amount: requestedAmount,
         currency: payment.currency,
         reason: reason ?? "Admin initiated refund",
-        idempotencyKey: refundId,
+        idempotencyKey: gatewayIdempotencyKey,
         notes: {
           orderId: order.id,
           adminUserId,
@@ -164,11 +202,13 @@ export function createRefundService({
       });
     } catch (err) {
       // Release the reservation so it doesn't permanently eat into this
-      // order's refundable amount — a retry generates a fresh idempotency
-      // key regardless, so there's no resumption path that depends on
-      // keeping this row "pending".
+      // order's refundable amount — there's no resumption path that
+      // depends on keeping this row "pending". The client key is released
+      // too so the caller can retry under the same key; the gateway key
+      // derived from it keeps that retry safe.
       await refundRepo.updateRefundStatus(database, refundId, {
         status: "failed",
+        idempotency_key: null,
         updated_at: new Date(),
       });
       throw err;
@@ -253,57 +293,18 @@ export function createRefundService({
       return record;
     });
 
-    return {
-      id: createdRefund.id,
-      orderId: createdRefund.order_id,
-      orderItemId: createdRefund.order_item_id,
-      paymentId: createdRefund.payment_id,
-      gatewayRefundId: createdRefund.gateway_refund_id,
-      amount: createdRefund.amount,
-      currency: createdRefund.currency,
-      reason: createdRefund.reason,
-      status: createdRefund.status as Refund["status"],
-      createdBy: createdRefund.created_by,
-      createdAt: createdRefund.created_at,
-      updatedAt: createdRefund.updated_at,
-    };
+    return toRefundContract(createdRefund);
   }
 
   async function getRefundById(refundId: string): Promise<Refund | undefined> {
     const r = await refundRepo.findRefundById(database, refundId);
     if (!r) return undefined;
-    return {
-      id: r.id,
-      orderId: r.order_id,
-      orderItemId: r.order_item_id,
-      paymentId: r.payment_id,
-      gatewayRefundId: r.gateway_refund_id,
-      amount: r.amount,
-      currency: r.currency,
-      reason: r.reason,
-      status: r.status as Refund["status"],
-      createdBy: r.created_by,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    };
+    return toRefundContract(r);
   }
 
   async function listRefundsForOrder(orderId: string): Promise<Refund[]> {
     const list = await refundRepo.listRefundsByOrderId(database, orderId);
-    return list.map((r) => ({
-      id: r.id,
-      orderId: r.order_id,
-      orderItemId: r.order_item_id,
-      paymentId: r.payment_id,
-      gatewayRefundId: r.gateway_refund_id,
-      amount: r.amount,
-      currency: r.currency,
-      reason: r.reason,
-      status: r.status as Refund["status"],
-      createdBy: r.created_by,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    }));
+    return list.map(toRefundContract);
   }
 
   return {
