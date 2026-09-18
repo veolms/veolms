@@ -52,6 +52,23 @@ type DiscussionStatus = DiscussionWorkspaceCard["status"];
 
 type PageTabTone = "blue" | "green" | "gold" | "rose" | "violet";
 
+function findScrollableAncestor(element: HTMLElement): HTMLElement | null {
+  let current = element.parentElement;
+
+  while (current && current !== document.body) {
+    const style = window.getComputedStyle(current);
+    const canScrollVertically = /(?:auto|scroll|overlay)/.test(style.overflowY);
+
+    if (canScrollVertically) {
+      return current;
+    }
+
+    current = current.parentElement;
+  }
+
+  return null;
+}
+
 export interface DiscussionsWorkspaceProps {
   role: CourseRole;
   tab?: string;
@@ -609,6 +626,10 @@ export function DiscussionsWorkspace({
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   useEffect(() => {
+    fetchingNextPageRef.current = false;
+  }, [workspaceQuery]);
+
+  useEffect(() => {
     const sentinel = loadMoreRef.current;
     if (
       !sentinel ||
@@ -618,17 +639,52 @@ export function DiscussionsWorkspace({
     ) {
       return undefined;
     }
+
+    const scrollRoot = findScrollableAncestor(sentinel);
+    const rootBottom = () =>
+      scrollRoot?.getBoundingClientRect().bottom ?? window.innerHeight;
+
+    const checkSentinel = () => {
+      if (sentinel.getBoundingClientRect().top <= rootBottom() + 600) {
+        loadMore();
+      }
+    };
+    const scrollTargets: Array<HTMLElement | Window> = scrollRoot
+      ? [scrollRoot, window]
+      : [window];
+
+    scrollTargets.forEach((target) => {
+      target.addEventListener("scroll", checkSentinel, { passive: true });
+    });
+    checkSentinel();
+    const layoutCheckFrame = window.requestAnimationFrame(checkSentinel);
+
+    if (typeof IntersectionObserver === "undefined") {
+      return () => {
+        window.cancelAnimationFrame(layoutCheckFrame);
+        scrollTargets.forEach((target) => {
+          target.removeEventListener("scroll", checkSentinel);
+        });
+      };
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) loadMore();
+        if (entries.some((entry) => entry.isIntersecting)) checkSentinel();
       },
       {
-        root: document.getElementById("courses-main-scrollport"),
+        root: scrollRoot,
         rootMargin: "600px 0px",
       },
     );
     observer.observe(sentinel);
-    return () => observer.disconnect();
+    return () => {
+      window.cancelAnimationFrame(layoutCheckFrame);
+      observer.disconnect();
+      scrollTargets.forEach((target) => {
+        target.removeEventListener("scroll", checkSentinel);
+      });
+    };
   }, [hasNextPage, isFetchNextPageError, isFetchingNextPage, loadMore]);
 
   useEffect(() => {
@@ -946,7 +1002,7 @@ export function DiscussionsWorkspace({
                       </button>
                     </div>
                   )}
-                  <div ref={loadMoreRef} aria-live="polite">
+                  <div ref={loadMoreRef} className="min-h-px" aria-live="polite">
                     {isFetchingNextPage && (
                       <p className="py-3 text-center text-xs font-medium text-(--muted)">
                         Loading more discussions…
