@@ -56,6 +56,8 @@ export interface ThemedSelectProps<Value extends string = string> {
   defaultLimit?: number;
   action?: ThemedSelectAction;
   compactOnMobile?: boolean;
+  /** Match the menu to the visible control wrapper around the trigger. */
+  matchMenuToContainer?: boolean;
 }
 
 const joinClasses = (
@@ -93,6 +95,7 @@ export function ThemedSelect<Value extends string>({
   defaultLimit,
   action,
   compactOnMobile = false,
+  matchMenuToContainer = false,
 }: ThemedSelectProps<Value>) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -191,7 +194,8 @@ export function ThemedSelect<Value extends string>({
   const calculatePosition = useCallback((): MenuPosition | null => {
     const trigger = triggerRef.current;
     if (!trigger) return null;
-    const rect = trigger.getBoundingClientRect();
+    const anchor = matchMenuToContainer ? trigger.parentElement : trigger;
+    const rect = (anchor ?? trigger).getBoundingClientRect();
     const viewportPadding = 12;
     const gap = 6;
     const desiredHeight = Math.min(
@@ -238,6 +242,7 @@ export function ThemedSelect<Value extends string>({
     action,
     filteredOptions.length,
     measureNaturalMenuWidth,
+    matchMenuToContainer,
     menuMinWidth,
     searchable,
   ]);

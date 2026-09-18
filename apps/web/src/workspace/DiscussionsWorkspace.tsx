@@ -4,11 +4,14 @@ import { useSearchParams } from "react-router";
 import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "../hooks/useDebounce";
 import { AtIcon as At } from "@phosphor-icons/react/At";
 import { BookmarkSimpleIcon as BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { ChatTeardropTextIcon as ChatTeardropText } from "@phosphor-icons/react/ChatTeardropText";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
+import { EyeSlashIcon as EyeSlash } from "@phosphor-icons/react/EyeSlash";
 import { FunnelIcon as Funnel } from "@phosphor-icons/react/Funnel";
+import { GlobeIcon as Globe } from "@phosphor-icons/react/Globe";
 import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
@@ -35,6 +38,7 @@ import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
 import { DiscussionAvatar } from "../learning/DiscussionAvatar";
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 import type { DiscussionContent } from "../learning/discussion-editor/types";
+import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
 import {
   SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
   SearchShortcutHint,
@@ -86,6 +90,12 @@ const statusLabels: Readonly<Record<DiscussionStatus, string>> = {
   solved: "Solved",
   open: "Open",
 };
+
+const qnaStatusLabels = {
+  open: "Open",
+  answered: "Answered",
+  solved: "Solved",
+} as const;
 
 const statusIcons: Readonly<Record<DiscussionStatus, typeof CheckCircle>> = {
   answered: CheckCircle,
@@ -165,6 +175,11 @@ function DiscussionComposer({
 
 const QUESTION_PREVIEW_MAX_HEIGHT_PX = 48;
 
+function isPlainQuestionContent(thread: DiscussionWorkspaceCard): boolean {
+  const content = thread.content.trim();
+  return !content || content === thread.plainText.trim();
+}
+
 function DiscussionWorkspaceQuestionContent({
   thread,
   expanded,
@@ -176,6 +191,7 @@ function DiscussionWorkspaceQuestionContent({
 }) {
   const [needsClamp, setNeedsClamp] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const isPlainText = isPlainQuestionContent(thread);
   const content = useMemo<DiscussionContent>(
     () => ({
       format: "markdown",
@@ -200,7 +216,11 @@ function DiscussionWorkspaceQuestionContent({
   }, [content]);
 
   return (
-    <div className="discussion-hub__question-content">
+    <div
+      className={`discussion-hub__question-content ${
+        isPlainText ? "is-plain" : ""
+      }`}
+    >
       <div className="relative">
         <div
           ref={contentRef}
@@ -262,6 +282,24 @@ function getVisibilityLabel(
   return visibility.charAt(0).toUpperCase() + visibility.slice(1);
 }
 
+function getDiscussionThreadDestination(
+  thread: DiscussionWorkspaceCard,
+): string {
+  const basePath = getCoursePlayerPath(
+    thread.courseId,
+    "courses",
+    1,
+    "/discussions/q-and-a",
+    { threadId: thread.id },
+  );
+  if (!thread.lessonId) return basePath;
+
+  const [pathname, query = ""] = basePath.split("?", 2);
+  const search = new URLSearchParams(query);
+  search.set("lessonId", thread.lessonId);
+  return `${pathname}?${search.toString()}`;
+}
+
 function DiscussionWorkspaceAttachmentIndicator({
   label,
 }: {
@@ -277,16 +315,32 @@ function DiscussionWorkspaceAttachmentIndicator({
 
 function DiscussionWorkspaceQuestionCard({
   thread,
-  setNotice,
+  onNavigatePage,
 }: {
   thread: DiscussionWorkspaceCard;
-  setNotice?: (message: string) => void;
+  onNavigatePage: NavigateTo;
 }) {
   const [expanded, setExpanded] = useState(false);
   const attachmentLabel = getAttachmentLabel(thread.attachmentSummary);
   const visibilityLabel = getVisibilityLabel(thread.visibility);
-  const lifecycleStatus = thread.status === "solved" ? "solved" : "open";
+  const isPlainText = isPlainQuestionContent(thread);
+  const VisibilityIcon =
+    thread.visibility === "private"
+      ? Lock
+      : thread.visibility === "unlisted"
+        ? EyeSlash
+        : Globe;
+  const lifecycleStatus: "open" | "answered" | "solved" =
+    thread.status === "answered"
+      ? "answered"
+      : thread.status === "solved"
+        ? "solved"
+        : "open";
   const LifecycleIcon = statusIcons[lifecycleStatus];
+  const destination = getDiscussionThreadDestination(thread);
+  const destinationLabel = [thread.course, thread.lesson]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <article
@@ -294,6 +348,27 @@ function DiscussionWorkspaceQuestionCard({
         expanded ? "is-expanded" : "is-collapsed"
       }`}
     >
+      <a
+        className="discussion-thread__navigation-link"
+        href={destination}
+        aria-label={`Open question${
+          destinationLabel ? ` in ${destinationLabel}` : ""
+        }`}
+        onClick={(event) => {
+          if (
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return;
+          }
+          event.preventDefault();
+          onNavigatePage(destination, { exact: true });
+        }}
+      />
       <div className="discussion-thread__open discussion-thread__open--overview">
         <div className="discussion-thread__avatar">
           <DiscussionAvatar
@@ -301,13 +376,26 @@ function DiscussionWorkspaceQuestionCard({
             className="discussion-thread__avatar-image"
           />
         </div>
-        <div className="discussion-thread__body">
+        <div
+          className={`discussion-thread__body ${
+            isPlainText ? "is-plain" : ""
+          }`}
+        >
           <div className="discussion-thread__author">
-            <span>{thread.isOwn ? "You" : thread.author}</span>
+            <span className="discussion-thread__author-name">
+              {thread.isOwn ? "You" : thread.author}
+            </span>
             {thread.authorUsername && (
               <>
-                <span aria-hidden="true">·</span>
-                <span>@{thread.authorUsername.replace(/^@+/, "")}</span>
+                <span
+                  className="discussion-thread__author-separator"
+                  aria-hidden="true"
+                >
+                  ·
+                </span>
+                <span className="discussion-thread__author-username">
+                  @{thread.authorUsername.replace(/^@+/, "")}
+                </span>
               </>
             )}
           </div>
@@ -326,7 +414,12 @@ function DiscussionWorkspaceQuestionCard({
                 (thread.lesson || attachmentLabel || visibilityLabel) && (
                   <span aria-hidden="true" />
                 )}
-              {thread.lesson && <small>{thread.lesson}</small>}
+              {thread.lesson && (
+                <small className="discussion-thread__lesson">
+                  <BookOpen size={13} aria-hidden="true" />
+                  <span>{thread.lesson}</span>
+                </small>
+              )}
               {thread.lesson && (attachmentLabel || visibilityLabel) && (
                 <span aria-hidden="true" />
               )}
@@ -338,7 +431,8 @@ function DiscussionWorkspaceQuestionCard({
               )}
               {visibilityLabel && (
                 <small className="discussion-thread__visibility">
-                  {visibilityLabel}
+                  <VisibilityIcon size={13} aria-hidden="true" />
+                  <span>{visibilityLabel}</span>
                 </small>
               )}
             </div>
@@ -350,7 +444,7 @@ function DiscussionWorkspaceQuestionCard({
           >
             <span className="discussion-thread__status-label">
               <LifecycleIcon size={15} weight="fill" aria-hidden="true" />
-              <span>{statusLabels[lifecycleStatus]}</span>
+              <span>{qnaStatusLabels[lifecycleStatus]}</span>
             </span>
             {thread.isLocked && (
               <span
@@ -369,18 +463,6 @@ function DiscussionWorkspaceQuestionCard({
           <time>{thread.activity}</time>
         </div>
       </div>
-      <button
-        type="button"
-        className="discussion-thread__more"
-        aria-label="More options for question"
-        onClick={() => {
-          setNotice?.(
-            "Thread actions will be available with connected discussions.",
-          );
-        }}
-      >
-        <DotsThreeVertical size={21} weight="bold" />
-      </button>
     </article>
   );
 }
@@ -409,21 +491,39 @@ export function DiscussionsWorkspace({
   const debouncedQuery = useDebounce(query, DEFAULT_DEBOUNCE_DELAY_MS);
   const [status, setStatus] = useState("all");
   const [sort, setSort] = useState("activity");
+  const [qnaStatus, setQnaStatus] = useState("all");
+  const [qnaSort, setQnaSort] = useState("activity");
   const [composer, setComposer] = useState<"question" | "discussion" | null>(
     null,
   );
+
+  const isQnaTab = activeTab === "q-and-a";
+  const workspaceStatus = isQnaTab ? qnaStatus : status;
+  const workspaceSort = isQnaTab ? qnaSort : sort;
 
   const workspaceQuery = useMemo(
     () => ({
       tab: activeTab,
       ...(selectedCourseId !== "all" ? { courseId: selectedCourseId } : {}),
       ...(debouncedQuery.trim() ? { search: debouncedQuery.trim() } : {}),
-      ...(activeTab === "q-and-a" ? { mine: true } : {}),
-      status: status as "all" | "answered" | "mentioned" | "solved" | "open",
-      sort: sort as "activity" | "replies",
+      ...(isQnaTab ? { mine: true } : {}),
+      status: workspaceStatus as
+        | "all"
+        | "answered"
+        | "mentioned"
+        | "solved"
+        | "open",
+      sort: workspaceSort as "activity" | "latest" | "replies",
       limit: 20,
     }),
-    [activeTab, debouncedQuery, selectedCourseId, sort, status],
+    [
+      activeTab,
+      debouncedQuery,
+      isQnaTab,
+      selectedCourseId,
+      workspaceSort,
+      workspaceStatus,
+    ],
   );
   const workspaceQueryResult = useDiscussionsWorkspace(workspaceQuery);
   const {
@@ -446,18 +546,41 @@ export function DiscussionsWorkspace({
     [workspaceData],
   );
 
-  const courseOptions = useMemo(() => {
-    const courses = new Map<string, string>();
-    workspaceData?.pages.forEach((page) => {
-      page.courses.forEach((courseOption) => {
-        courses.set(courseOption.id, courseOption.title);
-      });
+  const [knownCourseOptions, setKnownCourseOptions] = useState<
+    Record<string, string>
+  >({});
+
+  useEffect(() => {
+    const incomingCourses = workspaceData?.pages.flatMap(
+      (page) => page.courses,
+    );
+    if (!incomingCourses?.length) return;
+
+    setKnownCourseOptions((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const course of incomingCourses) {
+        if (next[course.id] === course.title) continue;
+        next[course.id] = course.title;
+        changed = true;
+      }
+      return changed ? next : current;
     });
-    return [
-      ["all", "Course"] as const,
-      ...Array.from(courses, ([id, title]) => [id, title] as const),
-    ];
   }, [workspaceData]);
+
+  const courses = new Map(Object.entries(knownCourseOptions));
+  workspaceData?.pages.forEach((page) => {
+    page.courses.forEach((courseOption) => {
+      courses.set(courseOption.id, courseOption.title);
+    });
+  });
+  if (selectedCourseId !== "all" && !courses.has(selectedCourseId)) {
+    courses.set(selectedCourseId, "Selected course");
+  }
+  const courseOptions = [
+    ["all", "All courses"] as const,
+    ...Array.from(courses, ([id, title]) => [id, title] as const),
+  ];
 
   const setCourse = (courseId: string) => {
     setSearchParams(
@@ -623,7 +746,11 @@ export function DiscussionsWorkspace({
                       id="workspace-discussions-search-input"
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Search discussions by title or keyword..."
+                      placeholder={
+                        isQnaTab
+                          ? "Search your questions..."
+                          : "Search discussions by title or keyword..."
+                      }
                       data-search-shortcut-target
                       aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
                     />
@@ -635,47 +762,74 @@ export function DiscussionsWorkspace({
                       ariaLabel="Filter discussions by course"
                       triggerClassName="discussion-hub__select-trigger"
                       contentClassName="discussion-hub__select-content"
+                      matchMenuToContainer={isQnaTab}
                       value={selectedCourseId}
                       options={courseOptions}
                     />
                   </div>
                   <div className="discussion-hub__select">
                     <ThemedSelect
-                      value={status}
-                      onValueChange={setStatus}
+                      value={isQnaTab ? qnaStatus : status}
+                      onValueChange={isQnaTab ? setQnaStatus : setStatus}
                       ariaLabel="Filter discussions by status"
                       triggerClassName="discussion-hub__select-trigger"
                       contentClassName="discussion-hub__select-content"
+                      matchMenuToContainer={isQnaTab}
                       options={
-                        [
-                          ["all", "Status"],
-                          ["answered", "Answered"],
-                          ["mentioned", "Mentioned"],
-                          ["solved", "Solved"],
-                          ["open", "Open"],
-                        ] as const
+                        isQnaTab
+                          ? ([
+                              ["all", "All"],
+                              ["open", "Open"],
+                              ["answered", "Answered"],
+                              ["solved", "Solved"],
+                              ["mentioned", "Mentioned"],
+                            ] as const)
+                          : ([
+                              ["all", "Status"],
+                              ["answered", "Answered"],
+                              ["mentioned", "Mentioned"],
+                              ["solved", "Solved"],
+                              ["open", "Open"],
+                            ] as const)
                       }
                     />
                   </div>
                   <div className="discussion-hub__select discussion-hub__select--sort">
                     <Funnel size={17} aria-hidden="true" />
                     <ThemedSelect
-                      value={sort}
-                      onValueChange={setSort}
-                      ariaLabel={`Sort discussions: ${
-                        sort === "activity"
-                          ? "Latest activity"
-                          : sort === "replies"
-                            ? "Most replies"
-                            : "Newest"
-                      }`}
+                      value={isQnaTab ? qnaSort : sort}
+                      onValueChange={isQnaTab ? setQnaSort : setSort}
+                      ariaLabel={
+                        isQnaTab
+                          ? `Sort questions: ${
+                              qnaSort === "activity"
+                                ? "Latest activity"
+                                : qnaSort === "latest"
+                                  ? "Newest"
+                                  : "Most replies"
+                            }`
+                          : `Sort discussions: ${
+                              sort === "activity"
+                                ? "Latest activity"
+                                : sort === "replies"
+                                  ? "Most replies"
+                                  : "Newest"
+                            }`
+                      }
                       triggerClassName="discussion-hub__select-trigger"
                       contentClassName="discussion-hub__select-content"
+                      matchMenuToContainer={isQnaTab}
                       options={
-                        [
-                          ["activity", "Latest activity"],
-                          ["replies", "Most replies"],
-                        ] as const
+                        isQnaTab
+                          ? ([
+                              ["activity", "Latest activity"],
+                              ["latest", "Newest"],
+                              ["replies", "Most replies"],
+                            ] as const)
+                          : ([
+                              ["activity", "Latest activity"],
+                              ["replies", "Most replies"],
+                            ] as const)
                       }
                     />
                   </div>
@@ -706,7 +860,7 @@ export function DiscussionsWorkspace({
                         <DiscussionWorkspaceQuestionCard
                           key={thread.id}
                           thread={thread}
-                          setNotice={setNotice}
+                          onNavigatePage={onNavigatePage}
                         />
                       ) : (
                         <article className="discussion-thread" key={thread.id}>
@@ -784,6 +938,8 @@ export function DiscussionsWorkspace({
                           setCourse("all");
                           setStatus("all");
                           setSort("activity");
+                          setQnaStatus("all");
+                          setQnaSort("activity");
                         }}
                       >
                         Clear filters
