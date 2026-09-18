@@ -1,5 +1,13 @@
-import type { Order, OrderItemSnapshot } from "@veolms/contracts";
-import type { OrderItemType, OrderStatus } from "@veolms/database";
+import { orderPaymentMethodSchema } from "@veolms/contracts";
+import type {
+  Order,
+  OrderItemSnapshot,
+  OrderAdminDetails,
+  OrderPaymentMethod,
+} from "@veolms/contracts";
+import type { Database, OrderItemType, OrderStatus } from "@veolms/database";
+import type { Selectable } from "kysely";
+import { toRefundContract } from "../refunds/refund.mapper.ts";
 
 /**
  * Minimal shape needed to map a persisted order row to the `Order` API
@@ -69,12 +77,76 @@ export function toOrderItemContract(row: OrderItemRowLike): OrderItemSnapshot {
  * but keeps working off the in-memory row captured before that update, so it
  * needs to reflect the now-current status/paidAt without a redundant re-read.
  */
+/**
+ * Projects the untyped `payments.payment_method` jsonb onto the fields the
+ * contract exposes. Anything else stored in the column is dropped, and a value
+ * that isn't a recognisable payment method becomes `null` rather than
+ * leaking through or failing the response.
+ */
+export function toOrderPaymentMethod(raw: unknown): OrderPaymentMethod | null {
+  const parsed = orderPaymentMethodSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
+type AdminUserRow = Pick<
+  Selectable<Database["users"]>,
+  "display_name" | "username" | "email"
+>;
+
+/**
+ * Builds the academy-only `admin` block shown on an order. Shared by the
+ * single-order and list paths so both present a row identically.
+ */
+export function toOrderAdminDetails(input: {
+  order: Pick<OrderRowLike, "user_id">;
+  user?: AdminUserRow;
+  coupon?: Selectable<Database["coupons"]>;
+  payment?: Selectable<Database["payments"]>;
+  refunds: Selectable<Database["refunds"]>[];
+}): OrderAdminDetails {
+  const { order, user, coupon, payment, refunds } = input;
+  return {
+    student: {
+      id: order.user_id,
+      name: user?.display_name || user?.username || "Student",
+      displayName: user?.display_name,
+      email: user?.email ?? null,
+      username: user?.username || "student",
+    },
+    coupon: coupon
+      ? {
+          id: coupon.id,
+          code: coupon.code,
+          discountType: coupon.discount_type as "percentage" | "fixed",
+          discountValue: coupon.discount_value,
+        }
+      : null,
+    payment: payment
+      ? {
+          id: payment.id,
+          gatewayProvider: payment.gateway_provider,
+          gatewayOrderId: payment.gateway_order_id,
+          gatewayPaymentId: payment.gateway_payment_id ?? null,
+          amount: payment.amount,
+          currency: payment.currency,
+          status: payment.status,
+          paymentMethod: toOrderPaymentMethod(payment.payment_method),
+        }
+      : null,
+    refunds: refunds.map(toRefundContract),
+  };
+}
+
 export function toOrderContract(
   row: OrderRowLike,
   items: OrderItemRowLike[],
-  overrides?: { status?: OrderStatus; paidAt?: Date | null },
+  overrides?: {
+    status?: OrderStatus;
+    paidAt?: Date | null;
+    admin?: OrderAdminDetails;
+  },
 ): Order {
-  return {
+  const result: Order = {
     id: row.id,
     orderNumber: row.order_number,
     userId: row.user_id,
@@ -95,4 +167,10 @@ export function toOrderContract(
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+
+  if (overrides?.admin) {
+    result.admin = overrides.admin;
+  }
+
+  return result;
 }

@@ -25,6 +25,7 @@ export const createRefundRequestSchema = z.strictObject({
   amount: z.number().int().positive().optional(),
   reason: z.string().max(500).optional(),
   preserveAccess: z.boolean().default(false),
+  idempotencyKey: z.string().min(1).max(255).optional(),
 });
 export type CreateRefundRequest = z.infer<typeof createRefundRequestSchema>;
 

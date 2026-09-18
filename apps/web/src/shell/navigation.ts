@@ -12,6 +12,7 @@ import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { EnvelopeSimpleIcon as EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
 import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
+import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
 import type { Icon } from "@phosphor-icons/react";
 import type { SidebarPreferences } from "../settings/settingsPreferences";
 
@@ -81,6 +82,7 @@ const menuIcons: Record<string, Icon> = {
   House,
   SquaresFour,
   Star,
+  Tag,
   Tote,
   Users,
 };
@@ -163,6 +165,30 @@ export function resolveShellNavigation(
   isDefault: boolean;
 } {
   const serverItems = getNavigationItemsFromMenus(menus);
+  const hasStaffMenus = serverItems.some(([label]) =>
+    ["Dashboard", "Courses", "Students", "Analytics", "Orders", "Quizzes", "Reviews"].includes(label),
+  );
+  const hasCoupons = serverItems.some(([label]) => label === "Coupons");
+  if (hasStaffMenus && !hasCoupons) {
+    const couponsItem: DynamicNavigationItem = [
+      "Coupons",
+      Tag,
+      {
+        id: "default-coupons",
+        routeLink: "/coupons",
+        parentId: null,
+        source: "server",
+      },
+    ];
+    const insertIdx = serverItems.findIndex(
+      ([label]) => label === "Orders" || label === "Courses" || label === "Analytics",
+    );
+    if (insertIdx !== -1) {
+      serverItems.splice(insertIdx + 1, 0, couponsItem);
+    } else {
+      serverItems.push(couponsItem);
+    }
+  }
   return { items: serverItems, isDefault: false };
 }
 
@@ -170,6 +196,7 @@ const navigationTones: Record<string, string> = {
   Home: "#5da9ff",
   Dashboard: "#5da9ff",
   Courses: "#8f70ff",
+  Coupons: "#fbbf24",
   Students: "#55d98b",
   Wishlist: "#ff6684",
   Reviews: "#f1be4b",

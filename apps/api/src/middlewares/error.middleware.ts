@@ -20,7 +20,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
           404,
           "ROUTE_NOT_FOUND",
           `Route ${request.method} ${request.url} does not exist.`,
-        ),
+        ).toJSON(),
       ),
   );
 
@@ -44,7 +44,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
             path: issue.instancePath,
             message: issue.message ?? "Invalid value.",
           })),
-        ),
+        ).toJSON(),
       );
     }
 

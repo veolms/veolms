@@ -1,6 +1,7 @@
-import type { FastifyRequest, FastifyReply } from "fastify";
+import type { FastifyRequest } from "fastify";
 import type {
   CreateCouponRequest,
+  ListCouponsQuery,
   UpdateCouponRequest,
 } from "@veolms/contracts";
 import type { CouponService } from "./coupon.service.ts";
@@ -10,8 +11,10 @@ export function createCouponController({
 }: {
   service: CouponService;
 }) {
-  async function listCoupons() {
-    return await service.listCoupons();
+  async function listCoupons(
+    request: FastifyRequest<{ Querystring: ListCouponsQuery }>,
+  ) {
+    return await service.listCoupons(request.query);
   }
 
   async function getCoupon(
