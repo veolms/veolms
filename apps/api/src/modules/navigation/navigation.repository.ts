@@ -1,15 +1,45 @@
+import { sql } from "kysely";
 import type { SidenavMenuNode } from "@veolms/contracts";
 import type { DatabaseExecutor as Executor } from "@veolms/database";
+
+async function getUserRoleIds(database: Executor, userId: string): Promise<string[]> {
+  const [directRows, scopedRows] = await Promise.all([
+    database
+      .selectFrom("user_roles")
+      .select("role_id")
+      .where("user_id", "=", userId)
+      .execute(),
+    database
+      .selectFrom("role_assignments as ra")
+      .select("ra.role_id")
+      .where("ra.user_id", "=", userId)
+      .where((eb) =>
+        eb.or([
+          eb("ra.expires_at", "is", null),
+          eb("ra.expires_at", ">", sql<Date>`CURRENT_TIMESTAMP`),
+        ]),
+      )
+      .execute(),
+  ]);
+
+  return Array.from(
+    new Set([...directRows.map((r) => r.role_id), ...scopedRows.map((r) => r.role_id)]),
+  );
+}
 
 export async function listUserRoleNames(
   database: Executor,
   userId: string,
 ): Promise<string[]> {
+  const roleIds = await getUserRoleIds(database, userId);
+  if (roleIds.length === 0) {
+    return [];
+  }
+
   const rows = await database
-    .selectFrom("user_roles")
-    .innerJoin("roles", "roles.id", "user_roles.role_id")
+    .selectFrom("roles")
     .select("roles.name")
-    .where("user_roles.user_id", "=", userId)
+    .where("roles.id", "in", roleIds)
     .execute();
 
   return rows.map((row) => row.name);
@@ -19,9 +49,13 @@ export async function listUserPermissions(
   database: Executor,
   userId: string,
 ): Promise<string[]> {
+  const roleIds = await getUserRoleIds(database, userId);
+  if (roleIds.length === 0) {
+    return [];
+  }
+
   const rows = await database
-    .selectFrom("user_roles")
-    .innerJoin("menu_permissions", "menu_permissions.role_id", "user_roles.role_id")
+    .selectFrom("menu_permissions")
     .innerJoin("menus", "menus.id", "menu_permissions.menu_id")
     .select([
       "menus.route_link",
@@ -30,7 +64,7 @@ export async function listUserPermissions(
       "menu_permissions.can_update",
       "menu_permissions.can_delete",
     ])
-    .where("user_roles.user_id", "=", userId)
+    .where("menu_permissions.role_id", "in", roleIds)
     .execute();
 
   const permissions = new Set<string>();
@@ -49,9 +83,13 @@ export async function listUserMenus(
   database: Executor,
   userId: string,
 ): Promise<SidenavMenuNode[]> {
+  const roleIds = await getUserRoleIds(database, userId);
+  if (roleIds.length === 0) {
+    return [];
+  }
+
   const rows = await database
-    .selectFrom("user_roles")
-    .innerJoin("menu_permissions", "menu_permissions.role_id", "user_roles.role_id")
+    .selectFrom("menu_permissions")
     .innerJoin("menus", "menus.id", "menu_permissions.menu_id")
     .select([
       "menus.id",
@@ -67,7 +105,7 @@ export async function listUserMenus(
       "menu_permissions.can_update",
       "menu_permissions.can_delete",
     ])
-    .where("user_roles.user_id", "=", userId)
+    .where("menu_permissions.role_id", "in", roleIds)
     .orderBy("menus.created_at", "asc")
     .orderBy("menus.id", "asc")
     .execute();
