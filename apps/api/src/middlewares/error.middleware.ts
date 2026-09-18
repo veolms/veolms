@@ -92,7 +92,8 @@ export function registerErrorHandler(app: FastifyInstance): void {
                   "An unexpected error occurred.",
               ),
               (error as { issues?: ValidationIssue[] }).issues ||
-                (error as { error?: { issues?: ValidationIssue[] } }).error?.issues,
+                (error as { error?: { issues?: ValidationIssue[] } }).error
+                  ?.issues,
             )
           : null;
 
@@ -113,7 +114,14 @@ export function registerErrorHandler(app: FastifyInstance): void {
 
       return reply
         .code(appError.statusCode)
-        .send(appError.toJSON());
+        .send(
+          httpError(
+            appError.statusCode,
+            appError.code,
+            appError.message,
+            appError.issues,
+          ).toJSON(),
+        );
     }
 
     request.log.error({ err: error }, "Unhandled error");
@@ -129,4 +137,3 @@ export function registerErrorHandler(app: FastifyInstance): void {
       );
   });
 }
-

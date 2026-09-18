@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueries } from "@tanstack/react-query";
 import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "../hooks/useDebounce";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
@@ -16,7 +17,10 @@ import type { QuizStatus } from "@veolms/contracts";
 import { Button } from "../components/Button";
 import { ThemedSelect, type ThemedSelectOption } from "../ThemedSelect";
 import { useMyCourses } from "../services/courses";
+import { useStudents } from "../services/students";
 import {
+  quizKeys,
+  quizzesService,
   useCourseQuizAnalytics,
   useCourseQuizAssignments,
   useMyQuizAssignments,
@@ -282,10 +286,27 @@ function InstructorOverview({
   const [courseId, setCourseId] = useState<string | null>(null);
   const courseAnalytics = useCourseQuizAnalytics(courseId);
   const assignments = useCourseQuizAssignments(courseId);
+  const studentsQuery = useStudents({ limit: 1 });
+
+  const courseList = useMemo(
+    () => courses.data?.courses ?? [],
+    [courses.data?.courses],
+  );
+
+  const allCourseAnalyticsQueries = useQueries({
+    queries: courseList.map((course) => ({
+      queryKey: quizKeys.courseAnalytics(course.id),
+      queryFn: () => quizzesService.courseAnalytics(course.id),
+      staleTime: 30_000,
+    })),
+  });
 
   useEffect(() => {
-    if (!courseId && courses.data?.courses[0]) {
-      setCourseId(courses.data.courses[0].id);
+    if (courseId && courses.data?.courses) {
+      const exists = courses.data.courses.some((c) => c.id === courseId);
+      if (!exists) {
+        setCourseId(null);
+      }
     }
   }, [courseId, courses.data?.courses]);
 
@@ -294,6 +315,69 @@ function InstructorOverview({
     (quiz) => quiz.status === "published",
   ).length;
   const drafts = quizzes.filter((quiz) => quiz.status === "draft").length;
+
+  const totalAssignedAssessmentsAcrossAll = useMemo(() => {
+    return allCourseAnalyticsQueries.reduce((sum, q) => {
+      return sum + (q.data?.totalQuizzes ?? 0);
+    }, 0);
+  }, [allCourseAnalyticsQueries]);
+
+  const totalLearnersAcrossAll = useMemo(() => {
+    if (typeof studentsQuery.data?.pages[0]?.totalCount === "number") {
+      return studentsQuery.data.pages[0].totalCount;
+    }
+    const studentCounts = allCourseAnalyticsQueries
+      .map((q) => q.data?.students)
+      .filter((val): val is number => typeof val === "number");
+    if (studentCounts.length > 0) {
+      return Math.max(...studentCounts);
+    }
+    return null;
+  }, [studentsQuery.data, allCourseAnalyticsQueries]);
+
+  const coursesWithAttempts = useMemo(() => {
+    return allCourseAnalyticsQueries
+      .map((q) => q.data)
+      .filter((data): data is NonNullable<typeof data> =>
+        Boolean(
+          data &&
+          data.totalQuizzes > 0 &&
+          (data.quizCompletionRate > 0 ||
+            data.quizzes.some(
+              (q) => q.completionRate > 0 || q.averageScore > 0,
+            )),
+        ),
+      );
+  }, [allCourseAnalyticsQueries]);
+
+  const allCoursesMetrics = useMemo(() => {
+    if (coursesWithAttempts.length === 0) {
+      return { averageScore: null, passRate: null };
+    }
+    const avgScoreSum = coursesWithAttempts.reduce(
+      (sum, c) => sum + c.averageQuizScore,
+      0,
+    );
+    const passRateSum = coursesWithAttempts.reduce(
+      (sum, c) => sum + c.passRate,
+      0,
+    );
+    return {
+      averageScore: Math.round(avgScoreSum / coursesWithAttempts.length),
+      passRate: Math.round(passRateSum / coursesWithAttempts.length),
+    };
+  }, [coursesWithAttempts]);
+
+  const assignedCount =
+    assignments.data?.length ?? analytics?.totalQuizzes ?? 0;
+  const hasCourseAttempts = Boolean(
+    analytics &&
+    assignedCount > 0 &&
+    (analytics.quizCompletionRate > 0 ||
+      analytics.quizzes.some(
+        (q) => q.completionRate > 0 || q.averageScore > 0,
+      )),
+  );
 
   const courseOptions: readonly ThemedSelectOption[] = useMemo(() => {
     const list: ThemedSelectOption[] = [["", "All courses"]];
@@ -399,8 +483,9 @@ function InstructorOverview({
               triggerClassName="!h-9 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-2.5 sm:!px-3.5 !text-xs sm:!text-sm !font-semibold !text-(--text) focus:!border-(--accent)"
             />
             <p className="text-xs text-(--muted)">
-              {assignments.data?.length ?? 0} assigned assessment
-              {assignments.data?.length === 1 ? "" : "s"} in this course
+              {courseId
+                ? `${assignedCount} assigned assessment${assignedCount === 1 ? "" : "s"} in this course`
+                : `${totalAssignedAssessmentsAcrossAll} assigned assessment${totalAssignedAssessmentsAcrossAll === 1 ? "" : "s"} across ${courseList.length} course${courseList.length === 1 ? "" : "s"}`}
             </p>
           </div>
         </div>
@@ -414,21 +499,71 @@ function InstructorOverview({
         />
         <StatCard
           icon={<Users size={20} weight="bold" />}
-          label="Assigned learners"
-          value={analytics?.students ?? "—"}
-          detail="Across the selected course"
+          label="Enrolled learners"
+          value={
+            courseId
+              ? courseAnalytics.isLoading
+                ? "—"
+                : (analytics?.students ?? 0)
+              : (totalLearnersAcrossAll ?? (studentsQuery.isLoading ? "—" : 0))
+          }
+          detail={courseId ? "Enrolled in this course" : "Across all courses"}
         />
         <StatCard
           icon={<Gauge size={20} weight="bold" />}
           label="Average score"
-          value={analytics ? percent(analytics.averageQuizScore) : "—"}
-          detail="Course-wide average"
+          value={
+            courseId
+              ? courseAnalytics.isLoading
+                ? "—"
+                : hasCourseAttempts
+                  ? percent(analytics?.averageQuizScore)
+                  : "—"
+              : allCoursesMetrics.averageScore !== null
+                ? `${allCoursesMetrics.averageScore}%`
+                : "—"
+          }
+          detail={
+            courseId
+              ? assignedCount === 0
+                ? "No assessments in this course"
+                : hasCourseAttempts
+                  ? "Course-wide average"
+                  : "No graded attempts yet"
+              : allCoursesMetrics.averageScore !== null
+                ? "Across courses with attempts"
+                : totalAssignedAssessmentsAcrossAll > 0
+                  ? "No graded attempts yet"
+                  : "No assessments assigned yet"
+          }
         />
         <StatCard
           icon={<CheckCircle size={20} weight="bold" />}
           label="Pass rate"
-          value={analytics ? percent(analytics.passRate) : "—"}
-          detail="Latest graded outcomes"
+          value={
+            courseId
+              ? courseAnalytics.isLoading
+                ? "—"
+                : hasCourseAttempts
+                  ? percent(analytics?.passRate)
+                  : "—"
+              : allCoursesMetrics.passRate !== null
+                ? `${allCoursesMetrics.passRate}%`
+                : "—"
+          }
+          detail={
+            courseId
+              ? assignedCount === 0
+                ? "No assessments in this course"
+                : hasCourseAttempts
+                  ? "Latest graded outcomes"
+                  : "No graded attempts yet"
+              : allCoursesMetrics.passRate !== null
+                ? "Across courses with attempts"
+                : totalAssignedAssessmentsAcrossAll > 0
+                  ? "No graded attempts yet"
+                  : "No assessments assigned yet"
+          }
           tone="success"
         />
       </div>
@@ -769,7 +904,7 @@ function InstructorAnalytics() {
         <StatCard
           label="Average"
           value={
-            assignmentAnalytics.data
+            assignmentAnalytics.data && assignmentAnalytics.data.attempted > 0
               ? percent(assignmentAnalytics.data.averageScore)
               : "—"
           }
@@ -778,7 +913,7 @@ function InstructorAnalytics() {
         <StatCard
           label="Highest"
           value={
-            assignmentAnalytics.data
+            assignmentAnalytics.data && assignmentAnalytics.data.attempted > 0
               ? percent(assignmentAnalytics.data.highestScore)
               : "—"
           }
@@ -788,7 +923,7 @@ function InstructorAnalytics() {
         <StatCard
           label="Lowest"
           value={
-            assignmentAnalytics.data
+            assignmentAnalytics.data && assignmentAnalytics.data.attempted > 0
               ? percent(assignmentAnalytics.data.lowestScore)
               : "—"
           }
@@ -838,11 +973,23 @@ function InstructorAnalytics() {
               <MetricTile label="Required" value={analytics.requiredQuizzes} />
               <MetricTile
                 label="Completion"
-                value={percent(analytics.quizCompletionRate)}
+                value={
+                  analytics.totalQuizzes > 0
+                    ? percent(analytics.quizCompletionRate)
+                    : "—"
+                }
               />
               <MetricTile
                 label="Pass rate"
-                value={percent(analytics.passRate)}
+                value={
+                  analytics.totalQuizzes > 0 &&
+                  (analytics.quizCompletionRate > 0 ||
+                    analytics.quizzes.some(
+                      (q) => q.completionRate > 0 || q.averageScore > 0,
+                    ))
+                    ? percent(analytics.passRate)
+                    : "—"
+                }
               />
             </div>
           ) : null}

@@ -42,7 +42,11 @@ export function StudentDetailsPage({
     .toUpperCase();
 
   const handleCopyEmail = () => {
-    if (student?.email && typeof navigator !== "undefined" && navigator.clipboard) {
+    if (
+      student?.email &&
+      typeof navigator !== "undefined" &&
+      navigator.clipboard
+    ) {
       void navigator.clipboard.writeText(student.email);
       setNotice?.(`Email ${student.email} copied to clipboard.`);
     }
@@ -61,7 +65,11 @@ export function StudentDetailsPage({
           className="group inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface) px-3.5 py-2 text-xs md:text-sm font-semibold text-(--text-secondary) hover:border-(--border) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
           style={{ boxShadow: "var(--card-shadow)" }}
         >
-          <ArrowLeft size={16} weight="bold" className="transition-transform group-hover:-translate-x-0.5 text-(--muted) group-hover:text-(--text)" />
+          <ArrowLeft
+            size={16}
+            weight="bold"
+            className="transition-transform group-hover:-translate-x-0.5 text-(--muted) group-hover:text-(--text)"
+          />
           <span>Back to Students</span>
         </button>
       </nav>
@@ -91,7 +99,8 @@ export function StudentDetailsPage({
             Student Profile Not Found
           </h2>
           <p className="mt-1 max-w-sm text-xs md:text-sm text-(--muted)">
-            Could not load learner profile for @{username}. The student might not exist or may have been removed.
+            Could not load learner profile for @{username}. The student might
+            not exist or may have been removed.
           </p>
           <div className="mt-5 flex gap-3">
             <button
@@ -130,6 +139,7 @@ export function StudentDetailsPage({
                   <img
                     src={student.avatarUrl}
                     alt={student.displayName}
+                    referrerPolicy="no-referrer"
                     className="h-20 w-20 sm:h-24 sm:w-24 shrink-0 rounded-2xl object-cover border border-[color-mix(in_srgb,var(--text)_12%,transparent)] shadow-sm"
                   />
                 ) : (
@@ -190,16 +200,20 @@ export function StudentDetailsPage({
 
                   {/* Metadata Badges: Joined, Email, Phone */}
                   <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
-                    <div
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_70%,transparent)] px-2.5 py-1 font-medium text-(--muted)"
-                    >
-                      <CalendarBlank size={14} className="shrink-0 text-(--accent)" />
+                    <div className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_70%,transparent)] px-2.5 py-1 font-medium text-(--muted)">
+                      <CalendarBlank
+                        size={14}
+                        className="shrink-0 text-(--accent)"
+                      />
                       <span>
                         Joined{" "}
-                        {new Date(student.joinedAt).toLocaleDateString(undefined, {
-                          month: "short",
-                          year: "numeric",
-                        })}
+                        {new Date(student.joinedAt).toLocaleDateString(
+                          undefined,
+                          {
+                            month: "short",
+                            year: "numeric",
+                          },
+                        )}
                       </span>
                     </div>
 
@@ -210,17 +224,22 @@ export function StudentDetailsPage({
                         className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_70%,transparent)] px-2.5 py-1 font-medium text-(--text-secondary) hover:text-(--accent) hover:border-(--accent) transition-colors cursor-pointer"
                         title="Click to copy email"
                       >
-                        <EnvelopeSimple size={14} className="shrink-0 text-(--muted)" />
-                        <span className="font-mono text-[11.5px]">{student.email}</span>
+                        <EnvelopeSimple
+                          size={14}
+                          className="shrink-0 text-(--muted)"
+                        />
+                        <span className="font-mono text-[11.5px]">
+                          {student.email}
+                        </span>
                       </button>
                     )}
 
                     {student.phoneNo && (
-                      <div
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_70%,transparent)] px-2.5 py-1 font-medium text-(--muted)"
-                      >
+                      <div className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_70%,transparent)] px-2.5 py-1 font-medium text-(--muted)">
                         <Phone size={14} className="shrink-0" />
-                        <span className="font-mono text-[11.5px]">{student.phoneNo}</span>
+                        <span className="font-mono text-[11.5px]">
+                          {student.phoneNo}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -306,7 +325,9 @@ export function StudentDetailsPage({
               <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
                 {metrics?.completedCoursesCount ?? 0}
               </p>
-              <p className="mt-0.5 text-[11px] text-(--muted)">Finished courses</p>
+              <p className="mt-0.5 text-[11px] text-(--muted)">
+                Finished courses
+              </p>
             </div>
 
             {/* Card 3: In Progress */}
@@ -325,7 +346,9 @@ export function StudentDetailsPage({
               <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
                 {metrics?.inProgressCoursesCount ?? 0}
               </p>
-              <p className="mt-0.5 text-[11px] text-(--muted)">Active progress</p>
+              <p className="mt-0.5 text-[11px] text-(--muted)">
+                Active progress
+              </p>
             </div>
 
             {/* Card 4: Lessons Done */}
@@ -344,7 +367,9 @@ export function StudentDetailsPage({
               <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
                 {metrics?.totalLessonsCompleted ?? 0}
               </p>
-              <p className="mt-0.5 text-[11px] text-(--muted)">Total completed</p>
+              <p className="mt-0.5 text-[11px] text-(--muted)">
+                Total completed
+              </p>
             </div>
 
             {/* Card 5: Avg Progress */}
@@ -363,7 +388,9 @@ export function StudentDetailsPage({
               <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
                 {metrics?.averageProgressPercent ?? 0}%
               </p>
-              <p className="mt-0.5 text-[11px] text-(--muted)">Overall learning rate</p>
+              <p className="mt-0.5 text-[11px] text-(--muted)">
+                Overall learning rate
+              </p>
             </div>
           </section>
 
@@ -402,7 +429,8 @@ export function StudentDetailsPage({
                   No courses enrolled yet
                 </h3>
                 <p className="mt-1 text-xs md:text-sm text-(--muted) max-w-sm leading-relaxed">
-                  This student has registered an account but has not yet enrolled in any academy courses.
+                  This student has registered an account but has not yet
+                  enrolled in any academy courses.
                 </p>
               </div>
             )}
@@ -443,9 +471,7 @@ function CourseProgressCard({
               className="h-16 w-24 shrink-0 rounded-xl object-cover border border-(--border) shadow-xs"
             />
           ) : (
-            <div
-              className="flex h-16 w-24 shrink-0 items-center justify-center rounded-xl font-bold text-xs text-(--accent) bg-(--accent)/10 border border-(--border) shadow-xs"
-            >
+            <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-xl font-bold text-xs text-(--accent) bg-(--accent)/10 border border-(--border) shadow-xs">
               <BookOpen size={24} weight="duotone" />
             </div>
           )}
@@ -482,17 +508,23 @@ function CourseProgressCard({
               </span>
               <span>•</span>
               <span>
-                Source: <span className="capitalize">{course.enrollmentSource.replace("_", " ")}</span>
+                Source:{" "}
+                <span className="capitalize">
+                  {course.enrollmentSource.replace("_", " ")}
+                </span>
               </span>
               {course.lastAccessedAt && (
                 <>
                   <span>•</span>
                   <span>
                     Last active{" "}
-                    {new Date(course.lastAccessedAt).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                    })}
+                    {new Date(course.lastAccessedAt).toLocaleDateString(
+                      undefined,
+                      {
+                        month: "short",
+                        day: "numeric",
+                      },
+                    )}
                   </span>
                 </>
               )}
@@ -505,7 +537,8 @@ function CourseProgressCard({
           <div className="w-full sm:w-44">
             <div className="flex items-center justify-between text-xs mb-1.5">
               <span className="text-[11px] text-(--muted)">
-                {course.completedLessonsCount} of {course.totalLessonsCount} lessons
+                {course.completedLessonsCount} of {course.totalLessonsCount}{" "}
+                lessons
               </span>
               <span
                 className={`font-bold font-mono text-xs ${
@@ -541,4 +574,3 @@ function CourseProgressCard({
     </article>
   );
 }
-

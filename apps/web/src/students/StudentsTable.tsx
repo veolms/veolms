@@ -159,6 +159,7 @@ const StudentAvatar = memo(function StudentAvatar({
         height={40}
         loading="lazy"
         decoding="async"
+        referrerPolicy="no-referrer"
         onError={() => setImageFailed(true)}
         className="h-10 w-10 shrink-0 rounded-full object-cover border border-(--border) shadow-xs"
       />

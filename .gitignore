@@ -16,3 +16,5 @@ scratch/
 # Local Impeccable hook manifests
 .codex/hooks.json
 .github/hooks/impeccable.json
+
+.wrangler/

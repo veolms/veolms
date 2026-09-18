@@ -113,11 +113,12 @@ export async function listStudentsPaginated(
       "u.username",
       "u.display_name",
       "u.email",
+      "u.avatar_data_url",
       "u.created_at",
       "u.updated_at",
     ])
     .where("u.is_deleted", "=", false)
-    // Filter to users that are students (either have student role, or have an enrollment)
+    // Filter to users that are students (either have student role in user_roles/role_assignments, or have an enrollment)
     .where((eb) =>
       eb.or([
         eb.exists(
@@ -130,6 +131,14 @@ export async function listStudentsPaginated(
         ),
         eb.exists(
           eb
+            .selectFrom("role_assignments as ra")
+            .innerJoin("roles as r", "r.id", "ra.role_id")
+            .select("r.id")
+            .whereRef("ra.user_id", "=", "u.id")
+            .where("r.name", "=", "student"),
+        ),
+        eb.exists(
+          eb
             .selectFrom("enrollments as e")
             .select("e.id")
             .whereRef("e.user_id", "=", "u.id"),
@@ -138,14 +147,17 @@ export async function listStudentsPaginated(
     );
 
   if (options.search) {
-    const term = `%${options.search}%`;
-    query = query.where((eb) =>
-      eb.or([
-        eb("u.display_name", "ilike", term),
-        eb("u.username", "ilike", term),
-        eb("u.email", "ilike", term),
-      ]),
-    );
+    const cleanSearch = options.search.replace(/^@+/, "").trim();
+    if (cleanSearch) {
+      const term = `%${cleanSearch}%`;
+      query = query.where((eb) =>
+        eb.or([
+          eb("u.display_name", "ilike", term),
+          eb("u.username", "ilike", term),
+          eb("u.email", "ilike", term),
+        ]),
+      );
+    }
   }
 
   if (options.courseId) {
@@ -260,6 +272,7 @@ export async function countTotalStudents(
     .selectFrom("users as u")
     .select((eb) => eb.fn.count<number>("u.id").as("total"))
     .where("u.is_deleted", "=", false)
+    // Filter to users that are students (either have student role in user_roles/role_assignments, or have an enrollment)
     .where((eb) =>
       eb.or([
         eb.exists(
@@ -272,6 +285,14 @@ export async function countTotalStudents(
         ),
         eb.exists(
           eb
+            .selectFrom("role_assignments as ra")
+            .innerJoin("roles as r", "r.id", "ra.role_id")
+            .select("r.id")
+            .whereRef("ra.user_id", "=", "u.id")
+            .where("r.name", "=", "student"),
+        ),
+        eb.exists(
+          eb
             .selectFrom("enrollments as e")
             .select("e.id")
             .whereRef("e.user_id", "=", "u.id"),
@@ -280,14 +301,17 @@ export async function countTotalStudents(
     );
 
   if (options.search) {
-    const term = `%${options.search}%`;
-    query = query.where((eb) =>
-      eb.or([
-        eb("u.display_name", "ilike", term),
-        eb("u.username", "ilike", term),
-        eb("u.email", "ilike", term),
-      ]),
-    );
+    const cleanSearch = options.search.replace(/^@+/, "").trim();
+    if (cleanSearch) {
+      const term = `%${cleanSearch}%`;
+      query = query.where((eb) =>
+        eb.or([
+          eb("u.display_name", "ilike", term),
+          eb("u.username", "ilike", term),
+          eb("u.email", "ilike", term),
+        ]),
+      );
+    }
   }
 
   if (options.courseId) {
@@ -404,19 +428,43 @@ export async function listCourseLessonCounts(
 }
 
 /**
- * Finds a student user by username (case-insensitive).
+ * Batch loads avatars for a list of student user IDs.
+ */
+export async function listAvatarsForUserIds(
+  database: StudentsExecutor,
+  userIds: string[],
+) {
+  if (userIds.length === 0) return [];
+  return await database
+    .selectFrom("user_avatars")
+    .select([
+      "id",
+      "user_id",
+      "source",
+      "avatar_data_url",
+      "created_at",
+      "last_used_at",
+    ])
+    .where("user_id", "in", userIds)
+    .orderBy("created_at", "desc")
+    .execute();
+}
+
+/**
+ * Finds a student user by username (case-insensitive, strips any leading @).
  */
 export async function findStudentByUsername(
   database: StudentsExecutor,
   username: string,
 ) {
+  const cleanUsername = username.replace(/^@+/, "").trim();
   return await database
     .selectFrom("users as u")
     .selectAll("u")
     .where((eb) =>
       eb.or([
-        eb("u.username", "=", username),
-        eb(sql`LOWER(u.username)`, "=", username.toLowerCase()),
+        eb("u.username", "=", cleanUsername),
+        eb(sql`LOWER(u.username)`, "=", cleanUsername.toLowerCase()),
       ]),
     )
     .where("u.is_deleted", "=", false)

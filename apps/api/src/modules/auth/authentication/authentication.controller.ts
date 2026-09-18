@@ -14,6 +14,7 @@ import type {
   LoginRequest,
   ProfileUpdateRequest,
   RegisterRequest,
+  SelectAvatarRequest,
 } from "@veolms/contracts";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
@@ -211,6 +212,83 @@ export function createAuthController(context: AuthContext) {
     };
   }
 
+  async function listAvatars(request: FastifyRequest) {
+    return authService.listAvatars(request.user!.id);
+  }
+
+  async function selectAvatar(
+    request: FastifyRequest<{ Body: SelectAvatarRequest }>,
+  ) {
+    const user = request.user!;
+    const updated = await authService.selectAvatar(
+      user.id,
+      request.body.avatarId,
+    );
+
+    return {
+      id: updated.id,
+      username: updated.username,
+      displayName: updated.display_name,
+      ...presentAvatar(updated.avatar_data_url),
+      bio: updated.bio,
+      emailPublic: Boolean(
+        updated.email_public && updated.email && updated.email_verified_at,
+      ),
+      mobilePublic: Boolean(
+        updated.mobile_public && updated.phone_no && updated.phone_verified_at,
+      ),
+      linkedinUrl: updated.linkedin_url,
+      linkedinPublic: Boolean(updated.linkedin_public && updated.linkedin_url),
+      githubUrl: updated.github_url,
+      githubPublic: Boolean(updated.github_public && updated.github_url),
+      websiteUrl: updated.website_url,
+      websitePublic: Boolean(updated.website_public && updated.website_url),
+      email: updated.email,
+      emailVerified: Boolean(updated.email_verified_at),
+      phoneNo: updated.phone_no,
+      mobileVerified: Boolean(updated.phone_verified_at),
+      roles: updated.roles,
+      mfaVerified: request.session?.mfa_verified ?? false,
+      totpEnabled: user.totpEnabled,
+      passkeyEnabled: user.passkeyEnabled,
+      mfaMandatory: user.mfaMandatory,
+    };
+  }
+
+  async function deleteUploadedAvatars(request: FastifyRequest) {
+    const user = request.user!;
+    const updated = await authService.deleteUploadedAvatars(user.id);
+
+    return {
+      id: updated.id,
+      username: updated.username,
+      displayName: updated.display_name,
+      ...presentAvatar(updated.avatar_data_url),
+      bio: updated.bio,
+      emailPublic: Boolean(
+        updated.email_public && updated.email && updated.email_verified_at,
+      ),
+      mobilePublic: Boolean(
+        updated.mobile_public && updated.phone_no && updated.phone_verified_at,
+      ),
+      linkedinUrl: updated.linkedin_url,
+      linkedinPublic: Boolean(updated.linkedin_public && updated.linkedin_url),
+      githubUrl: updated.github_url,
+      githubPublic: Boolean(updated.github_public && updated.github_url),
+      websiteUrl: updated.website_url,
+      websitePublic: Boolean(updated.website_public && updated.website_url),
+      email: updated.email,
+      emailVerified: Boolean(updated.email_verified_at),
+      phoneNo: updated.phone_no,
+      mobileVerified: Boolean(updated.phone_verified_at),
+      roles: updated.roles,
+      mfaVerified: request.session?.mfa_verified ?? false,
+      totpEnabled: user.totpEnabled,
+      passkeyEnabled: user.passkeyEnabled,
+      mfaMandatory: user.mfaMandatory,
+    };
+  }
+
   async function deactivateAccount(
     request: FastifyRequest,
     reply: FastifyReply,
@@ -229,6 +307,9 @@ export function createAuthController(context: AuthContext) {
     updateProfile,
     presignAvatarUpload,
     completeAvatarUpload,
+    listAvatars,
+    selectAvatar,
+    deleteUploadedAvatars,
     deactivateAccount,
   };
 }
