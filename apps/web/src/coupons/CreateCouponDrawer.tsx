@@ -10,11 +10,13 @@ import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotc
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { ThemedSelect } from "../ThemedSelect";
 import { ThemedDateTimePicker } from "../ThemedDateTimePicker";
+import { QuizRichTextField } from "../quizzes/QuizRichTextField";
 import { CouponTicketPreview } from "./CouponTicketPreview";
 import {
   isoToLocalDateTimeValue,
   packCouponCopy,
   parseLocalDateTime,
+  sanitizeNumberInput,
   toLocalDateTimeValue,
   unpackCouponCopy,
 } from "./couponHelpers";
@@ -60,21 +62,50 @@ export function CreateCouponDrawer({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage");
-  const [discountValue, setDiscountValue] = useState<number>(20);
+  const [discountValue, setDiscountValue] = useState<number | "">(20);
   const [maxDiscountAmount, setMaxDiscountAmount] = useState<string>("");
-  const [minOrderAmount, setMinOrderAmount] = useState<string>("0");
+  const [minOrderAmount, setMinOrderAmount] = useState<string>("");
 
   const [startsAt, setStartsAt] = useState(defaultStart);
   const [expiresAt, setExpiresAt] = useState(defaultEnd);
 
   const [hasUsageLimit, setHasUsageLimit] = useState(false);
-  const [usageLimit, setUsageLimit] = useState<number>(500);
+  const [usageLimit, setUsageLimit] = useState<number | "">(500);
 
   const [hasPerUserLimit, setHasPerUserLimit] = useState(true);
-  const [perUserLimit, setPerUserLimit] = useState<number>(1);
+  const [perUserLimit, setPerUserLimit] = useState<number | "">(1);
 
   const [isActive, setIsActive] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleDiscountTypeChange = (val: string) => {
+    const nextType = val as "percentage" | "fixed";
+    setDiscountType(nextType);
+    if (nextType === "percentage" && typeof discountValue === "number" && discountValue > 100) {
+      setDiscountValue(100);
+    }
+  };
+
+  const handleDiscountValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const sanitized = sanitizeNumberInput(e.target.value, {
+      max: discountType === "percentage" ? 100 : 100000,
+    });
+    setDiscountValue(sanitized);
+  };
+
+  const handleUsageLimitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const sanitized = sanitizeNumberInput(e.target.value, {
+      max: 1000000,
+    });
+    setUsageLimit(sanitized);
+  };
+
+  const handlePerUserLimitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const sanitized = sanitizeNumberInput(e.target.value, {
+      max: 100000,
+    });
+    setPerUserLimit(sanitized);
+  };
 
   useEffect(() => {
     if (couponToEdit) {
@@ -88,7 +119,9 @@ export function CreateCouponDrawer({
       setMaxDiscountAmount(
         couponToEdit.maxDiscountAmount ? String(couponToEdit.maxDiscountAmount) : "",
       );
-      setMinOrderAmount(String(couponToEdit.minOrderAmount ?? 0));
+      setMinOrderAmount(
+        couponToEdit.minOrderAmount ? String(couponToEdit.minOrderAmount) : "",
+      );
 
       setStartsAt(
         isoToLocalDateTimeValue(couponToEdit.startsAt) || defaultStart,
@@ -117,7 +150,7 @@ export function CreateCouponDrawer({
       setDiscountType("percentage");
       setDiscountValue(50);
       setMaxDiscountAmount("");
-      setMinOrderAmount("0");
+      setMinOrderAmount("");
       setStartsAt(defaultStart);
       setExpiresAt(defaultEnd);
       setHasUsageLimit(true);
@@ -145,12 +178,13 @@ export function CreateCouponDrawer({
       return;
     }
 
-    if (!discountValue || Number(discountValue) <= 0) {
+    const numericDiscountValue = Number(discountValue) || 0;
+    if (!discountValue || numericDiscountValue <= 0) {
       setErrorMessage("Discount value must be greater than 0.");
       return;
     }
 
-    if (discountType === "percentage" && Number(discountValue) > 100) {
+    if (discountType === "percentage" && numericDiscountValue > 100) {
       setErrorMessage("Percentage discount cannot exceed 100%.");
       return;
     }
@@ -174,13 +208,13 @@ export function CreateCouponDrawer({
         await onSubmitUpdate(couponToEdit.id, {
           description: packedDescription,
           discountType,
-          discountValue: Number(discountValue),
+          discountValue: numericDiscountValue,
           maxDiscountAmount: maxDiscountAmount ? Number(maxDiscountAmount) : null,
           minOrderAmount: minOrderAmount ? Number(minOrderAmount) : 0,
           startsAt: startDateObj.toISOString(),
           expiresAt: endDateObj.toISOString(),
-          globalUsageLimit: hasUsageLimit ? Number(usageLimit) : null,
-          perUserLimit: hasPerUserLimit ? Number(perUserLimit) : 1,
+          globalUsageLimit: hasUsageLimit && usageLimit ? Number(usageLimit) : null,
+          perUserLimit: hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
           isActive,
         });
       } else {
@@ -188,13 +222,13 @@ export function CreateCouponDrawer({
           code: cleanCode,
           description: packedDescription,
           discountType,
-          discountValue: Number(discountValue),
+          discountValue: numericDiscountValue,
           maxDiscountAmount: maxDiscountAmount ? Number(maxDiscountAmount) : undefined,
           minOrderAmount: minOrderAmount ? Number(minOrderAmount) : 0,
           startsAt: startDateObj.toISOString(),
           expiresAt: endDateObj.toISOString(),
-          globalUsageLimit: hasUsageLimit ? Number(usageLimit) : undefined,
-          perUserLimit: hasPerUserLimit ? Number(perUserLimit) : 1,
+          globalUsageLimit: hasUsageLimit && usageLimit ? Number(usageLimit) : undefined,
+          perUserLimit: hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
           isActive,
         });
       }
@@ -318,12 +352,13 @@ export function CreateCouponDrawer({
                     {description.length}/200
                   </span>
                 </div>
-                <textarea
+                <QuizRichTextField
+                  label="Coupon description"
                   value={description}
-                  onChange={(e) => setDescription(e.target.value.slice(0, 200))}
+                  onChange={(val) => setDescription(val.slice(0, 200))}
                   placeholder="Flat 50% off on all courses this Diwali!"
-                  rows={2}
-                  className="w-full rounded-xl bg-[color-mix(in_srgb,var(--surface-strong)_70%,var(--canvas))] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] focus:border-amber-400 p-3 text-xs md:text-sm text-(--text) outline-none placeholder-(--muted) resize-none"
+                  documentId={`drawer-coupon-${couponToEdit?.id ?? "new"}-description`}
+                  minHeight="min-h-20"
                 />
               </div>
 
@@ -337,9 +372,7 @@ export function CreateCouponDrawer({
                     <ThemedSelect
                       id="create-coupon-type"
                       value={discountType}
-                      onValueChange={(val) =>
-                        setDiscountType(val as "percentage" | "fixed")
-                      }
+                      onValueChange={handleDiscountTypeChange}
                       options={discountTypeOptions}
                       ariaLabel="Discount type"
                       triggerClassName="h-9.5! p-0! bg-transparent! shadow-none! border-0! text-xs font-semibold text-(--text) hover:bg-transparent! focus:outline-none! flex items-center justify-between w-full"
@@ -357,7 +390,8 @@ export function CreateCouponDrawer({
                       min={1}
                       max={discountType === "percentage" ? 100 : 100000}
                       value={discountValue}
-                      onChange={(e) => setDiscountValue(Number(e.target.value))}
+                      onChange={handleDiscountValueChange}
+                      placeholder={discountType === "percentage" ? "20" : "500"}
                       required
                       className="w-full bg-transparent border-0 text-xs md:text-sm font-semibold text-(--text) outline-none"
                     />
@@ -430,7 +464,8 @@ export function CreateCouponDrawer({
                     type="number"
                     min={1}
                     value={usageLimit}
-                    onChange={(e) => setUsageLimit(Number(e.target.value))}
+                    onChange={handleUsageLimitChange}
+                    placeholder="500"
                     className="w-24 rounded-lg bg-[color-mix(in_srgb,var(--surface-strong)_70%,var(--canvas))] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] px-2.5 py-1 text-xs text-(--text) font-semibold outline-none"
                   />
                 )}
@@ -463,7 +498,8 @@ export function CreateCouponDrawer({
                     type="number"
                     min={1}
                     value={perUserLimit}
-                    onChange={(e) => setPerUserLimit(Number(e.target.value))}
+                    onChange={handlePerUserLimitChange}
+                    placeholder="1"
                     className="w-24 rounded-lg bg-[color-mix(in_srgb,var(--surface-strong)_70%,var(--canvas))] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] px-2.5 py-1 text-xs text-(--text) font-semibold outline-none"
                   />
                 )}
@@ -534,7 +570,7 @@ export function CreateCouponDrawer({
                     title={title}
                     description={description}
                     discountType={discountType}
-                    discountValue={discountValue}
+                    discountValue={Number(discountValue) || 0}
                     expiresAt={expiresAt}
                   />
                 </div>

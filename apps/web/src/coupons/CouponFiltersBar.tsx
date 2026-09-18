@@ -61,7 +61,7 @@ export function CouponFiltersBar({
   return (
     <div className="flex flex-col gap-3 px-3 pb-3 mt-4 sm:px-7 sm:pb-5">
       <div
-        className="flex items-center gap-1 overflow-x-auto no-scrollbar rounded-[12px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_80%,var(--surface))] p-1 shadow-[inset_0_1px_2px_color-mix(in_srgb,black_10%,transparent)]"
+        className="flex items-center gap-1 overflow-x-auto no-scrollbar rounded-[10px] sm:rounded-[12px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_80%,var(--surface))] p-1 shadow-[inset_0_1px_2px_color-mix(in_srgb,black_10%,transparent)]"
         role="tablist"
         aria-label="Coupon status"
       >
@@ -74,10 +74,10 @@ export function CouponFiltersBar({
               role="tab"
               aria-selected={isActive}
               onClick={() => onTabChange(tab.id)}
-              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-md sm:rounded-[8px] px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
                 isActive
                   ? "bg-(--card-surface,var(--surface)) text-(--text) shadow-(--card-compact-shadow)"
-                  : "text-(--muted) hover:text-(--text)"
+                  : "text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
               }`}
             >
               <span>{tab.label}</span>

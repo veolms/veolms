@@ -17,6 +17,7 @@ export interface CouponSummaryMetrics {
 
 export interface CouponSummaryCardsProps {
   metrics: CouponSummaryMetrics;
+  activeTab?: CouponTabFilter;
   onFilterTab?: (tab: CouponTabFilter) => void;
 }
 
@@ -26,6 +27,7 @@ function StatCard({
   value,
   detail,
   tone = "default",
+  active = false,
   onClick,
 }: {
   icon: React.ReactNode;
@@ -33,6 +35,7 @@ function StatCard({
   value: number | string;
   detail?: string;
   tone?: "default" | "success" | "danger";
+  active?: boolean;
   onClick?: () => void;
 }) {
   const clickable = Boolean(onClick);
@@ -41,16 +44,18 @@ function StatCard({
       type="button"
       onClick={onClick}
       disabled={!clickable}
-      className={`rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-2.5 sm:p-5 text-left transition-all duration-200 hover:shadow-(--card-hover-shadow) ${
-        clickable ? "cursor-pointer" : "cursor-default"
-      }`}
+      className={`group rounded-[12px] sm:rounded-[16px] border bg-(--card-surface-raised,var(--surface)) p-2.5 sm:p-5 text-left transition-all duration-200 hover:shadow-(--card-hover-shadow) ${
+        active
+          ? "border-(--accent) ring-2 ring-(--accent)/20"
+          : "border-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
+      } ${clickable ? "cursor-pointer" : "cursor-default"}`}
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       <div className="flex items-center justify-between gap-1.5 sm:gap-2">
-        <p className="truncate text-[0.7rem] sm:text-xs font-semibold tracking-wide text-(--muted)">
+        <p className="truncate text-[0.7rem] sm:text-xs font-semibold tracking-wide text-(--muted) group-hover:text-(--text) transition-colors">
           {label}
         </p>
-        <span className="flex size-6 sm:size-7 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-(--accent)">
+        <span className="flex size-6 sm:size-7 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-(--accent) group-hover:scale-105 transition-transform">
           {icon}
         </span>
       </div>
@@ -76,6 +81,7 @@ function StatCard({
 
 export function CouponSummaryCards({
   metrics,
+  activeTab,
   onFilterTab,
 }: CouponSummaryCardsProps) {
   const activeShare =
@@ -86,28 +92,30 @@ export function CouponSummaryCards({
   return (
     <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 xl:grid-cols-4">
       <StatCard
-        icon={<Tag size={16} weight="bold" />}
+        icon={<Tag size={18} weight="bold" />}
         label="Total coupons"
         value={metrics.totalCoupons.toLocaleString("en-IN")}
         detail={`${metrics.draftCoupons} inactive · ${metrics.scheduledCoupons ?? 0} scheduled`}
+        active={activeTab === "all"}
         onClick={() => onFilterTab?.("all")}
       />
       <StatCard
-        icon={<CheckCircle size={16} weight="bold" />}
+        icon={<CheckCircle size={18} weight="bold" />}
         label="Active now"
         value={metrics.activeCoupons.toLocaleString("en-IN")}
         detail={activeShare}
         tone="success"
+        active={activeTab === "active"}
         onClick={() => onFilterTab?.("active")}
       />
       <StatCard
-        icon={<Users size={16} weight="bold" />}
+        icon={<Users size={18} weight="bold" />}
         label="Redemptions"
         value={metrics.totalRedemptions.toLocaleString("en-IN")}
         detail="Completed checkouts"
       />
       <StatCard
-        icon={<CurrencyInr size={16} weight="bold" />}
+        icon={<CurrencyInr size={18} weight="bold" />}
         label="Discount given"
         value={formatRupees(metrics.totalDiscountGiven)}
         detail="Across redeemed orders"

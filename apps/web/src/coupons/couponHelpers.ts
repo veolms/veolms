@@ -207,3 +207,23 @@ export function parseLocalDateTime(value: string | Date | null | undefined): Dat
   const result = new Date(year, month - 1, day, hour, minute, 0, 0);
   return Number.isNaN(result.getTime()) ? null : result;
 }
+
+export function sanitizeNumberInput(
+  value: string | number,
+  options?: { max?: number; min?: number },
+): number | "" {
+  if (value === "" || value === null || value === undefined) return "";
+  const str = String(value);
+  const digitsOnly = str.replace(/[^0-9]/g, "");
+  if (!digitsOnly) return "";
+  const stripped = digitsOnly.replace(/^0+(?=\d)/, "");
+  let num = parseInt(stripped, 10);
+  if (Number.isNaN(num)) return "";
+  if (options?.max !== undefined && num > options.max) {
+    num = options.max;
+  }
+  if (options?.min !== undefined && num < options.min) {
+    num = options.min;
+  }
+  return num;
+}

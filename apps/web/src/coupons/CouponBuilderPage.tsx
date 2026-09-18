@@ -17,6 +17,7 @@ import {
 } from "../services/coupons";
 import { getApiError } from "../lib/api-error";
 import type { NavigateTo } from "../routing/navigation";
+import { QuizRichTextField } from "../quizzes/QuizRichTextField";
 import { CouponTicketPreview } from "./CouponTicketPreview";
 import {
   couponMoneyToForm,
@@ -24,6 +25,7 @@ import {
   isoToLocalDateTimeValue,
   packCouponCopy,
   parseLocalDateTime,
+  sanitizeNumberInput,
   surfaceClass,
   toCouponMoneyPayload,
   toLocalDateTimeValue,
@@ -137,15 +139,44 @@ export function CouponBuilderPage({
   const [discountType, setDiscountType] = useState<"percentage" | "fixed">(
     "percentage",
   );
-  const [discountValue, setDiscountValue] = useState(20);
+  const [discountValue, setDiscountValue] = useState<number | "">(20);
   const [startsAt, setStartsAt] = useState(defaultStart);
   const [expiresAt, setExpiresAt] = useState(defaultEnd);
   const [hasUsageLimit, setHasUsageLimit] = useState(false);
-  const [usageLimit, setUsageLimit] = useState(2000);
+  const [usageLimit, setUsageLimit] = useState<number | "">(2000);
   const [hasPerUserLimit, setHasPerUserLimit] = useState(true);
-  const [perUserLimit, setPerUserLimit] = useState(1);
+  const [perUserLimit, setPerUserLimit] = useState<number | "">(1);
   const [restrictedCourseIds, setRestrictedCourseIds] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleDiscountTypeChange = (value: string) => {
+    const nextType = value as "percentage" | "fixed";
+    setDiscountType(nextType);
+    if (nextType === "percentage" && typeof discountValue === "number" && discountValue > 100) {
+      setDiscountValue(100);
+    }
+  };
+
+  const handleDiscountValueChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const sanitized = sanitizeNumberInput(event.target.value, {
+      max: discountType === "percentage" ? 100 : 100000,
+    });
+    setDiscountValue(sanitized);
+  };
+
+  const handleUsageLimitChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const sanitized = sanitizeNumberInput(event.target.value, {
+      max: 1000000,
+    });
+    setUsageLimit(sanitized);
+  };
+
+  const handlePerUserLimitChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const sanitized = sanitizeNumberInput(event.target.value, {
+      max: 100000,
+    });
+    setPerUserLimit(sanitized);
+  };
 
   useEffect(() => {
     if (isEditMode && existingCoupon) {
@@ -226,11 +257,12 @@ export function CouponBuilderPage({
       setErrorMessage("Title is required.");
       return;
     }
-    if (discountValue <= 0) {
+    const numericDiscountValue = Number(discountValue) || 0;
+    if (!discountValue || numericDiscountValue <= 0) {
       setErrorMessage("Discount value must be greater than 0.");
       return;
     }
-    if (discountType === "percentage" && discountValue > 100) {
+    if (discountType === "percentage" && numericDiscountValue > 100) {
       setErrorMessage("Percentage discount cannot exceed 100%.");
       return;
     }
@@ -253,7 +285,7 @@ export function CouponBuilderPage({
 
     const money = toCouponMoneyPayload({
       discountType,
-      discountValue: Number(discountValue),
+      discountValue: numericDiscountValue,
     });
     const packedDescription = packCouponCopy(cleanTitle, description);
 
@@ -266,8 +298,8 @@ export function CouponBuilderPage({
           minOrderAmount: money.minOrderAmount,
           startsAt: startDateObj.toISOString(),
           expiresAt: endDateObj.toISOString(),
-          globalUsageLimit: hasUsageLimit ? Number(usageLimit) : null,
-          perUserLimit: hasPerUserLimit ? Number(perUserLimit) : 1,
+          globalUsageLimit: hasUsageLimit && usageLimit ? Number(usageLimit) : null,
+          perUserLimit: hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
           isActive: existingCoupon.isActive,
           restrictedCourseIds:
             restrictedCourseIds.length > 0 ? restrictedCourseIds : null,
@@ -283,8 +315,8 @@ export function CouponBuilderPage({
           minOrderAmount: money.minOrderAmount,
           startsAt: startDateObj.toISOString(),
           expiresAt: endDateObj.toISOString(),
-          globalUsageLimit: hasUsageLimit ? Number(usageLimit) : undefined,
-          perUserLimit: hasPerUserLimit ? Number(perUserLimit) : 1,
+          globalUsageLimit: hasUsageLimit && usageLimit ? Number(usageLimit) : undefined,
+          perUserLimit: hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
           isActive: true,
           restrictedCourseIds:
             restrictedCourseIds.length > 0 ? restrictedCourseIds : undefined,
@@ -395,13 +427,13 @@ export function CouponBuilderPage({
 
           <div className="w-full min-w-0">
             <FieldLabel htmlFor="coupon-description">Description</FieldLabel>
-            <textarea
-              id="coupon-description"
+            <QuizRichTextField
+              label="Coupon description"
               value={description}
-              onChange={(event) => setDescription(event.target.value.slice(0, 500))}
+              onChange={(val) => setDescription(val.slice(0, 500))}
+              documentId={`coupon-${couponId ?? "new"}-description`}
               placeholder="Flat 50% off on all courses this Diwali!"
-              rows={3}
-              className={`${fieldClass} h-auto min-h-0 w-full resize-none py-2.5 leading-5`}
+              minHeight="min-h-24"
             />
             <p className="mt-1 text-right text-[12px] text-(--muted)">
               {description.length}/500
@@ -415,9 +447,7 @@ export function CouponBuilderPage({
                 <ThemedSelect
                   id="coupon-discount-type"
                   value={discountType}
-                  onValueChange={(value) =>
-                    setDiscountType(value as "percentage" | "fixed")
-                  }
+                  onValueChange={handleDiscountTypeChange}
                   options={discountTypeOptions}
                   ariaLabel="Discount type"
                   triggerClassName="h-11! p-0! bg-transparent! shadow-none! border-0! text-sm font-medium hover:bg-transparent! flex w-full items-center justify-between"
@@ -435,7 +465,8 @@ export function CouponBuilderPage({
                   min={1}
                   max={discountType === "percentage" ? 100 : 100000}
                   value={discountValue}
-                  onChange={(event) => setDiscountValue(Number(event.target.value))}
+                  onChange={handleDiscountValueChange}
+                  placeholder={discountType === "percentage" ? "20" : "500"}
                   required
                   className="w-full border-0 bg-transparent outline-none"
                 />
@@ -491,7 +522,8 @@ export function CouponBuilderPage({
                 min={1}
                 value={usageLimit}
                 disabled={!hasUsageLimit}
-                onChange={(event) => setUsageLimit(Number(event.target.value))}
+                onChange={handleUsageLimitChange}
+                placeholder="2000"
                 className={`${fieldClass} w-24 disabled:opacity-40`}
               />
               <span className="text-[12px] text-(--muted)">
@@ -510,7 +542,8 @@ export function CouponBuilderPage({
                 min={1}
                 value={perUserLimit}
                 disabled={!hasPerUserLimit}
-                onChange={(event) => setPerUserLimit(Number(event.target.value))}
+                onChange={handlePerUserLimitChange}
+                placeholder="1"
                 className={`${fieldClass} w-24 disabled:opacity-40`}
               />
               <span className="text-[12px] text-(--muted)">
@@ -594,7 +627,7 @@ export function CouponBuilderPage({
             code={code}
             title={title}
             discountType={discountType}
-            discountValue={discountValue}
+            discountValue={Number(discountValue) || 0}
             expiresAt={expiresAt}
             restrictedCoursesLabel={restrictedCoursesLabel}
           />

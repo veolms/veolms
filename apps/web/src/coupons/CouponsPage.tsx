@@ -163,7 +163,11 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
         </div>
       </header>
 
-      <CouponSummaryCards metrics={summaryMetrics} onFilterTab={setActiveTab} />
+      <CouponSummaryCards
+        metrics={summaryMetrics}
+        activeTab={activeTab}
+        onFilterTab={setActiveTab}
+      />
 
       <section className={surfaceClass} aria-label="Coupon library">
         <div className="flex items-start justify-between gap-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3 py-2.5 sm:p-7">
