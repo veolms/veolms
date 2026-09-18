@@ -1,7 +1,9 @@
 import { z } from "zod";
 import {
+  couponListResponseSchema,
   couponSchema,
   createCouponRequestSchema,
+  listCouponsQuerySchema,
   updateCouponRequestSchema,
 } from "@veolms/contracts";
 import { jsonResponse } from "../../../lib/responses.ts";
@@ -16,31 +18,31 @@ const couponRoutes: RoutePlugin = async (app, options) => {
   const service = createCouponService({ database: options.database });
   const controller = createCouponController({ service });
 
-  // 1. GET /coupons - List all coupons
   app.get(
     "/coupons",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requireStaff,
       schema: {
         operationId: "listCoupons",
         tags: ["Commerce - Coupons"],
-        summary: "List all coupons",
-        description: "Returns all active, expired, and disabled coupon codes for the academy.",
+        summary: "List coupons",
+        description:
+          "Returns academy coupons with cursor pagination. Pass `courseId` to include only coupons that apply to that course.",
+        querystring: listCouponsQuerySchema,
         response: {
-          200: jsonResponse("List of coupons", z.array(couponSchema)),
+          200: jsonResponse("List of coupons", couponListResponseSchema),
           401: errorResponse("Unauthorized"),
-          403: errorResponse("Forbidden - Admin required"),
+          403: errorResponse("Forbidden"),
         },
       },
     },
     controller.listCoupons,
   );
 
-  // 2. GET /coupons/:couponId - Get coupon by ID
   app.get(
     "/coupons/:couponId",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requireStaff,
       schema: {
         operationId: "getCouponById",
         tags: ["Commerce - Coupons"],
@@ -49,7 +51,7 @@ const couponRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse("Coupon details", couponSchema),
           401: errorResponse("Unauthorized"),
-          403: errorResponse("Forbidden - Admin required"),
+          403: errorResponse("Forbidden"),
           404: errorResponse("Coupon not found"),
         },
       },
@@ -57,22 +59,22 @@ const couponRoutes: RoutePlugin = async (app, options) => {
     controller.getCoupon,
   );
 
-  // 3. POST /coupons - Create new coupon
   app.post(
     "/coupons",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requireStaff,
       schema: {
         operationId: "createCoupon",
         tags: ["Commerce - Coupons"],
         summary: "Create a new coupon",
-        description: "Creates a discount coupon with percentage/fixed amount, expiry date, usage limits, and course restrictions.",
+        description:
+          "Creates a discount coupon with percentage/fixed amount, expiry date, usage limits, and course restrictions.",
         body: createCouponRequestSchema,
         response: {
           200: jsonResponse("Coupon created successfully", couponSchema),
           400: errorResponse("Invalid coupon parameters"),
           401: errorResponse("Unauthorized"),
-          403: errorResponse("Forbidden - Admin required"),
+          403: errorResponse("Forbidden"),
           409: errorResponse("Coupon code already exists"),
         },
       },
@@ -80,11 +82,10 @@ const couponRoutes: RoutePlugin = async (app, options) => {
     controller.createCoupon,
   );
 
-  // 4. PATCH /coupons/:couponId - Update coupon
   app.patch(
     "/coupons/:couponId",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requireStaff,
       schema: {
         operationId: "updateCoupon",
         tags: ["Commerce - Coupons"],
@@ -95,7 +96,7 @@ const couponRoutes: RoutePlugin = async (app, options) => {
           200: jsonResponse("Coupon updated successfully", couponSchema),
           400: errorResponse("Invalid update parameters"),
           401: errorResponse("Unauthorized"),
-          403: errorResponse("Forbidden - Admin required"),
+          403: errorResponse("Forbidden"),
           404: errorResponse("Coupon not found"),
         },
       },
@@ -103,7 +104,6 @@ const couponRoutes: RoutePlugin = async (app, options) => {
     controller.updateCoupon,
   );
 
-  // 5. DELETE /coupons/:couponId - Delete coupon
   app.delete(
     "/coupons/:couponId",
     {
@@ -121,6 +121,7 @@ const couponRoutes: RoutePlugin = async (app, options) => {
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
           404: errorResponse("Coupon not found"),
+          409: errorResponse("Coupon has redemptions"),
         },
       },
     },

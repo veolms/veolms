@@ -21,6 +21,7 @@ import type {
 } from "react";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
 import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
 import { DotsThreeCircleIcon as DotsThreeCircle } from "@phosphor-icons/react/DotsThreeCircle";
@@ -46,6 +47,7 @@ import {
 import { useSecondPressHold } from "./gestures/useSecondPressHold";
 import { WorkspacePage } from "./workspace/WorkspacePages";
 import { ReviewsPage } from "./reviews/ReviewsPage";
+import { CouponsPage } from "./coupons/CouponsPage";
 import { OrdersPage } from "./orders/OrdersPage";
 import { OrderHistoryPage } from "./order-history/OrderHistoryPage";
 import { NotificationsPage } from "./notifications/NotificationsPage";
@@ -53,6 +55,8 @@ import { QuizAnalyticsPage } from "./quizzes/QuizAnalyticsPage";
 import { QuizBuilderPage } from "./quizzes/QuizBuilderPage";
 import { QuizDirectAttemptPage } from "./quizzes/QuizDirectAttemptPage";
 import { StudentsPage, StudentDetailsPage } from "./students";
+import { CouponBuilderPage } from "./coupons/CouponBuilderPage";
+import { CouponsAccessDenied } from "./coupons/CouponsAccessDenied";
 import { getVisibleCourses } from "./courses/catalogue";
 import type {
   Course,
@@ -103,6 +107,7 @@ import {
   getUserRoles,
   getVisibleWorkspaceRoles,
   hasAdminRole,
+  isStaffRole,
   resolveWorkspaceRole,
   getWorkspaceRoleStorageKey,
   getRoleDisplayName,
@@ -225,6 +230,7 @@ interface CoursesPageProps {
   quizId?: string;
   assignmentId?: string;
   username?: string;
+  couponId?: string;
   miniPlayerCourseId?: string | null;
   learningBackground?: {
     courseSlug?: string;
@@ -539,6 +545,7 @@ export function CoursesPage({
   quizId,
   assignmentId,
   username,
+  couponId,
   miniPlayerCourseId = null,
   learningBackground = null,
   learningMotionStageRef,
@@ -3331,6 +3338,31 @@ export function CoursesPage({
     if (surfacePage === "reviews" || surfaceActiveSection === "Reviews") {
       return (
         <ReviewsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+      );
+    }
+    if (surfacePage === "coupon-builder") {
+      if (!isAuthReady) {
+        return (
+          <main data-coupon-surface="" className="mx-auto grid w-full max-w-[1320px] place-items-center py-24">
+            <CircleNotch size={28} className="mb-3 animate-spin text-(--accent)" />
+            <p className="text-sm text-(--muted)">Loading coupon builder...</p>
+          </main>
+        );
+      }
+      if (!activeUser || !isStaffRole(userRoles)) {
+        return <CouponsAccessDenied onNavigatePage={onNavigatePage} />;
+      }
+      return (
+        <CouponBuilderPage
+          couponId={couponId}
+          onNavigatePage={onNavigatePage}
+          setNotice={setNotice}
+        />
+      );
+    }
+    if (surfacePage === "coupons" || surfaceActiveSection === "Coupons") {
+      return (
+        <CouponsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
       );
     }
     if (surfacePage === "orders" || surfaceActiveSection === "Orders") {
