@@ -8,10 +8,7 @@ import {
   resolveAuthenticatedDestination,
   resolveSessionAccess,
 } from "../routing/routeAccess";
-import {
-  authKeys,
-  currentUserQueryOptions,
-} from "../services/auth";
+import { authKeys, currentUserQueryOptions } from "../services/auth";
 import { productName } from "../routing/routeDescriptors";
 import { authStore } from "../store/auth.store";
 
@@ -32,6 +29,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     // A failed or unauthenticated session check should leave the normal login
     // screen available. Protected API calls remain server-authorized.
     queryClient.setQueryData(authKeys.me(), null);
+    queryClient.removeQueries({ queryKey: authKeys.avatars() });
     authStore.clearAuth();
   }
 

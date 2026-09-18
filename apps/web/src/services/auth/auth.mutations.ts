@@ -78,6 +78,7 @@ function persistAuthenticatedSession(
   interactionCreationCoordinator.reset();
   optimisticDeletionCoordinator.reset();
   queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
+  queryClient.removeQueries({ queryKey: authKeys.avatars() });
   queryClient.setQueryData(authKeys.me(), currentUser);
   queryClient.invalidateQueries({ queryKey: navigationKeys.all });
 }
@@ -168,10 +169,37 @@ export function useUpdateProfile() {
     onSuccess: async (profile) => {
       authStore.setUser(profile);
       queryClient.setQueryData(authKeys.me(), profile);
+      queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
       // The PATCH response updates the UI immediately, but `/auth/me` remains
       // the canonical source after a reload. Re-fetch it here so visibility
       // flags and any server-side guards are reflected before the save settles.
       await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+    },
+  });
+}
+
+export function useSelectAvatar() {
+  const queryClient = useQueryClient();
+
+  return useMutation<UserProfileResponse, ApiError, string>({
+    mutationFn: (avatarId) => authService.selectAvatar(avatarId),
+    onSuccess: (profile) => {
+      authStore.setUser(profile);
+      queryClient.setQueryData(authKeys.me(), profile);
+      queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
+    },
+  });
+}
+
+export function useDeleteUploadedAvatars() {
+  const queryClient = useQueryClient();
+
+  return useMutation<UserProfileResponse, ApiError, void>({
+    mutationFn: () => authService.deleteUploadedAvatars(),
+    onSuccess: (profile) => {
+      authStore.setUser(profile);
+      queryClient.setQueryData(authKeys.me(), profile);
+      queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
     },
   });
 }
@@ -312,6 +340,7 @@ export function useLogout() {
       clearCoursePlayerSessions();
       queryClient.setQueryData(authKeys.me(), null);
       queryClient.removeQueries({ queryKey: authKeys.me() });
+      queryClient.removeQueries({ queryKey: authKeys.avatars() });
       queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
       queryClient.removeQueries({ queryKey: navigationKeys.all });
       queryClient.invalidateQueries({ queryKey: authKeys.me() });

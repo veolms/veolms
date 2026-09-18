@@ -15,6 +15,70 @@ export interface StudentsServiceOptions {
   database: Kysely<Database>;
 }
 
+export function resolveStudentAvatar(
+  userAvatarDataUrl: string | null | undefined,
+  avatars: {
+    source: string;
+    avatar_data_url: string;
+    created_at?: Date | string;
+    last_used_at?: Date | string;
+  }[] = [],
+): string | null {
+  if (avatars && avatars.length > 0) {
+    // Priority 1: Google provider photo
+    const googleAvatar = avatars.find(
+      (a) =>
+        a.source === "google" &&
+        typeof a.avatar_data_url === "string" &&
+        a.avatar_data_url.trim().length > 0,
+    );
+    if (googleAvatar) {
+      return googleAvatar.avatar_data_url;
+    }
+
+    // Priority 1b: User's avatar_data_url if it is a Google photo
+    if (
+      userAvatarDataUrl &&
+      (userAvatarDataUrl.includes("googleusercontent.com") ||
+        userAvatarDataUrl.includes("google.com/"))
+    ) {
+      return userAvatarDataUrl;
+    }
+
+    // Priority 2: Other provider photo (e.g. GitHub)
+    const providerAvatar = avatars.find(
+      (a) =>
+        a.source !== "upload" &&
+        typeof a.avatar_data_url === "string" &&
+        a.avatar_data_url.trim().length > 0,
+    );
+    if (providerAvatar) {
+      return providerAvatar.avatar_data_url;
+    }
+
+    // Priority 3: Uploaded avatar in user_avatars
+    const uploadedAvatar = avatars.find(
+      (a) =>
+        typeof a.avatar_data_url === "string" &&
+        a.avatar_data_url.trim().length > 0,
+    );
+    if (uploadedAvatar) {
+      return uploadedAvatar.avatar_data_url;
+    }
+  }
+
+  // Priority 4: Active avatar on user table
+  if (
+    userAvatarDataUrl &&
+    typeof userAvatarDataUrl === "string" &&
+    userAvatarDataUrl.trim().length > 0
+  ) {
+    return userAvatarDataUrl;
+  }
+
+  return null;
+}
+
 export function createStudentsService({ database }: StudentsServiceOptions) {
   async function listStudents(
     query: StudentListQuery,
@@ -50,9 +114,10 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
 
     const userIds = pageRows.map((u) => u.id);
 
-    const [allEnrollments, allProgress] = await Promise.all([
+    const [allEnrollments, allProgress, allAvatars] = await Promise.all([
       studentsRepo.listEnrollmentsForUserIds(database, userIds),
       studentsRepo.listProgressForUserIds(database, userIds),
+      studentsRepo.listAvatarsForUserIds(database, userIds),
     ]);
 
     // Distinct course IDs across all returned students
@@ -79,9 +144,18 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
       progressByUserId.set(p.user_id, list);
     }
 
+    const avatarsByUserId = new Map<string, typeof allAvatars>();
+    for (const a of allAvatars) {
+      const list = avatarsByUserId.get(a.user_id) ?? [];
+      list.push(a);
+      avatarsByUserId.set(a.user_id, list);
+    }
+
     const students: StudentListItem[] = pageRows.map((user) => {
       const userEnrollments = enrollmentsByUserId.get(user.id) ?? [];
       const userProgress = progressByUserId.get(user.id) ?? [];
+      const userAvatars = avatarsByUserId.get(user.id) ?? [];
+      const avatarUrl = resolveStudentAvatar(user.avatar_data_url, userAvatars);
 
       // Group progress by courseId
       const progressByCourse = new Map<string, typeof userProgress>();
@@ -144,7 +218,7 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         username: user.username,
         displayName: user.display_name,
         email: user.email,
-        avatarUrl: null,
+        avatarUrl,
         joinedAt: user.created_at.toISOString(),
         enrolledCoursesCount,
         completedCoursesCount,
@@ -212,9 +286,10 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
       );
     }
 
-    const [enrolledCourses, userProgress] = await Promise.all([
+    const [enrolledCourses, userProgress, userAvatars] = await Promise.all([
       studentsRepo.getStudentEnrolledCourses(database, user.id),
       studentsRepo.listProgressForUserIds(database, [user.id]),
+      studentsRepo.listAvatarsForUserIds(database, [user.id]),
     ]);
 
     const courseIds = enrolledCourses.map((c) => c.course_id);
@@ -315,7 +390,7 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         displayName: user.display_name,
         email: user.email,
         phoneNo: user.phone_no,
-        avatarUrl: user.avatar_data_url,
+        avatarUrl: resolveStudentAvatar(user.avatar_data_url, userAvatars),
         bio: user.bio,
         joinedAt: user.created_at.toISOString(),
         socials: {

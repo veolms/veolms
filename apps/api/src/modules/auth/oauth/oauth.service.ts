@@ -151,6 +151,7 @@ export function createOauthService({
         provider,
         profile.providerUserId,
       );
+    let shouldSyncProviderAvatar = Boolean(user);
     assertAccountActive(user);
 
     if (!user) {
@@ -169,6 +170,7 @@ export function createOauthService({
           providerUserId: profile.providerUserId,
         });
         user = existingUser;
+        shouldSyncProviderAvatar = true;
       } else {
         const localPart = profile.email.split("@")[0] || "oauth_user";
         const username = await authService.generateUniqueUsername(
@@ -183,9 +185,19 @@ export function createOauthService({
           phoneVerified: false,
           oauth: { provider, providerUserId: profile.providerUserId },
           avatarSourceUrl: profile.pictureUrl,
+          avatarSource: provider,
         });
         user = await authService.requireUser(userId);
       }
+    }
+
+    if (shouldSyncProviderAvatar && user) {
+      await authService.syncProviderAvatar(
+        user.id,
+        provider,
+        profile.pictureUrl,
+      );
+      user = await authService.requireUser(user.id);
     }
 
     const session = await sessionService.establishSession(user, request);
@@ -245,8 +257,18 @@ export function createOauthService({
         phoneVerified: false,
         oauth: { provider, providerUserId: profile.providerUserId },
         avatarSourceUrl: profile.pictureUrl,
+        avatarSource: provider,
       });
       user = await authService.requireUser(userId);
+    }
+
+    if (statusCode === 200 && user) {
+      await authService.syncProviderAvatar(
+        user.id,
+        provider,
+        profile.pictureUrl,
+      );
+      user = await authService.requireUser(user.id);
     }
 
     const session = await sessionService.establishSession(user, requestMeta);

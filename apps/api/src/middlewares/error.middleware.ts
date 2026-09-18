@@ -65,7 +65,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
             500,
             "RESPONSE_SERIALIZATION_FAILED",
             "The server produced an invalid response.",
-          ),
+          ).toJSON(),
         );
     }
 
@@ -92,7 +92,8 @@ export function registerErrorHandler(app: FastifyInstance): void {
                   "An unexpected error occurred.",
               ),
               (error as { issues?: ValidationIssue[] }).issues ||
-                (error as { error?: { issues?: ValidationIssue[] } }).error?.issues,
+                (error as { error?: { issues?: ValidationIssue[] } }).error
+                  ?.issues,
             )
           : null;
 
@@ -107,7 +108,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
               appError.statusCode,
               appError.code,
               "An unexpected error occurred.",
-            ),
+            ).toJSON(),
           );
       }
 
@@ -119,7 +120,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
             appError.code,
             appError.message,
             appError.issues,
-          ),
+          ).toJSON(),
         );
     }
 
@@ -132,8 +133,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
           500,
           "INTERNAL_SERVER_ERROR",
           "An unexpected error occurred.",
-        ),
+        ).toJSON(),
       );
   });
 }
-
