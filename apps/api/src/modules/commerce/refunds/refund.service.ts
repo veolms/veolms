@@ -6,6 +6,7 @@ import type {
 } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
+import { AppError } from "../../../lib/errors.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import * as refundRepo from "./refund.repository.ts";
 import { toRefundContract } from "./refund.mapper.ts";
@@ -21,6 +22,22 @@ export interface RefundService {
   ): Promise<Refund>;
   getRefundById(refundId: string): Promise<Refund | undefined>;
   listRefundsForOrder(orderId: string): Promise<Refund[]>;
+}
+
+/**
+ * Whether a gateway error proves no refund was created. Anything else — a
+ * network failure, timeout, 5xx, an in-progress 409, an unreadable response —
+ * leaves the outcome unknown: the gateway may well have processed it.
+ */
+function isDefinitiveGatewayRejection(err: unknown): boolean {
+  return (
+    err instanceof AppError &&
+    err.code === "PAYMENT_GATEWAY_ERROR" &&
+    err.statusCode >= 400 &&
+    err.statusCode < 500 &&
+    err.statusCode !== 408 &&
+    err.statusCode !== 409
+  );
 }
 
 export function createRefundService({
@@ -54,7 +71,7 @@ export function createRefundService({
     request: CreateRefundRequest,
   ): Promise<Refund> {
     const { orderId, orderItemId, amount, reason, idempotencyKey } = request;
-    const refundId = crypto.randomUUID();
+    const newRefundId = crypto.randomUUID();
 
     // 1. Reserve — see the concurrency note above.
     const reservation = await database.transaction().execute(async (trx) => {
@@ -81,6 +98,40 @@ export function createRefundService({
           if (!sameRequest) {
             throw CommerceErrors.REFUND_IDEMPOTENCY_KEY_REUSED();
           }
+
+          // Reserved but never confirmed by the gateway: the earlier attempt
+          // failed with an unknown outcome or died mid-flight. Resume it
+          // under the same gateway key instead of reporting it as done — the
+          // gateway hands back the original refund if it was created.
+          if (existing.status === "pending" && !existing.gateway_refund_id) {
+            const payment = await paymentRepo.findPaymentById(
+              trx,
+              existing.payment_id,
+            );
+            if (!payment?.gateway_payment_id) {
+              throw CommerceErrors.REFUND_NOT_ALLOWED(
+                "No captured payment exists for this order.",
+              );
+            }
+            const resumedItem = existing.order_item_id
+              ? ((await orderRepo.findOrderItemById(trx, existing.order_item_id)) ??
+                null)
+              : null;
+            return {
+              kind: "dispatch" as const,
+              refundId: existing.id,
+              order,
+              targetItem: resumedItem,
+              payment,
+              requestedAmount: existing.amount,
+              totalRefundedAlready: await refundRepo.sumOtherCountedRefunds(
+                trx,
+                order.id,
+                { refundId: existing.id },
+              ),
+            };
+          }
+
           return { kind: "replay" as const, refund: existing };
         }
       }
@@ -141,7 +192,7 @@ export function createRefundService({
 
       const now = new Date();
       await refundRepo.insertRefund(trx, {
-        id: refundId,
+        id: newRefundId,
         order_id: order.id,
         order_item_id: targetItem?.id ?? null,
         payment_id: payment.id,
@@ -157,7 +208,8 @@ export function createRefundService({
       });
 
       return {
-        kind: "reserved" as const,
+        kind: "dispatch" as const,
+        refundId: newRefundId,
         order,
         targetItem,
         payment,
@@ -170,8 +222,14 @@ export function createRefundService({
       return toRefundContract(reservation.refund);
     }
 
-    const { order, targetItem, payment, requestedAmount, totalRefundedAlready } =
-      reservation;
+    const {
+      refundId,
+      order,
+      targetItem,
+      payment,
+      requestedAmount,
+      totalRefundedAlready,
+    } = reservation;
 
     // 2. Dispatch refund through the PaymentGateway abstraction (outside
     //    the reservation transaction/lock above).
@@ -201,11 +259,20 @@ export function createRefundService({
         },
       });
     } catch (err) {
-      // Release the reservation so it doesn't permanently eat into this
-      // order's refundable amount — there's no resumption path that
-      // depends on keeping this row "pending". The client key is released
-      // too so the caller can retry under the same key; the gateway key
-      // derived from it keeps that retry safe.
+      // Outcome unknown (timeout, 5xx, ...) and the caller can retry under
+      // a key: keep the reservation `pending` with its key. It keeps
+      // counting against the refundable amount, which is right if the
+      // gateway did create the refund, and a retry with the same key resumes
+      // it (see the replay branch above) under the same gateway key, so it
+      // resolves to the original refund rather than a second one.
+      if (idempotencyKey && !isDefinitiveGatewayRejection(err)) {
+        throw err;
+      }
+
+      // Otherwise release the reservation so it doesn't permanently eat into
+      // this order's refundable amount: either the gateway definitively
+      // refused (no refund exists), or there is no key a retry could resume
+      // it by. Clearing the key lets the caller start over under it.
       await refundRepo.updateRefundStatus(database, refundId, {
         status: "failed",
         idempotency_key: null,
@@ -223,15 +290,46 @@ export function createRefundService({
     const isFullRefund = isProcessed && newTotalRefunded >= payment.amount;
 
     const createdRefund = await database.transaction().execute(async (trx) => {
-      const record = await refundRepo.updateRefundStatus(trx, refundId, {
+      // The gateway returns the same refund for a repeated key, so the
+      // webhook may have recorded it already: it upserts by gateway refund id
+      // and can't see this reservation. It applied its own side effects, so
+      // fold the reservation into that row instead of colliding on the unique
+      // gateway_refund_id.
+      const recorded = await refundRepo.findRefundByGatewayRefundId(
+        trx,
+        gatewayResult.gatewayRefundId,
+      );
+      if (recorded && recorded.id !== refundId) {
+        // Release the key first: it is unique per order.
+        await refundRepo.updateRefundStatus(trx, refundId, {
+          status: "failed",
+          idempotency_key: null,
+          updated_at: now,
+        });
+        const adopted = await refundRepo.updateRefundStatus(trx, recorded.id, {
+          status: recorded.status,
+          ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
+          updated_at: now,
+        });
+        return adopted ?? recorded;
+      }
+
+      // Conditional on still being unconfirmed: a concurrent request
+      // resuming the same key may have finalized it first, and the side
+      // effects below (credit note, access, outbox) must happen once.
+      const record = await refundRepo.finalizePendingRefund(trx, refundId, {
         gateway_refund_id: gatewayResult.gatewayRefundId,
         status: gatewayResult.status,
         updated_at: now,
       });
       if (!record) {
-        throw new Error(
-          `processRefund: reserved refund row ${refundId} was not found at finalization`,
-        );
+        const current = await refundRepo.findRefundById(trx, refundId);
+        if (!current) {
+          throw new Error(
+            `processRefund: reserved refund row ${refundId} was not found at finalization`,
+          );
+        }
+        return current;
       }
 
       // Only update order status, issue credit note, and revoke access if gateway settled the refund immediately
