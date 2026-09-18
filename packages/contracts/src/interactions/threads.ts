@@ -29,6 +29,18 @@ export const threadSortSchema = z.enum([
 ]);
 export type ThreadSort = z.infer<typeof threadSortSchema>;
 
+export const discussionTabSchema = z.enum([
+  "all",
+  "q-and-a",
+  "comments",
+  "notes",
+  "mentions",
+  "following",
+  "saved",
+  "reports",
+]);
+export type DiscussionTab = z.infer<typeof discussionTabSchema>;
+
 export const questionFilterStatusSchema = z.enum(["all", "answered", "mentioned", "solved", "open"]);
 export type QuestionFilterStatus = z.infer<typeof questionFilterStatusSchema>;
 
@@ -60,7 +72,9 @@ export const learningThreadSchema = z.object({
   id: z.uuid(),
   academyId: z.uuid(),
   courseId: z.uuid(),
+  courseTitle: z.string().nullable().optional(),
   lessonId: z.uuid().nullable().optional(),
+  lessonTitle: z.string().nullable().optional(),
   userId: z.uuid(),
   author: learningAuthorSchema,
   kind: discussionEntryKindSchema,
@@ -79,6 +93,7 @@ export const learningThreadSchema = z.object({
   isLiked: z.boolean().optional(),
   isBookmarked: z.boolean().optional(),
   isFollowing: z.boolean().optional(),
+  isMentioned: z.boolean().optional(),
   isOwn: z.boolean().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -127,6 +142,7 @@ export type UpdateLearningThreadRequest = z.infer<
 
 export const listLearningThreadsQuerySchema = z.object({
   kind: z.enum(["all", "comment", "question", "note", "qna"]).default("all"),
+  tab: discussionTabSchema.optional(),
   courseId: z.uuid().optional(),
   lessonId: z.uuid().optional(),
   search: z.string().max(200).optional(),
@@ -148,4 +164,97 @@ export const learningThreadsListResponseSchema = z.object({
 });
 export type LearningThreadsListResponse = z.infer<
   typeof learningThreadsListResponseSchema
+>;
+
+export const userDiscussionActivitySchema = z.object({
+  questionsAsked: z.number().int().nonnegative(),
+  repliesCount: z.number().int().nonnegative(),
+  answersAccepted: z.number().int().nonnegative(),
+  helpfulVotes: z.number().int().nonnegative(),
+});
+export type UserDiscussionActivity = z.infer<
+  typeof userDiscussionActivitySchema
+>;
+
+export const userMentionNotificationSchema = z.object({
+  id: z.uuid(),
+  sourceType: z.enum(["thread", "reply"]),
+  sourceId: z.uuid(),
+  threadId: z.uuid(),
+  threadTitle: z.string().nullable().optional(),
+  courseId: z.uuid(),
+  courseTitle: z.string().nullable().optional(),
+  lessonId: z.uuid().nullable().optional(),
+  lessonTitle: z.string().nullable().optional(),
+  author: learningAuthorSchema,
+  snippet: z.string(),
+  createdAt: z.string(),
+});
+export type UserMentionNotification = z.infer<
+  typeof userMentionNotificationSchema
+>;
+
+export const userMentionsListResponseSchema = z.object({
+  mentions: z.array(userMentionNotificationSchema),
+  totalCount: z.number().int().nonnegative().optional(),
+});
+export type UserMentionsListResponse = z.infer<
+  typeof userMentionsListResponseSchema
+>;
+
+export const discussionsWorkspaceCourseOptionSchema = z.object({
+  id: z.uuid(),
+  title: z.string().min(1),
+  slug: z.string().optional(),
+});
+export type DiscussionsWorkspaceCourseOption = z.infer<
+  typeof discussionsWorkspaceCourseOptionSchema
+>;
+
+export const workspaceDiscussionItemSchema = z.object({
+  id: z.uuid(),
+  itemType: z.enum(["thread", "note", "reply", "report"]),
+  kind: discussionEntryKindSchema,
+  title: z.string().nullable().optional(),
+  content: z.string(),
+  plainText: z.string(),
+  courseId: z.uuid(),
+  courseTitle: z.string().nullable().optional(),
+  lessonId: z.uuid().nullable().optional(),
+  lessonTitle: z.string().nullable().optional(),
+  timestampSeconds: z.number().int().nonnegative().nullable().optional(),
+  author: learningAuthorSchema,
+  status: questionFilterStatusSchema.optional(),
+  repliesCount: z.number().int().nonnegative().default(0),
+  likesCount: z.number().int().nonnegative().default(0),
+  isLiked: z.boolean().optional(),
+  isBookmarked: z.boolean().optional(),
+  isFollowing: z.boolean().optional(),
+  isMentioned: z.boolean().optional(),
+  isOwn: z.boolean().optional(),
+  reportDetails: z
+    .object({
+      targetType: z.enum(["thread", "reply", "note"]),
+      targetId: z.uuid(),
+      reason: z.string(),
+      details: z.string().nullable().optional(),
+      status: z.enum(["pending", "reviewed", "dismissed", "actioned"]).optional(),
+      actionTaken: z.string().nullable().optional(),
+    })
+    .optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type WorkspaceDiscussionItem = z.infer<
+  typeof workspaceDiscussionItemSchema
+>;
+
+export const discussionsWorkspaceResponseSchema = z.object({
+  items: z.array(workspaceDiscussionItemSchema),
+  courses: z.array(discussionsWorkspaceCourseOptionSchema),
+  nextCursor: z.string().nullable(),
+  totalCount: z.number().int().nonnegative(),
+});
+export type DiscussionsWorkspaceResponse = z.infer<
+  typeof discussionsWorkspaceResponseSchema
 >;

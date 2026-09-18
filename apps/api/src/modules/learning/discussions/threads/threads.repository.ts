@@ -29,7 +29,9 @@ export interface ThreadRowWithAuthor {
   id: string;
   academyId: string;
   courseId: string;
+  courseTitle: string | null;
   lessonId: string | null;
+  lessonTitle: string | null;
   userId: string;
   kind: DiscussionEntryKind;
   title: string | null;
@@ -56,6 +58,8 @@ export type ThreadFilterOptions = ListLearningThreadsQuery & {
   accessibleCourseIds?: readonly string[];
   pageCursor?: DiscussionListCursor;
 };
+
+
 
 export interface ThreadsRepository {
   createThread(
@@ -128,6 +132,10 @@ export interface ThreadsRepository {
     threadId: string,
     status: InteractionStatus,
   ): Promise<void>;
+
+
+
+
 }
 
 function applyThreadFilters<O>(
@@ -236,6 +244,69 @@ function applyThreadFilters<O>(
     }
   }
 
+  if (options.tab === "q-and-a") {
+    q = q.where("t.kind", "=", "question");
+  } else if (options.tab === "comments") {
+    q = q.where("t.kind", "=", "comment");
+  } else if (options.tab === "following") {
+    if (!options.currentUserId) {
+      q = q.where(sql<boolean>`1 = 0`);
+    } else {
+      const currentUserId = options.currentUserId;
+      q = q.where((eb: ExpressionBuilder<ThreadsAliasedDB, "t">) =>
+        eb.exists(
+          eb
+            .selectFrom("learning_follows as lf")
+            .select(sql`1`.as("one"))
+            .whereRef("lf.thread_id", "=", "t.id")
+            .where("lf.user_id", "=", currentUserId),
+        ),
+      );
+    }
+  } else if (options.tab === "saved") {
+    if (!options.currentUserId) {
+      q = q.where(sql<boolean>`1 = 0`);
+    } else {
+      const currentUserId = options.currentUserId;
+      q = q.where((eb: ExpressionBuilder<ThreadsAliasedDB, "t">) =>
+        eb.exists(
+          eb
+            .selectFrom("learning_bookmarks as lb")
+            .select(sql`1`.as("one"))
+            .whereRef("lb.thread_id", "=", "t.id")
+            .where("lb.user_id", "=", currentUserId),
+        ),
+      );
+    }
+  } else if (options.tab === "mentions") {
+    if (!options.currentUserId) {
+      q = q.where(sql<boolean>`1 = 0`);
+    } else {
+      const currentUserId = options.currentUserId;
+      q = q.where((eb: ExpressionBuilder<ThreadsAliasedDB, "t">) =>
+        eb.or([
+          eb.exists(
+            eb
+              .selectFrom("learning_mentions as m")
+              .select(sql`1`.as("one"))
+              .whereRef("m.source_id", "=", "t.id")
+              .where("m.source_type", "=", "thread")
+              .where("m.mentioned_user_id", "=", currentUserId),
+          ),
+          eb.exists(
+            eb
+              .selectFrom("learning_mentions as m")
+              .innerJoin("learning_replies as lr", "lr.id", "m.source_id")
+              .select(sql`1`.as("one"))
+              .whereRef("lr.thread_id", "=", "t.id")
+              .where("m.source_type", "=", "reply")
+              .where("m.mentioned_user_id", "=", currentUserId),
+          ),
+        ]),
+      );
+    }
+  }
+
   return q;
 }
 
@@ -315,11 +386,15 @@ export function createThreadsRepository(): ThreadsRepository {
       const row = await db
         .selectFrom("learning_threads as t")
         .innerJoin("users as u", "u.id", "t.user_id")
+        .leftJoin("courses as c", "c.id", "t.course_id")
+        .leftJoin("course_lessons as cl", "cl.id", "t.lesson_id")
         .select([
           "t.id as id",
           "t.academy_id as academyId",
           "t.course_id as courseId",
+          "c.title as courseTitle",
           "t.lesson_id as lessonId",
+          "cl.title as lessonTitle",
           "t.user_id as userId",
           "t.kind as kind",
           "t.title as title",
@@ -352,11 +427,15 @@ export function createThreadsRepository(): ThreadsRepository {
 
       let query = filtered
         .innerJoin("users as u", "u.id", "t.user_id")
+        .leftJoin("courses as c", "c.id", "t.course_id")
+        .leftJoin("course_lessons as cl", "cl.id", "t.lesson_id")
         .select([
           "t.id as id",
           "t.academy_id as academyId",
           "t.course_id as courseId",
+          "c.title as courseTitle",
           "t.lesson_id as lessonId",
+          "cl.title as lessonTitle",
           "t.user_id as userId",
           "t.kind as kind",
           "t.title as title",
@@ -537,5 +616,8 @@ export function createThreadsRepository(): ThreadsRepository {
         .where("id", "=", threadId)
         .execute();
     },
+
+
+
   };
 }

@@ -15,7 +15,7 @@ export interface ThreadsController {
       Body: CreateLearningThreadRequest;
     }>,
     reply: FastifyReply,
-  ): Promise<any>;
+  ): Promise<void>;
 
   listLessonThreads(
     request: FastifyRequest<{
@@ -23,21 +23,21 @@ export interface ThreadsController {
       Querystring: ListLearningThreadsQuery;
     }>,
     reply: FastifyReply,
-  ): Promise<any>;
+  ): Promise<void>;
 
   listHubThreads(
     request: FastifyRequest<{
       Querystring: ListLearningThreadsQuery;
     }>,
     reply: FastifyReply,
-  ): Promise<any>;
+  ): Promise<void>;
 
   getThread(
     request: FastifyRequest<{
       Params: { threadId: string };
     }>,
     reply: FastifyReply,
-  ): Promise<any>;
+  ): Promise<void>;
 
   updateThread(
     request: FastifyRequest<{
@@ -45,14 +45,21 @@ export interface ThreadsController {
       Body: UpdateLearningThreadRequest;
     }>,
     reply: FastifyReply,
-  ): Promise<any>;
+  ): Promise<void>;
 
   deleteThread(
     request: FastifyRequest<{
       Params: { threadId: string };
     }>,
     reply: FastifyReply,
-  ): Promise<any>;
+  ): Promise<void>;
+
+  getDiscussionsWorkspace(
+    request: FastifyRequest<{
+      Querystring: ListLearningThreadsQuery;
+    }>,
+    reply: FastifyReply,
+  ): Promise<void>;
 }
 
 export function createThreadsController({
@@ -83,6 +90,8 @@ export function createThreadsController({
 
       return reply.status(201).send(thread);
     },
+
+
 
     async listLessonThreads(request, reply) {
       const user = request.user!;
@@ -147,6 +156,23 @@ export function createThreadsController({
       return reply
         .status(200)
         .send({ message: "Discussion thread deleted successfully." });
+    },
+
+
+
+
+
+    async getDiscussionsWorkspace(request, reply) {
+      const user = request.user!;
+      const query = request.query;
+
+      const result = await service.getDiscussionsWorkspace(database, {
+        ...query,
+        currentUserId: user.id,
+        roles: user.roles,
+      });
+
+      return reply.status(200).send(result);
     },
   };
 }

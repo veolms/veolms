@@ -13,7 +13,11 @@ import {
   type CSSProperties,
   type MutableRefObject,
 } from "react";
-import { createMentionCompletionSource } from "./mentions";
+import {
+  createMentionCompletionSource,
+  mentionCompletionOptionClass,
+  renderMentionCompletionAddon,
+} from "./mentions";
 import { createDiscussionClipboardExtension } from "./clipboard";
 import { DISCUSSION_CODE_LANGUAGES } from "./code-languages";
 import {
@@ -24,9 +28,7 @@ import {
 import { selectDiscussionAttachment } from "./attachments";
 import { createDiscussionDraft, type DiscussionDraft } from "./types";
 import "./atomic-editor.css";
-import {
-  DISCUSSION_ATTACHMENTS_ENABLED,
-} from "./image-storage";
+import { DISCUSSION_ATTACHMENTS_ENABLED } from "./image-storage";
 import type { LocalComposerAttachment } from "../../services/learning-interactions";
 
 export interface DiscussionEditorController extends DiscussionEditorCommands {
@@ -120,6 +122,14 @@ export function DiscussionEditor({
         override: [createMentionCompletionSource(courseId)],
         activateOnTyping: true,
         defaultKeymap: true,
+        icons: false,
+        optionClass: mentionCompletionOptionClass,
+        addToOptions: [
+          {
+            position: 0,
+            render: renderMentionCompletionAddon,
+          },
+        ],
       }),
     ];
   }, [courseId, mentionsEnabled]);
