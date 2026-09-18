@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { isIP } from "node:net";
 
 import fastifyAutoload from "@fastify/autoload";
 import type { Database } from "@veolms/database";
@@ -108,9 +109,40 @@ export async function createApp({
       ),
   });
 
-  // Configure CORS
+  const isAllowedLanOrigin = (origin: string | undefined): boolean => {
+    if (!origin || config.WEBAUTHN_ORIGINS.includes(origin)) return true;
+    if (config.NODE_ENV === "production") return false;
+
+    try {
+      const url = new URL(origin);
+      if (url.protocol !== "http:" || isIP(url.hostname) !== 4) return false;
+
+      const octets = url.hostname.split(".").map(Number);
+      if (
+        octets.some(
+          (octet) => !Number.isInteger(octet) || octet < 0 || octet > 255,
+        )
+      ) {
+        return false;
+      }
+
+      const firstOctet = octets[0] ?? -1;
+      const secondOctet = octets[1] ?? -1;
+      return (
+        firstOctet === 10 ||
+        (firstOctet === 172 && secondOctet >= 16 && secondOctet <= 31) ||
+        (firstOctet === 192 && secondOctet === 168)
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  // Configure CORS. Private LAN origins are allowed for device-based local
+  // development so credentialed requests work from any local IPv4 address.
   await app.register(fastifyCors, {
-    origin: config.WEBAUTHN_ORIGINS,
+    origin: (origin, callback) =>
+      callback(null, isAllowedLanOrigin(origin)),
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });

@@ -54,7 +54,7 @@ function useSessionAccess() {
   return {
     access,
     user: resolvedUser,
-    pending: isPending && !isFetched && !resolvedUser,
+    pending: !isFetched && !resolvedUser,
   };
 }
 
@@ -65,10 +65,9 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const path = normalizeAppPath(location.pathname);
   const authenticationRequired = requiresAcademyAuth(path);
   const landingDestination = resolveAcademyLandingDestination(access);
-  const courseAuthorRouteDenied = shouldRedirectFromCourseAuthorPath(
-    path,
-    user?.roles,
-  );
+  const courseAuthorRouteDenied =
+    access.isSessionReady &&
+    shouldRedirectFromCourseAuthorPath(path, user?.roles);
 
   useEffect(() => {
     if (pending) {

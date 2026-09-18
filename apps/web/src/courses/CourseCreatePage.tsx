@@ -3,6 +3,7 @@ import {
   useEffect,
   useRef,
   useMemo,
+  useCallback,
   memo,
 } from "react";
 import { useLocation } from "react-router";
@@ -20,6 +21,13 @@ import {
   CourseDescriptionEditor,
   LessonDescriptionEditor,
 } from "./CourseDescriptionEditor";
+import {
+  LessonContentTypeIcon,
+  LessonStudioEditor,
+  lessonContentTypeIconSvg,
+  type LessonStudioEditorHandle,
+  type StudioLessonContentType,
+} from "./curriculum";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { ToastNotification } from "../ToastNotification";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
@@ -41,7 +49,8 @@ import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/Down
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { EyeSlashIcon as EyeSlash } from "@phosphor-icons/react/EyeSlash";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
-import { ImageIcon } from "@phosphor-icons/react/Image";
+import { HeadphonesIcon as Headphones } from "@phosphor-icons/react/Headphones";
+import { ImageIcon, ImageIcon as Image } from "@phosphor-icons/react/Image";
 import { InfoIcon as Info } from "@phosphor-icons/react/Info";
 import { LightningIcon as Lightning } from "@phosphor-icons/react/Lightning";
 import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullets";
@@ -180,7 +189,7 @@ function LessonDescriptionPreview({
 interface LessonSnapshot {
   title: string;
   description: string;
-  contentType: "video" | "document" | "quiz";
+  contentType: "video" | "document" | "quiz" | "audio" | "image";
   contentMediaId?: string | null;
   isPublished?: boolean;
   isPreview?: boolean;
@@ -191,9 +200,9 @@ interface CurriculumLessonItem {
   title: string;
   isEditingTitle?: boolean;
   contentTypeSelected?: boolean;
-  pendingContentType?: "video" | "document" | "quiz";
+  pendingContentType?: "video" | "document" | "quiz" | "audio" | "image";
   description: string;
-  contentType: "video" | "document" | "quiz";
+  contentType: "video" | "document" | "quiz" | "audio" | "image";
   contentMediaId?: string | null;
   durationSeconds?: number;
   isExpanded: boolean;
@@ -225,6 +234,8 @@ interface MemoizedLessonCardProps {
   isReorderPending: boolean;
   isFocusMode: boolean;
   isResourceBusy: boolean;
+  isLessonEditorMounted: boolean;
+  onLessonEditorOpen: (lessonId: string) => void;
   render: (state: {
     isExpanded: boolean;
     setExpanded: React.Dispatch<React.SetStateAction<boolean>>;
@@ -232,14 +243,23 @@ interface MemoizedLessonCardProps {
     setEditorOpen: React.Dispatch<React.SetStateAction<boolean>>;
     isQuizOpen: boolean;
     setQuizOpen: React.Dispatch<React.SetStateAction<boolean>>;
+    lessonEditorRef: React.RefObject<LessonStudioEditorHandle | null>;
+    isLessonEditorMounted: boolean;
+    onLessonEditorOpen: (lessonId: string) => void;
   }) => React.ReactElement;
 }
 
 const MemoizedLessonCard = memo(
-  function MemoizedLessonCard({ lesson, render }: MemoizedLessonCardProps) {
+  function MemoizedLessonCard({
+    lesson,
+    isLessonEditorMounted,
+    onLessonEditorOpen,
+    render,
+  }: MemoizedLessonCardProps) {
     const [isExpanded, setExpanded] = useState(lesson.isExpanded);
-    const [isEditorOpen, setEditorOpen] = useState(false);
+    const [isEditorOpen, setEditorOpen] = useState(Boolean(lesson.isExpanded));
     const [isQuizOpen, setQuizOpen] = useState(false);
+    const lessonEditorRef = useRef<LessonStudioEditorHandle>(null);
 
     useEffect(() => {
       setExpanded(lesson.isExpanded);
@@ -252,6 +272,9 @@ const MemoizedLessonCard = memo(
       setEditorOpen,
       isQuizOpen,
       setQuizOpen,
+      lessonEditorRef,
+      isLessonEditorMounted,
+      onLessonEditorOpen,
     });
   },
   (previous, next) =>
@@ -265,7 +288,9 @@ const MemoizedLessonCard = memo(
     previous.isSectionReordering === next.isSectionReordering &&
     previous.isReorderPending === next.isReorderPending &&
     previous.isFocusMode === next.isFocusMode &&
-    previous.isResourceBusy === next.isResourceBusy,
+    previous.isResourceBusy === next.isResourceBusy &&
+    previous.isLessonEditorMounted === next.isLessonEditorMounted &&
+    previous.onLessonEditorOpen === next.onLessonEditorOpen,
 );
 
 export type CourseWizardStepId =
@@ -1093,7 +1118,7 @@ export const checkIsCurriculumDirty = (
       id: string;
       title: string;
       description?: string;
-      contentType: "video" | "document" | "quiz";
+      contentType: "video" | "document" | "quiz" | "audio" | "image";
       contentMediaId?: string | null;
       durationSeconds?: number;
       isPublished?: boolean;
@@ -1102,7 +1127,7 @@ export const checkIsCurriculumDirty = (
       initialState?: {
         title: string;
         description: string;
-        contentType: "video" | "document" | "quiz";
+        contentType: "video" | "document" | "quiz" | "audio" | "image";
         contentMediaId?: string | null;
         isPublished?: boolean;
         isPreview?: boolean;
@@ -1355,7 +1380,7 @@ const sectionGhostHtml = (
 const lessonGhostHtml = (
   title: string,
   index: number,
-  contentType: "video" | "document" | "quiz",
+  contentType: "video" | "document" | "quiz" | "audio" | "image",
 ) => {
   const isVideo = contentType === "video";
   return `
@@ -1378,11 +1403,11 @@ const lessonGhostHtml = (
           <path d="M100,60a16,16,0,1,1-16-16A16,16,0,0,1,100,60Zm72-16a16,16,0,1,0,16,16A16,16,0,0,0,172,44ZM84,112a16,16,0,1,0,16,16A16,16,0,0,0,84,112Zm88,0a16,16,0,1,0,16,16A16,16,0,0,0,172,112ZM84,180a16,16,0,1,0,16,16A16,16,0,0,0,84,180Zm88,0a16,16,0,1,0,16,16A16,16,0,0,0,172,180Z"/>
         </svg>
       </span>
-      <span style="display: inline-flex; min-width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 4px; background: rgba(128,128,128,0.18); color: var(--muted, #888); font-size: 0.72rem; font-weight: 600;">
-        ${index + 1}
+      <span style="display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; color: var(--accent, #6366f1);">
+        ${lessonContentTypeIconSvg(contentType)}
       </span>
       <span style="font-weight: 600; font-size: 0.88rem; color: var(--text, #fff);">
-        ${escapeHtml(title)}
+        ${index + 1}. ${escapeHtml(title)}
       </span>
     </div>
     <div style="display: flex; align-items: center; gap: 8px;">
@@ -1477,7 +1502,7 @@ export interface BuildLocalPreviewParams {
       id: string;
       title: string;
       description?: string | null;
-      contentType: "video" | "document" | "quiz";
+      contentType: "video" | "document" | "quiz" | "audio" | "image";
       contentMediaId?: string | null;
       durationSeconds?: number;
       isPreview?: boolean;
@@ -1601,7 +1626,11 @@ export function buildLocalPreviewData({
         sectionId: sec.id,
         title: les.title,
         description: les.description || null,
-        contentType: les.contentType,
+        contentType: (les.contentType === "audio"
+          ? "video"
+          : les.contentType === "image"
+            ? "document"
+            : les.contentType) as "video" | "document" | "quiz",
         contentMediaId: les.contentMediaId ?? null,
         durationSeconds: les.durationSeconds,
         position: lesIdx,
@@ -2665,13 +2694,35 @@ export function CourseCreatePage({
   const tabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
   const stepsNavRef = useRef<HTMLElement | null>(null);
   const [isCurriculumFocusMode, setIsCurriculumFocusMode] = useState(false);
+  const [mountedLessonEditorIds, setMountedLessonEditorIds] = useState<string[]>(
+    [],
+  );
+  const [editingLessonTarget, setEditingLessonTarget] = useState<{
+    sectionId: string;
+    lessonId: string;
+  } | null>(null);
 
-  // Automatically reset focus mode if navigating away from curriculum step
+  // Automatically reset focus mode & lesson editor if navigating away from curriculum step
   useEffect(() => {
     if (activeStep !== "curriculum") {
       setIsCurriculumFocusMode(false);
+      setEditingLessonTarget(null);
     }
   }, [activeStep]);
+
+  useEffect(() => {
+    setMountedLessonEditorIds([]);
+  }, [activeEditId]);
+
+  const rememberLessonEditor = useCallback((lessonId: string) => {
+    setMountedLessonEditorIds((previous) => {
+      const next = [
+        ...previous.filter((mountedLessonId) => mountedLessonId !== lessonId),
+        lessonId,
+      ];
+      return next.slice(-3);
+    });
+  }, []);
 
   // Allow pressing Escape key to exit focus mode
   useEffect(() => {
@@ -3062,7 +3113,7 @@ export function CourseCreatePage({
       courseVersionRef.current = updated.version;
       thumbnailMediaIdRef.current = presigned.mediaAssetId;
       setThumbnailMediaId(presigned.mediaAssetId);
-      setThumbnail(processedThumbnailUrl);
+      setThumbnail(updated.thumbnailUrl ?? processedThumbnailUrl);
       thumbnailDirtyRef.current = false;
       setThumbnailUploadStatus("idle");
       setThumbnailUploadError(null);
@@ -4667,7 +4718,11 @@ export function CourseCreatePage({
         }
         thumbnailMediaIdRef.current = confirmedThumbnailMediaId;
         setThumbnailMediaId(confirmedThumbnailMediaId);
-        setThumbnail(getCourseThumbnailCdnUrl(confirmedThumbnailMediaId) ?? null);
+        setThumbnail(
+          c.thumbnailUrl ??
+            getCourseThumbnailCdnUrl(confirmedThumbnailMediaId) ??
+            null,
+        );
       }
 
       const isBasicsSavingActive =
@@ -6352,7 +6407,7 @@ export function CourseCreatePage({
       title: newLessonTitle,
       description: "",
       contentType: "video" as const,
-      contentTypeSelected: false,
+      contentTypeSelected: true,
       isExpanded: true,
       isPublished: true,
       isPreview: false,
@@ -6633,7 +6688,11 @@ export function CourseCreatePage({
       const persistedSnapshot = {
         title: trimmedTitle,
         description: les.description || "",
-        contentType: les.contentType,
+        contentType: (les.contentType === "audio"
+          ? "video"
+          : les.contentType === "image"
+            ? "document"
+            : les.contentType) as "video" | "document" | "quiz",
         contentMediaId: les.contentMediaId ?? null,
         durationSeconds: les.durationSeconds,
         isPublished: isPublishedVal,
@@ -8047,7 +8106,7 @@ export function CourseCreatePage({
           title: "New Lesson 1",
           description: "",
           contentType: "video",
-          contentTypeSelected: false,
+          contentTypeSelected: true,
           isExpanded: true,
           isPublished: true,
           isPreview: false,
@@ -9282,7 +9341,7 @@ export function CourseCreatePage({
         }}
         tabListRef={stepsNavRef}
         id="course-wizard-tab-panel"
-        className="course-wizard-tab-content w-full min-h-0 flex-1 flex flex-col"
+        className="course-wizard-tab-content relative w-full min-h-0 flex-1 flex flex-col px-6 pt-4 pb-6 max-[640px]:px-4 max-[640px]:pt-3"
         stateAttribute="data-wizard-step"
         labelledBy={`course-wizard-tab-${activeStep}`}
         disabled={
@@ -9921,7 +9980,266 @@ export function CourseCreatePage({
               </div>
             </div>
           ) : panelStep === "curriculum" ? (
-            <div className="course-wizard-curriculum-panel flex flex-col gap-4 w-full flex-1 min-h-0">
+            editingLessonTarget &&
+            sections.some(
+              (s) =>
+                s.id === editingLessonTarget.sectionId &&
+                s.lessons.some((l) => l.id === editingLessonTarget.lessonId),
+            ) ? (
+              (() => {
+                const activeSection = sections.find(
+                  (s) => s.id === editingLessonTarget.sectionId,
+                )!;
+                const activeLesson = activeSection.lessons.find(
+                  (l) => l.id === editingLessonTarget.lessonId,
+                )!;
+                const secIdx = sections.findIndex((s) => s.id === activeSection.id);
+                const lesIdx = activeSection.lessons.findIndex(
+                  (l) => l.id === activeLesson.id,
+                );
+
+                return (
+                  <div className="course-wizard-curriculum-panel flex flex-col gap-4 w-full flex-1 min-h-0">
+                    <LessonStudioEditor
+                      sectionNumber={secIdx + 1}
+                      sectionTitle={activeSection.title}
+                      lessonNumber={lesIdx + 1}
+                      lessonTitle={activeLesson.title}
+                      courseSlug={editorData?.course?.slug}
+                      courseTitle={
+                        courseTitle ||
+                        "Web Development Course for Absolute Beginners | Hindi"
+                      }
+                      contentType={
+                        (activeLesson.contentType as StudioLessonContentType) ||
+                        "video"
+                      }
+                      isPublished={activeLesson.isPublished !== false}
+                      isPreview={activeLesson.isPreview === true}
+                      mediaInfo={
+                        activeLesson.contentMediaId
+                          ? {
+                              id: activeLesson.contentMediaId,
+                              name:
+                                activeLesson.contentType === "video"
+                                  ? "intro-to-web-dev.mp4"
+                                  : activeLesson.contentType === "audio"
+                                    ? "intro-to-web-dev.mp3"
+                                    : activeLesson.contentType === "image"
+                                      ? "web-dev-thumbnail.png"
+                                      : "intro-to-web-dev.pdf",
+                              durationSeconds:
+                                activeLesson.durationSeconds || 754,
+                              sizeBytes: 128 * 1024 * 1024,
+                            }
+                          : null
+                      }
+                      resources={activeLesson.resources.map((r) => ({
+                        id: r.id,
+                        name: r.name,
+                        type: r.type,
+                        size: r.size,
+                        mediaAssetId: r.mediaAssetId,
+                      }))}
+                      isSaving={savingLessonId === activeLesson.id}
+                      onBack={() => setEditingLessonTarget(null)}
+                      onSave={async (payload) => {
+                        handleUpdateLesson(activeSection.id, activeLesson.id, {
+                          title: payload.title,
+                          contentType: payload.contentType,
+                          isPublished: payload.isPublished,
+                          isPreview: payload.isPreview,
+                        });
+                        const saved = await persistLesson(
+                          activeSection.id,
+                          activeLesson.id,
+                          { collapseOnSuccess: false },
+                        );
+                        if (saved) {
+                          setToastMessage("Lesson changes saved successfully.");
+                          setEditingLessonTarget(null);
+                        }
+                      }}
+                      onContentTypeChange={(contentType) => {
+                        handleUpdateLesson(activeSection.id, activeLesson.id, {
+                          contentType,
+                        });
+                      }}
+                      onDeleteLesson={() => {
+                        handleDeleteLesson(activeSection.id, activeLesson.id);
+                        setEditingLessonTarget(null);
+                      }}
+                      onPreviewLesson={() => {
+                        if (currentCourseId) {
+                          window.open(`/courses/${currentCourseId}`, "_blank");
+                        }
+                      }}
+                      onMediaAttached={(mediaAssetId) =>
+                        handleLessonMediaAttached(
+                          activeSection.id,
+                          activeLesson.id,
+                          mediaAssetId,
+                        )
+                      }
+                      onProcessingComplete={() =>
+                        handleLessonProcessingComplete()
+                      }
+                      onUploadMedia={async (file) => {
+                        try {
+                          const presigned =
+                            await mediaService.presignMediaUpload({
+                              filename: file.name,
+                              contentType:
+                                file.type || "application/octet-stream",
+                              fileSize: file.size,
+                              type:
+                                activeLesson.contentType === "image"
+                                  ? "image"
+                                  : activeLesson.contentType === "document"
+                                    ? "document"
+                                    : "video",
+                              visibility: "protected",
+                            });
+                          await mediaService.uploadFileToPresignedUrl(
+                            presigned.uploadUrl,
+                            file,
+                          );
+                          await mediaService.confirmUpload(
+                            presigned.mediaAssetId,
+                          );
+                          await handleLessonMediaAttached(
+                            activeSection.id,
+                            activeLesson.id,
+                            presigned.mediaAssetId,
+                          );
+                          setToastMessage(
+                            "Media uploaded and attached successfully.",
+                          );
+                        } catch (err: unknown) {
+                          setToastMessage(
+                            err instanceof Error
+                              ? err.message
+                              : "Media upload failed.",
+                          );
+                        }
+                      }}
+                      onAddResourceFile={async (file) => {
+                        try {
+                          const presigned =
+                            await mediaService.presignMediaUpload({
+                              filename: file.name,
+                              contentType:
+                                file.type || "application/octet-stream",
+                              fileSize: file.size,
+                              type: "document",
+                              visibility: "protected",
+                            });
+                          await mediaService.uploadFileToPresignedUrl(
+                            presigned.uploadUrl,
+                            file,
+                          );
+                          await mediaService.confirmUpload(
+                            presigned.mediaAssetId,
+                          );
+                          const created = await handleCreateLessonResource(
+                            activeLesson.id,
+                            {
+                              title: file.name,
+                              mediaAssetId: presigned.mediaAssetId,
+                            },
+                          );
+                          handleLessonResourceAdded(
+                            activeSection.id,
+                            activeLesson.id,
+                            {
+                              id: created.id,
+                              name: created.title,
+                              type: "document",
+                              size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+                              mediaAssetId: created.mediaAssetId,
+                            },
+                          );
+                          setToastMessage("Resource attached successfully.");
+                        } catch (err: unknown) {
+                          setToastMessage(
+                            err instanceof Error
+                              ? err.message
+                              : "Resource upload failed.",
+                          );
+                        }
+                      }}
+                      onDeleteResource={async (resId) => {
+                        try {
+                          await handleDeleteLessonResource(resId);
+                          const resItem = activeLesson.resources.find(
+                            (r) => r.id === resId,
+                          );
+                          if (resItem) {
+                            handleLessonResourceRemoved(
+                              activeSection.id,
+                              activeLesson.id,
+                              resItem,
+                            );
+                          }
+                          setToastMessage("Resource removed.");
+                        } catch (err: unknown) {
+                          setToastMessage(
+                            err instanceof Error
+                              ? err.message
+                              : "Could not remove resource.",
+                          );
+                        }
+                      }}
+                      descriptionSection={
+                        <div className="flex flex-col gap-2">
+                          <LessonDescriptionEditor
+                            id={`lesson-description-${activeLesson.id}`}
+                            disabled={
+                              activeLesson.isPendingCreation ||
+                              savingLessonId === activeLesson.id
+                            }
+                            value={activeLesson.description}
+                            onChange={(val) =>
+                              handleUpdateLesson(
+                                activeSection.id,
+                                activeLesson.id,
+                                { description: val },
+                              )
+                            }
+                            placeholder="Add a detailed description of what students will learn in this lesson..."
+                            maxLength={1500}
+                          />
+                        </div>
+                      }
+                      quizSection={
+                        currentCourseId &&
+                        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                          activeLesson.id,
+                        ) ? (
+                          <QuizAuthoringPanel
+                            courseId={currentCourseId}
+                            lessonId={activeLesson.id}
+                            lessonTitle={activeLesson.title}
+                            onQuizDeleted={() => {}}
+                            isFocusMode={isCurriculumFocusMode}
+                            onToggleFocusMode={() =>
+                              setIsCurriculumFocusMode((prev) => !prev)
+                            }
+                          />
+                        ) : (
+                          <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
+                            Save the course and lesson before configuring an
+                            attached Quiz.
+                          </div>
+                        )
+                      }
+                    />
+
+                  </div>
+                );
+              })()
+            ) : (
+              <div className="course-wizard-curriculum-panel flex flex-col gap-4 w-full flex-1 min-h-0">
               {/* Header row */}
               <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3">
                 <div className="">
@@ -10353,6 +10671,10 @@ export function CourseCreatePage({
                                   createLessonResourceMutation.isPending ||
                                   deleteLessonResourceMutation.isPending
                                 }
+                                isLessonEditorMounted={mountedLessonEditorIds.includes(
+                                  les.id,
+                                )}
+                                onLessonEditorOpen={rememberLessonEditor}
                                 render={({
                                   isExpanded,
                                   setExpanded,
@@ -10360,10 +10682,19 @@ export function CourseCreatePage({
                                   setEditorOpen,
                                   isQuizOpen,
                                   setQuizOpen,
+                                  lessonEditorRef,
+                                  isLessonEditorMounted,
+                                  onLessonEditorOpen,
                                 }) => {
+                                  const shouldKeepEditorMounted =
+                                    isEditorOpen || isLessonEditorMounted;
                                   const toggleLesson = async () => {
                                     const nextExpanded = !isExpanded;
-                                    if (nextExpanded) setExpanded(true);
+                                    if (nextExpanded) {
+                                      setExpanded(true);
+                                      setEditorOpen(true);
+                                      onLessonEditorOpen(les.id);
+                                    }
                                     const canToggle =
                                       await handleToggleLessonExpand(
                                         sec.id,
@@ -10372,6 +10703,7 @@ export function CourseCreatePage({
                                       );
                                     if (!canToggle) {
                                       setExpanded(isExpanded);
+                                      if (nextExpanded) setEditorOpen(false);
                                     } else if (!nextExpanded) {
                                       setExpanded(false);
                                       setEditorOpen(false);
@@ -10417,7 +10749,7 @@ export function CourseCreatePage({
                                 <div
                                   className="flex items-center justify-between px-4 py-3 select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[10px_12px]"
                                   onClick={() => void toggleLesson()}
-                                  title="Click to toggle lesson editor"
+                                  title="Expand lesson editor"
                                 >
                                   <div className="flex min-w-0 flex-1 items-center gap-3 max-[768px]:w-full max-[768px]:gap-2">
                                     <span
@@ -10466,14 +10798,19 @@ export function CourseCreatePage({
                                     >
                                       <DotsSixVertical size={18} />
                                     </span>
-                                    <span className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded text-(--muted) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-[0.72rem] font-medium">
-                                      {lesIndex + 1}
-                                    </span>
+                                    <LessonContentTypeIcon
+                                      contentType={
+                                        les.pendingContentType || les.contentType
+                                      }
+                                    />
                                     {les.isEditingTitle ? (
                                       <div
                                         className="flex min-w-0 flex-1 items-center gap-2"
                                         onClick={(e) => e.stopPropagation()}
                                       >
+                                        <span className="shrink-0 text-(--text) text-[0.88rem] font-semibold">
+                                          {lesIndex + 1}.{" "}
+                                        </span>
                                         <input
                                           id={`les-title-${les.id}`}
                                           type="text"
@@ -10541,7 +10878,7 @@ export function CourseCreatePage({
                                     ) : (
                                       <div className="group/title flex min-w-0 flex-1 items-center gap-1.5">
                                         <span className="min-w-0 flex-1 truncate whitespace-nowrap text-(--text) text-[0.88rem] font-semibold cursor-pointer">
-                                          {les.title}
+                                          {lesIndex + 1}. {les.title}
                                         </span>
                                         <button
                                           type="button"
@@ -10596,27 +10933,31 @@ export function CourseCreatePage({
                                         Unpublished
                                       </span>
                                     )}
-                                    {les.isPreview === true && (
-                                      <span
-                                        className="inline-flex items-center gap-1 text-[#10b981] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#10b981_12%,transparent)] border border-[color-mix(in_srgb,#10b981_28%,transparent)]"
-                                        title="Free Preview: Anyone can view this lesson without enrolling."
-                                      >
-                                        Preview
-                                      </span>
-                                    )}
-                                    {les.contentType === "video" ? (
-                                      <span
-                                        className="inline-flex shrink-0 items-center justify-center text-(--accent-ink,var(--accent))"
-                                        aria-label="Video lesson"
-                                        title="Video lesson"
-                                      >
-                                        <PlayCircle size={17} weight="fill" />
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-1.25 text-(--accent-ink,var(--accent)) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_24%,transparent)]">
-                                        <FileText size={13} weight="fill" />{" "}
-                                        Document
-                                      </span>
+                                    {isEditorOpen && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          disabled={savingLessonId === les.id || deletingLessonId === les.id}
+                                          className="inline-flex h-7 items-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-2.5 text-[0.74rem] font-semibold text-(--text) transition-colors hover:bg-[color-mix(in_srgb,var(--text)_12%,transparent)] disabled:cursor-not-allowed disabled:opacity-50"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            lessonEditorRef.current?.cancel();
+                                          }}
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={savingLessonId === les.id || deletingLessonId === les.id}
+                                          className="inline-flex h-7 items-center rounded-[8px] bg-(--accent) px-2.5 text-[0.74rem] font-bold text-(--on-accent,#ffffff) shadow-[0_2px_8px_var(--accent-shadow)] transition-colors hover:bg-(--accent-hover,var(--accent)) disabled:cursor-not-allowed disabled:opacity-50"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            lessonEditorRef.current?.save();
+                                          }}
+                                        >
+                                          Save Changes
+                                        </button>
+                                      </>
                                     )}
                                     <button
                                       type="button"
@@ -10662,9 +11003,10 @@ export function CourseCreatePage({
                                   </div>
                                 </div>
 
-                                {isExpanded && (
+                                {(isExpanded || shouldKeepEditorMounted) && (
                                   <div
-                                    aria-hidden={false}
+                                    aria-hidden={!isExpanded}
+                                    className={isExpanded ? undefined : "hidden"}
                                   >
                                     {les.isPendingCreation ? (
                                   <div className="flex min-h-48 items-center justify-center border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-8">
@@ -10676,84 +11018,196 @@ export function CourseCreatePage({
                                       Creating lesson...
                                     </div>
                                   </div>
-                                ) : !les.contentTypeSelected ? (
-                                  <div className="flex flex-col items-center justify-center gap-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-8 text-center">
-                                    <h3 className="m-0 text-(--text) text-[1rem] font-bold">
-                                      What type of lesson is this?
-                                    </h3>
-                                    <p className="m-0 text-(--muted) text-[0.82rem]">
-                                      Choose whether this lesson delivers video or document content. Quizzes can be added as assessments to either type.
-                                    </p>
-                                    <div className="flex items-center justify-center gap-3 pt-2 max-[520px]:w-full max-[520px]:flex-col">
-                                      <button
-                                        type="button"
-                                        style={{
-                                          fontSize: "0.84rem",
-                                          fontWeight: 600,
-                                          gap: "6px",
-                                        }}
-                                        className={`inline-flex min-h-9 min-w-36 items-center justify-center gap-2 rounded-[8px] border px-4 py-1.5 text-[0.84rem] font-semibold cursor-pointer transition-colors ${les.pendingContentType === "video" ? "border-(--accent) bg-[color-mix(in_srgb,var(--text)_10%,var(--surface))] text-(--text)" : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-transparent text-(--muted) hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"}`}
-                                        onClick={() =>
-                                          handleUpdateLesson(sec.id, les.id, {
-                                            pendingContentType: "video",
-                                          })
-                                        }
-                                      >
-                                        <Video size={18} weight="fill" /> Video
-                                      </button>
-                                      <button
-                                        type="button"
-                                        style={{
-                                          fontSize: "0.84rem",
-                                          fontWeight: 600,
-                                          gap: "6px",
-                                        }}
-                                        className={`inline-flex min-h-9 min-w-36 items-center justify-center gap-2 rounded-[8px] border px-4 py-1.5 text-[0.84rem] font-semibold cursor-pointer transition-colors ${les.pendingContentType === "document" ? "border-(--accent) bg-[color-mix(in_srgb,var(--text)_10%,var(--surface))] text-(--text)" : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-transparent text-(--muted) hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"}`}
-                                        onClick={() =>
-                                          handleUpdateLesson(sec.id, les.id, {
-                                            pendingContentType: "document",
-                                          })
-                                        }
-                                      >
-                                        <FileText size={18} weight="fill" />{" "}
-                                        Document / PDF
-                                      </button>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      disabled={
-                                        !les.pendingContentType ||
-                                        savingLessonId === les.id
+                                ) : shouldKeepEditorMounted ? (
+                                  <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-5 max-[768px]:p-[14px_12px_16px]">
+                                    <LessonStudioEditor
+                                      ref={lessonEditorRef}
+                                      hideHeader
+                                      sectionNumber={sections.findIndex((item) => item.id === sec.id) + 1}
+                                      sectionTitle={sec.title}
+                                      lessonNumber={lesIndex + 1}
+                                      lessonTitle={les.title}
+                                      courseSlug={editorData?.course?.slug}
+                                      courseTitle={
+                                        courseTitle ||
+                                        "Web Development Course for Absolute Beginners | Hindi"
                                       }
-                                      style={{
-                                        fontSize: "0.84rem",
-                                        fontWeight: 600,
-                                        height: "34px",
-                                        borderRadius: "8px",
-                                        gap: "6px",
-                                        paddingTop: 0,
-                                        paddingBottom: 0,
-                                      }}
-                                      className="mt-2 inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) px-4 shadow-[0_3px_10px_var(--accent-shadow)] cursor-pointer transition-all hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
-                                      onClick={() => {
-                                        if (!les.pendingContentType) return;
-                                        void handleLessonDiscreteChange(
+                                      contentType={
+                                        (les.contentType as StudioLessonContentType) ||
+                                        "video"
+                                      }
+                                      isPublished={les.isPublished !== false}
+                                      isPreview={les.isPreview === true}
+                                      playbackSuspended={!isExpanded}
+                                      mediaInfo={
+                                        les.contentMediaId
+                                          ? {
+                                              id: les.contentMediaId,
+                                              name:
+                                                les.contentType === "video"
+                                                  ? "intro-to-web-dev.mp4"
+                                                  : les.contentType === "audio"
+                                                    ? "intro-to-web-dev.mp3"
+                                                    : les.contentType === "image"
+                                                      ? "web-dev-thumbnail.png"
+                                                      : "intro-to-web-dev.pdf",
+                                              durationSeconds:
+                                                les.durationSeconds || 754,
+                                              sizeBytes: 128 * 1024 * 1024,
+                                            }
+                                          : null
+                                      }
+                                      resources={les.resources.map((resource) => ({
+                                        id: resource.id,
+                                        name: resource.name,
+                                        type: resource.type,
+                                        size: resource.size,
+                                        mediaAssetId: resource.mediaAssetId,
+                                      }))}
+                                      isSaving={savingLessonId === les.id}
+                                      onBack={() => void toggleLesson()}
+                                      onSave={async (payload) => {
+                                        handleUpdateLesson(sec.id, les.id, {
+                                          title: payload.title,
+                                          contentType: payload.contentType,
+                                          isPublished: payload.isPublished,
+                                          isPreview: payload.isPreview,
+                                        });
+                                        const saved = await persistLesson(
                                           sec.id,
                                           les.id,
-                                          {
-                                            contentType: les.pendingContentType,
-                                            ...(les.pendingContentType ===
-                                            "document"
-                                              ? { contentMediaId: null }
-                                              : {}),
-                                          },
+                                          { collapseOnSuccess: false },
                                         );
+                                        if (saved) {
+                                          setToastMessage("Lesson changes saved successfully.");
+                                          setEditorOpen(false);
+                                        }
                                       }}
-                                    >
-                                      {savingLessonId === les.id
-                                        ? "Saving..."
-                                        : "Continue"}
-                                    </button>
+                                      onContentTypeChange={(contentType) => {
+                                        handleUpdateLesson(sec.id, les.id, {
+                                          contentType,
+                                        });
+                                      }}
+                                      onMediaAttached={(mediaAssetId) =>
+                                        handleLessonMediaAttached(
+                                          sec.id,
+                                          les.id,
+                                          mediaAssetId,
+                                        )
+                                      }
+                                      onProcessingComplete={() =>
+                                        handleLessonProcessingComplete()
+                                      }
+                                      onUploadMedia={async (file) => {
+                                        try {
+                                          const presigned =
+                                            await mediaService.presignMediaUpload({
+                                              filename: file.name,
+                                              contentType:
+                                                file.type || "application/octet-stream",
+                                              fileSize: file.size,
+                                              type:
+                                                les.contentType === "image"
+                                                  ? "image"
+                                                  : les.contentType === "document"
+                                                    ? "document"
+                                                    : "video",
+                                              visibility: "protected",
+                                            });
+                                          await mediaService.uploadFileToPresignedUrl(
+                                            presigned.uploadUrl,
+                                            file,
+                                          );
+                                          await mediaService.confirmUpload(
+                                            presigned.mediaAssetId,
+                                          );
+                                          await handleLessonMediaAttached(
+                                            sec.id,
+                                            les.id,
+                                            presigned.mediaAssetId,
+                                          );
+                                          setToastMessage(
+                                            "Media uploaded and attached successfully.",
+                                          );
+                                        } catch (err: unknown) {
+                                          setToastMessage(
+                                            err instanceof Error
+                                              ? err.message
+                                              : "Media upload failed.",
+                                          );
+                                        }
+                                      }}
+                                      descriptionSection={
+                                        <LessonDescriptionEditor
+                                          id={`lesson-description-${les.id}`}
+                                          disabled={
+                                            les.isPendingCreation ||
+                                            savingLessonId === les.id
+                                          }
+                                          value={les.description}
+                                          onChange={(value) =>
+                                            handleUpdateLesson(sec.id, les.id, {
+                                              description: value,
+                                            })
+                                          }
+                                          placeholder="Add a detailed description of what students will learn in this lesson..."
+                                          maxLength={1500}
+                                        />
+                                      }
+                                      resourcesSection={
+                                        <LessonResourceManager
+                                          courseId={currentCourseId}
+                                          lessonId={les.id}
+                                          resources={les.resources}
+                                          disabled={
+                                            les.isPendingCreation ||
+                                            createLessonResourceMutation.isPending ||
+                                            deleteLessonResourceMutation.isPending
+                                          }
+                                          onCreateResource={(payload) =>
+                                            handleCreateLessonResource(les.id, payload)
+                                          }
+                                          onResourceAdded={(resource) =>
+                                            handleLessonResourceAdded(
+                                              sec.id,
+                                              les.id,
+                                              resource,
+                                            )
+                                          }
+                                          onDeleteResource={(resourceId) =>
+                                            handleDeleteLessonResource(resourceId)
+                                          }
+                                          onResourceRemoved={(resource) =>
+                                            handleLessonResourceRemoved(
+                                              sec.id,
+                                              les.id,
+                                              resource,
+                                            )
+                                          }
+                                        />
+                                      }
+                                      quizSection={
+                                        currentCourseId &&
+                                        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                                          les.id,
+                                        ) ? (
+                                          <QuizAuthoringPanel
+                                            courseId={currentCourseId}
+                                            lessonId={les.id}
+                                            lessonTitle={les.title}
+                                            onQuizDeleted={() => {}}
+                                            isFocusMode={isCurriculumFocusMode}
+                                            onToggleFocusMode={() =>
+                                              setIsCurriculumFocusMode((prev) => !prev)
+                                            }
+                                          />
+                                        ) : (
+                                          <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
+                                            Save the course and lesson before configuring an attached Quiz.
+                                          </div>
+                                        )
+                                      }
+                                    />
                                   </div>
                                 ) : (
                                   <div
@@ -10843,7 +11297,10 @@ export function CourseCreatePage({
                                           ) : (
                                             <LessonDescriptionPreview
                                               description={les.description}
-                                              onEdit={() => setEditorOpen(true)}
+                                              onEdit={() => {
+                                                setEditorOpen(true);
+                                                onLessonEditorOpen(les.id);
+                                              }}
                                             />
                                           )}
                                         </div>
@@ -11241,7 +11698,8 @@ export function CourseCreatePage({
                 ))
               )}
             </div>
-          ) : panelStep === "access-rules" ? (
+          )
+        ) : panelStep === "access-rules" ? (
             <div className="flex w-full flex-col gap-5">
               {/* Top Grid: 1. Who can access & 2. Access duration */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">

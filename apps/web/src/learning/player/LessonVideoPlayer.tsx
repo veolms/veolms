@@ -93,6 +93,9 @@ export interface LessonVideoPlayerProps {
   onTheaterToggle: () => void;
   autoPlayOnMediaChange?: boolean;
   autoplayEnabled?: boolean;
+  showAutoplayControl?: boolean;
+  circularSettingsControl?: boolean;
+  showLessonNavigation?: boolean;
   playbackSuspended?: boolean;
   canGoNext?: boolean;
   canGoPrevious?: boolean;
@@ -133,6 +136,9 @@ export interface LessonVideoPlayerProps {
 export function LessonVideoPlayer({
   autoPlayOnMediaChange = false,
   autoplayEnabled = true,
+  showAutoplayControl = true,
+  circularSettingsControl = false,
+  showLessonNavigation = true,
   playbackSuspended = false,
   canGoNext = false,
   canGoPrevious = false,
@@ -820,6 +826,9 @@ export function LessonVideoPlayer({
           <LessonPlayerControls
             ambientEnabled={ambientEnabled}
             autoplayEnabled={autoplayEnabled}
+            showAutoplayControl={showAutoplayControl}
+            circularSettingsControl={circularSettingsControl}
+            showLessonNavigation={showLessonNavigation}
             canGoNext={canGoNext}
             canGoPrevious={canGoPrevious}
             controlsSuppressed={minimizeGesture.controlsSuppressed}

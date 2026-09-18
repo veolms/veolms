@@ -1286,11 +1286,12 @@ export function CoursesPage({
   ]);
 
   useEffect(() => {
+    if (page === "course-create") return;
+    if (!authUserFetched) return;
     if (effectiveRole !== "creator") {
       const forbiddenPages = [
         "students",
         "student-details",
-        "course-create",
         "quiz-builder",
       ];
       if (
@@ -1301,7 +1302,7 @@ export function CoursesPage({
         onNavigatePage?.("/");
       }
     }
-  }, [effectiveRole, onNavigatePage, page, requestedSection]);
+  }, [authUserFetched, effectiveRole, onNavigatePage, page, requestedSection]);
 
   useEffect(() => {
     if (!storedPreferencesReady) return;
@@ -3306,9 +3307,6 @@ export function CoursesPage({
       );
     }
     if (surfacePage === "course-create") {
-      if (effectiveRole !== "creator") {
-        return null;
-      }
       return (
         <CourseCreatePage
           onNavigatePage={onNavigatePage}

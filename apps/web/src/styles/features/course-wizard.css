@@ -13,7 +13,7 @@
   max-width: none !important;
   align-self: stretch !important;
   box-sizing: border-box !important;
-  margin: 0 calc(-1 * var(--wizard-tab-nav-bleed)) 14px !important;
+  margin: 0 calc(-1 * var(--wizard-tab-nav-bleed)) 0 !important;
   padding: 0 var(--wizard-tab-nav-bleed) !important;
   gap: 8px !important;
   background: color-mix(in srgb, var(--main-surface) 78%, transparent) !important;
@@ -317,7 +317,7 @@ body[data-modal-open="true"] .course-wizard-mobile-action-bar {
     flex-shrink: 0 !important;
     position: relative !important;
     top: 0 !important;
-    margin-bottom: 8px !important;
+    margin-bottom: 0 !important;
   }
 
   [data-course-wizard] > .course-wizard-tab-content {
