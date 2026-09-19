@@ -15,6 +15,8 @@ export interface DiscussionWorkspaceCard {
   lessonId?: string | null;
   lesson: string;
   lessonTitle: string | null;
+  parentThreadId?: string | null;
+  parentThreadTitle?: string | null;
   timestampSeconds: number | null;
   author: string;
   authorUsername: string;
@@ -30,6 +32,8 @@ export interface DiscussionWorkspaceCard {
   isFollowing?: boolean;
   isMentioned?: boolean;
   activity: string;
+  mentionedAt?: string;
+  mentionActivity?: string;
   attachmentSummary: WorkspaceDiscussionItem["attachmentSummary"];
   itemType: WorkspaceDiscussionItem["itemType"];
   kind: WorkspaceDiscussionItem["kind"];
@@ -75,12 +79,13 @@ function getTitle(item: WorkspaceDiscussionItem, excerpt: string): string {
 
 export function adaptDiscussionWorkspaceItem(
   item: WorkspaceDiscussionItem,
-  options?: { comments?: boolean; notes?: boolean },
+  options?: { comments?: boolean; mentions?: boolean; notes?: boolean },
 ): DiscussionWorkspaceCard {
   const excerpt = getExcerpt(item);
   const isNote = options?.notes === true || item.kind === "note";
+  const isMention = options?.mentions === true;
   const status =
-    options?.comments || isNote
+    options?.comments || isMention || isNote
       ? undefined
       : item.status && item.status !== "all"
         ? item.status
@@ -88,20 +93,23 @@ export function adaptDiscussionWorkspaceItem(
 
   return {
     id: item.id,
-    title: isNote
-      ? item.title?.trim() || undefined
-      : options?.comments
-        ? item.title?.trim() || ""
-        : getTitle(item, excerpt),
+    title:
+      isNote || isMention
+        ? item.title?.trim() || undefined
+        : options?.comments
+          ? item.title?.trim() || ""
+          : getTitle(item, excerpt),
     excerpt,
     content: item.content,
-    plainText: isNote ? item.plainText : excerpt,
+    plainText: isNote || isMention ? item.plainText : excerpt,
     courseId: item.courseId,
     course: item.courseTitle?.trim() || "",
     courseTitle: item.courseTitle ?? null,
     lessonId: item.lessonId,
     lesson: item.lessonTitle?.trim() || "",
     lessonTitle: item.lessonTitle ?? null,
+    parentThreadId: item.parentThreadId ?? null,
+    parentThreadTitle: item.parentThreadTitle?.trim() || null,
     timestampSeconds: item.timestampSeconds ?? null,
     author: item.author.displayName || item.author.username,
     authorUsername: item.author.username?.trim() || "",
@@ -117,6 +125,10 @@ export function adaptDiscussionWorkspaceItem(
     isFollowing: item.isFollowing,
     isMentioned: item.isMentioned,
     activity: formatRelativeTime(item.updatedAt || item.createdAt),
+    mentionedAt: item.mentionedAt,
+    mentionActivity: item.mentionedAt
+      ? formatRelativeTime(item.mentionedAt)
+      : undefined,
     attachmentSummary: item.attachmentSummary,
     itemType: item.itemType,
     kind: item.kind,

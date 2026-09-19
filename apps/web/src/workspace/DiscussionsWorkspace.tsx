@@ -709,6 +709,265 @@ function DiscussionWorkspaceCommentCard({
   );
 }
 
+const MENTION_PREVIEW_MAX_HEIGHT_PX = 48;
+
+function DiscussionWorkspaceMentionContent({
+  mention,
+  expanded,
+  onExpandedChange,
+  parentContext,
+}: {
+  mention: DiscussionWorkspaceCard;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+  parentContext?: string | null;
+}) {
+  const [needsClamp, setNeedsClamp] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const content = useMemo<DiscussionContent>(
+    () => ({
+      format: "markdown",
+      markdown: mention.content.trim() || mention.plainText,
+      plainText: mention.plainText,
+    }),
+    [mention.content, mention.plainText],
+  );
+
+  useEffect(() => {
+    const node = contentRef.current;
+    if (!node) return undefined;
+
+    let frame = 0;
+    const measure = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const nextNeedsClamp =
+          node.scrollHeight > MENTION_PREVIEW_MAX_HEIGHT_PX + 4;
+        setNeedsClamp((current) =>
+          current === nextNeedsClamp ? current : nextNeedsClamp,
+        );
+      });
+    };
+
+    measure();
+    window.addEventListener("resize", measure);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", measure);
+    };
+  }, [content]);
+
+  return (
+    <div className="discussion-hub__mention-content">
+      <div className="relative">
+        <div
+          ref={contentRef}
+          className="discussion-hub__mention-markdown overflow-hidden transition-[max-height] duration-300 ease-in-out"
+          style={
+            needsClamp && !expanded
+              ? { maxHeight: `${MENTION_PREVIEW_MAX_HEIGHT_PX}px` }
+              : undefined
+          }
+        >
+          <DiscussionMarkdown
+            content={content}
+            label={`Mention by ${mention.author}`}
+            className="max-w-none"
+          />
+        </div>
+        {needsClamp && !expanded && (
+          <div
+            aria-hidden="true"
+            className="discussion-hub__mention-fade pointer-events-none absolute bottom-0 left-0 right-0 h-8"
+          />
+        )}
+      </div>
+      {(needsClamp || parentContext) && (
+        <div className="discussion-hub__mention-utility">
+          {needsClamp && (
+            <button
+              type="button"
+              className="discussion-hub__mention-toggle"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onExpandedChange(!expanded);
+              }}
+              aria-expanded={expanded}
+            >
+              {expanded ? "Show less" : "Read more"}
+            </button>
+          )}
+          {needsClamp && parentContext && (
+            <span
+              className="discussion-hub__mention-utility-separator"
+              aria-hidden="true"
+            >
+              ·
+            </span>
+          )}
+          {parentContext && (
+            <span className="discussion-thread__parent-context">
+              <ChatTeardropText size={14} aria-hidden="true" />
+              <span>{parentContext}</span>
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DiscussionWorkspaceMentionCard({
+  mention,
+  onNavigatePage,
+}: {
+  mention: DiscussionWorkspaceCard;
+  onNavigatePage: NavigateTo;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const isReply = mention.itemType === "reply";
+  const isRootQuestion =
+    !isReply && (mention.kind === "question" || mention.kind === "qna");
+  const attachmentLabel = getAttachmentLabel(mention.attachmentSummary);
+  const visibilityLabel = getVisibilityLabel(mention.visibility);
+  const VisibilityIcon =
+    mention.visibility === "private"
+      ? Lock
+      : mention.visibility === "unlisted"
+        ? EyeSlash
+        : Globe;
+  const parentKindLabel = mention.kind === "comment" ? "Comment" : "Q&A";
+  const parentContext = isReply
+    ? mention.parentThreadTitle?.trim()
+      ? `Reply in ${mention.parentThreadTitle.trim()} · ${parentKindLabel}`
+      : `Reply in ${parentKindLabel}`
+    : null;
+  const destination = getDiscussionThreadDestination(
+    isReply && mention.parentThreadId
+      ? { ...mention, id: mention.parentThreadId }
+      : mention,
+    "/discussions/mentions",
+  );
+  const destinationLabel = [mention.course, mention.lesson]
+    .filter(Boolean)
+    .join(", ");
+  const mentionActivity = mention.mentionActivity ?? "Recently";
+
+  return (
+    <article
+      className={`discussion-thread discussion-thread--mention ${
+        expanded ? "is-expanded" : "is-collapsed"
+      }`}
+    >
+      <a
+        className="discussion-thread__navigation-link"
+        href={destination}
+        aria-label={`${isReply ? "Open parent discussion" : "Open mentioned discussion"}${destinationLabel ? ` in ${destinationLabel}` : ""}`}
+        onClick={(event) => {
+          if (
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return;
+          }
+          event.preventDefault();
+          onNavigatePage(destination, { exact: true });
+        }}
+      />
+      <div className="discussion-thread__open discussion-thread__open--overview">
+        <div className="discussion-thread__avatar">
+          <DiscussionAvatar
+            src={mention.avatar || null}
+            className="discussion-thread__avatar-image"
+          />
+        </div>
+        <div className="discussion-thread__body">
+          <div className="discussion-thread__author">
+            <span className="discussion-thread__author-name">
+              {mention.isOwn ? "You" : mention.author}
+            </span>
+            {mention.authorUsername && (
+              <>
+                <span
+                  className="discussion-thread__author-separator"
+                  aria-hidden="true"
+                >
+                  ·
+                </span>
+                <span className="discussion-thread__author-username">
+                  @{mention.authorUsername.replace(/^@+/, "")}
+                </span>
+              </>
+            )}
+          </div>
+          {isRootQuestion && mention.title && (
+            <div className="discussion-thread__mention-title">
+              {mention.title}
+            </div>
+          )}
+          <DiscussionWorkspaceMentionContent
+            mention={mention}
+            expanded={expanded}
+            onExpandedChange={setExpanded}
+            parentContext={parentContext}
+          />
+          {(mention.course ||
+            mention.lesson ||
+            attachmentLabel ||
+            visibilityLabel) && (
+            <div className="discussion-thread__context">
+              {mention.course && <span>{mention.course}</span>}
+              {mention.course &&
+                (mention.lesson || attachmentLabel || visibilityLabel) && (
+                  <span aria-hidden="true" />
+                )}
+              {mention.lesson && (
+                <small className="discussion-thread__lesson">
+                  <BookOpen size={13} aria-hidden="true" />
+                  <span>{mention.lesson}</span>
+                </small>
+              )}
+              {mention.lesson && (attachmentLabel || visibilityLabel) && (
+                <span aria-hidden="true" />
+              )}
+              {attachmentLabel && (
+                <DiscussionWorkspaceAttachmentIndicator
+                  label={attachmentLabel}
+                />
+              )}
+              {attachmentLabel && visibilityLabel && (
+                <span aria-hidden="true" />
+              )}
+              {visibilityLabel && (
+                <small className="discussion-thread__visibility">
+                  <VisibilityIcon size={13} aria-hidden="true" />
+                  <span>{visibilityLabel}</span>
+                </small>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="discussion-thread__meta">
+          <span className="discussion-thread__mention-indicator">
+            <At size={15} weight="fill" aria-hidden="true" />
+            <span>Mentioned</span>
+          </span>
+          <span>
+            <ChatTeardropText size={17} /> {mention.replies}{" "}
+            {mention.replies === 1 ? "reply" : "replies"}
+          </span>
+          <time dateTime={mention.mentionedAt}>{mentionActivity}</time>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 const NOTE_PREVIEW_MAX_HEIGHT_PX = 48;
 
 function formatNoteTimestamp(seconds: number | null): string | null {
@@ -980,6 +1239,7 @@ export function DiscussionsWorkspace({
   const isQnaTab = activeTab === "q-and-a";
   const isCommentsTab = activeTab === "comments";
   const isNotesTab = activeTab === "notes";
+  const isMentionsTab = activeTab === "mentions";
   const workspaceStatus = isQnaTab ? qnaStatus : status;
   const workspaceSort = isQnaTab ? qnaSort : sort;
 
@@ -998,6 +1258,8 @@ export function DiscussionsWorkspace({
         sort: notesSort,
       };
     }
+
+    if (isMentionsTab) return sharedQuery;
 
     return {
       ...sharedQuery,
@@ -1031,10 +1293,11 @@ export function DiscussionsWorkspace({
         .map((item) =>
           adaptDiscussionWorkspaceItem(item, {
             comments: isCommentsTab,
+            mentions: isMentionsTab,
             notes: isNotesTab,
           }),
         ) ?? [],
-    [isCommentsTab, isNotesTab, workspaceData],
+    [isCommentsTab, isMentionsTab, isNotesTab, workspaceData],
   );
 
   const [knownCourseOptions, setKnownCourseOptions] = useState<
@@ -1271,9 +1534,11 @@ export function DiscussionsWorkspace({
               <main className="discussion-hub__feed">
                 <section
                   className={`discussion-hub__filters ${
-                    isCommentsTab || isNotesTab
-                      ? "discussion-hub__filters--comments"
-                      : ""
+                    isMentionsTab
+                      ? "discussion-hub__filters--mentions"
+                      : isCommentsTab || isNotesTab
+                        ? "discussion-hub__filters--comments"
+                        : ""
                   }`}
                   aria-label="Filter discussions"
                 >
@@ -1291,7 +1556,9 @@ export function DiscussionsWorkspace({
                             ? "Search your comments..."
                             : isNotesTab
                               ? "Search your notes..."
-                              : "Search discussions by title or keyword..."
+                              : isMentionsTab
+                                ? "Search mentions..."
+                                : "Search discussions by title or keyword..."
                       }
                       data-search-shortcut-target
                       aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
@@ -1305,13 +1572,13 @@ export function DiscussionsWorkspace({
                       triggerClassName="discussion-hub__select-trigger"
                       contentClassName="discussion-hub__select-content"
                       matchMenuToContainer={
-                        isQnaTab || isCommentsTab || isNotesTab
+                        isQnaTab || isCommentsTab || isNotesTab || isMentionsTab
                       }
                       value={selectedCourseId}
                       options={courseOptions}
                     />
                   </div>
-                  {!isCommentsTab && !isNotesTab && (
+                  {!isCommentsTab && !isNotesTab && !isMentionsTab && (
                     <div className="discussion-hub__select">
                       <ThemedSelect
                         value={isQnaTab ? qnaStatus : status}
@@ -1340,7 +1607,7 @@ export function DiscussionsWorkspace({
                       />
                     </div>
                   )}
-                  {isNotesTab ? (
+                  {isMentionsTab ? null : isNotesTab ? (
                     <div className="discussion-hub__select discussion-hub__select--sort">
                       <Funnel size={17} aria-hidden="true" />
                       <ThemedSelect<"activity" | "latest">
@@ -1412,7 +1679,9 @@ export function DiscussionsWorkspace({
                           ? "Loading notes…"
                           : isCommentsTab
                             ? "Loading comments…"
-                            : "Loading discussions…"}
+                            : isMentionsTab
+                              ? "Loading mentions…"
+                              : "Loading discussions…"}
                       </h2>
                     </div>
                   ) : isWorkspaceError ? (
@@ -1422,7 +1691,9 @@ export function DiscussionsWorkspace({
                           ? "Unable to load notes"
                           : isCommentsTab
                             ? "Unable to load comments"
-                            : "Unable to load discussions"}
+                            : isMentionsTab
+                              ? "Unable to load mentions"
+                              : "Unable to load discussions"}
                       </h2>
                       <p>
                         {workspaceError instanceof Error
@@ -1431,7 +1702,9 @@ export function DiscussionsWorkspace({
                             ? "There was a problem loading notes."
                             : isCommentsTab
                               ? "There was a problem loading comments."
-                              : "There was a problem loading discussions."}
+                              : isMentionsTab
+                                ? "There was a problem loading mentions."
+                                : "There was a problem loading discussions."}
                       </p>
                       <button type="button" onClick={() => void refetch()}>
                         Retry
@@ -1444,6 +1717,16 @@ export function DiscussionsWorkspace({
                           <DiscussionWorkspaceNoteCard
                             key={thread.id}
                             note={thread}
+                          />
+                        );
+                      }
+
+                      if (isMentionsTab) {
+                        return (
+                          <DiscussionWorkspaceMentionCard
+                            key={thread.id}
+                            mention={thread}
+                            onNavigatePage={onNavigatePage}
                           />
                         );
                       }
@@ -1537,14 +1820,18 @@ export function DiscussionsWorkspace({
                             : "No notes yet"
                           : isCommentsTab
                             ? "No comments match these filters"
-                            : "No discussions match these filters"}
+                            : isMentionsTab
+                              ? "No mentions match these filters"
+                              : "No discussions match these filters"}
                       </h2>
                       <p>
                         {isNotesTab
                           ? "Try clearing a filter or choosing another course."
                           : isCommentsTab
                             ? "Try clearing a filter or choosing another course."
-                            : "Try clearing a filter or start a new question for the course."}
+                            : isMentionsTab
+                              ? "Try clearing a filter or choosing another course."
+                              : "Try clearing a filter or start a new question for the course."}
                       </p>
                       <button
                         type="button"
@@ -1573,7 +1860,9 @@ export function DiscussionsWorkspace({
                           ? "Loading more comments…"
                           : isNotesTab
                             ? "Loading more notes…"
-                            : "Loading more discussions…"}
+                            : isMentionsTab
+                              ? "Loading more mentions…"
+                              : "Loading more discussions…"}
                       </p>
                     )}
                     {isFetchNextPageError && (
