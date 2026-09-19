@@ -979,6 +979,7 @@ export const LessonVideoUpload = forwardRef<
       loadedBytes={uploadLoadedBytes}
       phase={phase}
       progress={uploadProgress}
+      embedded={inline}
     />
   ) : (
     <TranscodingProgressStage
@@ -991,6 +992,7 @@ export const LessonVideoUpload = forwardRef<
       hasReceivedProgress={hasReceivedProgress}
       streamConnectionState={streamConnectionState}
       isReplacement={isPendingReplacement}
+      embedded={inline}
       onReplace={
         mediaAssetId && !isReplacingVideo && !selectedFile
           ? () => setIsReplacingVideo(true)
@@ -1449,6 +1451,7 @@ interface UploadProgressStageProps {
   loadedBytes: number;
   phase: UploadPhase;
   progress: number;
+  embedded?: boolean;
 }
 
 function UploadProgressStage({
@@ -1456,6 +1459,7 @@ function UploadProgressStage({
   loadedBytes,
   phase,
   progress,
+  embedded = false,
 }: UploadProgressStageProps) {
   const uploadState: ProgressState =
     phase === "confirming" ? "complete" : progress > 0 ? "active" : "pending";
@@ -1466,10 +1470,16 @@ function UploadProgressStage({
 
   return (
     <div className="min-w-0 space-y-3.5 sm:space-y-4">
-      <VideoFileSummary file={file} />
+      <VideoFileSummary file={file} embedded={embedded} />
 
       {/* Progress Card: 3D raised surface, 0 borders */}
-      <section className={`min-w-0 ${RAISED_CARD_CLASS} p-3.5 sm:p-4`}>
+      <section
+        className={`min-w-0 ${
+          embedded
+            ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-4"
+            : `${RAISED_CARD_CLASS} p-3.5 sm:p-4`
+        }`}
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="m-0 text-[0.84rem] sm:text-[0.86rem] font-semibold text-(--text)">
@@ -1543,6 +1553,7 @@ interface TranscodingProgressStageProps {
   hasReceivedProgress: boolean;
   streamConnectionState: StreamConnectionState;
   isReplacement: boolean;
+  embedded?: boolean;
   onReplace?: () => void;
 }
 
@@ -1556,6 +1567,7 @@ function TranscodingProgressStage({
   hasReceivedProgress,
   streamConnectionState,
   isReplacement,
+  embedded = false,
   onReplace,
 }: TranscodingProgressStageProps) {
   // A worker can report 100% FFmpeg progress while the job is still doing
@@ -1584,11 +1596,17 @@ function TranscodingProgressStage({
         file={file}
         mediaAttached={mediaAttached}
         badge={badge}
+        embedded={embedded}
         onReplace={onReplace}
       />
 
-      {/* Processing Progress Card: 3D raised, 0 borders */}
-      <section className={`min-w-0 ${RAISED_CARD_CLASS} p-3.5 sm:p-4`}>
+      <section
+        className={`min-w-0 ${
+          embedded
+            ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-4"
+            : `${RAISED_CARD_CLASS} p-3.5 sm:p-4`
+        }`}
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="m-0 text-[0.84rem] sm:text-[0.86rem] font-semibold text-(--text)">
@@ -1643,67 +1661,65 @@ function TranscodingProgressStage({
                 ? "Processing continues in the background while live updates reconnect."
                 : "This may take a few minutes. Processing will continue in the background."}
         </p>
-      </section>
-
-      {/* Transcoding Status Card: 3D raised container + sunken inner socket, 0 borders */}
-      <section className={`${RAISED_CARD_CLASS} p-3.5 sm:p-4`}>
-        <h3 className="m-0 text-[0.8rem] sm:text-[0.82rem] font-semibold text-(--text)">
-          Transcoding status
-        </h3>
-        <div
-          className={`mt-2.5 sm:mt-3 overflow-hidden ${INSET_WELL_CLASS} divide-y divide-[color-mix(in_srgb,var(--text)_8%,transparent)]`}
-        >
-          <TranscodingStatusRow
-            label="Transcoding job"
-            state={isFailed ? "failed" : isReady ? "complete" : "active"}
-            value={
-              isFailed
-                ? status === "cancelled"
-                  ? "Transcoding cancelled"
-                  : "Transcoding failed"
-                : getJobLabel(status)
-            }
-          />
-          <TranscodingStatusRow
-            label="Playback output"
-            state={isReady ? "complete" : isFailed ? "failed" : "pending"}
-            value={
-              isReady
-                ? "Verified"
-                : isFailed
-                  ? "Not generated"
-                  : isConnectionDegraded
-                    ? "Last known status"
-                    : "Pending verification"
-            }
-          />
-          <TranscodingStatusRow
-            label="Lesson attachment"
-            state={
-              attachmentError
-                ? "failed"
-                : isReady
-                  ? "complete"
+        <div className="mt-3.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-3.5">
+          <h3 className="m-0 text-[0.8rem] sm:text-[0.82rem] font-semibold text-(--text)">
+            Transcoding status
+          </h3>
+          <div
+            className={`mt-2.5 sm:mt-3 overflow-hidden ${INSET_WELL_CLASS} divide-y divide-[color-mix(in_srgb,var(--text)_8%,transparent)]`}
+          >
+            <TranscodingStatusRow
+              label="Transcoding job"
+              state={isFailed ? "failed" : isReady ? "complete" : "active"}
+              value={
+                isFailed
+                  ? status === "cancelled"
+                    ? "Transcoding cancelled"
+                    : "Transcoding failed"
+                  : getJobLabel(status)
+              }
+            />
+            <TranscodingStatusRow
+              label="Playback output"
+              state={isReady ? "complete" : isFailed ? "failed" : "pending"}
+              value={
+                isReady
+                  ? "Verified"
                   : isFailed
-                    ? "failed"
-                    : "pending"
-            }
-            value={
-              attachmentError
-                ? "Attachment failed"
-                : isReady
-                  ? isReplacement
-                    ? "Will replace current"
-                    : "Ready"
-                  : isFailed
+                    ? "Not generated"
+                    : isConnectionDegraded
+                      ? "Last known status"
+                      : "Pending verification"
+              }
+            />
+            <TranscodingStatusRow
+              label="Lesson attachment"
+              state={
+                attachmentError
+                  ? "failed"
+                  : isReady
+                    ? "complete"
+                    : isFailed
+                      ? "failed"
+                      : "pending"
+              }
+              value={
+                attachmentError
+                  ? "Attachment failed"
+                  : isReady
                     ? isReplacement
-                      ? "Current video kept"
-                      : "Not attached"
-                    : isReplacement
-                      ? "Current video kept"
-                      : "Pending"
-            }
-          />
+                      ? "Will replace current"
+                      : "Ready"
+                    : isFailed
+                      ? isReplacement
+                        ? "Current video kept"
+                        : "Not attached"
+                      : isReplacement
+                        ? "Current video kept"
+                        : "Pending"
+              }
+            />
+          </div>
         </div>
       </section>
 
@@ -1713,6 +1729,7 @@ function TranscodingProgressStage({
 
 interface VideoFileSummaryProps {
   badge?: string;
+  embedded?: boolean;
   file: File | null;
   mediaAttached?: boolean;
   onRemove?: () => void;
@@ -1721,6 +1738,7 @@ interface VideoFileSummaryProps {
 
 function VideoFileSummary({
   badge,
+  embedded = false,
   file,
   mediaAttached = false,
   onRemove,
@@ -1735,7 +1753,11 @@ function VideoFileSummary({
 
   return (
     <div
-      className={`flex min-w-0 items-center gap-3 sm:gap-3.5 ${RAISED_CARD_CLASS} p-2.5 sm:p-3`}
+      className={`flex min-w-0 items-center gap-3 sm:gap-3.5 ${
+        embedded
+          ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-2.5 sm:p-3"
+          : `${RAISED_CARD_CLASS} p-2.5 sm:p-3`
+      }`}
     >
       <VideoThumbnail file={file} />
       <div className="min-w-0 flex-1">

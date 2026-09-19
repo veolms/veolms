@@ -162,6 +162,9 @@ export function LessonMediaWorkspace({
   const hasVideoPreview = Boolean(previewUrl) && contentType === "video";
   const hasVideoSource = hasMediaAttached || hasVideoPreview;
   const isAttachedVideo = hasMediaAttached && contentType === "video";
+  const isGroupedVideo =
+    contentType === "video" &&
+    (isAttachedVideo || (hasVideoSource && Boolean(videoUploadSection)));
 
   const formatFileSize = (bytes?: number) => {
     if (!bytes || bytes <= 0) return "0 MB";
@@ -215,7 +218,7 @@ export function LessonMediaWorkspace({
   const videoPlayer = hasVideoSource && contentType === "video" ? (
     <div
       className={`relative aspect-video w-full overflow-hidden bg-black ${
-        isAttachedVideo
+        isGroupedVideo
           ? "rounded-t-[14px] sm:rounded-t-[16px] rounded-b-none shadow-none"
           : "rounded-[14px] shadow-(--card-shadow)"
       }`}
@@ -271,7 +274,7 @@ export function LessonMediaWorkspace({
 
       <div
         className={
-          isAttachedVideo
+          isGroupedVideo
             ? "overflow-hidden rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) shadow-(--card-shadow)"
             : "contents"
         }
@@ -399,12 +402,12 @@ export function LessonMediaWorkspace({
       {(contentType !== "video" || isAttachedVideo || !videoUploadSection) && (
       <div
         className={`flex flex-col ${
-          isAttachedVideo
+          isGroupedVideo
             ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-4.5"
             : "rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-4.5 shadow-(--card-shadow)"
         }`}
       >
-        {!isAttachedVideo ? (
+        {!isGroupedVideo ? (
           <h4 className="m-0 text-[0.84rem] sm:text-[0.88rem] font-bold text-(--text)">
             {contentType === "video"
               ? "Video Settings"
@@ -418,7 +421,7 @@ export function LessonMediaWorkspace({
 
         <div
           className={`flex items-center justify-between gap-3 ${
-            isAttachedVideo
+            isGroupedVideo
               ? "mt-0 rounded-none border-0 bg-transparent p-0"
               : "mt-3 rounded-[10px] sm:rounded-[12px] border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-2.5 sm:p-3"
           }`}
@@ -513,12 +516,12 @@ export function LessonMediaWorkspace({
       {contentType === "video" || contentType === "audio" ? (
         <div
           className={`flex flex-col ${
-            isAttachedVideo
+            isGroupedVideo
               ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-4.5"
               : "rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-4.5 shadow-(--card-shadow)"
           }`}
         >
-          {!isAttachedVideo ? (
+          {!isGroupedVideo ? (
             <h4 className="m-0 text-[0.84rem] sm:text-[0.88rem] font-bold text-(--text)">
               Thumbnail
             </h4>
@@ -526,7 +529,7 @@ export function LessonMediaWorkspace({
 
           <div
             className={`flex items-center justify-between gap-3 ${
-              isAttachedVideo
+              isGroupedVideo
                 ? "mt-0 rounded-none border-0 bg-transparent p-0"
                 : "mt-3 rounded-[10px] sm:rounded-[12px] border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-2.5 sm:p-3"
             }`}
