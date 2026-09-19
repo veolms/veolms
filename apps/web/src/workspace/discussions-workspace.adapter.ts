@@ -79,13 +79,19 @@ function getTitle(item: WorkspaceDiscussionItem, excerpt: string): string {
 
 export function adaptDiscussionWorkspaceItem(
   item: WorkspaceDiscussionItem,
-  options?: { comments?: boolean; mentions?: boolean; notes?: boolean },
+  options?: {
+    comments?: boolean;
+    mentions?: boolean;
+    notes?: boolean;
+    following?: boolean;
+  },
 ): DiscussionWorkspaceCard {
   const excerpt = getExcerpt(item);
   const isNote = options?.notes === true || item.kind === "note";
   const isMention = options?.mentions === true;
+  const isFollowing = options?.following === true;
   const status =
-    options?.comments || isMention || isNote
+    options?.comments || isMention || isNote || isFollowing
       ? undefined
       : item.status && item.status !== "all"
         ? item.status
@@ -96,12 +102,12 @@ export function adaptDiscussionWorkspaceItem(
     title:
       isNote || isMention
         ? item.title?.trim() || undefined
-        : options?.comments
+        : options?.comments || isFollowing
           ? item.title?.trim() || ""
           : getTitle(item, excerpt),
     excerpt,
     content: item.content,
-    plainText: isNote || isMention ? item.plainText : excerpt,
+    plainText: isNote || isMention || isFollowing ? item.plainText : excerpt,
     courseId: item.courseId,
     course: item.courseTitle?.trim() || "",
     courseTitle: item.courseTitle ?? null,
@@ -124,7 +130,9 @@ export function adaptDiscussionWorkspaceItem(
     isBookmarked: item.isBookmarked,
     isFollowing: item.isFollowing,
     isMentioned: item.isMentioned,
-    activity: formatRelativeTime(item.updatedAt || item.createdAt),
+    activity: formatRelativeTime(
+      isFollowing ? item.updatedAt : item.updatedAt || item.createdAt,
+    ),
     mentionedAt: item.mentionedAt,
     mentionActivity: item.mentionedAt
       ? formatRelativeTime(item.mentionedAt)

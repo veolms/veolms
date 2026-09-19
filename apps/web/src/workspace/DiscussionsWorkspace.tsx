@@ -275,7 +275,11 @@ function DiscussionWorkspaceQuestionContent({
         <button
           type="button"
           className="discussion-hub__question-toggle"
-          onClick={() => onExpandedChange(!expanded)}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onExpandedChange(!expanded);
+          }}
           aria-expanded={expanded}
         >
           {expanded ? "Show less" : "Read more"}
@@ -703,6 +707,160 @@ function DiscussionWorkspaceCommentCard({
             {thread.replies === 1 ? "reply" : "replies"}
           </span>
           <time>{thread.activity}</time>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function DiscussionWorkspaceFollowingCard({
+  thread,
+  onNavigatePage,
+}: {
+  thread: DiscussionWorkspaceCard;
+  onNavigatePage: NavigateTo;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const isQuestion = thread.kind === "question" || thread.kind === "qna";
+  const hasTitle = isQuestion && Boolean(thread.title?.trim());
+  const attachmentLabel = getAttachmentLabel(thread.attachmentSummary);
+  const visibilityLabel = getVisibilityLabel(thread.visibility);
+  const VisibilityIcon =
+    thread.visibility === "private"
+      ? Lock
+      : thread.visibility === "unlisted"
+        ? EyeSlash
+        : Globe;
+  const destination = getDiscussionThreadDestination(
+    thread,
+    "/discussions/following",
+  );
+  const destinationLabel = [thread.course, thread.lesson]
+    .filter(Boolean)
+    .join(", ");
+  const isPlainQuestion = isQuestion && isPlainQuestionContent(thread);
+
+  return (
+    <article
+      className={`discussion-thread discussion-thread--following ${
+        expanded ? "is-expanded" : "is-collapsed"
+      }`}
+    >
+      <a
+        className="discussion-thread__navigation-link"
+        href={destination}
+        aria-label={`Open followed ${isQuestion ? "question" : "comment"}${destinationLabel ? ` in ${destinationLabel}` : ""}`}
+        onClick={(event) => {
+          if (
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return;
+          }
+          event.preventDefault();
+          onNavigatePage(destination, { exact: true });
+        }}
+      />
+      <div className="discussion-thread__open discussion-thread__open--overview">
+        <div className="discussion-thread__avatar">
+          <DiscussionAvatar
+            src={thread.avatar || null}
+            className="discussion-thread__avatar-image"
+          />
+        </div>
+        <div
+          className={`discussion-thread__body ${isPlainQuestion ? "is-plain" : ""}`}
+        >
+          <div className="discussion-thread__author">
+            <span className="discussion-thread__author-name">
+              {thread.isOwn ? "You" : thread.author}
+            </span>
+            {thread.authorUsername && (
+              <>
+                <span
+                  className="discussion-thread__author-separator"
+                  aria-hidden="true"
+                >
+                  ·
+                </span>
+                <span className="discussion-thread__author-username">
+                  @{thread.authorUsername.replace(/^@+/, "")}
+                </span>
+              </>
+            )}
+          </div>
+          {hasTitle && (
+            <div className="discussion-thread__following-title">
+              {thread.title}
+            </div>
+          )}
+          {isQuestion ? (
+            <DiscussionWorkspaceQuestionContent
+              thread={thread}
+              expanded={expanded}
+              onExpandedChange={setExpanded}
+            />
+          ) : (
+            <DiscussionWorkspaceCommentContent
+              thread={thread}
+              expanded={expanded}
+              onExpandedChange={setExpanded}
+            />
+          )}
+          {(thread.course ||
+            thread.lesson ||
+            attachmentLabel ||
+            visibilityLabel) && (
+            <div className="discussion-thread__context">
+              {thread.course && <span>{thread.course}</span>}
+              {thread.course &&
+                (thread.lesson || attachmentLabel || visibilityLabel) && (
+                  <span aria-hidden="true" />
+                )}
+              {thread.lesson && (
+                <small className="discussion-thread__lesson">
+                  <BookOpen size={13} aria-hidden="true" />
+                  <span>{thread.lesson}</span>
+                </small>
+              )}
+              {thread.lesson && (attachmentLabel || visibilityLabel) && (
+                <span aria-hidden="true" />
+              )}
+              {attachmentLabel && (
+                <DiscussionWorkspaceAttachmentIndicator
+                  label={attachmentLabel}
+                />
+              )}
+              {attachmentLabel && visibilityLabel && (
+                <span aria-hidden="true" />
+              )}
+              {visibilityLabel && (
+                <small className="discussion-thread__visibility">
+                  <VisibilityIcon size={13} aria-hidden="true" />
+                  <span>{visibilityLabel}</span>
+                </small>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="discussion-thread__meta">
+          <span className="discussion-thread__following-indicator">
+            {isQuestion ? (
+              <Question size={15} weight="fill" aria-hidden="true" />
+            ) : (
+              <ChatTeardropText size={15} weight="fill" aria-hidden="true" />
+            )}
+            <span>{isQuestion ? "Q&A" : "Comment"}</span>
+          </span>
+          <span>
+            <ChatTeardropText size={17} /> {thread.replies}{" "}
+            {thread.replies === 1 ? "reply" : "replies"}
+          </span>
+          <time dateTime={thread.updatedAt}>{thread.activity}</time>
         </div>
       </div>
     </article>
@@ -1240,6 +1398,7 @@ export function DiscussionsWorkspace({
   const isCommentsTab = activeTab === "comments";
   const isNotesTab = activeTab === "notes";
   const isMentionsTab = activeTab === "mentions";
+  const isFollowingTab = activeTab === "following";
   const workspaceStatus = isQnaTab ? qnaStatus : status;
   const workspaceSort = isQnaTab ? qnaSort : sort;
 
@@ -1256,6 +1415,13 @@ export function DiscussionsWorkspace({
         ...sharedQuery,
         mine: true,
         sort: notesSort,
+      };
+    }
+
+    if (isFollowingTab) {
+      return {
+        ...sharedQuery,
+        sort: "activity" as const,
       };
     }
 
@@ -1295,9 +1461,10 @@ export function DiscussionsWorkspace({
             comments: isCommentsTab,
             mentions: isMentionsTab,
             notes: isNotesTab,
+            following: isFollowingTab,
           }),
         ) ?? [],
-    [isCommentsTab, isMentionsTab, isNotesTab, workspaceData],
+    [isCommentsTab, isFollowingTab, isMentionsTab, isNotesTab, workspaceData],
   );
 
   const [knownCourseOptions, setKnownCourseOptions] = useState<
@@ -1364,6 +1531,7 @@ export function DiscussionsWorkspace({
     activeTab,
     debouncedQuery,
     isCommentsTab,
+    isFollowingTab,
     isNotesTab,
     isQnaTab,
     notesSort,
@@ -1534,11 +1702,13 @@ export function DiscussionsWorkspace({
               <main className="discussion-hub__feed">
                 <section
                   className={`discussion-hub__filters ${
-                    isMentionsTab
-                      ? "discussion-hub__filters--mentions"
-                      : isCommentsTab || isNotesTab
-                        ? "discussion-hub__filters--comments"
-                        : ""
+                    isFollowingTab
+                      ? "discussion-hub__filters--following"
+                      : isMentionsTab
+                        ? "discussion-hub__filters--mentions"
+                        : isCommentsTab || isNotesTab
+                          ? "discussion-hub__filters--comments"
+                          : ""
                   }`}
                   aria-label="Filter discussions"
                 >
@@ -1558,7 +1728,9 @@ export function DiscussionsWorkspace({
                               ? "Search your notes..."
                               : isMentionsTab
                                 ? "Search mentions..."
-                                : "Search discussions by title or keyword..."
+                                : isFollowingTab
+                                  ? "Search followed discussions..."
+                                  : "Search discussions by title or keyword..."
                       }
                       data-search-shortcut-target
                       aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
@@ -1572,42 +1744,49 @@ export function DiscussionsWorkspace({
                       triggerClassName="discussion-hub__select-trigger"
                       contentClassName="discussion-hub__select-content"
                       matchMenuToContainer={
-                        isQnaTab || isCommentsTab || isNotesTab || isMentionsTab
+                        isQnaTab ||
+                        isCommentsTab ||
+                        isNotesTab ||
+                        isMentionsTab ||
+                        isFollowingTab
                       }
                       value={selectedCourseId}
                       options={courseOptions}
                     />
                   </div>
-                  {!isCommentsTab && !isNotesTab && !isMentionsTab && (
-                    <div className="discussion-hub__select">
-                      <ThemedSelect
-                        value={isQnaTab ? qnaStatus : status}
-                        onValueChange={isQnaTab ? setQnaStatus : setStatus}
-                        ariaLabel="Filter discussions by status"
-                        triggerClassName="discussion-hub__select-trigger"
-                        contentClassName="discussion-hub__select-content"
-                        matchMenuToContainer={isQnaTab}
-                        options={
-                          isQnaTab
-                            ? ([
-                                ["all", "All"],
-                                ["open", "Open"],
-                                ["answered", "Answered"],
-                                ["solved", "Solved"],
-                                ["mentioned", "Mentioned"],
-                              ] as const)
-                            : ([
-                                ["all", "Status"],
-                                ["answered", "Answered"],
-                                ["mentioned", "Mentioned"],
-                                ["solved", "Solved"],
-                                ["open", "Open"],
-                              ] as const)
-                        }
-                      />
-                    </div>
-                  )}
-                  {isMentionsTab ? null : isNotesTab ? (
+                  {!isCommentsTab &&
+                    !isNotesTab &&
+                    !isMentionsTab &&
+                    !isFollowingTab && (
+                      <div className="discussion-hub__select">
+                        <ThemedSelect
+                          value={isQnaTab ? qnaStatus : status}
+                          onValueChange={isQnaTab ? setQnaStatus : setStatus}
+                          ariaLabel="Filter discussions by status"
+                          triggerClassName="discussion-hub__select-trigger"
+                          contentClassName="discussion-hub__select-content"
+                          matchMenuToContainer={isQnaTab}
+                          options={
+                            isQnaTab
+                              ? ([
+                                  ["all", "All"],
+                                  ["open", "Open"],
+                                  ["answered", "Answered"],
+                                  ["solved", "Solved"],
+                                  ["mentioned", "Mentioned"],
+                                ] as const)
+                              : ([
+                                  ["all", "Status"],
+                                  ["answered", "Answered"],
+                                  ["mentioned", "Mentioned"],
+                                  ["solved", "Solved"],
+                                  ["open", "Open"],
+                                ] as const)
+                          }
+                        />
+                      </div>
+                    )}
+                  {isMentionsTab || isFollowingTab ? null : isNotesTab ? (
                     <div className="discussion-hub__select discussion-hub__select--sort">
                       <Funnel size={17} aria-hidden="true" />
                       <ThemedSelect<"activity" | "latest">
@@ -1681,7 +1860,9 @@ export function DiscussionsWorkspace({
                             ? "Loading comments…"
                             : isMentionsTab
                               ? "Loading mentions…"
-                              : "Loading discussions…"}
+                              : isFollowingTab
+                                ? "Loading followed discussions…"
+                                : "Loading discussions…"}
                       </h2>
                     </div>
                   ) : isWorkspaceError ? (
@@ -1693,7 +1874,9 @@ export function DiscussionsWorkspace({
                             ? "Unable to load comments"
                             : isMentionsTab
                               ? "Unable to load mentions"
-                              : "Unable to load discussions"}
+                              : isFollowingTab
+                                ? "Failed to load followed discussions"
+                                : "Unable to load discussions"}
                       </h2>
                       <p>
                         {workspaceError instanceof Error
@@ -1704,7 +1887,9 @@ export function DiscussionsWorkspace({
                               ? "There was a problem loading comments."
                               : isMentionsTab
                                 ? "There was a problem loading mentions."
-                                : "There was a problem loading discussions."}
+                                : isFollowingTab
+                                  ? "There was a problem loading followed discussions."
+                                  : "There was a problem loading discussions."}
                       </p>
                       <button type="button" onClick={() => void refetch()}>
                         Retry
@@ -1726,6 +1911,16 @@ export function DiscussionsWorkspace({
                           <DiscussionWorkspaceMentionCard
                             key={thread.id}
                             mention={thread}
+                            onNavigatePage={onNavigatePage}
+                          />
+                        );
+                      }
+
+                      if (isFollowingTab) {
+                        return (
+                          <DiscussionWorkspaceFollowingCard
+                            key={thread.id}
+                            thread={thread}
                             onNavigatePage={onNavigatePage}
                           />
                         );
@@ -1822,7 +2017,11 @@ export function DiscussionsWorkspace({
                             ? "No comments match these filters"
                             : isMentionsTab
                               ? "No mentions match these filters"
-                              : "No discussions match these filters"}
+                              : isFollowingTab
+                                ? query.trim() || selectedCourseId !== "all"
+                                  ? "No followed discussions found"
+                                  : "No followed discussions yet"
+                                : "No discussions match these filters"}
                       </h2>
                       <p>
                         {isNotesTab
@@ -1831,7 +2030,9 @@ export function DiscussionsWorkspace({
                             ? "Try clearing a filter or choosing another course."
                             : isMentionsTab
                               ? "Try clearing a filter or choosing another course."
-                              : "Try clearing a filter or start a new question for the course."}
+                              : isFollowingTab
+                                ? "Try clearing a filter or choosing another course."
+                                : "Try clearing a filter or start a new question for the course."}
                       </p>
                       <button
                         type="button"
@@ -1862,7 +2063,9 @@ export function DiscussionsWorkspace({
                             ? "Loading more notes…"
                             : isMentionsTab
                               ? "Loading more mentions…"
-                              : "Loading more discussions…"}
+                              : isFollowingTab
+                                ? "Loading more followed discussions…"
+                                : "Loading more discussions…"}
                       </p>
                     )}
                     {isFetchNextPageError && (
