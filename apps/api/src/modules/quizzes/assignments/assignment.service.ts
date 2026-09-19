@@ -253,6 +253,7 @@ export function createAssignmentService(options: QuizServiceOptions) {
       actor.roles.some((role) => role.toLowerCase() === "instructor");
     if (
       !canManageCourse &&
+      !(await repo.isPublishedFreeCourse(database, courseId)) &&
       !(await options.accessService.hasActiveAccess(
         database,
         actor.id,

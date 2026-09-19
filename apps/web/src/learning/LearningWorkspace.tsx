@@ -691,10 +691,10 @@ export function LearningWorkspace({
 
   const hasLessonQuiz = useCallback(
     (lessonNumber: number): boolean => {
+      const lesson = curriculumLessonsById.get(lessonNumber);
+      if (lesson?.[5] === "quiz") return true;
       const uuid = getLessonUuid(lessonNumber);
       if (!uuid) {
-        const les = curriculumLessonsById.get(lessonNumber);
-        if (les && les[5] === "quiz") return true;
         return lessonNumber === selectedLesson
           ? Boolean(quizAssignment)
           : false;
