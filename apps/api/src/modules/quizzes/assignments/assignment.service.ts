@@ -247,8 +247,23 @@ export function createAssignmentService(options: QuizServiceOptions) {
     const course = await courseService.findCourseById(courseId);
     if (!course)
       throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    if (!isAdmin(actor))
-      await courseService.getCourseAndVerifyOwner(courseId, actor.id);
+    const canManageCourse =
+      isAdmin(actor) ||
+      course.creator_id === actor.id ||
+      actor.roles.some((role) => role.toLowerCase() === "instructor");
+    if (
+      !canManageCourse &&
+      !(await options.accessService.hasActiveAccess(
+        database,
+        actor.id,
+        courseId,
+      ))
+    )
+      throw new AppError(
+        403,
+        "COURSE_ACCESS_REQUIRED",
+        "You need active course access to view this Quiz assignment.",
+      );
     const rows = await repo.listAssignmentsForCourse(database, courseId);
     return Promise.all(
       rows.map(async (row) => ({

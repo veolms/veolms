@@ -106,6 +106,7 @@ export function createQuizController({
       const result = await attempts.start(
         context(request).user.id,
         (request.params as { assignmentId: string }).assignmentId,
+        context(request).user.roles,
       );
       reply.code(201);
       return result;
@@ -120,11 +121,13 @@ export function createQuizController({
         context(request).user.id,
         (request.params as { attemptId: string }).attemptId,
         request.body as never,
+        context(request).user.roles,
       ),
     submit: async (request: FastifyRequest) =>
       attempts.submit(
         context(request).user.id,
         (request.params as { attemptId: string }).attemptId,
+        context(request).user.roles,
       ),
     result: async (request: FastifyRequest) =>
       attempts.result(

@@ -45,10 +45,12 @@ export function QuizAttemptPanel({
   const [attemptId, setAttemptId] = useState(activeAttemptId);
   const [result, setResult] = useState<QuizResult | null>(null);
   const prevAssignmentIdRef = useRef(assignmentId);
+  const startRequestedForAssignmentRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (prevAssignmentIdRef.current !== assignmentId) {
       prevAssignmentIdRef.current = assignmentId;
+      startRequestedForAssignmentRef.current = null;
       setAttemptId(activeAttemptId);
       setResult(null);
       return;
@@ -62,6 +64,12 @@ export function QuizAttemptPanel({
   const [now, setNow] = useState(() => Date.now());
   const expiryRefreshRef = useRef<string | null>(null);
   const start = useStartQuizAttempt();
+  const {
+    error: startError,
+    isPending: isStarting,
+    mutate: startAttempt,
+    reset: resetStart,
+  } = start;
   const submit = useSubmitQuizAttempt();
   const attemptQuery = useQuizAttempt(attemptId);
   const attempt = attemptQuery.data;
@@ -97,9 +105,17 @@ export function QuizAttemptPanel({
   const flushAutosync = autosync.flush;
 
   useEffect(() => {
-    if (attemptId || start.isPending || result) return;
-    start.mutate(assignmentId, { onSuccess: (next) => setAttemptId(next.id) });
-  }, [assignmentId, attemptId, start, result]);
+    if (
+      attemptId ||
+      isStarting ||
+      result ||
+      startRequestedForAssignmentRef.current === assignmentId
+    )
+      return;
+
+    startRequestedForAssignmentRef.current = assignmentId;
+    startAttempt(assignmentId, { onSuccess: (next) => setAttemptId(next.id) });
+  }, [assignmentId, attemptId, isStarting, result, startAttempt]);
 
   useEffect(() => {
     if (
@@ -142,6 +158,8 @@ export function QuizAttemptPanel({
     if (!result || result.attemptNumber >= maxAttempts) return;
     autosync.discard();
     expiryRefreshRef.current = null;
+    startRequestedForAssignmentRef.current = null;
+    resetStart();
     setResult(null);
     setAttemptId(null);
   };
@@ -157,8 +175,16 @@ export function QuizAttemptPanel({
       />
     );
   }
-  if (start.error || attemptQuery.error) {
-    const error = start.error ?? attemptQuery.error;
+  if (startError || attemptQuery.error) {
+    const error = startError ?? attemptQuery.error;
+    const retryOpening = () => {
+      if (startError) {
+        resetStart();
+        startRequestedForAssignmentRef.current = null;
+      } else {
+        void attemptQuery.refetch();
+      }
+    };
     return (
       <section
         className="mx-auto max-w-3xl rounded-[14px] sm:rounded-[20px] border border-red-500/20 bg-(--card-surface,var(--surface)) p-3.5 sm:p-6 text-(--text)"
@@ -186,11 +212,20 @@ export function QuizAttemptPanel({
             ) : null}
           </div>
         ) : null}
-        <p role="alert" className="text-red-400">Unable to open this Quiz. {error?.message}</p>
+        <p role="alert" className="text-red-400">
+          Unable to open this Quiz. {error?.message}
+        </p>
+        <button
+          type="button"
+          onClick={retryOpening}
+          className="mt-4 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) px-3 py-1.5 text-xs font-semibold text-(--text) transition-colors hover:border-(--accent) hover:text-(--accent)"
+        >
+          Try again
+        </button>
       </section>
     );
   }
-  if (attemptQuery.isLoading || start.isPending || !attempt) {
+  if (attemptQuery.isLoading || isStarting || !attempt) {
     return (
       <section
         className="mx-auto max-w-3xl rounded-[14px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-6 text-(--muted)"

@@ -646,6 +646,7 @@ export function LearningWorkspace({
     fallbackEmptyLesson;
   const courseQuizAssignments = useCourseQuizAssignments(
     courseOverview?.course.id,
+    { enabled: isAuthenticated },
   );
   const [activeLessonView, setActiveLessonView] = useState<"video" | "quiz">(
     initialLessonView,

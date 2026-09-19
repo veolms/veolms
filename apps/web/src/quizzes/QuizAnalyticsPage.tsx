@@ -553,14 +553,14 @@ function QuizLibrary({
           <label className="relative flex items-center">
             <span className="sr-only">Search quizzes</span>
             <MagnifyingGlass
-              className="pointer-events-none absolute left-3 text-(--muted)"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-(--muted)"
               size={16}
             />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search quizzes by title..."
-              className={`${inputClass} w-full pl-9`}
+              className={`${inputClass} w-full !pl-9`}
             />
           </label>
           <ThemedSelect
