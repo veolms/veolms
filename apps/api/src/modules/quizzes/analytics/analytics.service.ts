@@ -12,6 +12,17 @@ function pct(value: number, total: number) {
 
 export function createAnalyticsService(options: QuizServiceOptions) {
   const { database, accessService, courseService } = options;
+  async function academyId() {
+    const id = await options.getAcademyId();
+    if (!id)
+      throw new AppError(
+        503,
+        "ACADEMY_NOT_CONFIGURED",
+        "The academy is not configured.",
+      );
+    return id;
+  }
+
   async function assertOwned(actor: QuizActor, assignmentId: string) {
     const assignment = await repo.findAssignment(database, assignmentId);
     if (!assignment)
@@ -46,6 +57,12 @@ export function createAnalyticsService(options: QuizServiceOptions) {
   async function studentName(studentId: string, fallback: string) {
     const student = await options.authService.findUserById(studentId);
     return student?.display_name ?? fallback;
+  }
+
+  async function listVisibleQuizzes(actor: QuizActor) {
+    return isAdmin(actor)
+      ? repo.listQuizzesByAcademy(database, await academyId())
+      : repo.listQuizzesByCreator(database, actor.id);
   }
 
   async function assignment(actor: QuizActor, assignmentId: string) {
@@ -172,7 +189,7 @@ export function createAnalyticsService(options: QuizServiceOptions) {
   }
 
   async function student(actor: QuizActor, studentId: string) {
-    const quizzes = await repo.listQuizzesByCreator(database, actor.id);
+    const quizzes = await listVisibleQuizzes(actor);
     const assignments = await repo.listAssignmentsForQuizzes(
       database,
       quizzes.map((quiz) => quiz.id),

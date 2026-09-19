@@ -23,6 +23,19 @@ export async function listQuizzesByCreator(
     .execute();
 }
 
+export async function listQuizzesByAcademy(
+  database: DatabaseExecutor,
+  academyId: string,
+) {
+  return await database
+    .selectFrom("quizzes")
+    .selectAll()
+    .where("academy_id", "=", academyId)
+    .where("deleted_at", "is", null)
+    .orderBy("updated_at", "desc")
+    .execute();
+}
+
 export async function findVersion(
   database: DatabaseExecutor,
   versionId: string,
