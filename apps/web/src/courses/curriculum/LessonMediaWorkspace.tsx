@@ -219,7 +219,7 @@ export function LessonMediaWorkspace({
     <div
       className={`relative aspect-video w-full overflow-hidden bg-black ${
         isGroupedVideo
-          ? "rounded-t-[14px] sm:rounded-t-[16px] rounded-b-none shadow-none"
+          ? "rounded-none shadow-none"
           : "rounded-[14px] shadow-(--card-shadow)"
       }`}
     >
@@ -275,7 +275,7 @@ export function LessonMediaWorkspace({
       <div
         className={
           isGroupedVideo
-            ? "overflow-hidden rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) shadow-(--card-shadow)"
+            ? "overflow-hidden rounded-none border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) shadow-none"
             : "contents"
         }
       >
@@ -517,7 +517,7 @@ export function LessonMediaWorkspace({
         <div
           className={`flex flex-col ${
             isGroupedVideo
-              ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-4.5"
+              ? "rounded-b-[14px] sm:rounded-b-[16px] border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-4.5"
               : "rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-4.5 shadow-(--card-shadow)"
           }`}
         >

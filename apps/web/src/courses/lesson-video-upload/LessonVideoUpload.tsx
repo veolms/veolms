@@ -1513,7 +1513,13 @@ function UploadProgressStage({
       </section>
 
       {/* Checklist Card: 3D raised surface, 0 borders, clear opacity hierarchy */}
-      <section className={`${RAISED_CARD_CLASS} p-3.5 sm:p-4 space-y-1`}>
+      <section
+        className={`${
+          embedded
+            ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-4"
+            : `${RAISED_CARD_CLASS} p-3.5 sm:p-4`
+        } space-y-1`}
+      >
         <UploadChecklistItem
           description="Getting your video ready to upload..."
           label="Preparing upload"
@@ -1538,7 +1544,13 @@ function UploadProgressStage({
       </section>
 
       {/* Background info note: 0 borders, subtle tinted depth */}
-      <div className="flex items-start gap-2.5 rounded-[12px] border-none bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-3.5 py-3 text-[0.72rem] sm:text-[0.73rem] leading-relaxed text-(--text-secondary) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_8%,transparent))]">
+      <div
+        className={`flex items-start gap-2.5 px-3.5 py-3 text-[0.72rem] sm:text-[0.73rem] leading-relaxed text-(--text-secondary) ${
+          embedded
+            ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface))"
+            : "rounded-[12px] border-none bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_8%,transparent))]"
+        }`}
+      >
         <Info
           size={16}
           weight="fill"
@@ -1676,7 +1688,11 @@ function TranscodingProgressStage({
             Transcoding status
           </h3>
           <div
-            className={`mt-2.5 sm:mt-3 overflow-hidden ${INSET_WELL_CLASS} divide-y divide-[color-mix(in_srgb,var(--text)_8%,transparent)]`}
+            className={`mt-2.5 sm:mt-3 overflow-hidden ${
+              embedded
+                ? "rounded-none border-none bg-(--surface) shadow-none"
+                : INSET_WELL_CLASS
+            } divide-y divide-[color-mix(in_srgb,var(--text)_8%,transparent)]`}
           >
             <TranscodingStatusRow
               label="Transcoding job"
