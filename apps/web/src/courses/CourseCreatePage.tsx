@@ -7680,10 +7680,17 @@ export function CourseCreatePage({
   };
 
   const currencySymbol = getCurrencySymbol(pricing.currency || "INR");
+  const previewCurrency = pricing.currency || "INR";
+  const previewSellingAmount = pricing.sellingPrice.trim()
+    ? parseFloat(pricing.sellingPrice.replace(/,/g, ""))
+    : 0;
+  const previewOriginalAmount = pricing.originalPrice.trim()
+    ? parseFloat(pricing.originalPrice.replace(/,/g, ""))
+    : 0;
 
   const previewPricing: CourseOverviewPricingProps =
     pricing.pricingType === "free"
-      ? { price: "Free" }
+      ? { price: "Free", amount: 0, currency: previewCurrency }
       : {
           price: pricing.sellingPrice.trim()
             ? `${currencySymbol}${pricing.sellingPrice.trim()}`
@@ -7694,15 +7701,17 @@ export function CourseCreatePage({
           discount:
             pricing.originalPrice.trim() &&
             pricing.sellingPrice.trim() &&
-            parseFloat(pricing.originalPrice.replace(/,/g, "")) >
-              parseFloat(pricing.sellingPrice.replace(/,/g, ""))
+            previewOriginalAmount > previewSellingAmount
               ? `${Math.round(
-                  ((parseFloat(pricing.originalPrice.replace(/,/g, "")) -
-                    parseFloat(pricing.sellingPrice.replace(/,/g, ""))) /
-                    parseFloat(pricing.originalPrice.replace(/,/g, ""))) *
+                  ((previewOriginalAmount - previewSellingAmount) /
+                    previewOriginalAmount) *
                     100,
                 )}% OFF`
               : undefined,
+          amount: Number.isFinite(previewSellingAmount)
+            ? previewSellingAmount
+            : 0,
+          currency: previewCurrency,
         };
 
   const editorCourseSlug = editorData?.course?.slug;
@@ -12385,9 +12394,19 @@ export function CourseCreatePage({
                   }}
                   className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] max-[768px]:w-full max-[768px]:justify-center"
                   onClick={() => {
-                    if (onNavigatePage) {
-                      onNavigatePage("settings");
+                    if (!onNavigatePage) return;
+                    if (!currentCourseId) {
+                      onNavigatePage("/coupons/create");
+                      return;
                     }
+                    const params = new URLSearchParams({
+                      courseId: currentCourseId,
+                    });
+                    params.set(
+                      "returnTo",
+                      `${window.location.pathname}${window.location.search}`,
+                    );
+                    onNavigatePage(`/coupons/create?${params.toString()}`);
                   }}
                 >
                   Go to Coupons <ArrowUpRight size={15} weight="bold" />

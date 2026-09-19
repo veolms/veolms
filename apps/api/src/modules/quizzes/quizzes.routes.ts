@@ -254,7 +254,7 @@ const quizRoutes: RoutePlugin = async (app, options) => {
           ...errors,
         },
       },
-      preHandler: author,
+      preHandler: learner,
     },
     controller.listCourseAssignments,
   );

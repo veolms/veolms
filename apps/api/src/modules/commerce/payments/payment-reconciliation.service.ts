@@ -156,20 +156,47 @@ export function createPaymentReconciliationService({
       if (order.coupon_id) {
         const coupon = await trx
           .selectFrom("coupons")
-          .select(["global_usage_limit", "per_user_limit"])
+          .select(["code", "global_usage_limit", "per_user_limit"])
           .where("id", "=", order.coupon_id)
           .executeTakeFirst();
 
-        await couponRepo.insertCouponRedemptionIfLimitNotReached(trx, {
-          id: crypto.randomUUID(),
-          coupon_id: order.coupon_id,
-          user_id: order.user_id,
-          order_id: order.id,
-          discount_amount: order.discount_amount,
-          global_usage_limit: coupon?.global_usage_limit ?? null,
-          per_user_limit: coupon?.per_user_limit ?? null,
-          created_at: now,
-        });
+        const redemptionResult =
+          await couponRepo.insertCouponRedemptionIfLimitNotReached(trx, {
+            id: crypto.randomUUID(),
+            coupon_id: order.coupon_id,
+            user_id: order.user_id,
+            order_id: order.id,
+            discount_amount: order.discount_amount,
+            global_usage_limit: coupon?.global_usage_limit ?? null,
+            per_user_limit: coupon?.per_user_limit ?? null,
+            created_at: now,
+          });
+
+        if (!redemptionResult.success) {
+          // The gateway has already captured this payment (real money moved)
+          // before this transaction runs. Aborting fulfillment here would
+          // roll back the payment claim/order-paid/access grant while the
+          // customer stays charged, with every retry hitting this same
+          // limit forever. The coupon limit is a soft check enforced up
+          // front at checkout (pricing.service.ts); this final atomic
+          // check only prevents *over*-redemption bookkeeping in a rare
+          // race — it must not block delivering what was already paid for.
+          // Skip recording the redemption and continue fulfilling the order.
+          const couponCode = coupon?.code ?? order.coupon_id;
+          await outbox.publish(trx, {
+            type: "coupon.redemption_limit_exceeded_at_finalization",
+            version: 1,
+            dedupeKey: `coupon.redemption_limit_exceeded:${claimed.id}`,
+            occurredAt: now,
+            payload: {
+              paymentId: claimed.id,
+              orderId: order.id,
+              couponId: order.coupon_id,
+              couponCode,
+              reason: redemptionResult.reason,
+            },
+          });
+        }
       }
 
       // 4. Grant access + enroll for every order item (course + bundle-expanded).

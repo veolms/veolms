@@ -1,6 +1,35 @@
 import type { CourseRole } from "../courses/catalogue";
 
-const CREATOR_ROLES = new Set(["creator", "instructor", "admin"]);
+export const ADMIN_ROLES = new Set([
+  "admin",
+  "administrator",
+  "platform_admin",
+  "platform administrator",
+]);
+
+export const STAFF_ROLES = new Set([
+  "admin",
+  "administrator",
+  "creator",
+  "instructor",
+  "platform_admin",
+  "platform administrator",
+  "superadmin",
+  "super_admin",
+]);
+
+export const CREATOR_ROLES = new Set([
+  "creator",
+  "instructor",
+  ...ADMIN_ROLES,
+]);
+
+export function normalizeRoles(
+  roles: readonly string[] | null | undefined,
+): string[] {
+  if (!roles?.length) return [];
+  return roles.map((r) => r.trim().toLowerCase());
+}
 
 export function getWorkspaceRoleStorageKey(userId?: string | null): string {
   return userId ? `veolms-role-${userId}` : "veolms-role";
@@ -13,8 +42,8 @@ export function getAllowedWorkspaceRoles(
     return [];
   }
 
-  const normalized = new Set(roles.map((role) => role.toLowerCase()));
-  if (normalized.has("admin")) {
+  const normalized = new Set(normalizeRoles(roles));
+  if ([...normalized].some((role) => ADMIN_ROLES.has(role))) {
     return ["student", "creator"];
   }
 
@@ -60,7 +89,16 @@ export function hasAdminRole(
   if (!roles?.length) {
     return false;
   }
-  return roles.some((role) => role.toLowerCase() === "admin");
+  return normalizeRoles(roles).some((role) => ADMIN_ROLES.has(role));
+}
+
+export function isStaffRole(
+  roles: readonly string[] | null | undefined,
+): boolean {
+  if (!roles?.length) {
+    return false;
+  }
+  return normalizeRoles(roles).some((role) => STAFF_ROLES.has(role));
 }
 
 export function getRoleDisplayName(

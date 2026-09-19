@@ -179,6 +179,7 @@ export interface RefundTable {
   reason: string | null;
   status: RefundStatus;
   created_by: string | null;
+  idempotency_key: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

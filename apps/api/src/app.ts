@@ -68,6 +68,15 @@ export async function createApp({
       return payload;
     }
 
+    // AppError carries transport metadata (statusCode, code, and the original
+    // Error fields) so the error handler can classify it. Those implementation
+    // fields are not part of the public ErrorResponse contract, though, and a
+    // strict Zod response serializer rejects them when an error is sent
+    // directly from a pre-handler. Convert it at the serialization boundary.
+    if (payload instanceof AppError) {
+      return payload.toJSON();
+    }
+
     // Already-enveloped payloads (notably error responses) pass through
     // untouched, so they are not wrapped a second time.
     if (

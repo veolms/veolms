@@ -48,16 +48,18 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
     }));
   }, [courseRecords]);
 
+  const cleanSearch = debouncedSearch.replace(/^@+/, "").trim();
+
   // Infinite query for students
   const queryFilter = useMemo(
     () => ({
-      search: debouncedSearch || undefined,
+      search: cleanSearch || undefined,
       courseId: courseFilter !== "all" ? courseFilter : undefined,
       status: statusFilter,
       sortBy,
       limit: 50,
     }),
-    [debouncedSearch, courseFilter, statusFilter, sortBy],
+    [cleanSearch, courseFilter, statusFilter, sortBy],
   );
 
   const {

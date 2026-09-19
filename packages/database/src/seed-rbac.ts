@@ -302,6 +302,18 @@ export const MENUS = {
     checkList: null,
     isBoth: false,
   },
+  coupons: {
+    id: "00000000-0000-4000-9000-000000000018",
+    parentId: null,
+    label: "Coupons",
+    routeLink: "/coupons",
+    icon: "Tag",
+    expanded: false,
+    checkList: null,
+    isBoth: false,
+  },
+
+  // Student Menus
   myCourses: {
     id: "00000000-0000-4000-9000-000000000012",
     parentId: null,

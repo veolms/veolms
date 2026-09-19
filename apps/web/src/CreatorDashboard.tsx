@@ -763,7 +763,8 @@ function QuickActions({
       "Create or edit coupons",
       Ticket,
       "green",
-      "Manage Coupons selected. Coupon management will be added later.",
+      "Manage Coupons selected.",
+      "/coupons",
     ],
     [
       "View Students",

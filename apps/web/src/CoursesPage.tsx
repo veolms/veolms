@@ -21,6 +21,7 @@ import type {
 } from "react";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
 import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
 import { DotsThreeCircleIcon as DotsThreeCircle } from "@phosphor-icons/react/DotsThreeCircle";
@@ -46,6 +47,7 @@ import {
 import { useSecondPressHold } from "./gestures/useSecondPressHold";
 import { WorkspacePage } from "./workspace/WorkspacePages";
 import { ReviewsPage } from "./reviews/ReviewsPage";
+import { CouponsPage } from "./coupons/CouponsPage";
 import { OrdersPage } from "./orders/OrdersPage";
 import { OrderHistoryPage } from "./order-history/OrderHistoryPage";
 import { NotificationsPage } from "./notifications/NotificationsPage";
@@ -53,6 +55,8 @@ import { QuizAnalyticsPage } from "./quizzes/QuizAnalyticsPage";
 import { QuizBuilderPage } from "./quizzes/QuizBuilderPage";
 import { QuizDirectAttemptPage } from "./quizzes/QuizDirectAttemptPage";
 import { StudentsPage, StudentDetailsPage } from "./students";
+import { CouponBuilderPage } from "./coupons/CouponBuilderPage";
+import { CouponsAccessDenied } from "./coupons/CouponsAccessDenied";
 import { getVisibleCourses } from "./courses/catalogue";
 import type {
   Course,
@@ -103,6 +107,7 @@ import {
   getUserRoles,
   getVisibleWorkspaceRoles,
   hasAdminRole,
+  isStaffRole,
   resolveWorkspaceRole,
   getWorkspaceRoleStorageKey,
   getRoleDisplayName,
@@ -225,6 +230,7 @@ interface CoursesPageProps {
   quizId?: string;
   assignmentId?: string;
   username?: string;
+  couponId?: string;
   miniPlayerCourseId?: string | null;
   learningBackground?: {
     courseSlug?: string;
@@ -539,6 +545,7 @@ export function CoursesPage({
   quizId,
   assignmentId,
   username,
+  couponId,
   miniPlayerCourseId = null,
   learningBackground = null,
   learningMotionStageRef,
@@ -553,6 +560,9 @@ export function CoursesPage({
       return "student";
     }
   });
+  const [hydratedWorkspaceRoleKey, setHydratedWorkspaceRoleKey] = useState<
+    string | null
+  >(null);
   const publicNavigationItems = getPublicNavigationItems();
   const [savedShellProfiles, setSavedShellProfiles] = useState<
     Record<CourseRole, ProfilePreferences | null>
@@ -729,6 +739,12 @@ export function CoursesPage({
     [isAuthenticated, role, userRoles],
   );
   const isAuthReady = Boolean(storeUser) || authUserFetched;
+  const workspaceRoleKey =
+    storedPreferencesReady && authUserFetched
+      ? (activeUser?.id ?? "guest")
+      : null;
+  const isWorkspaceRoleHydrated =
+    workspaceRoleKey !== null && hydratedWorkspaceRoleKey === workspaceRoleKey;
   const { isPending: isSigningOut, signOut } = useSignOut();
   const signOutAfterSync = useCallback(async () => {
     try {
@@ -980,6 +996,7 @@ export function CoursesPage({
       getWorkspaceRoleStorageKey(activeUser?.id),
     );
     setRole(storedRole === "creator" ? "creator" : "student");
+    setHydratedWorkspaceRoleKey(activeUser?.id ?? "guest");
   }, [activeUser?.id, authUserFetched, storedPreferencesReady]);
 
   useEffect(() => {
@@ -1266,7 +1283,8 @@ export function CoursesPage({
   }, [role, userRoles]);
 
   useEffect(() => {
-    if (!storedPreferencesReady || !authUserFetched) return;
+    if (!storedPreferencesReady || !authUserFetched || !isWorkspaceRoleHydrated)
+      return;
     localStorage.setItem(getWorkspaceRoleStorageKey(activeUser?.id), role);
     setCourseMenu(null);
     setEnrollmentFilter("all");
@@ -1282,18 +1300,20 @@ export function CoursesPage({
     page,
     requestedSection,
     role,
+    isWorkspaceRoleHydrated,
     storedPreferencesReady,
   ]);
 
   useEffect(() => {
     if (page === "course-create") return;
     if (!authUserFetched) return;
+    // The initial role is deterministic for SSR/hydration and may still be
+    // "student" while the account-specific workspace role is being restored.
+    // Do not redirect a valid creator route during that one render window.
+    if (!isWorkspaceRoleHydrated || !isAuthenticated) return;
+
     if (effectiveRole !== "creator") {
-      const forbiddenPages = [
-        "students",
-        "student-details",
-        "quiz-builder",
-      ];
+      const forbiddenPages = ["students", "student-details", "quiz-builder"];
       if (
         (page && forbiddenPages.includes(page)) ||
         requestedSection === "Students" ||
@@ -1302,7 +1322,15 @@ export function CoursesPage({
         onNavigatePage?.("/");
       }
     }
-  }, [authUserFetched, effectiveRole, onNavigatePage, page, requestedSection]);
+  }, [
+    authUserFetched,
+    effectiveRole,
+    isAuthenticated,
+    isWorkspaceRoleHydrated,
+    onNavigatePage,
+    page,
+    requestedSection,
+  ]);
 
   useEffect(() => {
     if (!storedPreferencesReady) return;
@@ -3331,6 +3359,37 @@ export function CoursesPage({
         <ReviewsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
       );
     }
+    if (surfacePage === "coupon-builder") {
+      if (!isAuthReady) {
+        return (
+          <main
+            data-coupon-surface=""
+            className="mx-auto grid w-full max-w-[1320px] place-items-center py-24"
+          >
+            <CircleNotch
+              size={28}
+              className="mb-3 animate-spin text-(--accent)"
+            />
+            <p className="text-sm text-(--muted)">Loading coupon builder...</p>
+          </main>
+        );
+      }
+      if (!activeUser || !isStaffRole(userRoles)) {
+        return <CouponsAccessDenied onNavigatePage={onNavigatePage} />;
+      }
+      return (
+        <CouponBuilderPage
+          couponId={couponId}
+          onNavigatePage={onNavigatePage}
+          setNotice={setNotice}
+        />
+      );
+    }
+    if (surfacePage === "coupons" || surfaceActiveSection === "Coupons") {
+      return (
+        <CouponsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+      );
+    }
     if (surfacePage === "orders" || surfaceActiveSection === "Orders") {
       return (
         <OrdersPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
@@ -3375,11 +3434,7 @@ export function CoursesPage({
         />
       );
     }
-    if (
-      surfacePage === "quizzes" ||
-      surfaceActiveSection === "Analytics" ||
-      surfaceActiveSection === "Quizzes"
-    ) {
+    if (surfacePage === "quizzes") {
       return <QuizAnalyticsPage role={role} onNavigatePage={onNavigatePage} />;
     }
     if (surfacePage === "student-details") {

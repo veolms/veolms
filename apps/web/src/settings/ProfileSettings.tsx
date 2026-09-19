@@ -42,6 +42,7 @@ import {
 import type { CountryOption } from "../auth/identifier";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { AvatarStylePicker } from "./AvatarStylePicker";
+import { AvatarManager } from "./AvatarManager";
 import { DicebearAvatar } from "./DicebearAvatar";
 import type {
   ProfileIdentity,
@@ -51,8 +52,11 @@ import type {
 import { getDefaultProfileIdentity } from "./profileTypes";
 import {
   useCurrentUser,
+  useDeleteUploadedAvatars,
   useSendEmailVerificationOtp,
   useSendPhoneVerificationOtp,
+  useSelectAvatar,
+  useUserAvatars,
   useVerifyEmail,
   useVerifyPhoneNumber,
 } from "../services/auth";
@@ -395,6 +399,13 @@ export function ProfileSettings({
     userProfileFetched && !userProfileError ? userProfile : storeUser;
   const canEdit = isAuthenticated && Boolean(activeUser);
   const queryClient = useQueryClient();
+  const {
+    data: storedAvatars = [],
+    isPending: storedAvatarsLoading,
+    isError: storedAvatarsError,
+  } = useUserAvatars({ enabled: canEdit });
+  const selectAvatarMutation = useSelectAvatar();
+  const deleteUploadedAvatarsMutation = useDeleteUploadedAvatars();
   const sendPhoneVerificationMutation = useSendPhoneVerificationOtp();
   const verifyPhoneNumberMutation = useVerifyPhoneNumber();
   const sendEmailVerificationMutation = useSendEmailVerificationOtp();
@@ -483,6 +494,7 @@ export function ProfileSettings({
       );
       authStore.setUser(updatedUser);
       queryClient.setQueryData(authKeys.me(), updatedUser);
+      queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
       setMobileCountryId(
         findCountryByPhoneNumber(nextProfile.mobileNumber ?? "")?.id ??
           DEFAULT_COUNTRY_ID,
@@ -509,6 +521,24 @@ export function ProfileSettings({
     isEqual: profilesMatch,
     onSynced: handleProfileSynced,
   });
+
+  const selectStoredAvatar = async (avatarId: string) => {
+    const updated = await selectAvatarMutation.mutateAsync(avatarId);
+    setAvatarFailed(false);
+    mergeFromServer({
+      avatarDataUrl: updated.avatarDataUrl,
+      avatarSrcSet: updated.avatarSrcSet,
+    });
+  };
+
+  const deleteUploadedAvatars = async () => {
+    const updated = await deleteUploadedAvatarsMutation.mutateAsync();
+    setAvatarFailed(false);
+    mergeFromServer({
+      avatarDataUrl: updated.avatarDataUrl,
+      avatarSrcSet: updated.avatarSrcSet,
+    });
+  };
   const verificationModalOpen =
     canEdit && (emailVerificationRequested || verificationRequested);
   const verificationChannel = emailVerificationRequested
@@ -962,6 +992,7 @@ export function ProfileSettings({
           avatarDataUrl: updated.avatarDataUrl,
           avatarSrcSet: updated.avatarSrcSet,
         });
+        queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
       })
       .catch((error: unknown) => {
         if (authStore.getState().user?.id !== activeUserId) return;
@@ -1156,6 +1187,14 @@ export function ProfileSettings({
                   {photoError}
                 </p>
               )}
+              <AvatarManager
+                avatars={storedAvatars}
+                canEdit={canEdit}
+                isLoading={canEdit && storedAvatarsLoading}
+                hasLoadError={canEdit && storedAvatarsError}
+                onSelect={selectStoredAvatar}
+                onDeleteAll={deleteUploadedAvatars}
+              />
             </section>
           </div>
 
@@ -1873,12 +1912,26 @@ export function ProfileSettings({
           seed={activeUser?.id ?? ""}
           onClose={() => setAvatarPickerOpen(false)}
           onSelect={(avatarUrl) => {
-            update((current) => ({
-              ...current,
-              avatarDataUrl: avatarUrl,
-              avatarSrcSet: [],
-            }));
+            if (photoUploading) return;
             setPhotoError("");
+            setPhotoUploading(true);
+            void authService
+              .uploadGeneratedAvatar(avatarUrl)
+              .then((updated) => {
+                handleProfileSynced(updated);
+                mergeFromServer({
+                  avatarDataUrl: updated.avatarDataUrl,
+                  avatarSrcSet: updated.avatarSrcSet,
+                });
+              })
+              .catch((error: unknown) => {
+                setPhotoError(
+                  error && typeof error === "object" && "message" in error
+                    ? String((error as { message?: unknown }).message)
+                    : "We couldn't save this avatar. Please try again.",
+                );
+              })
+              .finally(() => setPhotoUploading(false));
           }}
         />
       </section>

@@ -1,4 +1,4 @@
-import type { Invoice } from "@veolms/contracts";
+import type { Invoice, OrderScope } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 import { AppError } from "../../../lib/errors.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
@@ -9,16 +9,8 @@ import * as authRepo from "../../auth/authentication/authentication.repository.t
 import * as setupRepo from "../../auth/setup/setup.repository.ts";
 
 export interface InvoiceService {
-  generateInvoiceData(
-    userId: string,
-    orderId: string,
-    isAdmin?: boolean,
-  ): Promise<Invoice>;
-  generateInvoiceHtml(
-    userId: string,
-    orderId: string,
-    isAdmin?: boolean,
-  ): Promise<string>;
+  generateInvoiceData(scope: OrderScope, orderId: string): Promise<Invoice>;
+  generateInvoiceHtml(scope: OrderScope, orderId: string): Promise<string>;
 }
 
 export function createInvoiceService({
@@ -27,17 +19,24 @@ export function createInvoiceService({
   database: Executor;
 }): InvoiceService {
   async function generateInvoiceData(
-    userId: string,
+    scope: OrderScope,
     orderId: string,
-    isAdmin = false,
   ): Promise<Invoice> {
-    const order = await orderRepo.findOrderById(database, orderId);
-    if (!order || (!isAdmin && order.user_id !== userId)) {
+    const order = await orderRepo.findOrderById(database, orderId, scope);
+    if (!order) {
+      throw CommerceErrors.ORDER_NOT_FOUND(orderId);
+    }
+
+    if (scope.type === "user" && order.user_id !== scope.id) {
       throw CommerceErrors.ORDER_NOT_FOUND(orderId);
     }
 
     if (!["paid", "partially_refunded", "refunded"].includes(order.status)) {
-      throw new AppError(400, "ORDER_NOT_PAID", "Invoices are only available for paid orders.");
+      throw new AppError(
+        400,
+        "ORDER_NOT_PAID",
+        "Invoices are only available for paid orders.",
+      );
     }
 
     const items = await orderRepo.listOrderItems(database, orderId);
@@ -45,7 +44,8 @@ export function createInvoiceService({
     const user = await authRepo.findUserById(database, order.user_id);
     const academy = await setupRepo.findAcademy(database);
 
-    const paymentRef = payment?.gateway_payment_id ?? payment?.gateway_order_id ?? "N/A";
+    const paymentRef =
+      payment?.gateway_payment_id ?? payment?.gateway_order_id ?? "N/A";
 
     return {
       invoiceNumber: `INV-${order.order_number}`,
@@ -79,11 +79,10 @@ export function createInvoiceService({
   }
 
   async function generateInvoiceHtml(
-    userId: string,
+    scope: OrderScope,
     orderId: string,
-    isAdmin = false,
   ): Promise<string> {
-    const inv = await generateInvoiceData(userId, orderId, isAdmin);
+    const inv = await generateInvoiceData(scope, orderId);
     const dateStr = inv.paidAt
       ? new Date(inv.paidAt).toLocaleDateString("en-IN", {
           year: "numeric",
@@ -204,4 +203,3 @@ export function createInvoiceService({
     generateInvoiceHtml,
   };
 }
-
