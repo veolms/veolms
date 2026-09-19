@@ -29,6 +29,7 @@ import {
   type VideoJobStatus,
 } from "@veolms/contracts";
 import { mediaService } from "../../services/media";
+import { AppIcon } from "../../icons/AppIcon";
 
 export interface LessonVideoUploadProps {
   mediaAssetId?: string | null;
@@ -1817,9 +1818,13 @@ function VideoFileSummary({
           type="button"
           onClick={onUpload}
           aria-label={uploadIconOnly ? "Upload video" : "Upload Video"}
-          className={`inline-flex h-8.5 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[9px] border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] transition-all hover:bg-(--accent-hover,var(--accent)) active:scale-95 ${uploadIconOnly ? "w-8.5 px-0" : "px-3.5"}`}
+          className={`inline-flex h-9 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--accent)_55%,var(--text)_18%)] bg-transparent text-(--accent) transition-all hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] hover:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_12%,transparent)] active:scale-95 ${uploadIconOnly ? "w-9 px-0" : "px-3.5"}`}
         >
-          <CloudArrowUp size={15} weight="bold" />
+          {uploadIconOnly ? (
+            <AppIcon name="cloudUpload" aria-hidden="true" className="size-7" />
+          ) : (
+            <CloudArrowUp size={15} weight="bold" />
+          )}
           {!uploadIconOnly && <span>Upload Video</span>}
         </button>
       )}
