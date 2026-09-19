@@ -3409,11 +3409,7 @@ export function CoursesPage({
         />
       );
     }
-    if (
-      surfacePage === "quizzes" ||
-      surfaceActiveSection === "Analytics" ||
-      surfaceActiveSection === "Quizzes"
-    ) {
+    if (surfacePage === "quizzes") {
       return <QuizAnalyticsPage role={role} onNavigatePage={onNavigatePage} />;
     }
     if (surfacePage === "student-details") {
