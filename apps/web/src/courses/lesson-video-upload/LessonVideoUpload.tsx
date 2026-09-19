@@ -29,7 +29,6 @@ import {
   type VideoJobStatus,
 } from "@veolms/contracts";
 import { mediaService } from "../../services/media";
-import { AppIcon } from "../../icons/AppIcon";
 
 export interface LessonVideoUploadProps {
   mediaAssetId?: string | null;
@@ -1448,7 +1447,7 @@ function SelectVideoStage({
           file={selectedFile}
           embedded={minimal}
           onUpload={minimal ? onUploadFile : undefined}
-          uploadIconOnly={minimal}
+          uploadTextOnly={minimal}
           onRemove={onRemoveFile}
         />
       )}
@@ -1762,7 +1761,7 @@ interface VideoFileSummaryProps {
   mediaAttached?: boolean;
   onRemove?: () => void;
   onReplace?: () => void;
-  uploadIconOnly?: boolean;
+  uploadTextOnly?: boolean;
 }
 
 function VideoFileSummary({
@@ -1773,7 +1772,7 @@ function VideoFileSummary({
   mediaAttached = false,
   onRemove,
   onReplace,
-  uploadIconOnly = false,
+  uploadTextOnly = false,
 }: VideoFileSummaryProps) {
   const badgeClasses =
     badge === "Ready"
@@ -1817,15 +1816,13 @@ function VideoFileSummary({
         <button
           type="button"
           onClick={onUpload}
-          aria-label={uploadIconOnly ? "Upload video" : "Upload Video"}
-          className={`inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 transition-all active:scale-95 ${uploadIconOnly ? "h-8 w-8 rounded-full border-none bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-0 text-(--accent) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:text-(--accent-hover,var(--accent))" : "h-8.5 rounded-[9px] border-none bg-(--accent) px-3.5 text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] hover:bg-(--accent-hover,var(--accent))"}`}
+          aria-label="Upload video"
+          className={`inline-flex h-8 shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-none bg-(--accent) px-3.5 text-[0.76rem] font-semibold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] transition-all hover:bg-(--accent-hover,var(--accent)) active:scale-95 ${uploadTextOnly ? "" : "gap-1.5"}`}
         >
-          {uploadIconOnly ? (
-            <AppIcon name="cloudUpload" aria-hidden="true" className="size-[15px]" />
-          ) : (
+          {!uploadTextOnly && (
             <CloudArrowUp size={15} weight="bold" />
           )}
-          {!uploadIconOnly && <span>Upload Video</span>}
+          <span>Upload</span>
         </button>
       )}
       {badge && (
