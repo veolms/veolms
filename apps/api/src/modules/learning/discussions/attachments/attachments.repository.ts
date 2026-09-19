@@ -51,6 +51,11 @@ export interface AttachmentsRepository {
     threadIds: readonly string[],
   ): Promise<AttachmentSummaryRow[]>;
 
+  listReplyAttachmentSummaries(
+    db: DatabaseExecutor,
+    replyIds: readonly string[],
+  ): Promise<AttachmentSummaryRow[]>;
+
   listNoteAttachmentSummaries(
     db: DatabaseExecutor,
     noteIds: readonly string[],
@@ -202,6 +207,10 @@ export function createAttachmentsRepository(): AttachmentsRepository {
 
     async listThreadAttachmentSummaries(db, threadIds) {
       return listAttachmentSummaries(db, "thread", threadIds);
+    },
+
+    async listReplyAttachmentSummaries(db, replyIds) {
+      return listAttachmentSummaries(db, "reply", replyIds);
     },
 
     async listNoteAttachmentSummaries(db, noteIds) {

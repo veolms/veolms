@@ -41,6 +41,7 @@ import {
 } from "../shared/discussion.access.ts";
 import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import type {
+  MentionWorkspaceRow,
   ThreadsRepository,
   ThreadRowWithAuthor,
 } from "./threads.repository.ts";
@@ -50,6 +51,8 @@ import type {
 } from "../attachments/attachments.repository.ts";
 
 type LearningAttachmentRow = Selectable<LearningAttachmentTable>;
+
+const MENTIONS_WORKSPACE_SORT = "mentions";
 
 function assertVisibilityAllowed(
   kind: string,
@@ -724,7 +727,7 @@ export function createThreadsService(
       // broader staff shortcut remains unchanged for the existing thread and
       // report tabs below.
       const accessibleCourseIds =
-        tab === "notes" || !isStaff
+        tab === "notes" || tab === "mentions" || !isStaff
           ? await courseAccess.listAccessibleCourseIds(db, actor)
           : "all";
 
@@ -752,8 +755,23 @@ export function createThreadsService(
 
       const academyId = await resolveAcademyId(db);
       const limit = query.limit || 20;
-      const sort = normalizeThreadSort(query.sort);
+      const sort =
+        tab === "mentions"
+          ? MENTIONS_WORKSPACE_SORT
+          : normalizeThreadSort(query.sort);
       const pageCursor = decodeDiscussionCursor(query.cursor);
+
+      if (
+        tab === "mentions" &&
+        pageCursor?.sort &&
+        pageCursor.sort !== MENTIONS_WORKSPACE_SORT
+      ) {
+        throw httpError(
+          400,
+          "INVALID_CURSOR",
+          "The pagination cursor does not match the Mentions sort.",
+        );
+      }
 
       // Tab: Notes
       if (tab === "notes") {
@@ -1173,6 +1191,201 @@ export function createThreadsService(
         };
       }
 
+      // Tab: Mentions (one workspace item per exact mention source)
+      if (tab === "mentions") {
+        const mentionOptions = {
+          academyId,
+          currentUserId: actor.userId,
+          pageCursor,
+          limit,
+          ...(accessibleCourseIds !== "all" ? { accessibleCourseIds } : {}),
+          ...(query.courseId ? { courseId: query.courseId } : {}),
+          ...(query.lessonId ? { lessonId: query.lessonId } : {}),
+          ...(query.kind ? { kind: query.kind } : {}),
+          ...(query.search ? { search: query.search } : {}),
+          ...(query.visibility ? { visibility: query.visibility } : {}),
+        };
+
+        const [mentionRows, totalCount] = await Promise.all([
+          threadsRepo.listMentionItems(db, mentionOptions),
+          threadsRepo.countMentionItems(db, mentionOptions),
+        ]);
+
+        const { page, hasMore } = takePage(mentionRows, limit);
+        const threadIds = page
+          .filter((row) => row.itemType === "thread")
+          .map((row) => row.sourceId);
+        const replyIds = page
+          .filter((row) => row.itemType === "reply")
+          .map((row) => row.sourceId);
+        const sourceIds = [...threadIds, ...replyIds];
+
+        const [
+          likes,
+          bookmarks,
+          follows,
+          replyCounts,
+          threadAttachmentRows,
+          replyAttachmentRows,
+        ] = await Promise.all([
+          sourceIds.length > 0
+            ? db
+                .selectFrom("learning_likes")
+                .select(["target_type", "target_id"])
+                .where("user_id", "=", actor.userId)
+                .where("target_type", "in", ["thread", "reply"])
+                .where("target_id", "in", sourceIds)
+                .execute()
+            : Promise.resolve([]),
+          threadIds.length > 0
+            ? db
+                .selectFrom("learning_bookmarks")
+                .select("thread_id")
+                .where("user_id", "=", actor.userId)
+                .where("thread_id", "in", threadIds)
+                .execute()
+            : Promise.resolve([]),
+          threadIds.length > 0
+            ? db
+                .selectFrom("learning_follows")
+                .select("thread_id")
+                .where("user_id", "=", actor.userId)
+                .where("thread_id", "in", threadIds)
+                .execute()
+            : Promise.resolve([]),
+          replyIds.length > 0
+            ? db
+                .selectFrom("learning_replies")
+                .select("parent_reply_id")
+                .select(sql<number>`count(*)::int`.as("count"))
+                .where("parent_reply_id", "in", replyIds)
+                .where("status", "=", "active")
+                .groupBy("parent_reply_id")
+                .execute()
+            : Promise.resolve([]),
+          attachmentsRepo.listThreadAttachmentSummaries(db, threadIds),
+          attachmentsRepo.listReplyAttachmentSummaries(db, replyIds),
+        ]);
+
+        const likedThreadIds = new Set(
+          likes
+            .filter((like) => like.target_type === "thread")
+            .map((like) => like.target_id),
+        );
+        const likedReplyIds = new Set(
+          likes
+            .filter((like) => like.target_type === "reply")
+            .map((like) => like.target_id),
+        );
+        const bookmarkedThreadIds = new Set(
+          bookmarks.flatMap((bookmark) =>
+            bookmark.thread_id ? [bookmark.thread_id] : [],
+          ),
+        );
+        const followedThreadIds = new Set(
+          follows.map((follow) => follow.thread_id),
+        );
+        const replyReplyCounts = new Map(
+          replyCounts.flatMap((row) =>
+            row.parent_reply_id
+              ? [[row.parent_reply_id, Number(row.count)]]
+              : [],
+          ),
+        );
+        const threadAttachmentSummaries =
+          indexAttachmentSummaries(threadAttachmentRows);
+        const replyAttachmentSummaries =
+          indexAttachmentSummaries(replyAttachmentRows);
+
+        const items: WorkspaceDiscussionItem[] = page.map((row) => {
+          const isThread = row.itemType === "thread";
+          const isQna = row.kind === "question" || row.kind === "qna";
+          const statusVal: QuestionFilterStatus | undefined =
+            isThread && isQna
+              ? row.acceptedAnswerId
+                ? "solved"
+                : row.repliesCount && row.repliesCount > 0
+                  ? "answered"
+                  : "open"
+              : undefined;
+          const authorName = row.authorName || "Anonymous Learner";
+          const authorUsername =
+            row.authorUsername || `user-${row.userId.slice(0, 8)}`;
+
+          return {
+            id: row.sourceId,
+            itemType: row.itemType,
+            kind: row.kind,
+            title: row.title,
+            ...(isThread
+              ? {}
+              : {
+                  parentThreadId: row.parentThreadId,
+                  parentThreadTitle: row.parentThreadTitle,
+                }),
+            content: row.content,
+            plainText: row.plainText,
+            courseId: row.courseId,
+            courseTitle: row.courseTitle,
+            lessonId: row.lessonId,
+            lessonTitle: row.lessonTitle,
+            timestampSeconds: row.timestampSeconds,
+            author: {
+              id: row.userId,
+              displayName: authorName,
+              username: authorUsername,
+              avatarUrl: row.authorAvatarUrl,
+              role: mapAuthorRole(row.authorRole),
+            },
+            ...(isThread
+              ? {
+                  status: statusVal,
+                  visibility: row.visibility ?? undefined,
+                  isLocked: Boolean(row.isLocked),
+                  repliesCount: Number(row.repliesCount || 0),
+                  likesCount: Number(row.likesCount || 0),
+                  isLiked: likedThreadIds.has(row.sourceId),
+                  isBookmarked: bookmarkedThreadIds.has(row.sourceId),
+                  isFollowing: followedThreadIds.has(row.sourceId),
+                  attachmentSummary:
+                    threadAttachmentSummaries.get(row.sourceId) ??
+                    emptyAttachmentSummary(),
+                }
+              : {
+                  visibility: row.visibility ?? undefined,
+                  repliesCount: replyReplyCounts.get(row.sourceId) ?? 0,
+                  likesCount: Number(row.likesCount || 0),
+                  isLiked: likedReplyIds.has(row.sourceId),
+                  attachmentSummary:
+                    replyAttachmentSummaries.get(row.sourceId) ??
+                    emptyAttachmentSummary(),
+                }),
+            isMentioned: true,
+            isOwn: row.userId === actor.userId,
+            mentionedAt: toDate(row.mentionedAt).toISOString(),
+            createdAt: toDate(row.createdAt).toISOString(),
+            updatedAt: toDate(row.updatedAt).toISOString(),
+          };
+        });
+
+        const last = page.at(-1);
+        const nextCursor =
+          hasMore && last
+            ? encodeDiscussionCursor({
+                id: last.mentionId,
+                createdAt: toDate(last.mentionedAt),
+                sort: MENTIONS_WORKSPACE_SORT,
+              })
+            : null;
+
+        return {
+          items,
+          courses,
+          nextCursor,
+          totalCount,
+        };
+      }
+
       // Tab: Saved (handles both saved threads and saved notes)
       if (tab === "saved") {
         const threadOptions = {
@@ -1325,7 +1538,7 @@ export function createThreadsService(
         };
       }
 
-      // Other tabs: "comments", "q-and-a", "mentions", "following", "all"
+      // Other tabs: "comments", "q-and-a", "following", "all"
       // Apply role-based rules:
       // - For students on comments & q-and-a: only what the student has created (mine = true)
       // - Status filter is ONLY applicable to "q-and-a" tab
@@ -1458,7 +1671,7 @@ export function createThreadsService(
           isLiked: likedThreadIds.has(row.id),
           isBookmarked: bookmarkedThreadIds.has(row.id),
           isFollowing: followedThreadIds.has(row.id),
-          isMentioned: tab === "mentions" || mentionedThreadIds.has(row.id),
+          isMentioned: mentionedThreadIds.has(row.id),
           isOwn: row.userId === actor.userId,
           attachmentSummary:
             attachmentSummariesByThreadId.get(row.id) ??

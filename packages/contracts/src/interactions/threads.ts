@@ -232,6 +232,8 @@ export const workspaceDiscussionItemSchema = z.object({
   itemType: z.enum(["thread", "note", "reply", "report"]),
   kind: discussionEntryKindSchema,
   title: z.string().nullable().optional(),
+  parentThreadId: z.uuid().nullable().optional(),
+  parentThreadTitle: z.string().nullable().optional(),
   content: z.string(),
   plainText: z.string(),
   courseId: z.uuid(),
@@ -250,6 +252,7 @@ export const workspaceDiscussionItemSchema = z.object({
   isFollowing: z.boolean().optional(),
   isMentioned: z.boolean().optional(),
   isOwn: z.boolean().optional(),
+  mentionedAt: z.string().optional(),
   attachmentSummary: discussionAttachmentSummarySchema,
   reportDetails: z
     .object({

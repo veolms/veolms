@@ -1,7 +1,12 @@
 import type {
   Database,
   DatabaseExecutor,
+  CourseLessonTable,
+  CourseTable,
   LearningThreadTable,
+  LearningMentionTable,
+  LearningReplyTable,
+  UserTable,
 } from "@veolms/database";
 import type {
   DiscussionEntryKind,
@@ -10,7 +15,12 @@ import type {
   ListLearningThreadsQuery,
   UpdateLearningThreadRequest,
 } from "@veolms/contracts";
-import type { ExpressionBuilder, Selectable, SelectQueryBuilder } from "kysely";
+import type {
+  ExpressionBuilder,
+  Nullable,
+  Selectable,
+  SelectQueryBuilder,
+} from "kysely";
 import { sql } from "kysely";
 import {
   authorRoleSql,
@@ -24,6 +34,20 @@ export type LearningThreadRow = Selectable<LearningThreadTable>;
 // Kysely represents a `"learning_threads as t"` aliased query with the alias
 // added as its own entry on the DB generic, not the bare table name.
 type ThreadsAliasedDB = Database & { t: LearningThreadTable };
+type MentionsAliasedDB = Database & {
+  m: LearningMentionTable;
+  t: Nullable<LearningThreadTable>;
+  r: Nullable<LearningReplyTable>;
+  pt: Nullable<LearningThreadTable>;
+  tu: Nullable<UserTable>;
+  ru: Nullable<UserTable>;
+  tc: Nullable<CourseTable>;
+  pc: Nullable<CourseTable>;
+  tl: Nullable<CourseLessonTable>;
+  pl: Nullable<CourseLessonTable>;
+};
+type MentionAliases =
+  "m" | "t" | "r" | "pt" | "tu" | "ru" | "tc" | "pc" | "tl" | "pl";
 
 export interface ThreadRowWithAuthor {
   id: string;
@@ -51,6 +75,246 @@ export interface ThreadRowWithAuthor {
   authorAvatarUrl: string | null;
   authorRole: string | null;
 }
+
+export interface MentionWorkspaceRow {
+  mentionId: string;
+  itemType: "thread" | "reply";
+  sourceId: string;
+  mentionedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  parentThreadId: string | null;
+  parentThreadTitle: string | null;
+  kind: DiscussionEntryKind;
+  title: string | null;
+  content: string;
+  plainText: string;
+  timestampSeconds: number | null;
+  courseId: string;
+  courseTitle: string | null;
+  lessonId: string | null;
+  lessonTitle: string | null;
+  userId: string;
+  visibility: DiscussionVisibility | null;
+  status: InteractionStatus | null;
+  isLocked: boolean | null;
+  acceptedAnswerId: string | null;
+  likesCount: number;
+  repliesCount: number | null;
+  authorName: string | null;
+  authorUsername: string | null;
+  authorAvatarUrl: string | null;
+  authorRole: string | null;
+}
+
+export type MentionFilterOptions = Partial<
+  Pick<
+    ListLearningThreadsQuery,
+    "courseId" | "lessonId" | "kind" | "search" | "visibility"
+  >
+> & {
+  academyId: string;
+  currentUserId: string;
+  accessibleCourseIds?: readonly string[];
+  pageCursor?: DiscussionListCursor;
+  limit: number;
+};
+
+function createMentionSourceQuery(db: DatabaseExecutor) {
+  return db
+    .selectFrom("learning_mentions as m")
+    .leftJoin("learning_threads as t", (join) =>
+      join.onRef("t.id", "=", "m.source_id").on("m.source_type", "=", "thread"),
+    )
+    .leftJoin("learning_replies as r", (join) =>
+      join.onRef("r.id", "=", "m.source_id").on("m.source_type", "=", "reply"),
+    )
+    .leftJoin("learning_threads as pt", "pt.id", "r.thread_id")
+    .leftJoin("users as tu", "tu.id", "t.user_id")
+    .leftJoin("users as ru", "ru.id", "r.user_id")
+    .leftJoin("courses as tc", "tc.id", "t.course_id")
+    .leftJoin("courses as pc", "pc.id", "pt.course_id")
+    .leftJoin("course_lessons as tl", "tl.id", "t.lesson_id")
+    .leftJoin("course_lessons as pl", "pl.id", "pt.lesson_id");
+}
+
+function applyMentionFilters<O>(
+  query: SelectQueryBuilder<MentionsAliasedDB, MentionAliases, O>,
+  options: MentionFilterOptions,
+): SelectQueryBuilder<MentionsAliasedDB, MentionAliases, O> {
+  let q = query
+    .where("m.mentioned_user_id", "=", options.currentUserId)
+    .where(
+      sql<boolean>`(
+        (
+          m.source_type = 'thread'
+          and t.id is not null
+          and t.status = 'active'
+          and t.kind in ('comment', 'question')
+        )
+        or (
+          m.source_type = 'reply'
+          and r.id is not null
+          and r.status = 'active'
+          and pt.id is not null
+          and pt.status = 'active'
+          and pt.kind in ('comment', 'question')
+        )
+      )`,
+    )
+    .where(
+      sql<boolean>`(
+        coalesce(tc.id, pc.id) is not null
+        and coalesce(tc.deleted_at, pc.deleted_at) is null
+      )`,
+    )
+    .where(
+      sql<boolean>`(
+        coalesce(t.visibility, pt.visibility) = 'public'
+        or (
+          coalesce(t.visibility, pt.visibility) in ('private', 'unlisted')
+          and coalesce(t.user_id, pt.user_id) = ${options.currentUserId}
+        )
+      )`,
+    )
+    .where(
+      sql<boolean>`coalesce(t.academy_id, pt.academy_id) = ${options.academyId}`,
+    );
+
+  if (options.courseId) {
+    q = q.where(
+      sql<boolean>`coalesce(t.course_id, pt.course_id) = ${options.courseId}`,
+    );
+  } else if (options.accessibleCourseIds) {
+    if (options.accessibleCourseIds.length === 0) {
+      return q.where(sql<boolean>`1 = 0`);
+    }
+    q = q.where(
+      sql<boolean>`coalesce(t.course_id, pt.course_id) in (${sql.join(
+        options.accessibleCourseIds.map((courseId) => sql`${courseId}`),
+        sql`, `,
+      )})`,
+    );
+  }
+
+  if (options.lessonId) {
+    q = q.where(
+      sql<boolean>`coalesce(t.lesson_id, pt.lesson_id) = ${options.lessonId}`,
+    );
+  }
+
+  if (options.kind && options.kind !== "all") {
+    const normalizedKind = options.kind === "qna" ? "question" : options.kind;
+    q = q.where(sql<boolean>`coalesce(t.kind, pt.kind) = ${normalizedKind}`);
+  }
+
+  if (options.visibility) {
+    q = q.where(
+      sql<boolean>`coalesce(t.visibility, pt.visibility) = ${options.visibility}`,
+    );
+  }
+
+  if (options.search) {
+    const pattern = `%${options.search.toLowerCase()}%`;
+    q = q.where(
+      sql<boolean>`(
+        (
+          m.source_type = 'thread'
+          and (
+            lower(coalesce(t.title, '')) like ${pattern}
+            or lower(t.plain_text) like ${pattern}
+          )
+        )
+        or (
+          m.source_type = 'reply'
+          and lower(r.plain_text) like ${pattern}
+        )
+      )`,
+    );
+  }
+
+  if (options.pageCursor) {
+    q = q.where(
+      sql<boolean>`(
+        m.created_at < ${options.pageCursor.createdAt}
+        or (
+          m.created_at = ${options.pageCursor.createdAt}
+          and m.id < ${options.pageCursor.id}::uuid
+        )
+      )`,
+    );
+  }
+
+  return q;
+}
+
+const mentionWorkspaceSelect = [
+  "m.id as mentionId",
+  "m.source_type as itemType",
+  "m.source_id as sourceId",
+  "m.created_at as mentionedAt",
+  sql<Date>`case
+    when m.source_type = 'thread' then t.created_at
+    else r.created_at
+  end`.as("createdAt"),
+  sql<Date>`case
+    when m.source_type = 'thread' then t.updated_at
+    else r.updated_at
+  end`.as("updatedAt"),
+  sql<string | null>`case
+    when m.source_type = 'reply' then pt.id
+    else null
+  end`.as("parentThreadId"),
+  sql<string | null>`case
+    when m.source_type = 'reply' then pt.title
+    else null
+  end`.as("parentThreadTitle"),
+  sql<DiscussionEntryKind>`coalesce(t.kind, pt.kind)`.as("kind"),
+  sql<string | null>`coalesce(t.title, pt.title)`.as("title"),
+  sql<string>`case
+    when m.source_type = 'thread' then t.content
+    else r.content
+  end`.as("content"),
+  sql<string>`case
+    when m.source_type = 'thread' then t.plain_text
+    else r.plain_text
+  end`.as("plainText"),
+  sql<number | null>`case
+    when m.source_type = 'thread' then t.timestamp_seconds
+    else r.timestamp_seconds
+  end`.as("timestampSeconds"),
+  sql<string>`coalesce(t.course_id, pt.course_id)`.as("courseId"),
+  sql<string | null>`coalesce(tc.title, pc.title)`.as("courseTitle"),
+  sql<string | null>`coalesce(t.lesson_id, pt.lesson_id)`.as("lessonId"),
+  sql<string | null>`coalesce(tl.title, pl.title)`.as("lessonTitle"),
+  sql<string>`coalesce(t.user_id, r.user_id)`.as("userId"),
+  sql<string | null>`coalesce(t.visibility, pt.visibility)`.as("visibility"),
+  sql<InteractionStatus | null>`case
+    when m.source_type = 'thread' then t.status
+    else null
+  end`.as("status"),
+  sql<boolean | null>`case
+    when m.source_type = 'thread' then t.is_locked
+    else null
+  end`.as("isLocked"),
+  sql<string | null>`case
+    when m.source_type = 'thread' then t.accepted_answer_id
+    else null
+  end`.as("acceptedAnswerId"),
+  sql<number>`coalesce(t.likes_count, r.likes_count, 0)`.as("likesCount"),
+  sql<number | null>`case
+    when m.source_type = 'thread' then t.replies_count
+    else null
+  end`.as("repliesCount"),
+  sql<string | null>`coalesce(tu.display_name, ru.display_name)`.as(
+    "authorName",
+  ),
+  sql<string | null>`coalesce(tu.username, ru.username)`.as("authorUsername"),
+  sql<string | null>`coalesce(tu.avatar_data_url, ru.avatar_data_url)`.as(
+    "authorAvatarUrl",
+  ),
+  authorRoleSql("coalesce(t.user_id, r.user_id)"),
+] as const;
 
 export type ThreadFilterOptions = ListLearningThreadsQuery & {
   academyId: string;
@@ -91,6 +355,16 @@ export interface ThreadsRepository {
   countThreads(
     db: DatabaseExecutor,
     options: ThreadFilterOptions,
+  ): Promise<number>;
+
+  listMentionItems(
+    db: DatabaseExecutor,
+    options: MentionFilterOptions,
+  ): Promise<MentionWorkspaceRow[]>;
+
+  countMentionItems(
+    db: DatabaseExecutor,
+    options: MentionFilterOptions,
   ): Promise<number>;
 
   updateThread(
@@ -478,6 +752,30 @@ export function createThreadsRepository(): ThreadsRepository {
     async countThreads(db, options) {
       let query = db.selectFrom("learning_threads as t");
       query = applyThreadFilters(query, options);
+      const row = await query
+        .select(sql<number>`count(*)::int`.as("count"))
+        .executeTakeFirst();
+      return Number(row?.count ?? 0);
+    },
+
+    async listMentionItems(db, options) {
+      let query = createMentionSourceQuery(db);
+      query = applyMentionFilters(query, options);
+      const rows = await query
+        .select(mentionWorkspaceSelect)
+        .orderBy("m.created_at", "desc")
+        .orderBy("m.id", "desc")
+        .limit(options.limit + 1)
+        .execute();
+      return rows as MentionWorkspaceRow[];
+    },
+
+    async countMentionItems(db, options) {
+      let query = createMentionSourceQuery(db);
+      query = applyMentionFilters(query, {
+        ...options,
+        pageCursor: undefined,
+      });
       const row = await query
         .select(sql<number>`count(*)::int`.as("count"))
         .executeTakeFirst();
