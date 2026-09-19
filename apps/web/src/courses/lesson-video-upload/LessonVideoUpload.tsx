@@ -1,6 +1,5 @@
 import {
   ArrowsClockwise,
-  Check,
   CheckCircle,
   CircleNotch,
   CloudArrowUp,
@@ -20,7 +19,6 @@ import {
   useState,
   type ChangeEvent,
   type DragEvent,
-  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -1709,24 +1707,6 @@ function TranscodingProgressStage({
         </div>
       </section>
 
-      {/* After Processing Card: 3D raised, 0 borders - only shown when not failed to avoid scrolling */}
-      {!isFailed && (
-        <section className={`${RAISED_CARD_CLASS} p-3.5 sm:p-4`}>
-          <h3 className="m-0 text-[0.8rem] sm:text-[0.82rem] font-semibold text-(--text)">
-            After processing
-          </h3>
-          <div className="mt-2 sm:mt-2.5 space-y-2 text-[0.72rem] sm:text-[0.73rem] text-(--text-secondary)">
-            <RequirementRow>
-              {isReplacement
-                ? "The current video remains attached until this replacement is ready"
-                : "Video will be attached to this lesson automatically"}
-            </RequirementRow>
-            <RequirementRow>
-              You&apos;ll be able to preview the video in the player
-            </RequirementRow>
-          </div>
-        </section>
-      )}
     </div>
   );
 }
@@ -1838,15 +1818,6 @@ function VideoThumbnail({ file }: { file: File | null }) {
         weight="fill"
         className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]"
       />
-    </div>
-  );
-}
-
-function RequirementRow({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex items-center gap-2">
-      <Check size={14} weight="bold" className="shrink-0 text-emerald-400" />
-      <span>{children}</span>
     </div>
   );
 }
