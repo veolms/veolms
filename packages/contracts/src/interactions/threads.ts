@@ -268,6 +268,8 @@ export const workspaceDiscussionItemSchema = z.object({
     .optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  // Present for bookmark workspace items; omitted by existing tabs.
+  bookmarkedAt: z.string().optional(),
 });
 export type WorkspaceDiscussionItem = z.infer<
   typeof workspaceDiscussionItemSchema

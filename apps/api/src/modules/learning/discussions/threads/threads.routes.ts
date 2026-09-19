@@ -12,6 +12,7 @@ import { jsonResponse } from "../../../../lib/responses.ts";
 import type { RoutePlugin } from "../../../../lib/route-plugin.ts";
 import { createDiscussionPermissions } from "../shared/discussion.permissions.ts";
 import { createAttachmentsRepository } from "../attachments/attachments.repository.ts";
+import { createBookmarksRepository } from "../bookmarks/bookmarks.repository.ts";
 import { createThreadsController } from "./threads.controller.ts";
 import { createThreadsRepository } from "./threads.repository.ts";
 import { createThreadsService } from "./threads.service.ts";
@@ -20,7 +21,13 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
   const permissions = createDiscussionPermissions(options);
   const repository = createThreadsRepository();
   const attachmentsRepository = createAttachmentsRepository();
-  const service = createThreadsService(repository, attachmentsRepository);
+  const bookmarksRepository = createBookmarksRepository();
+  const service = createThreadsService(
+    repository,
+    attachmentsRepository,
+    undefined,
+    bookmarksRepository,
+  );
   const controller = createThreadsController({
     database: options.database,
     service,

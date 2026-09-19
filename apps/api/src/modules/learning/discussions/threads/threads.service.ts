@@ -45,6 +45,12 @@ import type {
   ThreadsRepository,
   ThreadRowWithAuthor,
 } from "./threads.repository.ts";
+import {
+  BOOKMARKS_WORKSPACE_SORT,
+  createBookmarksRepository,
+  type BookmarkWorkspaceRow,
+  type BookmarksRepository,
+} from "../bookmarks/bookmarks.repository.ts";
 import type {
   AttachmentsRepository,
   AttachmentSummaryRow,
@@ -129,6 +135,7 @@ export function createThreadsService(
   threadsRepo: ThreadsRepository,
   attachmentsRepo: AttachmentsRepository,
   courseAccess: DiscussionAccess = createDiscussionAccess(),
+  bookmarksRepo: BookmarksRepository = createBookmarksRepository(),
 ): ThreadsService {
   const outbox = createDiscussionOutbox();
 
@@ -145,6 +152,70 @@ export function createThreadsService(
     new Map(
       summaries.map((summary) => [summary.targetId, summary.attachmentSummary]),
     );
+
+  function mapBookmarkWorkspaceItem(
+    row: BookmarkWorkspaceRow,
+    attachmentSummary: DiscussionAttachmentSummary,
+    engagements: {
+      likedThreadIds: Set<string>;
+      likedNoteIds: Set<string>;
+      followedThreadIds: Set<string>;
+      mentionedThreadIds: Set<string>;
+    },
+    currentUserId: string,
+  ): WorkspaceDiscussionItem {
+    const isThread = row.itemType === "thread";
+    const isQuestion = row.kind === "question" || row.kind === "qna";
+    const status = isQuestion
+      ? row.acceptedAnswerId
+        ? "solved"
+        : Number(row.repliesCount || 0) > 0
+          ? "answered"
+          : "open"
+      : undefined;
+
+    const item: WorkspaceDiscussionItem = {
+      id: row.id,
+      itemType: row.itemType,
+      kind: row.kind,
+      title: row.title ?? null,
+      content: row.content,
+      plainText: row.plainText,
+      courseId: row.courseId,
+      courseTitle: row.courseTitle ?? null,
+      lessonId: row.lessonId ?? null,
+      lessonTitle: row.lessonTitle ?? null,
+      timestampSeconds: row.timestampSeconds ?? null,
+      author: {
+        id: row.userId,
+        displayName: row.authorName || "Anonymous Learner",
+        username: row.authorUsername || `user-${row.userId.slice(0, 8)}`,
+        avatarUrl: row.authorAvatarUrl,
+        role: mapAuthorRole(row.authorRole),
+      },
+      visibility: row.visibility,
+      repliesCount: isThread ? Number(row.repliesCount || 0) : 0,
+      likesCount: Number(row.likesCount || 0),
+      isLiked: isThread
+        ? engagements.likedThreadIds.has(row.id)
+        : engagements.likedNoteIds.has(row.id),
+      isBookmarked: true,
+      isOwn: row.userId === currentUserId,
+      attachmentSummary,
+      createdAt: toDate(row.createdAt).toISOString(),
+      updatedAt: toDate(row.updatedAt).toISOString(),
+      bookmarkedAt: toDate(row.bookmarkedAt).toISOString(),
+    };
+
+    if (isThread) {
+      item.status = status;
+      item.isLocked = Boolean(row.isLocked);
+      item.isFollowing = engagements.followedThreadIds.has(row.id);
+      item.isMentioned = engagements.mentionedThreadIds.has(row.id);
+    }
+
+    return item;
+  }
 
   const normalizeNotesWorkspaceSort = (
     sort: ListLearningThreadsQuery["sort"] | undefined,
@@ -703,6 +774,7 @@ export function createThreadsService(
         userId: query.currentUserId || "",
         roles: query.roles || [],
       };
+      const tab = query.tab || "q-and-a";
       const isStaff = actor.roles.some((r) =>
         ["admin", "instructor", "creator", "staff"].includes(r.toLowerCase()),
       );
@@ -718,20 +790,31 @@ export function createThreadsService(
         if (!course) {
           throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
         }
-        await courseAccess.assertCanAccessCourse(db, actor, query.courseId);
+        // Saved Notes use the canonical Note rule that lets their owner read
+        // the Note even if course access has otherwise lapsed. Thread
+        // bookmarks still require canonical course access in the repository.
+        if (tab !== "saved") {
+          await courseAccess.assertCanAccessCourse(db, actor, query.courseId);
+        }
       }
-
-      const tab = query.tab || "q-and-a";
 
       // Notes use the canonical course-access policy for every role. The
       // broader staff shortcut remains unchanged for the existing thread and
       // report tabs below.
       const accessibleCourseIds =
-        tab === "following" || tab === "notes" || tab === "mentions" || !isStaff
+        tab === "saved" ||
+        tab === "following" ||
+        tab === "notes" ||
+        tab === "mentions" ||
+        !isStaff
           ? await courseAccess.listAccessibleCourseIds(db, actor)
           : "all";
 
-      if (accessibleCourseIds !== "all" && accessibleCourseIds.length === 0) {
+      if (
+        accessibleCourseIds !== "all" &&
+        accessibleCourseIds.length === 0 &&
+        tab !== "saved"
+      ) {
         return { items: [], courses: [], nextCursor: null, totalCount: 0 };
       }
 
@@ -756,10 +839,24 @@ export function createThreadsService(
       const academyId = await resolveAcademyId(db);
       const limit = query.limit || 20;
       const sort =
-        tab === "mentions"
-          ? MENTIONS_WORKSPACE_SORT
-          : normalizeThreadSort(query.sort);
+        tab === "saved"
+          ? BOOKMARKS_WORKSPACE_SORT
+          : tab === "mentions"
+            ? MENTIONS_WORKSPACE_SORT
+            : normalizeThreadSort(query.sort);
       const pageCursor = decodeDiscussionCursor(query.cursor);
+
+      if (
+        tab === "saved" &&
+        pageCursor &&
+        pageCursor.sort !== BOOKMARKS_WORKSPACE_SORT
+      ) {
+        throw httpError(
+          400,
+          "INVALID_CURSOR",
+          "The pagination cursor does not match the Bookmarks sort.",
+        );
+      }
 
       if (
         tab === "mentions" &&
@@ -1386,149 +1483,137 @@ export function createThreadsService(
         };
       }
 
-      // Tab: Saved (handles both saved threads and saved notes)
+      // Tab: Saved / Bookmarks. The bookmark relationship is the driving
+      // dataset so threads and notes share one globally ordered stream.
       if (tab === "saved") {
-        const threadOptions = {
-          ...query,
-          tab: "saved" as const,
+        const bookmarkOptions = {
           academyId,
           currentUserId: actor.userId,
-          pageCursor,
-          ...(accessibleCourseIds !== "all" ? { accessibleCourseIds } : {}),
+          accessibleCourseIds,
+          courseId: query.courseId,
+          lessonId: query.lessonId,
+          kind: query.kind,
+          search: query.search,
+          visibility: query.visibility,
         };
 
-        const [threadRows, totalCount] = await Promise.all([
-          threadsRepo.listThreads(db, threadOptions),
-          threadsRepo.countThreads(db, threadOptions),
+        const [bookmarkRows, totalCount] = await Promise.all([
+          bookmarksRepo.listWorkspaceBookmarks(db, {
+            ...bookmarkOptions,
+            pageCursor,
+            limit,
+          }),
+          bookmarksRepo.countWorkspaceBookmarks(db, bookmarkOptions),
         ]);
 
-        const { page, hasMore } = takePage(threadRows, limit);
+        const { page, hasMore } = takePage(bookmarkRows, limit);
+        const threadIds = page
+          .filter((row) => row.itemType === "thread")
+          .map((row) => row.id);
+        const noteIds = page
+          .filter((row) => row.itemType === "note")
+          .map((row) => row.id);
 
-        let likedThreadIds = new Set<string>();
-        let followedThreadIds = new Set<string>();
-        let mentionedThreadIds = new Set<string>();
-        let attachmentSummariesByThreadId = new Map<
-          string,
-          DiscussionAttachmentSummary
-        >();
+        const likedThreadsPromise = threadIds.length
+          ? db
+              .selectFrom("learning_likes")
+              .select("target_id")
+              .where("user_id", "=", actor.userId)
+              .where("target_type", "=", "thread")
+              .where("target_id", "in", threadIds)
+              .execute()
+          : Promise.resolve([] as { target_id: string }[]);
+        const likedNotesPromise = noteIds.length
+          ? db
+              .selectFrom("learning_likes")
+              .select("target_id")
+              .where("user_id", "=", actor.userId)
+              .where("target_type", "=", "note")
+              .where("target_id", "in", noteIds)
+              .execute()
+          : Promise.resolve([] as { target_id: string }[]);
+        const followedThreadsPromise = threadIds.length
+          ? db
+              .selectFrom("learning_follows")
+              .select("thread_id")
+              .where("user_id", "=", actor.userId)
+              .where("thread_id", "in", threadIds)
+              .execute()
+          : Promise.resolve([] as { thread_id: string }[]);
+        const mentionedThreadsPromise = threadIds.length
+          ? Promise.all([
+              db
+                .selectFrom("learning_mentions")
+                .select("source_id")
+                .where("mentioned_user_id", "=", actor.userId)
+                .where("source_type", "=", "thread")
+                .where("source_id", "in", threadIds)
+                .execute(),
+              db
+                .selectFrom("learning_mentions as m")
+                .innerJoin("learning_replies as lr", "lr.id", "m.source_id")
+                .select("lr.thread_id as threadId")
+                .where("m.mentioned_user_id", "=", actor.userId)
+                .where("m.source_type", "=", "reply")
+                .where("lr.status", "=", "active")
+                .where("lr.thread_id", "in", threadIds)
+                .execute(),
+            ]).then(([threadMentions, replyMentions]) => [
+              ...threadMentions.map((mention) => mention.source_id),
+              ...replyMentions.map((mention) => mention.threadId),
+            ])
+          : Promise.resolve([] as string[]);
+        const [
+          likedThreads,
+          likedNotes,
+          followedThreads,
+          mentionedThreads,
+          threadAttachmentRows,
+          noteAttachmentRows,
+        ] = await Promise.all([
+          likedThreadsPromise,
+          likedNotesPromise,
+          followedThreadsPromise,
+          mentionedThreadsPromise,
+          attachmentsRepo.listThreadAttachmentSummaries(db, threadIds),
+          attachmentsRepo.listNoteAttachmentSummaries(db, noteIds),
+        ]);
 
-        if (page.length > 0) {
-          const threadIds = page.map((r) => r.id);
-          const [engagements, attachmentSummaryRows] = await Promise.all([
-            actor.userId
-              ? Promise.all([
-                  db
-                    .selectFrom("learning_likes")
-                    .select("target_id")
-                    .where("user_id", "=", actor.userId)
-                    .where("target_type", "=", "thread")
-                    .where("target_id", "in", threadIds)
-                    .execute(),
-                  db
-                    .selectFrom("learning_follows")
-                    .select("thread_id")
-                    .where("user_id", "=", actor.userId)
-                    .where("thread_id", "in", threadIds)
-                    .execute(),
-                  db
-                    .selectFrom("learning_mentions")
-                    .select("source_id")
-                    .where("mentioned_user_id", "=", actor.userId)
-                    .where("source_type", "=", "thread")
-                    .where("source_id", "in", threadIds)
-                    .execute(),
-                  db
-                    .selectFrom("learning_mentions as m")
-                    .innerJoin("learning_replies as lr", "lr.id", "m.source_id")
-                    .select("lr.thread_id as threadId")
-                    .where("m.mentioned_user_id", "=", actor.userId)
-                    .where("m.source_type", "=", "reply")
-                    .where("lr.thread_id", "in", threadIds)
-                    .execute(),
-                ])
-              : Promise.resolve([[], [], [], []]),
-            attachmentsRepo.listThreadAttachmentSummaries(db, threadIds),
-          ]);
+        const threadAttachmentSummaries =
+          indexAttachmentSummaries(threadAttachmentRows);
+        const noteAttachmentSummaries =
+          indexAttachmentSummaries(noteAttachmentRows);
+        const engagementSets = {
+          likedThreadIds: new Set(likedThreads.map((like) => like.target_id)),
+          likedNoteIds: new Set(likedNotes.map((like) => like.target_id)),
+          followedThreadIds: new Set(
+            followedThreads.map((follow) => follow.thread_id),
+          ),
+          mentionedThreadIds: new Set(mentionedThreads),
+        };
 
-          const [likes, follows, threadMentions, replyMentions] = engagements;
+        const items = page.map((row) =>
+          mapBookmarkWorkspaceItem(
+            row,
+            row.itemType === "thread"
+              ? (threadAttachmentSummaries.get(row.id) ??
+                  emptyAttachmentSummary())
+              : (noteAttachmentSummaries.get(row.id) ??
+                  emptyAttachmentSummary()),
+            engagementSets,
+            actor.userId,
+          ),
+        );
 
-          likedThreadIds = new Set(likes.map((l) => l.target_id));
-          followedThreadIds = new Set(follows.map((f) => f.thread_id));
-          mentionedThreadIds = new Set([
-            ...threadMentions.map((m) => m.source_id),
-            ...replyMentions.map((m) => m.threadId),
-          ]);
-          attachmentSummariesByThreadId = indexAttachmentSummaries(
-            attachmentSummaryRows,
-          );
-        }
-
-        const items: WorkspaceDiscussionItem[] = page.map((row) => {
-          const isQna = row.kind === "question" || row.kind === "qna";
-          const statusVal: QuestionFilterStatus | undefined = isQna
-            ? row.acceptedAnswerId
-              ? "solved"
-              : Number(row.repliesCount || 0) > 0
-                ? "answered"
-                : "open"
-            : undefined;
-
-          return {
-            id: row.id,
-            itemType: "thread",
-            kind: row.kind,
-            title: row.title ?? null,
-            content: row.content,
-            plainText: row.plainText,
-            courseId: row.courseId,
-            courseTitle: row.courseTitle ?? null,
-            lessonId: row.lessonId ?? null,
-            lessonTitle: row.lessonTitle ?? null,
-            timestampSeconds: row.timestampSeconds ?? null,
-            author: {
-              id: row.userId,
-              displayName: row.authorName || "Anonymous Learner",
-              username: row.authorUsername || `user-${row.userId.slice(0, 8)}`,
-              avatarUrl: row.authorAvatarUrl,
-              role: mapAuthorRole(row.authorRole),
-            },
-            status: statusVal,
-            visibility: row.visibility,
-            isLocked: Boolean(row.isLocked),
-            repliesCount: Number(row.repliesCount || 0),
-            likesCount: Number(row.likesCount || 0),
-            isLiked: likedThreadIds.has(row.id),
-            isBookmarked: true,
-            isFollowing: followedThreadIds.has(row.id),
-            isMentioned: mentionedThreadIds.has(row.id),
-            isOwn: row.userId === actor.userId,
-            attachmentSummary:
-              attachmentSummariesByThreadId.get(row.id) ??
-              emptyAttachmentSummary(),
-            createdAt:
-              row.createdAt instanceof Date
-                ? row.createdAt.toISOString()
-                : String(row.createdAt),
-            updatedAt:
-              row.updatedAt instanceof Date
-                ? row.updatedAt.toISOString()
-                : String(row.updatedAt),
-          };
-        });
-
-        let nextCursor: string | null = null;
         const last = page.at(-1);
-        if (hasMore && last) {
-          nextCursor = encodeDiscussionCursor({
-            id: last.id,
-            createdAt: toDate(last.createdAt),
-            sort,
-            updatedAt: last.updatedAt ? toDate(last.updatedAt) : undefined,
-            repliesCount: Number(last.repliesCount || 0),
-            engagement:
-              Number(last.likesCount || 0) + Number(last.repliesCount || 0),
-          });
-        }
+        const nextCursor =
+          hasMore && last
+            ? encodeDiscussionCursor({
+                id: last.bookmarkId,
+                createdAt: toDate(last.bookmarkedAt),
+                sort: BOOKMARKS_WORKSPACE_SORT,
+              })
+            : null;
 
         return {
           items,
