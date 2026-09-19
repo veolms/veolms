@@ -275,7 +275,7 @@ export function LessonMediaWorkspace({
       <div
         className={
           isGroupedVideo
-            ? "overflow-hidden rounded-none border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) shadow-none"
+            ? "overflow-hidden rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) shadow-(--card-shadow)"
             : "contents"
         }
       >
