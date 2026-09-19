@@ -59,8 +59,6 @@ export type ThreadFilterOptions = ListLearningThreadsQuery & {
   pageCursor?: DiscussionListCursor;
 };
 
-
-
 export interface ThreadsRepository {
   createThread(
     db: DatabaseExecutor,
@@ -132,10 +130,6 @@ export interface ThreadsRepository {
     threadId: string,
     status: InteractionStatus,
   ): Promise<void>;
-
-
-
-
 }
 
 function applyThreadFilters<O>(
@@ -237,6 +231,7 @@ function applyThreadFilters<O>(
               .select(sql`1`.as("one"))
               .whereRef("lr.thread_id", "=", "t.id")
               .where("m.source_type", "=", "reply")
+              .where("lr.status", "=", "active")
               .where("m.mentioned_user_id", "=", currentUserId),
           ),
         ]),
@@ -300,6 +295,7 @@ function applyThreadFilters<O>(
               .select(sql`1`.as("one"))
               .whereRef("lr.thread_id", "=", "t.id")
               .where("m.source_type", "=", "reply")
+              .where("lr.status", "=", "active")
               .where("m.mentioned_user_id", "=", currentUserId),
           ),
         ]),
@@ -516,6 +512,12 @@ export function createThreadsRepository(): ThreadsRepository {
     },
 
     async deleteThread(db, threadId) {
+      const replyRows = await db
+        .selectFrom("learning_replies")
+        .select("id")
+        .where("thread_id", "=", threadId)
+        .execute();
+
       await db
         .updateTable("learning_threads")
         .set({
@@ -535,6 +537,21 @@ export function createThreadsRepository(): ThreadsRepository {
         .where("thread_id", "=", threadId)
         .where("status", "!=", "deleted")
         .execute();
+
+      await db
+        .deleteFrom("learning_mentions")
+        .where("source_type", "=", "thread")
+        .where("source_id", "=", threadId)
+        .execute();
+
+      const replyIds = replyRows.map((row) => row.id);
+      if (replyIds.length > 0) {
+        await db
+          .deleteFrom("learning_mentions")
+          .where("source_type", "=", "reply")
+          .where("source_id", "in", replyIds)
+          .execute();
+      }
 
       await db
         .updateTable("learning_attachments")
@@ -616,8 +633,5 @@ export function createThreadsRepository(): ThreadsRepository {
         .where("id", "=", threadId)
         .execute();
     },
-
-
-
   };
 }

@@ -5,7 +5,7 @@ import type {
   MentionSourceType,
 } from "@veolms/database";
 import type { EngagementTargetType } from "@veolms/contracts";
-import type { Kysely, Transaction } from "kysely";
+import { sql, type Kysely, type Transaction } from "kysely";
 import {
   createOutboxService,
   type OutboxService,
@@ -17,6 +17,8 @@ import { createDiscussionAccess } from "./discussion.access.ts";
 const MENTION_PATTERN = /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,30})/g;
 const MAX_ACTOR_NAME = 255;
 const MAX_CONTEXT = 1000;
+
+export type MentionParticipantScope = readonly string[] | "all";
 
 export function createDiscussionOutbox(): OutboxService {
   return createOutboxService();
@@ -30,6 +32,29 @@ export function extractMentionUsernames(content: string): string[] {
     if (username) usernames.add(username);
   }
   return [...usernames];
+}
+
+export async function resolveMentionedUserIds(
+  db: DatabaseExecutor,
+  usernames: readonly string[],
+  participantScope: MentionParticipantScope,
+): Promise<string[]> {
+  if (participantScope !== "all" && participantScope.length === 0) {
+    return [];
+  }
+
+  let query = db
+    .selectFrom("users")
+    .select("id")
+    .where("is_deleted", "=", false)
+    .where(sql<string>`lower(username)`, "in", [...usernames]);
+
+  if (participantScope !== "all") {
+    query = query.where("id", "in", [...participantScope]);
+  }
+
+  const users = await query.execute();
+  return users.map((user) => user.id);
 }
 
 export async function withWriteTransaction<T>(
@@ -104,19 +129,16 @@ export async function syncMentionsAndNotify(
 
   if (usernames.length > 0) {
     const courseAccess = createDiscussionAccess();
-    const participantIds = await courseAccess.listCourseParticipantIds(
+    const participantScope = await courseAccess.listCourseParticipantIds(
       db,
       input.courseId,
     );
-    if (participantIds.length > 0) {
-      const users = await db
-        .selectFrom("users")
-        .select("id")
-        .where("username", "in", usernames)
-        .where("id", "in", participantIds)
-        .execute();
-      for (const user of users) mentionedIds.add(user.id);
-    }
+    const resolvedIds = await resolveMentionedUserIds(
+      db,
+      usernames,
+      participantScope,
+    );
+    for (const userId of resolvedIds) mentionedIds.add(userId);
   }
 
   for (const extraId of input.extraUserIds ?? []) {
