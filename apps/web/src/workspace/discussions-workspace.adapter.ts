@@ -20,10 +20,11 @@ export interface DiscussionWorkspaceCard {
   authorUsername: string;
   avatar: string;
   isOwn: boolean;
-  status: DiscussionWorkspaceStatus;
+  status?: DiscussionWorkspaceStatus;
   visibility?: WorkspaceDiscussionItem["visibility"];
   isLocked: boolean;
   replies: number;
+  likes: number;
   activity: string;
   attachmentSummary: WorkspaceDiscussionItem["attachmentSummary"];
   itemType: WorkspaceDiscussionItem["itemType"];
@@ -65,14 +66,19 @@ function getTitle(item: WorkspaceDiscussionItem, excerpt: string): string {
 
 export function adaptDiscussionWorkspaceItem(
   item: WorkspaceDiscussionItem,
+  options?: { comments?: boolean },
 ): DiscussionWorkspaceCard {
   const excerpt = getExcerpt(item);
   const status =
-    item.status && item.status !== "all" ? item.status : "open";
+    options?.comments
+      ? undefined
+      : item.status && item.status !== "all"
+        ? item.status
+        : "open";
 
   return {
     id: item.id,
-    title: getTitle(item, excerpt),
+    title: options?.comments ? item.title?.trim() || "" : getTitle(item, excerpt),
     excerpt,
     content: item.content,
     plainText: excerpt,
@@ -88,6 +94,7 @@ export function adaptDiscussionWorkspaceItem(
     visibility: item.visibility,
     isLocked: item.isLocked === true,
     replies: item.repliesCount,
+    likes: item.likesCount,
     activity: formatRelativeTime(item.updatedAt || item.createdAt),
     attachmentSummary: item.attachmentSummary,
     itemType: item.itemType,

@@ -145,6 +145,146 @@ test("discussion tabs use canonical routes and browser history", async ({
   await expect(page).toHaveTitle(/^Discussions .* ProCodrr$/);
 });
 
+test("comments workspace uses mine-only body cards", async ({ page }) => {
+  await page.route("**/api/v1/enrollments/courses", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ courses: [] }),
+    });
+  });
+
+  await page.route("**/api/v1/auth/me", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        statusCode: 200,
+        data: {
+          id: "00000000-0000-0000-0000-000000000040",
+          username: "ashi",
+          displayName: "Ashi",
+          email: null,
+          phoneNo: null,
+          emailVerified: false,
+          mobileVerified: false,
+          roles: ["Student"],
+          avatarSrcSet: [],
+          mfaVerified: true,
+          totpEnabled: false,
+          passkeyEnabled: false,
+          mfaMandatory: false,
+        },
+      }),
+    });
+  });
+  await page.route("**/api/v1/navigation/sidenav", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        statusCode: 200,
+        data: { menus: [], permissions: [], roles: ["Student"] },
+      }),
+    });
+  });
+
+  const workspaceRequests: URL[] = [];
+  await page.route("**/api/v1/discussions/workspace**", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    workspaceRequests.push(requestUrl);
+    if (requestUrl.searchParams.get("tab") !== "comments") {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: [],
+          courses: [],
+          nextCursor: null,
+          totalCount: 0,
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        items: [
+          {
+            id: "00000000-0000-0000-0000-000000000010",
+            itemType: "thread",
+            kind: "comment",
+            title: null,
+            content: "**Body-only** comment",
+            plainText: "Body-only comment",
+            courseId: "00000000-0000-0000-0000-000000000020",
+            courseTitle: "TypeScript Foundations",
+            lessonId: "00000000-0000-0000-0000-000000000030",
+            lessonTitle: "Introduction",
+            author: {
+              id: "00000000-0000-0000-0000-000000000040",
+              displayName: "Ashi",
+              username: "ashi",
+              avatarUrl: null,
+              role: "Student",
+            },
+            visibility: "public",
+            repliesCount: 5,
+            likesCount: 2,
+            isOwn: true,
+            attachmentSummary: {
+              count: 1,
+              hasImages: false,
+              hasVideos: false,
+              hasFiles: true,
+            },
+            createdAt: "2026-09-19T08:00:00.000Z",
+            updatedAt: "2026-09-19T08:30:00.000Z",
+          },
+        ],
+        courses: [],
+        nextCursor: null,
+        totalCount: 1,
+      }),
+    });
+  });
+
+  await openApp(page, "/discussions/q-and-a");
+  await page.getByRole("tab", { name: "Comments" }).click();
+  await expect(page).toHaveURL(/\/discussions\/comments$/);
+  const commentsPanel = page.locator("#discussion-panel .swiper-slide-active");
+  await expect(commentsPanel).toHaveCount(1);
+
+  await expect(
+    commentsPanel.getByPlaceholder("Search your comments..."),
+  ).toBeVisible();
+  await expect(
+    commentsPanel.locator('[aria-label="Filter discussions by status"]'),
+  ).toHaveCount(0);
+  await expect(commentsPanel.locator(".discussion-thread--comment")).toHaveCount(
+    1,
+  );
+  await expect(commentsPanel.locator(".discussion-thread__title")).toHaveCount(
+    0,
+  );
+  await expect(commentsPanel.locator(".discussion-thread__status")).toHaveCount(
+    0,
+  );
+  await expect(commentsPanel.locator(".discussion-thread__more")).toHaveCount(0);
+  await expect(
+    commentsPanel.locator(".discussion-thread__engagement"),
+  ).toContainText("2 likes");
+  await expect(
+    commentsPanel.locator(".discussion-hub__comment-markdown"),
+  ).toContainText("Body-only comment");
+
+  const requestUrl = workspaceRequests.at(-1);
+  expect(requestUrl).toBeDefined();
+  expect(requestUrl?.searchParams.get("tab")).toBe("comments");
+  expect(requestUrl?.searchParams.get("mine")).toBe("true");
+  expect(requestUrl?.searchParams.get("limit")).toBe("20");
+  expect(requestUrl?.searchParams.has("status")).toBe(false);
+  expect(requestUrl?.searchParams.has("cursor")).toBe(false);
+});
+
 test("settings and discussion tabs resume within one tab and reset in a new tab", async ({
   page,
   context,

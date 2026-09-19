@@ -18,6 +18,7 @@ import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/Pape
 import { PaperclipIcon as Paperclip } from "@phosphor-icons/react/Paperclip";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { SealCheckIcon as SealCheck } from "@phosphor-icons/react/SealCheck";
+import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import type { CourseRole } from "../courses/catalogue";
 import {
@@ -48,7 +49,7 @@ import {
   type DiscussionWorkspaceCard,
 } from "./discussions-workspace.adapter";
 
-type DiscussionStatus = DiscussionWorkspaceCard["status"];
+type DiscussionStatus = NonNullable<DiscussionWorkspaceCard["status"]>;
 
 type PageTabTone = "blue" | "green" | "gold" | "rose" | "violet";
 
@@ -275,6 +276,95 @@ function DiscussionWorkspaceQuestionContent({
   );
 }
 
+const COMMENT_PREVIEW_MAX_HEIGHT_PX = 48;
+
+function DiscussionWorkspaceCommentContent({
+  thread,
+  expanded,
+  onExpandedChange,
+}: {
+  thread: DiscussionWorkspaceCard;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+}) {
+  const [needsClamp, setNeedsClamp] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const content = useMemo<DiscussionContent>(
+    () => ({
+      format: "markdown",
+      markdown: thread.content.trim() || thread.plainText,
+      plainText: thread.plainText,
+    }),
+    [thread.content, thread.plainText],
+  );
+
+  useEffect(() => {
+    const node = contentRef.current;
+    if (!node) return undefined;
+
+    let frame = 0;
+    const measure = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const nextNeedsClamp =
+          node.scrollHeight > COMMENT_PREVIEW_MAX_HEIGHT_PX + 4;
+        setNeedsClamp((current) =>
+          current === nextNeedsClamp ? current : nextNeedsClamp,
+        );
+      });
+    };
+
+    measure();
+    window.addEventListener("resize", measure);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", measure);
+    };
+  }, [content]);
+
+  return (
+    <div className="discussion-hub__comment-content">
+      <div className="relative">
+        <div
+          ref={contentRef}
+          className="discussion-hub__comment-markdown overflow-hidden transition-[max-height] duration-300 ease-in-out"
+          style={
+            needsClamp && !expanded
+              ? { maxHeight: `${COMMENT_PREVIEW_MAX_HEIGHT_PX}px` }
+              : undefined
+          }
+        >
+          <DiscussionMarkdown
+            content={content}
+            label={`Comment by ${thread.author}`}
+            className="max-w-none"
+          />
+        </div>
+        {needsClamp && !expanded && (
+          <div
+            aria-hidden="true"
+            className="discussion-hub__comment-fade pointer-events-none absolute bottom-0 left-0 right-0 h-8"
+          />
+        )}
+      </div>
+      {needsClamp && (
+        <button
+          type="button"
+          className="discussion-hub__comment-toggle"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onExpandedChange(!expanded);
+          }}
+          aria-expanded={expanded}
+        >
+          {expanded ? "Show less" : "Read more"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function getAttachmentLabel(
   summary: DiscussionWorkspaceCard["attachmentSummary"],
 ): string | null {
@@ -301,12 +391,13 @@ function getVisibilityLabel(
 
 function getDiscussionThreadDestination(
   thread: DiscussionWorkspaceCard,
+  returnPath = "/discussions/q-and-a",
 ): string {
   const basePath = getCoursePlayerPath(
     thread.courseId,
     "courses",
     1,
-    "/discussions/q-and-a",
+    returnPath,
     { threadId: thread.id },
   );
   if (!thread.lessonId) return basePath;
@@ -484,6 +575,135 @@ function DiscussionWorkspaceQuestionCard({
   );
 }
 
+function DiscussionWorkspaceCommentCard({
+  thread,
+  onNavigatePage,
+}: {
+  thread: DiscussionWorkspaceCard;
+  onNavigatePage: NavigateTo;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const attachmentLabel = getAttachmentLabel(thread.attachmentSummary);
+  const visibilityLabel = getVisibilityLabel(thread.visibility);
+  const VisibilityIcon = thread.visibility === "unlisted" ? EyeSlash : Globe;
+  const destination = getDiscussionThreadDestination(
+    thread,
+    "/discussions/comments",
+  );
+  const destinationLabel = [thread.course, thread.lesson]
+    .filter(Boolean)
+    .join(", ");
+
+  return (
+    <article
+      className={`discussion-thread discussion-thread--comment ${
+        expanded ? "is-expanded" : "is-collapsed"
+      }`}
+    >
+      <a
+        className="discussion-thread__navigation-link"
+        href={destination}
+        aria-label={`Open comment${
+          destinationLabel ? ` in ${destinationLabel}` : ""
+        }`}
+        onClick={(event) => {
+          if (
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return;
+          }
+          event.preventDefault();
+          onNavigatePage(destination, { exact: true });
+        }}
+      />
+      <div className="discussion-thread__open discussion-thread__open--overview">
+        <div className="discussion-thread__avatar">
+          <DiscussionAvatar
+            src={thread.avatar || null}
+            className="discussion-thread__avatar-image"
+          />
+        </div>
+        <div className="discussion-thread__body">
+          <div className="discussion-thread__author">
+            <span className="discussion-thread__author-name">
+              {thread.isOwn ? "You" : thread.author}
+            </span>
+            {thread.authorUsername && (
+              <>
+                <span
+                  className="discussion-thread__author-separator"
+                  aria-hidden="true"
+                >
+                  ·
+                </span>
+                <span className="discussion-thread__author-username">
+                  @{thread.authorUsername.replace(/^@+/, "")}
+                </span>
+              </>
+            )}
+          </div>
+          <DiscussionWorkspaceCommentContent
+            thread={thread}
+            expanded={expanded}
+            onExpandedChange={setExpanded}
+          />
+          {(thread.course ||
+            thread.lesson ||
+            attachmentLabel ||
+            visibilityLabel) && (
+            <div className="discussion-thread__context">
+              {thread.course && <span>{thread.course}</span>}
+              {thread.course &&
+                (thread.lesson || attachmentLabel || visibilityLabel) && (
+                  <span aria-hidden="true" />
+                )}
+              {thread.lesson && (
+                <small className="discussion-thread__lesson">
+                  <BookOpen size={13} aria-hidden="true" />
+                  <span>{thread.lesson}</span>
+                </small>
+              )}
+              {thread.lesson && (attachmentLabel || visibilityLabel) && (
+                <span aria-hidden="true" />
+              )}
+              {attachmentLabel && (
+                <DiscussionWorkspaceAttachmentIndicator label={attachmentLabel} />
+              )}
+              {attachmentLabel && visibilityLabel && (
+                <span aria-hidden="true" />
+              )}
+              {visibilityLabel && (
+                <small className="discussion-thread__visibility">
+                  <VisibilityIcon size={13} aria-hidden="true" />
+                  <span>{visibilityLabel}</span>
+                </small>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="discussion-thread__meta">
+          <span className="discussion-thread__engagement">
+            <ThumbsUp size={15} weight="fill" aria-hidden="true" />
+            <span>
+              {thread.likes} {thread.likes === 1 ? "like" : "likes"}
+            </span>
+          </span>
+          <span>
+            <ChatTeardropText size={17} /> {thread.replies}{" "}
+            {thread.replies === 1 ? "reply" : "replies"}
+          </span>
+          <time>{thread.activity}</time>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export function DiscussionsWorkspace({
   tab = "q-and-a",
   onNavigatePage,
@@ -515,6 +735,7 @@ export function DiscussionsWorkspace({
   );
 
   const isQnaTab = activeTab === "q-and-a";
+  const isCommentsTab = activeTab === "comments";
   const workspaceStatus = isQnaTab ? qnaStatus : status;
   const workspaceSort = isQnaTab ? qnaSort : sort;
 
@@ -523,19 +744,24 @@ export function DiscussionsWorkspace({
       tab: activeTab,
       ...(selectedCourseId !== "all" ? { courseId: selectedCourseId } : {}),
       ...(debouncedQuery.trim() ? { search: debouncedQuery.trim() } : {}),
-      ...(isQnaTab ? { mine: true } : {}),
-      status: workspaceStatus as
-        | "all"
-        | "answered"
-        | "mentioned"
-        | "solved"
-        | "open",
+      ...(isQnaTab || isCommentsTab ? { mine: true } : {}),
+      ...(isCommentsTab
+        ? {}
+        : {
+            status: workspaceStatus as
+              | "all"
+              | "answered"
+              | "mentioned"
+              | "solved"
+              | "open",
+          }),
       sort: workspaceSort as "activity" | "latest" | "replies",
       limit: 20,
     }),
     [
       activeTab,
       debouncedQuery,
+      isCommentsTab,
       isQnaTab,
       selectedCourseId,
       workspaceSort,
@@ -559,8 +785,10 @@ export function DiscussionsWorkspace({
     () =>
       workspaceData?.pages
         .flatMap((page) => page.items)
-        .map(adaptDiscussionWorkspaceItem) ?? [],
-    [workspaceData],
+        .map((item) =>
+          adaptDiscussionWorkspaceItem(item, { comments: isCommentsTab }),
+        ) ?? [],
+    [isCommentsTab, workspaceData],
   );
 
   const [knownCourseOptions, setKnownCourseOptions] = useState<
@@ -781,7 +1009,7 @@ export function DiscussionsWorkspace({
       >
         {(_panelTab, preview) => (
           <>
-            {composer && !preview && (
+            {composer && !preview && !isCommentsTab && (
               <DiscussionComposer
                 kind={composer}
                 onCancel={() => setComposer(null)}
@@ -792,7 +1020,9 @@ export function DiscussionsWorkspace({
             <div className="discussion-hub__layout">
               <main className="discussion-hub__feed">
                 <section
-                  className="discussion-hub__filters"
+                  className={`discussion-hub__filters ${
+                    isCommentsTab ? "discussion-hub__filters--comments" : ""
+                  }`}
                   aria-label="Filter discussions"
                 >
                   <label className="discussion-hub__search">
@@ -805,7 +1035,9 @@ export function DiscussionsWorkspace({
                       placeholder={
                         isQnaTab
                           ? "Search your questions..."
-                          : "Search discussions by title or keyword..."
+                          : isCommentsTab
+                            ? "Search your comments..."
+                            : "Search discussions by title or keyword..."
                       }
                       data-search-shortcut-target
                       aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
@@ -818,38 +1050,40 @@ export function DiscussionsWorkspace({
                       ariaLabel="Filter discussions by course"
                       triggerClassName="discussion-hub__select-trigger"
                       contentClassName="discussion-hub__select-content"
-                      matchMenuToContainer={isQnaTab}
+                      matchMenuToContainer={isQnaTab || isCommentsTab}
                       value={selectedCourseId}
                       options={courseOptions}
                     />
                   </div>
-                  <div className="discussion-hub__select">
-                    <ThemedSelect
-                      value={isQnaTab ? qnaStatus : status}
-                      onValueChange={isQnaTab ? setQnaStatus : setStatus}
-                      ariaLabel="Filter discussions by status"
-                      triggerClassName="discussion-hub__select-trigger"
-                      contentClassName="discussion-hub__select-content"
-                      matchMenuToContainer={isQnaTab}
-                      options={
-                        isQnaTab
-                          ? ([
-                              ["all", "All"],
-                              ["open", "Open"],
-                              ["answered", "Answered"],
-                              ["solved", "Solved"],
-                              ["mentioned", "Mentioned"],
-                            ] as const)
-                          : ([
-                              ["all", "Status"],
-                              ["answered", "Answered"],
-                              ["mentioned", "Mentioned"],
-                              ["solved", "Solved"],
-                              ["open", "Open"],
-                            ] as const)
-                      }
-                    />
-                  </div>
+                  {!isCommentsTab && (
+                    <div className="discussion-hub__select">
+                      <ThemedSelect
+                        value={isQnaTab ? qnaStatus : status}
+                        onValueChange={isQnaTab ? setQnaStatus : setStatus}
+                        ariaLabel="Filter discussions by status"
+                        triggerClassName="discussion-hub__select-trigger"
+                        contentClassName="discussion-hub__select-content"
+                        matchMenuToContainer={isQnaTab}
+                        options={
+                          isQnaTab
+                            ? ([
+                                ["all", "All"],
+                                ["open", "Open"],
+                                ["answered", "Answered"],
+                                ["solved", "Solved"],
+                                ["mentioned", "Mentioned"],
+                              ] as const)
+                            : ([
+                                ["all", "Status"],
+                                ["answered", "Answered"],
+                                ["mentioned", "Mentioned"],
+                                ["solved", "Solved"],
+                                ["open", "Open"],
+                              ] as const)
+                        }
+                      />
+                    </div>
+                  )}
                   <div className="discussion-hub__select discussion-hub__select--sort">
                     <Funnel size={17} aria-hidden="true" />
                     <ThemedSelect
@@ -864,7 +1098,7 @@ export function DiscussionsWorkspace({
                                   ? "Newest"
                                   : "Most replies"
                             }`
-                          : `Sort discussions: ${
+                          : `${isCommentsTab ? "Sort comments" : "Sort discussions"}: ${
                               sort === "activity"
                                 ? "Latest activity"
                                 : sort === "replies"
@@ -874,7 +1108,7 @@ export function DiscussionsWorkspace({
                       }
                       triggerClassName="discussion-hub__select-trigger"
                       contentClassName="discussion-hub__select-content"
-                      matchMenuToContainer={isQnaTab}
+                      matchMenuToContainer={isQnaTab || isCommentsTab}
                       options={
                         isQnaTab
                           ? ([
@@ -895,15 +1129,23 @@ export function DiscussionsWorkspace({
                   {isWorkspacePending ? (
                     <div className="discussion-hub__empty" aria-busy="true">
                       <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-                      <h2>Loading discussions…</h2>
+                      <h2>
+                        {isCommentsTab ? "Loading comments…" : "Loading discussions…"}
+                      </h2>
                     </div>
                   ) : isWorkspaceError ? (
                     <div className="discussion-hub__empty" role="alert">
-                      <h2>Unable to load discussions</h2>
+                      <h2>
+                        {isCommentsTab
+                          ? "Unable to load comments"
+                          : "Unable to load discussions"}
+                      </h2>
                       <p>
                         {workspaceError instanceof Error
                           ? workspaceError.message
-                          : "There was a problem loading discussions."}
+                          : isCommentsTab
+                            ? "There was a problem loading comments."
+                            : "There was a problem loading discussions."}
                       </p>
                       <button type="button" onClick={() => void refetch()}>
                         Retry
@@ -911,9 +1153,16 @@ export function DiscussionsWorkspace({
                     </div>
                   ) : cards.length > 0 ? (
                     cards.map((thread) => {
-                      const StatusIcon = statusIcons[thread.status];
+                      const discussionStatus = thread.status ?? "open";
+                      const StatusIcon = statusIcons[discussionStatus];
                       return activeTab === "q-and-a" ? (
                         <DiscussionWorkspaceQuestionCard
+                          key={thread.id}
+                          thread={thread}
+                          onNavigatePage={onNavigatePage}
+                        />
+                      ) : isCommentsTab ? (
+                        <DiscussionWorkspaceCommentCard
                           key={thread.id}
                           thread={thread}
                           onNavigatePage={onNavigatePage}
@@ -930,7 +1179,7 @@ export function DiscussionsWorkspace({
                                 src={thread.avatar || null}
                                 className="discussion-thread__avatar-image"
                               />
-                              {thread.status !== "open" && (
+                              {discussionStatus !== "open" && (
                                 <i aria-hidden="true" />
                               )}
                             </div>
@@ -951,10 +1200,10 @@ export function DiscussionsWorkspace({
                             </div>
                             <div className="discussion-thread__meta">
                               <span
-                                className={`discussion-thread__status is-${thread.status}`}
+                                className={`discussion-thread__status is-${discussionStatus}`}
                               >
                                 <StatusIcon size={15} weight="fill" />{" "}
-                                {statusLabels[thread.status]}
+                                {statusLabels[discussionStatus]}
                               </span>
                               <span>
                                 <ChatTeardropText size={17} /> {thread.replies}{" "}
@@ -982,10 +1231,15 @@ export function DiscussionsWorkspace({
                   ) : (
                     <div className="discussion-hub__empty">
                       <UsersThree size={30} weight="duotone" />
-                      <h2>No discussions match these filters</h2>
+                      <h2>
+                        {isCommentsTab
+                          ? "No comments match these filters"
+                          : "No discussions match these filters"}
+                      </h2>
                       <p>
-                        Try clearing a filter or start a new question for the
-                        course.
+                        {isCommentsTab
+                          ? "Try clearing a filter or choosing another course."
+                          : "Try clearing a filter or start a new question for the course."}
                       </p>
                       <button
                         type="button"
@@ -1005,7 +1259,9 @@ export function DiscussionsWorkspace({
                   <div ref={loadMoreRef} className="min-h-px" aria-live="polite">
                     {isFetchingNextPage && (
                       <p className="py-3 text-center text-xs font-medium text-(--muted)">
-                        Loading more discussions…
+                        {isCommentsTab
+                          ? "Loading more comments…"
+                          : "Loading more discussions…"}
                       </p>
                     )}
                     {isFetchNextPageError && (
