@@ -1,10 +1,12 @@
 import { useEffect, useRef } from "react";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
 import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
 import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
 import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
+import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { XCircleIcon as XCircle } from "@phosphor-icons/react/XCircle";
 import type { NavigateTo } from "../routing/navigation";
 import type { OrderHistoryTabId } from "./orderHistoryData";
@@ -13,6 +15,7 @@ import { OrderHistoryInvoiceModal } from "./OrderHistoryInvoiceModal";
 import { OrderHistoryPagination } from "./OrderHistoryPagination";
 import { OrderHistoryTable } from "./OrderHistoryTable";
 import { useOrderHistoryFilter } from "./useOrderHistoryFilter";
+import { ordersService } from "../services/orders";
 
 export interface OrderHistoryPageProps {
   onNavigatePage?: NavigateTo;
@@ -39,6 +42,7 @@ export function OrderHistoryPage({
   const {
     paginatedOrders,
     totalFilteredCount,
+    totalLoadedCount,
     activeTab,
     setActiveTab,
     searchQuery,
@@ -57,6 +61,12 @@ export function OrderHistoryPage({
     selectedReceiptOrder,
     setSelectedReceiptOrder,
     resetFilters,
+    isLoading,
+    isError,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    refetch,
   } = useOrderHistoryFilter(setNotice);
 
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -87,6 +97,7 @@ export function OrderHistoryPage({
     setNotice?.(
       `Downloading invoice ${order.invoiceNumber} for order ${order.orderNumber}...`,
     );
+    window.open(ordersService.getInvoiceDownloadUrl(order.id), "_blank");
   };
 
   return (
@@ -183,7 +194,25 @@ export function OrderHistoryPage({
 
       {/* Orders Table Feed */}
       <section aria-label="Orders history list" className="flex flex-col gap-4">
-        {paginatedOrders.length > 0 ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center">
+            <CircleNotch size={32} className="animate-spin text-(--accent) mb-3" />
+            <h3 className="text-base font-semibold text-(--text)">Loading order history...</h3>
+          </div>
+        ) : isError ? (
+          <div className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center">
+            <WarningCircle size={32} className="text-rose-400 mb-3" />
+            <h3 className="text-base font-semibold text-(--text)">Unable to load order history</h3>
+            <p className="mt-1 text-xs text-(--muted)">Please check your connection and try again.</p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="mt-4 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-white cursor-pointer"
+            >
+              Retry
+            </button>
+          </div>
+        ) : paginatedOrders.length > 0 ? (
           <>
             <OrderHistoryTable
               orders={paginatedOrders}
@@ -191,7 +220,21 @@ export function OrderHistoryPage({
               setNotice={setNotice}
             />
 
-            {/* Pagination Controls */}
+            {hasNextPage && (
+              <div className="mt-2 flex items-center justify-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                  className="rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs md:text-sm font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer disabled:opacity-50"
+                  style={{ boxShadow: "var(--card-shadow)" }}
+                >
+                  {isFetchingNextPage ? "Loading more orders..." : "Load more orders"}
+                </button>
+              </div>
+            )}
+
+            {/* Pagination Controls (legacy component kept for compatibility) */}
             <OrderHistoryPagination
               currentPage={currentPage}
               totalPages={totalPages}
@@ -240,3 +283,4 @@ export function OrderHistoryPage({
     </div>
   );
 }
+

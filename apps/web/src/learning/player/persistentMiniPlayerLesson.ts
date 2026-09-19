@@ -4,10 +4,24 @@ import {
   lessonsById as defaultLessonsById,
   sections as defaultSections,
 } from "../courseContent";
+import {
+  getCachedVideoPlaybackBootstrap,
+  refreshVideoPlaybackToken,
+} from "../videoPlaybackBootstrap";
+import type {
+  VideoPlaybackBootstrap,
+  VideoPlaybackToken,
+} from "@veolms/contracts";
 import type {
   LearningPlayerPresentation,
   PersistentLearningPlayerRegistration,
 } from "./PersistentLearningPlayerHost";
+
+export interface PersistentMiniPlayerLessonChangeOptions {
+  playbackBootstrap?: VideoPlaybackBootstrap | null;
+  playbackSuspended?: boolean;
+  refreshPlaybackToken?: () => Promise<VideoPlaybackToken>;
+}
 
 export function courseRouteKeyFromLessonPath(
   path?: string | null,
@@ -54,6 +68,7 @@ export function buildPersistentMiniPlayerLessonSequence(
 export function applyPersistentMiniPlayerLessonChange(
   registration: PersistentLearningPlayerRegistration,
   lessonNumber: number,
+  options?: PersistentMiniPlayerLessonChangeOptions,
 ): PersistentLearningPlayerRegistration | null {
   if (lessonNumber === registration.selectedLesson) return null;
 
@@ -90,6 +105,29 @@ export function applyPersistentMiniPlayerLessonChange(
       ? lessonSequence[lessonIndex + 1]
       : undefined;
 
+  const courseSlug =
+    registration.courseSlug ??
+    courseRouteKeyFromLessonPath(registration.lessonPath) ??
+    registration.courseRouteKey;
+
+  const resolvedBootstrap =
+    options && "playbackBootstrap" in options
+      ? options.playbackBootstrap
+      : courseSlug
+        ? getCachedVideoPlaybackBootstrap({ courseSlug, lessonNumber })
+        : null;
+
+  const refreshPlaybackToken =
+    options?.refreshPlaybackToken ??
+    (courseSlug
+      ? () => refreshVideoPlaybackToken({ courseSlug, lessonNumber })
+      : registration.playerProps.refreshPlaybackToken);
+
+  const playbackSuspended =
+    options?.playbackSuspended !== undefined
+      ? options.playbackSuspended
+      : registration.playerProps.playbackSuspended;
+
   return {
     ...registration,
     selectedLesson: lessonNumber,
@@ -98,6 +136,9 @@ export function applyPersistentMiniPlayerLessonChange(
     playerProps: {
       ...registration.playerProps,
       media,
+      playbackBootstrap: resolvedBootstrap,
+      refreshPlaybackToken,
+      playbackSuspended,
       lessonTitle: lesson[1],
       lessonIndex: lessonIndex + 1,
       totalLessons: lessonSequence.length,

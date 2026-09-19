@@ -51,9 +51,15 @@ import {
 } from "../learning/player/persistentPlayerRegistration";
 import {
   applyPersistentMiniPlayerLessonChange,
+  courseRouteKeyFromLessonPath,
   resolveLearningMiniPlayerLessonPath,
   resolveMiniPlayerCourseId,
 } from "../learning/player/persistentMiniPlayerLesson";
+import {
+  getCachedVideoPlaybackBootstrap,
+  getVideoPlaybackBootstrap,
+  refreshVideoPlaybackToken,
+} from "../learning/videoPlaybackBootstrap";
 import type { LearningMiniPlayerSession } from "../learning/player/learningMiniPlayerTypes";
 import {
   closeLearningMiniPlayerSession,
@@ -224,7 +230,7 @@ export default function AcademyLayout() {
   const matches = useMatches();
   const location = useLocation();
   const navigate = useNavigate();
-  const { courseSlug, quizId, assignmentId } = useParams();
+  const { courseSlug, quizId, assignmentId, username, couponId } = useParams();
   const applicationScrollPositionsRef = useRef(
     new Map<string, ApplicationScrollPosition>(),
   );
@@ -274,6 +280,7 @@ export default function AcademyLayout() {
   const surfaceMotionVersionRef = useRef(0);
   const restoringPlayerRef = useRef(false);
   const restoreLearningMiniPlayerRef = useRef<() => void>(() => {});
+  const selectLessonTokenRef = useRef(0);
   const currentLocationPath = `${location.pathname}${location.search}${location.hash}`;
   const route = getMatchedRouteDescriptor(matches, location.pathname);
   const {
@@ -602,8 +609,24 @@ export default function AcademyLayout() {
       const token = Symbol("persistent-learning-player-registration");
       const restoreVersionAtRegistration = playerRestoreVersionRef.current;
       persistentRegistrationTokenRef.current = token;
-      persistentPlayerRef.current = registration;
-      setPersistentPlayer(registration);
+      const existing = persistentPlayerRef.current;
+      const resolvedRegistration =
+        registration.playerProps.playbackBootstrap == null &&
+        existing?.mediaKey === registration.mediaKey &&
+        existing.playerProps.playbackBootstrap != null
+          ? {
+              ...registration,
+              playerProps: {
+                ...registration.playerProps,
+                playbackBootstrap: existing.playerProps.playbackBootstrap,
+                refreshPlaybackToken:
+                  registration.playerProps.refreshPlaybackToken ??
+                  existing.playerProps.refreshPlaybackToken,
+              },
+            }
+          : registration;
+      persistentPlayerRef.current = resolvedRegistration;
+      setPersistentPlayer(resolvedRegistration);
       if (playerPresentationRef.current === "mini") {
         // Opening the learning route while the same (or another) course is
         // minimized should expand into the in-page player, not leave a hollow
@@ -668,14 +691,91 @@ export default function AcademyLayout() {
     const current = persistentPlayerRef.current;
     if (!current || playerPresentationRef.current !== "mini") return;
 
+    const courseSlug =
+      current.courseSlug ??
+      courseRouteKeyFromLessonPath(current.lessonPath) ??
+      current.courseRouteKey;
+
+    const cachedBootstrap = courseSlug
+      ? getCachedVideoPlaybackBootstrap({ courseSlug, lessonNumber })
+      : null;
+
+    const isProtected = Boolean(
+      current.playerProps.protectedPlayback ||
+        current.playerProps.playbackBootstrap != null,
+    );
+
+    const token = ++selectLessonTokenRef.current;
+
+    if (cachedBootstrap || !isProtected || !courseSlug) {
+      const updated = applyPersistentMiniPlayerLessonChange(
+        current,
+        lessonNumber,
+        {
+          playbackBootstrap: cachedBootstrap,
+          playbackSuspended: false,
+        },
+      );
+      if (!updated) return;
+
+      persistentPlayerRef.current = updated;
+      setPersistentPlayer(updated);
+      return;
+    }
+
     const updated = applyPersistentMiniPlayerLessonChange(
       current,
       lessonNumber,
+      {
+        playbackBootstrap: null,
+        playbackSuspended: true,
+      },
     );
     if (!updated) return;
 
     persistentPlayerRef.current = updated;
     setPersistentPlayer(updated);
+
+    void getVideoPlaybackBootstrap({ courseSlug, lessonNumber })
+      .then((bootstrap) => {
+        if (selectLessonTokenRef.current !== token) return;
+        const active = persistentPlayerRef.current;
+        if (
+          !active ||
+          active.selectedLesson !== lessonNumber ||
+          playerPresentationRef.current !== "mini"
+        ) {
+          return;
+        }
+
+        const withBootstrap: PersistentLearningPlayerRegistration = {
+          ...active,
+          playerProps: {
+            ...active.playerProps,
+            playbackBootstrap: bootstrap,
+            playbackSuspended: false,
+            refreshPlaybackToken: () =>
+              refreshVideoPlaybackToken({ courseSlug, lessonNumber }),
+          },
+        };
+        persistentPlayerRef.current = withBootstrap;
+        setPersistentPlayer(withBootstrap);
+      })
+      .catch(() => {
+        if (selectLessonTokenRef.current !== token) return;
+        const active = persistentPlayerRef.current;
+        if (!active || active.selectedLesson !== lessonNumber) return;
+
+        const withError: PersistentLearningPlayerRegistration = {
+          ...active,
+          playerProps: {
+            ...active.playerProps,
+            playbackSuspended: false,
+          },
+        };
+        persistentPlayerRef.current = withError;
+        setPersistentPlayer(withError);
+      });
   };
 
   const selectPersistentMiniPlayerLesson = useCallback(
@@ -1083,6 +1183,8 @@ export default function AcademyLayout() {
         courseSlug={courseSlug}
         quizId={quizId}
         assignmentId={assignmentId}
+        username={username}
+        couponId={couponId}
         miniPlayerCourseId={resolveMiniPlayerCourseId({
           presentation: playerPresentation,
           persistentCourseRouteKey: persistentPlayer?.courseRouteKey,

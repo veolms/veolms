@@ -130,6 +130,9 @@ export const createQuizQuestionRequestSchema = z.strictObject({
   explanation: z.string().max(5_000).nullable().optional(),
   options: z.array(quizOptionInputSchema).min(1).max(100),
 });
+export const createQuizWithQuestionsRequestSchema = createQuizRequestSchema.extend({
+  questions: z.array(createQuizQuestionRequestSchema).max(100),
+});
 export const updateQuizQuestionRequestSchema = createQuizQuestionRequestSchema
   .partial()
   .extend({
@@ -300,6 +303,9 @@ export type BulkQuizAnswersRequest = z.infer<
   typeof bulkQuizAnswersRequestSchema
 >;
 export type CreateQuizRequest = z.infer<typeof createQuizRequestSchema>;
+export type CreateQuizWithQuestionsRequest = z.infer<
+  typeof createQuizWithQuestionsRequestSchema
+>;
 export type UpdateQuizRequest = z.infer<typeof updateQuizRequestSchema>;
 export type CreateQuizQuestionRequest = z.infer<
   typeof createQuizQuestionRequestSchema

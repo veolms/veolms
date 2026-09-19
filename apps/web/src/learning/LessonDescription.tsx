@@ -58,6 +58,10 @@ export function LessonDescription({
   );
   const hasDescription = rawMarkdown.length > 0;
 
+  if (!isLoading && !hasDescription) {
+    return null;
+  }
+
   const expand = () => {
     if (isLoading || !hasDescription) return;
     setExpanded(true);

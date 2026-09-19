@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueries } from "@tanstack/react-query";
+import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "../hooks/useDebounce";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
@@ -15,7 +17,10 @@ import type { QuizStatus } from "@veolms/contracts";
 import { Button } from "../components/Button";
 import { ThemedSelect, type ThemedSelectOption } from "../ThemedSelect";
 import { useMyCourses } from "../services/courses";
+import { useStudents } from "../services/students";
 import {
+  quizKeys,
+  quizzesService,
   useCourseQuizAnalytics,
   useCourseQuizAssignments,
   useMyQuizAssignments,
@@ -61,11 +66,7 @@ function statusLabel(status: QuizStatus) {
       : "Draft";
 }
 
-function useInfiniteList<T>(
-  items: readonly T[],
-  initialLimit = 20,
-  step = 20,
-) {
+function useInfiniteList<T>(items: readonly T[], initialLimit = 20, step = 20) {
   const [limit, setLimit] = useState(initialLimit);
 
   useEffect(() => {
@@ -77,10 +78,7 @@ function useInfiniteList<T>(
     setLimit((prev) => Math.min(prev + step, items.length));
   }, [items.length, step]);
 
-  const displayedItems = useMemo(
-    () => items.slice(0, limit),
-    [items, limit],
-  );
+  const displayedItems = useMemo(() => items.slice(0, limit), [items, limit]);
 
   return {
     displayedItems,
@@ -187,7 +185,9 @@ function QuizPageHeader({
           {description}
         </p>
       </div>
-      {action ? <div className="shrink-0 pt-2 pb-0.5 sm:py-0">{action}</div> : null}
+      {action ? (
+        <div className="shrink-0 pt-2 pb-0.5 sm:py-0">{action}</div>
+      ) : null}
     </header>
   );
 }
@@ -286,10 +286,27 @@ function InstructorOverview({
   const [courseId, setCourseId] = useState<string | null>(null);
   const courseAnalytics = useCourseQuizAnalytics(courseId);
   const assignments = useCourseQuizAssignments(courseId);
+  const studentsQuery = useStudents({ limit: 1 });
+
+  const courseList = useMemo(
+    () => courses.data?.courses ?? [],
+    [courses.data?.courses],
+  );
+
+  const allCourseAnalyticsQueries = useQueries({
+    queries: courseList.map((course) => ({
+      queryKey: quizKeys.courseAnalytics(course.id),
+      queryFn: () => quizzesService.courseAnalytics(course.id),
+      staleTime: 30_000,
+    })),
+  });
 
   useEffect(() => {
-    if (!courseId && courses.data?.courses[0]) {
-      setCourseId(courses.data.courses[0].id);
+    if (courseId && courses.data?.courses) {
+      const exists = courses.data.courses.some((c) => c.id === courseId);
+      if (!exists) {
+        setCourseId(null);
+      }
     }
   }, [courseId, courses.data?.courses]);
 
@@ -299,11 +316,82 @@ function InstructorOverview({
   ).length;
   const drafts = quizzes.filter((quiz) => quiz.status === "draft").length;
 
+  const totalAssignedAssessmentsAcrossAll = useMemo(() => {
+    return allCourseAnalyticsQueries.reduce((sum, q) => {
+      return sum + (q.data?.totalQuizzes ?? 0);
+    }, 0);
+  }, [allCourseAnalyticsQueries]);
+
+  const totalLearnersAcrossAll = useMemo(() => {
+    if (typeof studentsQuery.data?.pages[0]?.totalCount === "number") {
+      return studentsQuery.data.pages[0].totalCount;
+    }
+    const studentCounts = allCourseAnalyticsQueries
+      .map((q) => q.data?.students)
+      .filter((val): val is number => typeof val === "number");
+    if (studentCounts.length > 0) {
+      return Math.max(...studentCounts);
+    }
+    return null;
+  }, [studentsQuery.data, allCourseAnalyticsQueries]);
+
+  const coursesWithAttempts = useMemo(() => {
+    return allCourseAnalyticsQueries
+      .map((q) => q.data)
+      .filter((data): data is NonNullable<typeof data> =>
+        Boolean(
+          data &&
+          data.totalQuizzes > 0 &&
+          (data.quizCompletionRate > 0 ||
+            data.quizzes.some(
+              (q) => q.completionRate > 0 || q.averageScore > 0,
+            )),
+        ),
+      );
+  }, [allCourseAnalyticsQueries]);
+
+  const allCoursesMetrics = useMemo(() => {
+    if (coursesWithAttempts.length === 0) {
+      return { averageScore: null, passRate: null };
+    }
+    const avgScoreSum = coursesWithAttempts.reduce(
+      (sum, c) => sum + c.averageQuizScore,
+      0,
+    );
+    const passRateSum = coursesWithAttempts.reduce(
+      (sum, c) => sum + c.passRate,
+      0,
+    );
+    return {
+      averageScore: Math.round(avgScoreSum / coursesWithAttempts.length),
+      passRate: Math.round(passRateSum / coursesWithAttempts.length),
+    };
+  }, [coursesWithAttempts]);
+
+  const assignedCount =
+    assignments.data?.length ?? analytics?.totalQuizzes ?? 0;
+  const hasCourseAttempts = Boolean(
+    analytics &&
+    assignedCount > 0 &&
+    (analytics.quizCompletionRate > 0 ||
+      analytics.quizzes.some(
+        (q) => q.completionRate > 0 || q.averageScore > 0,
+      )),
+  );
+
   const courseOptions: readonly ThemedSelectOption[] = useMemo(() => {
     const list: ThemedSelectOption[] = [["", "All courses"]];
     const sorted = [...(courses.data?.courses ?? [])].sort((a, b) => {
-      const dateA = a.updatedAt ? Date.parse(a.updatedAt) : a.createdAt ? Date.parse(a.createdAt) : 0;
-      const dateB = b.updatedAt ? Date.parse(b.updatedAt) : b.createdAt ? Date.parse(b.createdAt) : 0;
+      const dateA = a.updatedAt
+        ? Date.parse(a.updatedAt)
+        : a.createdAt
+          ? Date.parse(a.createdAt)
+          : 0;
+      const dateB = b.updatedAt
+        ? Date.parse(b.updatedAt)
+        : b.createdAt
+          ? Date.parse(b.createdAt)
+          : 0;
       return dateB - dateA;
     });
     for (const course of sorted) {
@@ -356,8 +444,18 @@ function InstructorOverview({
         <div className="relative grid gap-4 sm:gap-8 lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-center">
           <div>
             <div className="flex size-9 sm:size-11 items-center justify-center rounded-xl bg-(--accent) text-(--on-accent) shadow-lg shadow-(--accent-shadow)/30">
-              <ChartBar size={20} className="sm:hidden" weight="bold" aria-hidden="true" />
-              <ChartBar size={24} className="hidden sm:block" weight="bold" aria-hidden="true" />
+              <ChartBar
+                size={20}
+                className="sm:hidden"
+                weight="bold"
+                aria-hidden="true"
+              />
+              <ChartBar
+                size={24}
+                className="hidden sm:block"
+                weight="bold"
+                aria-hidden="true"
+              />
             </div>
             <h2 className="mt-3 sm:mt-5 max-w-2xl text-xl font-bold tracking-tight text-(--text) sm:text-3xl">
               A clearer view of assessment health.
@@ -385,7 +483,9 @@ function InstructorOverview({
               triggerClassName="!h-9 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-2.5 sm:!px-3.5 !text-xs sm:!text-sm !font-semibold !text-(--text) focus:!border-(--accent)"
             />
             <p className="text-xs text-(--muted)">
-              {assignments.data?.length ?? 0} assigned assessment{assignments.data?.length === 1 ? "" : "s"} in this course
+              {courseId
+                ? `${assignedCount} assigned assessment${assignedCount === 1 ? "" : "s"} in this course`
+                : `${totalAssignedAssessmentsAcrossAll} assigned assessment${totalAssignedAssessmentsAcrossAll === 1 ? "" : "s"} across ${courseList.length} course${courseList.length === 1 ? "" : "s"}`}
             </p>
           </div>
         </div>
@@ -399,21 +499,71 @@ function InstructorOverview({
         />
         <StatCard
           icon={<Users size={20} weight="bold" />}
-          label="Assigned learners"
-          value={analytics?.students ?? "—"}
-          detail="Across the selected course"
+          label="Enrolled learners"
+          value={
+            courseId
+              ? courseAnalytics.isLoading
+                ? "—"
+                : (analytics?.students ?? 0)
+              : (totalLearnersAcrossAll ?? (studentsQuery.isLoading ? "—" : 0))
+          }
+          detail={courseId ? "Enrolled in this course" : "Across all courses"}
         />
         <StatCard
           icon={<Gauge size={20} weight="bold" />}
           label="Average score"
-          value={analytics ? percent(analytics.averageQuizScore) : "—"}
-          detail="Course-wide average"
+          value={
+            courseId
+              ? courseAnalytics.isLoading
+                ? "—"
+                : hasCourseAttempts
+                  ? percent(analytics?.averageQuizScore)
+                  : "—"
+              : allCoursesMetrics.averageScore !== null
+                ? `${allCoursesMetrics.averageScore}%`
+                : "—"
+          }
+          detail={
+            courseId
+              ? assignedCount === 0
+                ? "No assessments in this course"
+                : hasCourseAttempts
+                  ? "Course-wide average"
+                  : "No graded attempts yet"
+              : allCoursesMetrics.averageScore !== null
+                ? "Across courses with attempts"
+                : totalAssignedAssessmentsAcrossAll > 0
+                  ? "No graded attempts yet"
+                  : "No assessments assigned yet"
+          }
         />
         <StatCard
           icon={<CheckCircle size={20} weight="bold" />}
           label="Pass rate"
-          value={analytics ? percent(analytics.passRate) : "—"}
-          detail="Latest graded outcomes"
+          value={
+            courseId
+              ? courseAnalytics.isLoading
+                ? "—"
+                : hasCourseAttempts
+                  ? percent(analytics?.passRate)
+                  : "—"
+              : allCoursesMetrics.passRate !== null
+                ? `${allCoursesMetrics.passRate}%`
+                : "—"
+          }
+          detail={
+            courseId
+              ? assignedCount === 0
+                ? "No assessments in this course"
+                : hasCourseAttempts
+                  ? "Latest graded outcomes"
+                  : "No graded attempts yet"
+              : allCoursesMetrics.passRate !== null
+                ? "Across courses with attempts"
+                : totalAssignedAssessmentsAcrossAll > 0
+                  ? "No graded attempts yet"
+                  : "No assessments assigned yet"
+          }
           tone="success"
         />
       </div>
@@ -514,11 +664,12 @@ function QuizLibrary({
   onNavigatePage?: (destination: string) => void;
 }) {
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, DEFAULT_DEBOUNCE_DELAY_MS);
   const [status, setStatus] = useState<QuizStatus | "all">("all");
   const visible = quizzes.filter(
     (quiz) =>
       (status === "all" || quiz.status === status) &&
-      quiz.title.toLowerCase().includes(search.trim().toLowerCase()),
+      quiz.title.toLowerCase().includes(debouncedSearch.trim().toLowerCase()),
   );
   const {
     displayedItems: displayedLibraryQuizzes,
@@ -537,14 +688,20 @@ function QuizLibrary({
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-(--muted)">
               Content library
             </p>
-            <h2 id="quiz-library-title" className="mt-1 text-lg sm:text-xl font-semibold">
+            <h2
+              id="quiz-library-title"
+              className="mt-1 text-lg sm:text-xl font-semibold"
+            >
               All quizzes
             </h2>
             <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-(--muted)">
               Draft, publish, and maintain versioned assessment content.
             </p>
           </div>
-          <Button onClick={() => onNavigatePage?.("/quizzes/create")} className="h-9 sm:h-10 text-xs sm:text-sm">
+          <Button
+            onClick={() => onNavigatePage?.("/quizzes/create")}
+            className="h-9 sm:h-10 text-xs sm:text-sm"
+          >
             <Plus size={16} weight="bold" />
             <span>New quiz</span>
           </Button>
@@ -647,8 +804,16 @@ function InstructorAnalytics() {
 
   const courseOptions: readonly ThemedSelectOption[] = useMemo(() => {
     const sorted = [...(courses.data?.courses ?? [])].sort((a, b) => {
-      const dateA = a.updatedAt ? Date.parse(a.updatedAt) : a.createdAt ? Date.parse(a.createdAt) : 0;
-      const dateB = b.updatedAt ? Date.parse(b.updatedAt) : b.createdAt ? Date.parse(b.createdAt) : 0;
+      const dateA = a.updatedAt
+        ? Date.parse(a.updatedAt)
+        : a.createdAt
+          ? Date.parse(a.createdAt)
+          : 0;
+      const dateB = b.updatedAt
+        ? Date.parse(b.updatedAt)
+        : b.createdAt
+          ? Date.parse(b.createdAt)
+          : 0;
       return dateB - dateA;
     });
     return sorted.map((course) => [course.id, course.title] as const);
@@ -682,7 +847,9 @@ function InstructorAnalytics() {
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-(--muted)">
               Instructor reporting
             </p>
-            <h2 className="mt-1 text-lg sm:text-xl font-semibold">Performance overview</h2>
+            <h2 className="mt-1 text-lg sm:text-xl font-semibold">
+              Performance overview
+            </h2>
             <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-(--muted)">
               Compare outcomes at course, assessment, and student level.
             </p>
@@ -737,7 +904,7 @@ function InstructorAnalytics() {
         <StatCard
           label="Average"
           value={
-            assignmentAnalytics.data
+            assignmentAnalytics.data && assignmentAnalytics.data.attempted > 0
               ? percent(assignmentAnalytics.data.averageScore)
               : "—"
           }
@@ -746,7 +913,7 @@ function InstructorAnalytics() {
         <StatCard
           label="Highest"
           value={
-            assignmentAnalytics.data
+            assignmentAnalytics.data && assignmentAnalytics.data.attempted > 0
               ? percent(assignmentAnalytics.data.highestScore)
               : "—"
           }
@@ -756,7 +923,7 @@ function InstructorAnalytics() {
         <StatCard
           label="Lowest"
           value={
-            assignmentAnalytics.data
+            assignmentAnalytics.data && assignmentAnalytics.data.attempted > 0
               ? percent(assignmentAnalytics.data.lowestScore)
               : "—"
           }
@@ -789,6 +956,9 @@ function InstructorAnalytics() {
                   setStudentId(null);
                 }}
                 options={assignmentOptions}
+                searchable
+                searchPlaceholder="Search assessments..."
+                defaultLimit={10}
                 ariaLabel="Select assessment"
                 triggerClassName="!h-9 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-2.5 sm:!px-3.5 !text-xs sm:!text-sm !font-medium !text-(--text) focus:!border-(--accent)"
               />
@@ -803,11 +973,23 @@ function InstructorAnalytics() {
               <MetricTile label="Required" value={analytics.requiredQuizzes} />
               <MetricTile
                 label="Completion"
-                value={percent(analytics.quizCompletionRate)}
+                value={
+                  analytics.totalQuizzes > 0
+                    ? percent(analytics.quizCompletionRate)
+                    : "—"
+                }
               />
               <MetricTile
                 label="Pass rate"
-                value={percent(analytics.passRate)}
+                value={
+                  analytics.totalQuizzes > 0 &&
+                  (analytics.quizCompletionRate > 0 ||
+                    analytics.quizzes.some(
+                      (q) => q.completionRate > 0 || q.averageScore > 0,
+                    ))
+                    ? percent(analytics.passRate)
+                    : "—"
+                }
               />
             </div>
           ) : null}
@@ -948,7 +1130,10 @@ function StudentReportPanel({
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-(--muted)">
             Learner report
           </p>
-          <h2 id="student-report-title" className="mt-1 text-lg sm:text-xl font-semibold">
+          <h2
+            id="student-report-title"
+            className="mt-1 text-lg sm:text-xl font-semibold"
+          >
             Quiz history and outcomes
           </h2>
         </div>
@@ -1074,7 +1259,10 @@ function LearnerQuizDashboard({
       >
         <div className="flex flex-col gap-3 border-b border-(--border) p-3 sm:p-7 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 id="assigned-quizzes-title" className="text-lg sm:text-xl font-semibold">
+            <h2
+              id="assigned-quizzes-title"
+              className="text-lg sm:text-xl font-semibold"
+            >
               Your assessments
             </h2>
             <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-(--muted)">
@@ -1259,7 +1447,9 @@ function LearnerQuizCard({
           <p className="text-[0.68rem] uppercase tracking-[0.12em] text-(--muted) font-semibold">
             Best score
           </p>
-          <p className="mt-1 font-bold text-(--text)">{percent(assignment.bestScore)}</p>
+          <p className="mt-1 font-bold text-(--text)">
+            {percent(assignment.bestScore)}
+          </p>
         </div>
         <div>
           <p className="text-[0.68rem] uppercase tracking-[0.12em] text-(--muted) font-semibold">
@@ -1309,7 +1499,9 @@ function QuizLibraryRow({
           <ChartBar size={20} className="hidden sm:block" weight="bold" />
         </div>
         <div className="min-w-0">
-          <p className="truncate font-semibold text-sm sm:text-base">{quiz.title}</p>
+          <p className="truncate font-semibold text-sm sm:text-base">
+            {quiz.title}
+          </p>
           <p className="mt-0.5 sm:mt-1 text-[0.72rem] sm:text-xs text-(--muted)">
             {latest?.questions.length ?? 0} questions · {published} published
             version{published === 1 ? "" : "s"} · Updated{" "}
@@ -1365,7 +1557,9 @@ function StatCard({
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       <div className="flex items-center justify-between gap-1.5 sm:gap-2">
-        <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">{label}</p>
+        <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
+          {label}
+        </p>
         {icon ? (
           <span className="flex size-6 sm:size-7 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-(--accent)">
             {icon}
@@ -1384,7 +1578,9 @@ function StatCard({
         {value}
       </p>
       {detail ? (
-        <p className="mt-0.5 sm:mt-1 truncate text-[0.68rem] sm:text-xs text-(--muted)">{detail}</p>
+        <p className="mt-0.5 sm:mt-1 truncate text-[0.68rem] sm:text-xs text-(--muted)">
+          {detail}
+        </p>
       ) : null}
     </div>
   );
@@ -1416,7 +1612,9 @@ function SectionHeading({
   return (
     <div className="flex items-start justify-between gap-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3 py-2.5 sm:p-7">
       <div>
-        <h2 className="text-base sm:text-lg font-bold tracking-tight text-(--text)">{title}</h2>
+        <h2 className="text-base sm:text-lg font-bold tracking-tight text-(--text)">
+          {title}
+        </h2>
         {description ? (
           <p className="mt-0.5 text-xs text-(--muted)">{description}</p>
         ) : null}
@@ -1446,10 +1644,18 @@ function QuickAction({
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-xs sm:text-sm font-bold text-(--text)">{title}</span>
-        <span className="mt-0.5 block text-[0.72rem] sm:text-xs text-(--muted)">{detail}</span>
+        <span className="block text-xs sm:text-sm font-bold text-(--text)">
+          {title}
+        </span>
+        <span className="mt-0.5 block text-[0.72rem] sm:text-xs text-(--muted)">
+          {detail}
+        </span>
       </span>
-      <ArrowRight className="ml-auto text-(--muted) group-hover:text-(--accent) transition-colors" size={16} weight="bold" />
+      <ArrowRight
+        className="ml-auto text-(--muted) group-hover:text-(--accent) transition-colors"
+        size={16}
+        weight="bold"
+      />
     </button>
   );
 }

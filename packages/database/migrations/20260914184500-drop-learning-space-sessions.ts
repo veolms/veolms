@@ -11,22 +11,22 @@ export async function up(database: Kysely<unknown>): Promise<void> {
 
   // Clean up any RBAC menu rows for Learning Space
   await sql`
-    update rbac_menus
+    update menus
     set parent_id = null
     where parent_id in (
-      select id from rbac_menus where label = 'Learning Space' or route_link = '/learning-space'
+      select id from menus where label = 'Learning Space' or route_link = '/learning-space'
     )
   `.execute(database);
 
   await sql`
-    delete from role_menu_permissions
+    delete from permissions
     where menu_id in (
-      select id from rbac_menus where label = 'Learning Space' or route_link = '/learning-space'
+      select id from menus where label = 'Learning Space' or route_link = '/learning-space'
     )
   `.execute(database);
 
   await sql`
-    delete from rbac_menus
+    delete from menus
     where label = 'Learning Space' or route_link = '/learning-space'
   `.execute(database);
 }

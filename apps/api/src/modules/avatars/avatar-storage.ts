@@ -1,6 +1,5 @@
+import type { AvatarImageVariant } from "@veolms/contracts";
 import type { S3StorageService } from "@veolms/storage";
-
-export const AVATAR_URL_PREFIX = "/api/v1/avatars";
 
 /** Cap on a manually uploaded photo, enforced server-side (mirrors the
  * client-side check the settings page already does before it uploads). */
@@ -8,6 +7,8 @@ export const AVATAR_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
 /** Looser cap on what we'll download from a provider's own CDN. */
 const PROVIDER_FETCH_MAX_BYTES = 5 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 4_000;
+export const AVATAR_IMAGE_WIDTHS = [45, 96, 160] as const;
+const AVATAR_ORIGINAL_EXTENSIONS = ["jpg", "png", "webp", "gif"] as const;
 export const AVATAR_CONTENT_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -15,35 +16,136 @@ export const AVATAR_CONTENT_TYPES = new Set([
   "image/gif",
 ]);
 
-/** Every user has at most one avatar object, always at this same key — a
- * fresh upload or re-fetched provider photo simply overwrites it in place,
- * so "replace the existing avatar" never needs an explicit delete. */
-export function avatarKey(userId: string): string {
-  return `public/avatars/${userId}`;
+/**
+ * A single namespace segment keeps the existing CDN transform Worker path
+ * contract intact while allowing every uploaded avatar to have immutable
+ * storage of its own.
+ */
+function avatarNamespace(userId: string, avatarId?: string): string {
+  return avatarId ? `${userId}--${avatarId}` : userId;
 }
 
-/** Storage key used before media visibility namespaces were introduced. */
-export function legacyAvatarKey(userId: string): string {
-  return `avatars/${userId}`;
+export function avatarStoragePrefix(userId: string, avatarId?: string): string {
+  return `public/avatars/${avatarNamespace(userId, avatarId)}`;
 }
 
-export function avatarPublicUrl(userId: string): string {
-  return `${AVATAR_URL_PREFIX}/${encodeURIComponent(userId)}`;
+function avatarVariantKey(
+  userId: string,
+  width: number,
+  avatarId?: string,
+): string {
+  return `${avatarStoragePrefix(userId, avatarId)}/${width}.webp`;
 }
+
+export function avatarOriginalKey(
+  userId: string,
+  contentType: string,
+  avatarId?: string,
+): string {
+  const extension =
+    contentType === "image/jpeg"
+      ? "jpg"
+      : contentType === "image/png"
+        ? "png"
+        : contentType === "image/gif"
+          ? "gif"
+          : "webp";
+  return `${avatarStoragePrefix(userId, avatarId)}/original.${extension}`;
+}
+
+export function avatarCdnUrl(
+  storage: S3StorageService,
+  userId: string,
+  width: (typeof AVATAR_IMAGE_WIDTHS)[number] = 160,
+  avatarId?: string,
+): string | null {
+  return storage.getPublicObjectUrl(avatarVariantKey(userId, width, avatarId));
+}
+
+/** Keeps one current original when a user changes image file extensions. */
+export async function removeOtherAvatarOriginals(
+  storage: S3StorageService,
+  userId: string,
+  contentType: string,
+  avatarId?: string,
+): Promise<void> {
+  const currentKey = avatarOriginalKey(userId, contentType, avatarId);
+  await Promise.all(
+    AVATAR_ORIGINAL_EXTENSIONS.map((extension) => {
+      const key = `${avatarStoragePrefix(userId, avatarId)}/original.${extension}`;
+      return key === currentKey
+        ? Promise.resolve()
+        : storage.deleteObject(key).catch(() => undefined);
+    }),
+  );
+}
+
+/** Removes stable CDN variants before a replacement can be served. */
+export async function removeAvatarVariants(
+  storage: S3StorageService,
+  userId: string,
+  avatarId?: string,
+): Promise<void> {
+  await storage.deleteObjects(
+    AVATAR_IMAGE_WIDTHS.map((width) =>
+      avatarVariantKey(userId, width, avatarId),
+    ),
+  );
+}
+
+const AVATAR_VARIANT_URL_PATTERN =
+  /^(.*\/public\/avatars\/[A-Za-z0-9_-]{1,200})\/(?:45|96|160)\.webp([?#].*)?$/u;
 
 export function isStoredAvatarUrl(value: string | null | undefined): boolean {
-  return Boolean(value?.startsWith(`${AVATAR_URL_PREFIX}/`));
+  return Boolean(value && AVATAR_VARIANT_URL_PATTERN.test(value));
 }
 
-/** Stores raw avatar bytes (a manual upload) under the user's fixed R2 key. */
+/** Builds the responsive source set for the canonical 160px CDN URL. */
+export function avatarSrcSetFromUrl(
+  value: string | null | undefined,
+): AvatarImageVariant[] {
+  if (!value) return [];
+  const match = AVATAR_VARIANT_URL_PATTERN.exec(value);
+  if (!match) return [];
+
+  const suffix = match[2] ?? "";
+  return AVATAR_IMAGE_WIDTHS.map((width) => ({
+    url: `${match[1]}/${width}.webp${suffix}`,
+    width,
+    height: width,
+  }));
+}
+
+/**
+ * Stores the uploaded original. The CDN/image-transform Worker creates and
+ * caches the requested WebP variants below this same user prefix:
+ *
+ * public/avatars/{userId--avatarId}/original.{extension}
+ * public/avatars/{userId--avatarId}/{width}.webp
+ *
+ * The database keeps the CDN URL for the 160px variant so browsers never
+ * download the original. Each upload owns its namespace, so avatar history
+ * remains stable while the Worker can continue using the existing path shape.
+ */
 export async function storeAvatarBuffer(
   storage: S3StorageService,
   userId: string,
   data: Buffer,
   contentType: string,
+  avatarId?: string,
 ): Promise<string> {
-  await storage.putObject(avatarKey(userId), data, contentType, data.length);
-  return avatarPublicUrl(userId);
+  const originalKey = avatarOriginalKey(userId, contentType, avatarId);
+  await storage.putObject(originalKey, data, contentType, data.length);
+  await removeAvatarVariants(storage, userId, avatarId);
+  await removeOtherAvatarOriginals(storage, userId, contentType, avatarId);
+
+  const avatarUrl = avatarCdnUrl(storage, userId, 160, avatarId);
+  if (!avatarUrl) {
+    await storage.deleteObject(originalKey).catch(() => undefined);
+    throw new Error("A public CDN URL is required to serve profile avatars.");
+  }
+
+  return avatarUrl;
 }
 
 export function detectImageContentType(
@@ -148,14 +250,15 @@ async function fetchWithRedirectValidation(
 }
 
 /**
- * Downloads a provider profile photo (Google/GitHub) and stores it under the
- * user's fixed R2 key. Returns null on any failure — callers fall back to
+ * Downloads a provider profile photo (Google/GitHub) and stores its original
+ * bytes for the CDN/image-transform Worker. Returns null on any failure — callers fall back to
  * the DiceBear default rather than blocking login or signup on this.
  */
 export async function storeAvatarFromUrl(
   storage: S3StorageService,
   userId: string,
   sourceUrl: string,
+  avatarId?: string,
 ): Promise<string | null> {
   try {
     const response = await fetchWithRedirectValidation(
@@ -197,22 +300,26 @@ export async function storeAvatarFromUrl(
       return null;
     }
 
-    return storeAvatarBuffer(storage, userId, buffer, detectedType);
+    return storeAvatarBuffer(storage, userId, buffer, detectedType, avatarId);
   } catch {
     return null;
   }
 }
 
-/** Deletes the user's stored avatar object. Used only when a profile moves
- * away from an R2-hosted avatar (e.g. onto a DiceBear pick), so the old
- * object doesn't linger as orphaned storage. */
+/** Deletes the user's stored original and any CDN-generated variants. */
 export async function removeAvatar(
   storage: S3StorageService,
   userId: string,
 ): Promise<void> {
-  await Promise.all(
-    [avatarKey(userId), legacyAvatarKey(userId)].map((key) =>
-      storage.deleteObject(key).catch(() => undefined),
-    ),
+  await removeAvatarPrefix(storage, avatarStoragePrefix(userId)).catch(
+    () => undefined,
   );
+}
+
+/** Deletes one explicitly-owned avatar namespace. */
+export async function removeAvatarPrefix(
+  storage: S3StorageService,
+  prefix: string,
+): Promise<void> {
+  await storage.deletePrefix(`${prefix.replace(/\/+$/u, "")}/`);
 }

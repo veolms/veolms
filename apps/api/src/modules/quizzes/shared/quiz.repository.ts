@@ -173,6 +173,18 @@ export async function insertQuestion(
     .executeTakeFirstOrThrow();
 }
 
+export async function insertQuestions(
+  database: DatabaseExecutor,
+  values: Insertable<Database["quiz_questions"]>[],
+) {
+  if (values.length === 0) return [];
+  return await database
+    .insertInto("quiz_questions")
+    .values(values)
+    .returningAll()
+    .execute();
+}
+
 export async function updateQuestion(
   database: DatabaseExecutor,
   questionId: string,

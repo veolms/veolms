@@ -1,5 +1,10 @@
 import type { NotificationCategory } from "@veolms/contracts";
-import { useDeferredValue, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+
+import {
+  DEFAULT_DEBOUNCE_DELAY_MS,
+  useDebounceValue,
+} from "../hooks/useDebounce";
 
 import {
   useArchiveNotification,
@@ -56,7 +61,10 @@ export function useNotificationsFilter(
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("latest");
-  const deferredSearch = useDeferredValue(searchQuery.trim());
+  const [debouncedSearch, setDebouncedSearchImmediately] = useDebounceValue(
+    searchQuery.trim(),
+    DEFAULT_DEBOUNCE_DELAY_MS,
+  );
 
   const filters = useMemo(() => {
     const next: {
@@ -75,9 +83,9 @@ export function useNotificationsFilter(
     }
     if (statusFilter === "unread") next.unread = true;
     if (statusFilter === "read") next.unread = false;
-    if (deferredSearch) next.search = deferredSearch;
+    if (debouncedSearch) next.search = debouncedSearch;
     return next;
-  }, [activeTab, categoryFilter, deferredSearch, statusFilter]);
+  }, [activeTab, categoryFilter, debouncedSearch, statusFilter]);
 
   const feed = useNotifications(filters);
   const mentions = useNotifications({ type: "user.mentioned", limit: 3 });
@@ -133,6 +141,7 @@ export function useNotificationsFilter(
   const resetFilters = () => {
     setActiveTab("all");
     setSearchQuery("");
+    setDebouncedSearchImmediately("");
     setCategoryFilter("all");
     setStatusFilter("all");
     setSortBy("latest");

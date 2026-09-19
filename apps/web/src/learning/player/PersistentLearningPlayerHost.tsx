@@ -31,6 +31,8 @@ import {
   sections as defaultSections,
 } from "../courseContent";
 import type { CourseSection, Lesson } from "../courseContent";
+import { courseRouteKeyFromLessonPath } from "./persistentMiniPlayerLesson";
+import { getVideoPlaybackBootstrap } from "../videoPlaybackBootstrap";
 
 export type LearningPlayerPresentation = "full" | "mini";
 
@@ -75,6 +77,14 @@ export function PersistentLearningPlayerHost({
   const mainScrollportRef = useRef<HTMLElement | null>(
     player.anchor?.closest<HTMLElement>(".courses-main") ?? null,
   );
+  const resolvedScrollport =
+    player.anchor?.closest<HTMLElement>(".courses-main") ??
+    (typeof document !== "undefined"
+      ? document.querySelector<HTMLElement>(".courses-main")
+      : null);
+  if (resolvedScrollport) {
+    mainScrollportRef.current = resolvedScrollport;
+  }
   const lastMiniRectRef = useRef<DOMRect | null>(null);
   const previousPresentationRef = useRef(presentation);
   const restoreCleanupRef = useRef<(() => void) | null>(null);
@@ -243,6 +253,36 @@ export function PersistentLearningPlayerHost({
     miniSelectedLessonIndex < miniLessonSequence.length - 1
       ? miniLessonSequence[miniSelectedLessonIndex + 1]
       : undefined;
+
+  useEffect(() => {
+    if (!mini) return;
+    const courseSlug =
+      player.courseSlug ??
+      courseRouteKeyFromLessonPath(player.lessonPath) ??
+      player.courseRouteKey;
+    if (!courseSlug || !player.playerProps.protectedPlayback) return;
+
+    if (miniNextLessonId !== undefined) {
+      void getVideoPlaybackBootstrap({
+        courseSlug,
+        lessonNumber: miniNextLessonId,
+      }).catch(() => undefined);
+    }
+    if (miniPreviousLessonId !== undefined) {
+      void getVideoPlaybackBootstrap({
+        courseSlug,
+        lessonNumber: miniPreviousLessonId,
+      }).catch(() => undefined);
+    }
+  }, [
+    mini,
+    miniNextLessonId,
+    miniPreviousLessonId,
+    player.courseRouteKey,
+    player.courseSlug,
+    player.lessonPath,
+    player.playerProps.protectedPlayback,
+  ]);
 
   const handleMiniSelectLesson = useCallback(
     (lessonNumber: number) => {

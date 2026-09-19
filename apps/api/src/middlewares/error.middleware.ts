@@ -4,6 +4,7 @@ import {
   isResponseSerializationError,
 } from "fastify-type-provider-zod";
 
+import type { ValidationIssue } from "@veolms/contracts";
 import { AppError, httpError } from "../lib/errors.ts";
 
 /**
@@ -19,12 +20,20 @@ export function registerErrorHandler(app: FastifyInstance): void {
           404,
           "ROUTE_NOT_FOUND",
           `Route ${request.method} ${request.url} does not exist.`,
-        ),
+        ).toJSON(),
       ),
   );
 
   // `TError` defaults to `unknown`, which would leave `error` unusable below.
   app.setErrorHandler<FastifyError>((error, request, reply) => {
+    if (reply.sent || reply.raw.headersSent) {
+      request.log.error(
+        { err: error },
+        "Error occurred after response was already sent",
+      );
+      return;
+    }
+
     if (hasZodFastifySchemaValidationErrors(error)) {
       return reply.code(400).send(
         httpError(
@@ -35,7 +44,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
             path: issue.instancePath,
             message: issue.message ?? "Invalid value.",
           })),
-        ),
+        ).toJSON(),
       );
     }
 
@@ -56,29 +65,62 @@ export function registerErrorHandler(app: FastifyInstance): void {
             500,
             "RESPONSE_SERIALIZATION_FAILED",
             "The server produced an invalid response.",
-          ),
+          ).toJSON(),
         );
     }
 
-    if (error instanceof AppError) {
-      if (error.statusCode >= 500) {
+    const appError =
+      error instanceof AppError
+        ? error
+        : typeof error === "object" &&
+            error !== null &&
+            ("statusCode" in error || "status" in error || "code" in error)
+          ? new AppError(
+              Number(
+                (error as { statusCode?: unknown }).statusCode ||
+                  (error as { status?: unknown }).status ||
+                  500,
+              ),
+              String(
+                (error as { code?: unknown }).code ||
+                  (error as { error?: { code?: unknown } }).error?.code ||
+                  "ERROR",
+              ),
+              String(
+                (error as { message?: unknown }).message ||
+                  (error as { error?: { message?: unknown } }).error?.message ||
+                  "An unexpected error occurred.",
+              ),
+              (error as { issues?: ValidationIssue[] }).issues ||
+                (error as { error?: { issues?: ValidationIssue[] } }).error
+                  ?.issues,
+            )
+          : null;
+
+    if (appError) {
+      if (appError.statusCode >= 500) {
         request.log.error({ err: error }, "Unhandled error");
 
         return reply
-          .code(error.statusCode)
+          .code(appError.statusCode)
           .send(
             httpError(
-              error.statusCode,
-              error.code,
+              appError.statusCode,
+              appError.code,
               "An unexpected error occurred.",
-            ),
+            ).toJSON(),
           );
       }
 
       return reply
-        .code(error.statusCode)
+        .code(appError.statusCode)
         .send(
-          httpError(error.statusCode, error.code, error.message, error.issues),
+          httpError(
+            appError.statusCode,
+            appError.code,
+            appError.message,
+            appError.issues,
+          ).toJSON(),
         );
     }
 
@@ -91,8 +133,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
           500,
           "INTERNAL_SERVER_ERROR",
           "An unexpected error occurred.",
-        ),
+        ).toJSON(),
       );
   });
 }
-

@@ -183,9 +183,13 @@ const parseCoursePlayerSessionCandidate = (
       !origin ||
       !pathOrigin ||
       pathOrigin !== origin ||
-      pathUrl.searchParams.size > 3 ||
+      pathUrl.searchParams.size > 4 ||
       [...pathUrl.searchParams.keys()].some(
-        (key) => key !== "from" && key !== "returnTo" && key !== "view",
+        (key) =>
+          key !== "from" &&
+          key !== "returnTo" &&
+          key !== "thread" &&
+          key !== "view",
       )
     )
       return null;
@@ -195,6 +199,8 @@ const parseCoursePlayerSessionCandidate = (
       candidate.returnPath ?? pathUrl.searchParams.get("returnTo"),
       fallbackReturnPath,
     );
+    const threadId = getCoursePlayerThread(pathUrl.search);
+    const view = getCoursePlayerView(pathUrl.search);
 
     return {
       courseId: candidate.courseId,
@@ -205,6 +211,7 @@ const parseCoursePlayerSessionCandidate = (
         origin,
         lessonId,
         returnPath,
+        { threadId, view },
       ),
       returnPath,
       updatedAt: candidate.updatedAt,
@@ -356,12 +363,31 @@ export function getCoursePlayerReturnPath(search: string): string {
   );
 }
 
+export function getCoursePlayerThread(search: string): string | null {
+  const thread = new URLSearchParams(search).get("thread");
+  const normalized = thread?.trim();
+  return normalized && !normalized.startsWith("client-") ? normalized : null;
+}
+
+export function getCoursePlayerView(
+  search: string,
+): "video" | "quiz" | undefined {
+  return new URLSearchParams(search).get("view") === "quiz"
+    ? "quiz"
+    : undefined;
+}
+
+export interface CoursePlayerPathOptions {
+  threadId?: string | null;
+  view?: "video" | "quiz";
+}
+
 export function getCoursePlayerPath(
   courseId: string,
   origin: CoursePlayerOrigin | LegacyCoursePlayerOrigin,
   lessonIdentifier: string | number = 1,
   returnPath?: string,
-  view?: "video" | "quiz",
+  options?: CoursePlayerPathOptions,
 ): string {
   const normalizedOrigin =
     normalizeCoursePlayerOrigin(origin) ?? DEFAULT_COURSE_PLAYER_ORIGIN;
@@ -374,7 +400,9 @@ export function getCoursePlayerPath(
   const search = new URLSearchParams({ from: normalizedOrigin });
   if (normalizedReturnPath !== fallbackReturnPath)
     search.set("returnTo", normalizedReturnPath);
-  if (view === "quiz") search.set("view", "quiz");
+  const threadId = options?.threadId?.trim();
+  if (threadId && !threadId.startsWith("client-")) search.set("thread", threadId);
+  if (options?.view === "quiz") search.set("view", "quiz");
   return `/learn/${encodeURIComponent(courseId)}/${getLessonSlug(lessonId)}?${search.toString()}`;
 }
 
@@ -448,6 +476,10 @@ export function migrateCoursePlayerSessionKey(
   );
   if (!previousSession) return;
 
+  const previousSearch = new URL(
+    previousSession.path,
+    INTERNAL_URL_ORIGIN,
+  ).search;
   const migratedSession: CoursePlayerSession = {
     ...previousSession,
     courseId: nextCourseId,
@@ -456,6 +488,10 @@ export function migrateCoursePlayerSessionKey(
       previousSession.origin,
       previousSession.lessonId,
       previousSession.returnPath,
+      {
+        threadId: getCoursePlayerThread(previousSearch),
+        view: getCoursePlayerView(previousSearch),
+      },
     ),
     updatedAt: Date.now(),
   };
@@ -492,7 +528,12 @@ export function upsertCoursePlayerSessionFromRoute(
     !hasLaunchContext && existingSession
       ? existingSession.returnPath
       : getCoursePlayerReturnPath(search);
-  const path = getCoursePlayerPath(courseId, origin, lessonId, returnPath);
+  const threadId = getCoursePlayerThread(search);
+  const view = getCoursePlayerView(search);
+  const path = getCoursePlayerPath(courseId, origin, lessonId, returnPath, {
+    threadId,
+    view,
+  });
   const session: CoursePlayerSession = {
     courseId,
     lessonId,

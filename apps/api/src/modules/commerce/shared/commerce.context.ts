@@ -9,6 +9,7 @@ export interface CommerceContext {
   middleware: AuthMiddleware;
   requireAuthenticated: AuthMiddleware["authenticate"][];
   requireAdmin: AuthMiddleware["authenticate"][];
+  requireStaff: AuthMiddleware["authenticate"][];
 }
 
 export function createCommerceContext({
@@ -30,9 +31,24 @@ export function createCommerceContext({
     middleware.requireRoles([ADMIN_ROLE]),
   ];
 
+  const requireStaff = [
+    middleware.authenticate,
+    middleware.requireAuthenticated,
+    middleware.requireMfaVerified,
+    middleware.requireRoles([
+      "admin",
+      "administrator",
+      "platform_admin",
+      "platform administrator",
+      "instructor",
+      "creator",
+    ]),
+  ];
+
   return {
     middleware,
     requireAuthenticated,
     requireAdmin,
+    requireStaff,
   };
 }

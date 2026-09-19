@@ -16,6 +16,10 @@ export default [
     }),
     route("wishlist", marker, { id: "wishlist", caseSensitive: true }),
     route("students", marker, { id: "students", caseSensitive: true }),
+    route("students/:username", marker, {
+      id: "student-details",
+      caseSensitive: true,
+    }),
     route("reviews", marker, { id: "reviews", caseSensitive: true }),
     route("quizzes", marker, { id: "quizzes", caseSensitive: true }),
     route("quizzes/create", marker, { id: "quiz-create", caseSensitive: true }),
@@ -58,6 +62,15 @@ export default [
     }),
     route("settings/:settingsTab?", marker, {
       id: "settings",
+      caseSensitive: true,
+    }),
+    route("coupons", marker, { id: "coupons", caseSensitive: true }),
+    route("coupons/create", marker, {
+      id: "coupon-create",
+      caseSensitive: true,
+    }),
+    route("coupons/:couponId", marker, {
+      id: "coupon-edit",
       caseSensitive: true,
     }),
     route("logout", marker, { id: "logout", caseSensitive: true }),

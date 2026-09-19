@@ -124,6 +124,40 @@ export function createCourseController({
     return await service.deleteCourse(id, creatorId, request.user?.roles);
   }
 
+  async function updateCourseThumbnail(
+    request: FastifyRequest<{
+      Params: { id: string };
+      Body: { thumbnailUrl: string; thumbnailMediaId?: string | null };
+    }>,
+  ) {
+    const { id } = request.params;
+    return await service.updateCourseThumbnail(id, request.body);
+  }
+
+  async function updateCourseDetails(
+    request: FastifyRequest<{
+      Params: { id: string };
+      Body: {
+        title?: string;
+        subtitle?: string | null;
+        description?: string | null;
+        language?: string;
+        level?: "beginner" | "intermediate" | "advanced" | "all_levels";
+        categoryId?: string | null;
+      };
+    }>,
+  ) {
+    const { id } = request.params;
+    return await service.updateCourseDetails(id, request.body);
+  }
+
+  async function archiveCourse(
+    request: FastifyRequest<{ Params: { id: string } }>,
+  ) {
+    const { id } = request.params;
+    return await service.archiveCourse(id);
+  }
+
   return {
     listCourses,
     getCourseBySlug,
@@ -132,6 +166,9 @@ export function createCourseController({
     listMyCourses,
     getCourseEditor,
     updateCourseBasics,
+    updateCourseThumbnail,
+    updateCourseDetails,
+    archiveCourse,
     getCourseOverview,
     deleteCourse,
   };

@@ -21,6 +21,7 @@ export interface NoteRow {
   userId: string;
   authorName?: string | null;
   authorUsername?: string | null;
+  authorAvatarUrl?: string | null;
   courseId: string;
   courseTitle?: string;
   sectionId: string | null;
@@ -67,6 +68,7 @@ const noteSelect = [
   "n.user_id as userId",
   "u.display_name as authorName",
   "u.username as authorUsername",
+  "u.avatar_data_url as authorAvatarUrl",
   "n.course_id as courseId",
   "c.title as courseTitle",
   "s.id as sectionId",
@@ -313,6 +315,7 @@ export function createNotesRepository(): NotesRepository {
             "n.user_id as userId",
             "u.display_name as authorName",
             "u.username as authorUsername",
+            "u.avatar_data_url as authorAvatarUrl",
             "n.course_id as courseId",
             "s.id as sectionId",
             "s.title as sectionTitle",
@@ -394,6 +397,11 @@ export function createNotesRepository(): NotesRepository {
           .deleteFrom("learning_likes")
           .where("target_type", "=", "note")
           .where("target_id", "=", noteId)
+          .execute();
+
+        await trx
+          .deleteFrom("learning_bookmarks")
+          .where("note_id", "=", noteId)
           .execute();
 
         await trx

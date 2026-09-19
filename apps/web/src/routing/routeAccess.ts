@@ -1,12 +1,11 @@
 import type { MfaGateUser } from "../auth/mfaGate";
 import { resolveMfaSetupView } from "../auth/mfaGate";
 import { normalizeNavigationPath } from "./routeDescriptors";
+import { CREATOR_ROLES, normalizeRoles } from "../shell/workspaceRole";
 
 export const APP_HOME_PATH = "/courses";
 export const LOGIN_PATH = "/login";
 export const MFA_CHALLENGE_PATH = "/mfa-setup?mfa=required";
-
-const COURSE_AUTHOR_ROLES = new Set(["admin", "creator", "instructor"]);
 
 // Temporary product flag: keep lessons accessible while the login flow is disabled.
 // Set this to false to restore authentication for learning routes.
@@ -36,15 +35,21 @@ export function isSettingsPath(pathname: string): boolean {
 
 export function isCourseAuthorPath(pathname: string): boolean {
   const path = pathname.split(/[?#]/, 1)[0] || "/";
-  return normalizeAppPath(path) === "/courses/create";
+  const normalized = normalizeAppPath(path);
+  return (
+    normalized === "/courses/create" ||
+    normalized === "/students" ||
+    normalized.startsWith("/students/") ||
+    normalized === "/quizzes/create" ||
+    (normalized.startsWith("/quizzes/") &&
+      !normalized.startsWith("/quizzes/attempt/"))
+  );
 }
 
 export function hasCourseAuthorRole(
   roles: readonly string[] | null | undefined,
 ): boolean {
-  return Boolean(
-    roles?.some((role) => COURSE_AUTHOR_ROLES.has(role.trim().toLowerCase())),
-  );
+  return normalizeRoles(roles).some((role) => CREATOR_ROLES.has(role));
 }
 
 export function shouldRedirectFromCourseAuthorPath(

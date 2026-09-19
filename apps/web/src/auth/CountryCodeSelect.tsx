@@ -61,6 +61,7 @@ export function CountryCodeSelect({
       options={COUNTRY_OPTIONS}
       searchable
       searchPlaceholder="Search country or code..."
+      menuMinWidth={260}
       triggerClassName={`country-code-select__trigger ${triggerClassName}`.trim()}
       value={selectedCountry.id}
     />

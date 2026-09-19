@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { refundSchema } from "./refund.ts";
 
 export const bundleStatusSchema = z.enum(["draft", "published", "archived"]);
 export type BundleStatus = z.infer<typeof bundleStatusSchema>;
@@ -111,10 +112,38 @@ export const couponSchema = z.strictObject({
   isActive: z.boolean().default(true),
   restrictedCourseIds: z.array(z.uuid()).nullable().optional(),
   restrictedBundleIds: z.array(z.uuid()).nullable().optional(),
+  redemptionCount: z.number().int().nonnegative().default(0),
+  totalDiscountGiven: z.number().int().nonnegative().default(0),
   createdAt: z.string().or(z.date()),
   updatedAt: z.string().or(z.date()),
 });
 export type Coupon = z.infer<typeof couponSchema>;
+
+export const listCouponsQuerySchema = z.object({
+  courseId: z.uuid().optional(),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+});
+export type ListCouponsQuery = z.infer<typeof listCouponsQuerySchema>;
+
+export const couponSummarySchema = z.object({
+  totalCount: z.number().int().nonnegative(),
+  activeCount: z.number().int().nonnegative(),
+  scheduledCount: z.number().int().nonnegative(),
+  expiredCount: z.number().int().nonnegative(),
+  inactiveCount: z.number().int().nonnegative(),
+  totalRedemptions: z.number().int().nonnegative(),
+  totalDiscountGiven: z.number().int().nonnegative(),
+});
+export type CouponSummary = z.infer<typeof couponSummarySchema>;
+
+export const couponListResponseSchema = z.object({
+  items: z.array(couponSchema),
+  nextCursor: z.string().nullable(),
+  totalCount: z.number().int().nonnegative().optional(),
+  summary: couponSummarySchema.optional(),
+});
+export type CouponListResponse = z.infer<typeof couponListResponseSchema>;
 
 export const createCouponRequestSchema = z.strictObject({
   code: z.string().min(1).max(50).toUpperCase(),
@@ -210,6 +239,145 @@ export const pricingCalculationSchema = z.strictObject({
 });
 export type PricingCalculation = z.infer<typeof pricingCalculationSchema>;
 
+export const orderScopeTypeSchema = z.enum(["user", "academy"]);
+export type OrderScopeType = z.infer<typeof orderScopeTypeSchema>;
+
+export const orderScopeSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("user"), id: z.string().uuid() }),
+  z.object({ type: z.literal("academy"), id: z.string().uuid() }),
+]);
+export type OrderScope = z.infer<typeof orderScopeSchema>;
+
+export const orderSortOrderSchema = z.enum(["asc", "desc"]);
+export type OrderSortOrder = z.infer<typeof orderSortOrderSchema>;
+
+export const orderViewSchema = z.enum(["admin", "student"]);
+export type OrderView = z.infer<typeof orderViewSchema>;
+
+// UTC ISO-8601 with up to microsecond precision, matching what the API emits
+// (Postgres `timestamptz` keeps microseconds). The value is bound into SQL and
+// cast with `::timestamptz`, so anything Postgres would reject has to be
+// refused here to surface as a 400 rather than a database error.
+const orderCursorTimestampPattern =
+  /^(?!0000)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/;
+
+export const orderCursorPayloadSchema = z.object({
+  id: z.string().uuid(),
+  createdAt: z.string().regex(orderCursorTimestampPattern),
+  sortOrder: orderSortOrderSchema,
+});
+export type OrderCursorPayload = z.infer<typeof orderCursorPayloadSchema>;
+
+function toBase64Url(str: string): string {
+  const g = globalThis as unknown as { Buffer?: { from: (s: string, enc: string) => { toString: (enc: string) => string } } };
+  if (typeof g.Buffer !== "undefined") {
+    return g.Buffer.from(str, "utf-8").toString("base64url");
+  }
+  return btoa(unescape(encodeURIComponent(str)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+function fromBase64Url(str: string): string {
+  const g = globalThis as unknown as { Buffer?: { from: (s: string, enc: string) => { toString: (enc: string) => string } } };
+  if (typeof g.Buffer !== "undefined") {
+    return g.Buffer.from(str, "base64url").toString("utf-8");
+  }
+  let base64 = str.replace(/-/g, "+").replace(/_/g, "/");
+  while (base64.length % 4) {
+    base64 += "=";
+  }
+  return decodeURIComponent(escape(atob(base64)));
+}
+
+export function encodeOrderCursor(payload: OrderCursorPayload): string {
+  return toBase64Url(JSON.stringify(payload));
+}
+
+export function decodeOrderCursor(
+  cursor: string,
+  expectedSortOrder: OrderSortOrder = "desc",
+): OrderCursorPayload {
+  try {
+    const raw = fromBase64Url(cursor);
+    const parsed = JSON.parse(raw);
+    const result = orderCursorPayloadSchema.safeParse(parsed);
+    if (!result.success) {
+      throw new Error("Invalid cursor format");
+    }
+    if (result.data.sortOrder !== expectedSortOrder) {
+      throw new Error("Cursor sort specification does not match request");
+    }
+    // JS rolls impossible dates over (2026-02-30 -> 2026-03-02) where Postgres
+    // errors, so require the parsed value to round-trip to the same instant.
+    const createdAtDate = new Date(result.data.createdAt);
+    if (
+      Number.isNaN(createdAtDate.getTime()) ||
+      createdAtDate.toISOString().slice(0, 19) !==
+        result.data.createdAt.slice(0, 19)
+    ) {
+      throw new Error("Invalid cursor timestamp");
+    }
+    return result.data;
+  } catch (err: unknown) {
+    throw new Error(err instanceof Error ? err.message : "Invalid cursor");
+  }
+}
+
+export const orderStudentInfoSchema = z.strictObject({
+  id: z.string().uuid(),
+  name: z.string(),
+  displayName: z.string().optional(),
+  email: z.string().nullable().optional(),
+  username: z.string(),
+});
+export type OrderStudentInfo = z.infer<typeof orderStudentInfoSchema>;
+
+// Deliberately not strict: `payments.payment_method` is untyped jsonb written
+// by several paths (gateway webhooks, manual grants, free checkout) and can
+// carry keys we don't want to expose. A plain object strips anything not
+// listed here, and an unexpected extra key can't fail serialization of a
+// whole list response.
+export const orderPaymentMethodSchema = z.object({
+  method: z.string(),
+  bank: z.string().nullable().optional(),
+  wallet: z.string().nullable().optional(),
+  vpa: z.string().nullable().optional(),
+  cardLast4: z.string().nullable().optional(),
+  cardNetwork: z.string().nullable().optional(),
+  transactionReference: z.string().nullable().optional(),
+});
+export type OrderPaymentMethod = z.infer<typeof orderPaymentMethodSchema>;
+
+export const orderAdminDetailsSchema = z.strictObject({
+  student: orderStudentInfoSchema,
+  coupon: z
+    .strictObject({
+      id: z.string().uuid(),
+      code: z.string(),
+      discountType: couponDiscountTypeSchema,
+      discountValue: z.number(),
+    })
+    .nullable()
+    .optional(),
+  refunds: z.array(refundSchema).optional(),
+  payment: z
+    .strictObject({
+      id: z.string().uuid(),
+      gatewayProvider: z.string(),
+      gatewayOrderId: z.string(),
+      gatewayPaymentId: z.string().nullable().optional(),
+      amount: z.number(),
+      currency: z.string(),
+      status: z.string(),
+      paymentMethod: orderPaymentMethodSchema.nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+});
+export type OrderAdminDetails = z.infer<typeof orderAdminDetailsSchema>;
+
 export const purchaseItemSnapshotSchema = z.strictObject({
   id: z.uuid(),
   purchaseId: z.uuid().optional(),
@@ -250,6 +418,7 @@ export const purchaseSchema = z.strictObject({
   paidAt: z.string().or(z.date()).nullable().optional(),
   createdAt: z.string().or(z.date()),
   updatedAt: z.string().or(z.date()),
+  admin: orderAdminDetailsSchema.optional(),
 });
 export type Purchase = z.infer<typeof purchaseSchema>;
 export const orderSchema = purchaseSchema;
@@ -309,3 +478,60 @@ export const invoiceSchema = z.strictObject({
   createdAt: z.string().or(z.date()),
 });
 export type Invoice = z.infer<typeof invoiceSchema>;
+
+export const ordersListQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().max(100).optional(),
+  courseId: z.string().uuid().optional(),
+  couponId: z.string().uuid().optional(),
+  status: orderStatusSchema.optional(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  sortOrder: orderSortOrderSchema.default("desc"),
+  view: orderViewSchema.optional(),
+});
+export type OrdersListQueryInput = z.input<typeof ordersListQuerySchema>;
+export type OrdersListQueryOutput = z.output<typeof ordersListQuerySchema>;
+// The validated query (defaults applied, dates coerced) is what handlers
+// receive; `OrdersListQueryInput` is what a client may send.
+export type OrdersListQuery = OrdersListQueryOutput;
+
+export const ordersListResponseSchema = z.strictObject({
+  orders: z.array(orderSchema),
+  nextCursor: z.string().nullable(),
+});
+export type OrdersListResponse = z.infer<typeof ordersListResponseSchema>;
+
+export const orderStatsQuerySchema = z.object({
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  courseId: z.string().uuid().optional(),
+  couponId: z.string().uuid().optional(),
+  status: orderStatusSchema.optional(),
+  // ISO 4217 code. Amounts in different currencies can't be summed, so the
+  // figures always describe one currency; omit to get the one with the most
+  // orders and read `currencies` in the response for the others.
+  currency: z.string().length(3).optional(),
+});
+export type OrderStatsQuery = z.infer<typeof orderStatsQuerySchema>;
+
+export const orderStatsResponseSchema = z.strictObject({
+  netRevenue: z.number().int(),
+  totalOrders: z.number().int().nonnegative(),
+  uniqueBuyers: z.number().int().nonnegative(),
+  refundedAmount: z.number().int().nonnegative(),
+  currency: z.string().length(3).default("INR"),
+  // Every currency present among the matching orders, so a caller can offer a
+  // switch and re-query with `currency`.
+  currencies: z.array(z.string().length(3)),
+});
+export type OrderStatsResponse = z.infer<typeof orderStatsResponseSchema>;
+
+export const orderDirectRefundRequestSchema = z.strictObject({
+  amount: z.number().int().positive().optional(),
+  reason: z.string().max(500).optional(),
+  preserveAccess: z.boolean().default(false),
+  idempotencyKey: z.string().min(1).max(255).optional(),
+});
+export type OrderDirectRefundRequest = z.infer<typeof orderDirectRefundRequestSchema>;

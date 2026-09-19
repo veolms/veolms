@@ -85,7 +85,7 @@
 
 .country-code-select__menu {
   min-width: 260px;
-  max-width: min(340px, calc(100vw - 24px));
+  max-width: min(300px, calc(100vw - 24px));
 }
 
 .country-code-select__trigger:focus-visible:not([data-state="open"]),
@@ -142,7 +142,7 @@
 .themed-select__content {
   z-index: 700;
   box-sizing: border-box;
-  max-width: calc(100vw - 24px);
+  max-width: min(300px, calc(100vw - 24px));
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
   border-radius: 10px;
@@ -278,10 +278,10 @@
 
 .themed-select__item-content {
   display: inline-flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  overflow: hidden;
 }
 
 .themed-select__item-flag {
@@ -293,9 +293,10 @@
 }
 
 .themed-select__item-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .themed-select__indicator {

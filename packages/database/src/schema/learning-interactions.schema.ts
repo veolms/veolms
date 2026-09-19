@@ -67,7 +67,8 @@ export interface LearningLikeTable {
 export interface LearningBookmarkTable {
   id: string;
   user_id: string;
-  thread_id: string;
+  thread_id: string | null;
+  note_id: string | null;
   created_at: Generated<Date>;
 }
 

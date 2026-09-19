@@ -38,13 +38,16 @@ export interface UserTable {
   updated_at: Generated<Date>;
 }
 
-export interface RoleTable {
+export type UserAvatarSource = "upload" | "google" | "github";
+
+export interface UserAvatarTable {
   id: string;
-  name: string;
-  description: string | null;
-  last_permission_update: Generated<Date>;
+  user_id: string;
+  source: UserAvatarSource;
+  storage_prefix: string;
+  avatar_data_url: string;
   created_at: Generated<Date>;
-  updated_at: Generated<Date>;
+  last_used_at: Generated<Date>;
 }
 
 export interface UserRoleTable {
@@ -66,7 +69,7 @@ export interface MenuTable {
   updated_at: Generated<Date>;
 }
 
-export interface PermissionTable {
+export interface MenuPermissionTable {
   id: string;
   role_id: string;
   menu_id: string;

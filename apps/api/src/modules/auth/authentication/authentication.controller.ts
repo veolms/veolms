@@ -3,21 +3,18 @@ import {
   clearSessionCookie,
   setSessionCookie,
 } from "../shared/auth.cookies.ts";
-import { presentLogin } from "../shared/auth.presenters.ts";
+import { presentAvatar, presentLogin } from "../shared/auth.presenters.ts";
 import {
   normalizePhoneIdentifier,
   resolveIdentifier,
 } from "../shared/auth.utils.ts";
-import {
-  AVATAR_CONTENT_TYPES,
-  AVATAR_UPLOAD_MAX_BYTES,
-  detectImageContentType,
-} from "../../avatars/index.ts";
-import { AppError } from "../../../lib/errors.ts";
 import type {
+  AvatarUploadCompleteRequest,
+  AvatarUploadPresignRequest,
   LoginRequest,
   ProfileUpdateRequest,
   RegisterRequest,
+  SelectAvatarRequest,
 } from "@veolms/contracts";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
@@ -107,7 +104,7 @@ export function createAuthController(context: AuthContext) {
       id: user.id,
       username: user.username,
       displayName: user.displayName,
-      avatarDataUrl: user.avatarDataUrl,
+      ...presentAvatar(user.avatarDataUrl),
       bio: user.bio,
       emailPublic: Boolean(
         user.emailPublic && user.email && user.emailVerified,
@@ -143,7 +140,7 @@ export function createAuthController(context: AuthContext) {
       id: updated.id,
       username: updated.username,
       displayName: updated.display_name,
-      avatarDataUrl: updated.avatar_data_url,
+      ...presentAvatar(updated.avatar_data_url),
       bio: updated.bio,
       emailPublic: Boolean(
         updated.email_public && updated.email && updated.email_verified_at,
@@ -169,39 +166,104 @@ export function createAuthController(context: AuthContext) {
     };
   }
 
-  async function uploadAvatar(request: FastifyRequest) {
+  async function presignAvatarUpload(
+    request: FastifyRequest<{ Body: AvatarUploadPresignRequest }>,
+  ) {
     const user = request.user!;
+    return authService.presignAvatarUpload(user.id, request.body);
+  }
 
-    const file = await request.file();
-    if (!file) {
-      throw new AppError(
-        400,
-        "INVALID_AVATAR_FILE",
-        "Choose a JPEG, PNG, WebP, or GIF image.",
-      );
-    }
-
-    const buffer = await file.toBuffer();
-    const contentType = detectImageContentType(buffer);
-    if (!contentType || !AVATAR_CONTENT_TYPES.has(contentType)) {
-      throw new AppError(
-        400,
-        "INVALID_AVATAR_FILE",
-        "Choose a JPEG, PNG, WebP, or GIF image.",
-      );
-    }
-
-    const updated = await authService.uploadAvatarPhoto(
+  async function completeAvatarUpload(
+    request: FastifyRequest<{ Body: AvatarUploadCompleteRequest }>,
+  ) {
+    const user = request.user!;
+    const updated = await authService.completeAvatarUpload(
       user.id,
-      buffer,
-      contentType,
+      request.body,
     );
 
     return {
       id: updated.id,
       username: updated.username,
       displayName: updated.display_name,
-      avatarDataUrl: updated.avatar_data_url,
+      ...presentAvatar(updated.avatar_data_url),
+      bio: updated.bio,
+      emailPublic: Boolean(
+        updated.email_public && updated.email && updated.email_verified_at,
+      ),
+      mobilePublic: Boolean(
+        updated.mobile_public && updated.phone_no && updated.phone_verified_at,
+      ),
+      linkedinUrl: updated.linkedin_url,
+      linkedinPublic: Boolean(updated.linkedin_public && updated.linkedin_url),
+      githubUrl: updated.github_url,
+      githubPublic: Boolean(updated.github_public && updated.github_url),
+      websiteUrl: updated.website_url,
+      websitePublic: Boolean(updated.website_public && updated.website_url),
+      email: updated.email,
+      emailVerified: Boolean(updated.email_verified_at),
+      phoneNo: updated.phone_no,
+      mobileVerified: Boolean(updated.phone_verified_at),
+      roles: updated.roles,
+      mfaVerified: request.session?.mfa_verified ?? false,
+      totpEnabled: user.totpEnabled,
+      passkeyEnabled: user.passkeyEnabled,
+      mfaMandatory: user.mfaMandatory,
+    };
+  }
+
+  async function listAvatars(request: FastifyRequest) {
+    return authService.listAvatars(request.user!.id);
+  }
+
+  async function selectAvatar(
+    request: FastifyRequest<{ Body: SelectAvatarRequest }>,
+  ) {
+    const user = request.user!;
+    const updated = await authService.selectAvatar(
+      user.id,
+      request.body.avatarId,
+    );
+
+    return {
+      id: updated.id,
+      username: updated.username,
+      displayName: updated.display_name,
+      ...presentAvatar(updated.avatar_data_url),
+      bio: updated.bio,
+      emailPublic: Boolean(
+        updated.email_public && updated.email && updated.email_verified_at,
+      ),
+      mobilePublic: Boolean(
+        updated.mobile_public && updated.phone_no && updated.phone_verified_at,
+      ),
+      linkedinUrl: updated.linkedin_url,
+      linkedinPublic: Boolean(updated.linkedin_public && updated.linkedin_url),
+      githubUrl: updated.github_url,
+      githubPublic: Boolean(updated.github_public && updated.github_url),
+      websiteUrl: updated.website_url,
+      websitePublic: Boolean(updated.website_public && updated.website_url),
+      email: updated.email,
+      emailVerified: Boolean(updated.email_verified_at),
+      phoneNo: updated.phone_no,
+      mobileVerified: Boolean(updated.phone_verified_at),
+      roles: updated.roles,
+      mfaVerified: request.session?.mfa_verified ?? false,
+      totpEnabled: user.totpEnabled,
+      passkeyEnabled: user.passkeyEnabled,
+      mfaMandatory: user.mfaMandatory,
+    };
+  }
+
+  async function deleteUploadedAvatars(request: FastifyRequest) {
+    const user = request.user!;
+    const updated = await authService.deleteUploadedAvatars(user.id);
+
+    return {
+      id: updated.id,
+      username: updated.username,
+      displayName: updated.display_name,
+      ...presentAvatar(updated.avatar_data_url),
       bio: updated.bio,
       emailPublic: Boolean(
         updated.email_public && updated.email && updated.email_verified_at,
@@ -243,7 +305,11 @@ export function createAuthController(context: AuthContext) {
     logout,
     me,
     updateProfile,
-    uploadAvatar,
+    presignAvatarUpload,
+    completeAvatarUpload,
+    listAvatars,
+    selectAvatar,
+    deleteUploadedAvatars,
     deactivateAccount,
   };
 }

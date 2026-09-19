@@ -3,11 +3,18 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
-import type { CurrentUserResponse, SessionResponse } from "@veolms/contracts";
+import type {
+  CurrentUserResponse,
+  SessionResponse,
+  UserAvatarListResponse,
+} from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { authStore } from "../../store/auth.store";
 import { authKeys } from "./auth.keys";
 import { authService } from "./auth.service";
+import { interactionCreationCoordinator } from "../learning-interactions/interaction-creation-coordinator";
+import { desiredStateCoordinator } from "../learning-interactions/desired-state-coordinator";
+import { optimisticDeletionCoordinator } from "../learning-interactions/optimistic-deletion-coordinator";
 
 export function currentUserQueryOptions(queryClient: QueryClient) {
   return {
@@ -29,6 +36,10 @@ export function currentUserQueryOptions(queryClient: QueryClient) {
         authStore.setUser(profile);
       } else {
         authStore.clearAuth();
+        queryClient.removeQueries({ queryKey: authKeys.avatars() });
+        desiredStateCoordinator.reset();
+        interactionCreationCoordinator.reset();
+        optimisticDeletionCoordinator.reset();
       }
 
       return profile;
@@ -52,6 +63,16 @@ export function useSessions(options?: { enabled?: boolean }) {
     queryFn: () => authService.getSessions(),
     enabled: options?.enabled ?? true,
     staleTime: 30 * 1000,
+    retry: false,
+  });
+}
+
+export function useUserAvatars(options?: { enabled?: boolean }) {
+  return useQuery<UserAvatarListResponse, ApiError>({
+    queryKey: authKeys.avatars(),
+    queryFn: () => authService.getAvatars(),
+    enabled: options?.enabled ?? true,
+    staleTime: 5 * 60 * 1000,
     retry: false,
   });
 }

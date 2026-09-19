@@ -21,6 +21,7 @@ import type {
 } from "react";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
 import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
 import { DotsThreeCircleIcon as DotsThreeCircle } from "@phosphor-icons/react/DotsThreeCircle";
@@ -46,12 +47,16 @@ import {
 import { useSecondPressHold } from "./gestures/useSecondPressHold";
 import { WorkspacePage } from "./workspace/WorkspacePages";
 import { ReviewsPage } from "./reviews/ReviewsPage";
+import { CouponsPage } from "./coupons/CouponsPage";
 import { OrdersPage } from "./orders/OrdersPage";
 import { OrderHistoryPage } from "./order-history/OrderHistoryPage";
 import { NotificationsPage } from "./notifications/NotificationsPage";
 import { QuizAnalyticsPage } from "./quizzes/QuizAnalyticsPage";
 import { QuizBuilderPage } from "./quizzes/QuizBuilderPage";
 import { QuizDirectAttemptPage } from "./quizzes/QuizDirectAttemptPage";
+import { StudentsPage, StudentDetailsPage } from "./students";
+import { CouponBuilderPage } from "./coupons/CouponBuilderPage";
+import { CouponsAccessDenied } from "./coupons/CouponsAccessDenied";
 import { getVisibleCourses } from "./courses/catalogue";
 import type {
   Course,
@@ -66,7 +71,6 @@ import { FloatingScrollbar } from "./shell/FloatingScrollbar";
 import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
 import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
-import { autosyncManager } from "./lib/autosync";
 import { useCurrentUser, useSignOut } from "./services/auth";
 import { useSidenav } from "./services/navigation";
 import { useAuthStore } from "./store/auth.store";
@@ -77,6 +81,7 @@ import {
   useMyCourses,
   useRestoreCourse,
 } from "./services/courses";
+import { useEnrolledCourses } from "./services/enrollments";
 import {
   adaptApiCourseToCatalogueCourse,
   adaptCourseSummaryToCatalogueCourse,
@@ -102,6 +107,7 @@ import {
   getUserRoles,
   getVisibleWorkspaceRoles,
   hasAdminRole,
+  isStaffRole,
   resolveWorkspaceRole,
   getWorkspaceRoleStorageKey,
   getRoleDisplayName,
@@ -161,6 +167,7 @@ import type { NavigateTo } from "./routing/navigation";
 import type { SettingsPageProps } from "./SettingsPage";
 import { isEditingShortcutTarget } from "./keyboardShortcuts";
 import { useGlobalSearchShortcut } from "./searchShortcut";
+import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "./hooks/useDebounce";
 import { useBackDismiss } from "./navigation/useBackDismiss";
 import { useShortcutPlatform } from "./useShortcutPlatform";
 import {
@@ -222,6 +229,8 @@ interface CoursesPageProps {
   courseSlug?: string;
   quizId?: string;
   assignmentId?: string;
+  username?: string;
+  couponId?: string;
   miniPlayerCourseId?: string | null;
   learningBackground?: {
     courseSlug?: string;
@@ -535,6 +544,8 @@ export function CoursesPage({
   courseSlug,
   quizId,
   assignmentId,
+  username,
+  couponId,
   miniPlayerCourseId = null,
   learningBackground = null,
   learningMotionStageRef,
@@ -640,6 +651,7 @@ export function CoursesPage({
     "",
     isStoredString,
   );
+  const debouncedSearch = useDebounce(search, DEFAULT_DEBOUNCE_DELAY_MS);
   const [statusFilter, setStatusFilter] = useState<CourseStatusFilter>("all");
   const [sort, setSort] = useState<CourseSort>("latest");
   const [wishlisted, setWishlisted] = useState<Set<string>>(() => new Set());
@@ -740,6 +752,9 @@ export function CoursesPage({
     useCourses({
       enabled: shouldQueryCourses && effectiveRole === "student",
     });
+  const { data: enrolledCoursesData } = useEnrolledCourses({
+    enabled: shouldLoadCourseSurface && effectiveRole === "student",
+  });
   const { data: myCoursesData, isPending: isMyCoursesPending } = useMyCourses({
     enabled:
       shouldQueryCourses &&
@@ -780,6 +795,7 @@ export function CoursesPage({
   const shellProfileDisplayName =
     activeUser?.displayName?.trim() || "Your name";
   const shellProfileAvatarUrl = activeUser?.avatarDataUrl ?? null;
+  const shellProfileAvatarSrcSet = activeUser?.avatarSrcSet ?? [];
   const profileRef = useRef<HTMLDivElement>(null);
   const coursesAppRef = useRef<HTMLDivElement>(null);
   const appliedThemeRef = useRef<"light" | "dark" | null>(null);
@@ -1277,6 +1293,24 @@ export function CoursesPage({
   ]);
 
   useEffect(() => {
+    if (effectiveRole !== "creator") {
+      const forbiddenPages = [
+        "students",
+        "student-details",
+        "course-create",
+        "quiz-builder",
+      ];
+      if (
+        (page && forbiddenPages.includes(page)) ||
+        requestedSection === "Students" ||
+        requestedSection === "Create Course"
+      ) {
+        onNavigatePage?.("/");
+      }
+    }
+  }, [effectiveRole, onNavigatePage, page, requestedSection]);
+
+  useEffect(() => {
     if (!storedPreferencesReady) return;
     localStorage.setItem("veolms-sidebar-mode", sidebarMode);
     localStorage.setItem(
@@ -1580,18 +1614,38 @@ export function CoursesPage({
     };
   }, [edgeSidebarOpen, onNavigatePage, sidebarMode]);
 
+  const roleFilteredNavigationItems = useMemo(() => {
+    return navigationItems.filter(([label]) => {
+      if (role === "student") {
+        return label !== "Students" && label !== "Dashboard";
+      }
+      if (role === "creator") {
+        return label !== "Home";
+      }
+      return true;
+    });
+  }, [navigationItems, role]);
+
   const navigation = getVisibleOrderedNavigation(
     navigationPreferencesReady && !isPublicNavigation
       ? navigationOrders[role]
       : isPublicNavigation
-        ? getDefaultNavigationOrder(navigationItems)
-        : getInitialNavigationOrder(role, navigationItems, activeUser?.id),
+        ? getDefaultNavigationOrder(roleFilteredNavigationItems)
+        : getInitialNavigationOrder(
+            role,
+            roleFilteredNavigationItems,
+            activeUser?.id,
+          ),
     navigationPreferencesReady && !isPublicNavigation
       ? navigationVisibility[role]
       : isPublicNavigation
-        ? getDefaultNavigationVisibility(navigationItems)
-        : getInitialNavigationVisibility(role, navigationItems, activeUser?.id),
-    navigationItems,
+        ? getDefaultNavigationVisibility(roleFilteredNavigationItems)
+        : getInitialNavigationVisibility(
+            role,
+            roleFilteredNavigationItems,
+            activeUser?.id,
+          ),
+    roleFilteredNavigationItems,
   ).filter(([label]) => label !== "Settings" || !settingsInSidebarDock);
   const updateNavigationScrollFade = () => {
     const nav = navigationRef.current;
@@ -1624,8 +1678,59 @@ export function CoursesPage({
 
   const allCourses = useMemo(() => {
     if (effectiveRole !== "creator") {
-      return (publishedCoursesData?.courses || []).map(
-        adaptCourseSummaryToCatalogueCourse,
+      const enrolledSet = new Set<string>();
+      const progressMap = new Map<string, number | null>();
+      if (enrolledCoursesData?.courses) {
+        for (const ec of enrolledCoursesData.courses) {
+          enrolledSet.add(ec.courseId);
+          if (ec.courseSlug) enrolledSet.add(ec.courseSlug);
+          progressMap.set(ec.courseId, ec.progress);
+          if (ec.courseSlug) progressMap.set(ec.courseSlug, ec.progress);
+        }
+      }
+      if (typeof window !== "undefined") {
+        for (const ec of enrolledCoursesData?.courses || []) {
+          try {
+            const courseKey = encodeURIComponent(ec.courseSlug);
+            const detailedProgStr = localStorage.getItem(
+              `veolms-learning-${courseKey}-progress`,
+            );
+            const total = ec.totalLessons > 0 ? ec.totalLessons : 84;
+            if (detailedProgStr) {
+              const progMap = JSON.parse(detailedProgStr) as Record<
+                string,
+                number
+              >;
+              const vals = Object.values(progMap);
+              if (vals.length > 0) {
+                const sum = vals.reduce((a, b) => a + b, 0);
+                const calc = Math.min(100, Math.round(sum / total));
+                progressMap.set(ec.courseId, calc);
+                if (ec.courseSlug) progressMap.set(ec.courseSlug, calc);
+                continue;
+              }
+            }
+            const lastLessonStr = localStorage.getItem(
+              `veolms-last-lesson-${courseKey}`,
+            );
+            if (lastLessonStr) {
+              const lessonNum = parseInt(lastLessonStr, 10);
+              if (!isNaN(lessonNum) && lessonNum > 0) {
+                const calc = Math.min(
+                  100,
+                  Math.round((lessonNum / total) * 100),
+                );
+                progressMap.set(ec.courseId, calc);
+                if (ec.courseSlug) progressMap.set(ec.courseSlug, calc);
+              }
+            }
+          } catch {
+            // Ignore storage errors
+          }
+        }
+      }
+      return (publishedCoursesData?.courses || []).map((summary) =>
+        adaptCourseSummaryToCatalogueCourse(summary, enrolledSet, progressMap),
       );
     }
     if (enrollmentFilter === "bin") {
@@ -1638,6 +1743,7 @@ export function CoursesPage({
     deletedCoursesData?.courses,
     effectiveRole,
     enrollmentFilter,
+    enrolledCoursesData,
     myCoursesData?.courses,
     publishedCoursesData?.courses,
   ]);
@@ -1700,7 +1806,7 @@ export function CoursesPage({
         role: effectiveRole,
         enrollmentFilter,
         statusFilter,
-        search,
+        search: debouncedSearch,
         sort,
       }),
     [
@@ -1708,7 +1814,7 @@ export function CoursesPage({
       allCourses,
       effectiveRole,
       enrollmentFilter,
-      search,
+      debouncedSearch,
       sort,
       statusFilter,
       wishlisted,
@@ -3116,12 +3222,14 @@ export function CoursesPage({
     surfacePage = page,
     surfaceSection = requestedSection,
     surfaceSettingsTab = settingsTab,
+    surfaceUsername = username,
   }: {
     surfaceCourseSlug?: string;
     surfaceDiscussionTab?: string;
     surfacePage?: string;
     surfaceSection?: string | null;
     surfaceSettingsTab?: string;
+    surfaceUsername?: string;
   } = {}): ReactNode => {
     const surfaceActiveSection =
       surfaceSection ?? (surfacePage === "courses" ? "Courses" : activeSection);
@@ -3165,15 +3273,15 @@ export function CoursesPage({
           onSidebarPreferencesChange={setSidebarPreferences}
           sidebarMode={renderedSidebarMode}
           onSidebarModeChange={setSidebarMode}
-          navigationItems={navigationItems}
+          navigationItems={roleFilteredNavigationItems}
           navigationVisibleItems={
             navigationPreferencesReady && !isPublicNavigation
               ? navigationVisibility[role]
               : isPublicNavigation
-                ? getDefaultNavigationVisibility(navigationItems)
+                ? getDefaultNavigationVisibility(roleFilteredNavigationItems)
                 : getInitialNavigationVisibility(
                     role,
-                    navigationItems,
+                    roleFilteredNavigationItems,
                     activeUser?.id,
                   )
           }
@@ -3182,7 +3290,7 @@ export function CoursesPage({
               ...current,
               [role]: ensureRequiredNavigationVisibility(
                 visibleItems,
-                navigationItems,
+                roleFilteredNavigationItems,
               ),
             }))
           }
@@ -3205,6 +3313,9 @@ export function CoursesPage({
       );
     }
     if (surfacePage === "course-create") {
+      if (effectiveRole !== "creator") {
+        return null;
+      }
       return (
         <CourseCreatePage
           onNavigatePage={onNavigatePage}
@@ -3227,6 +3338,31 @@ export function CoursesPage({
     if (surfacePage === "reviews" || surfaceActiveSection === "Reviews") {
       return (
         <ReviewsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+      );
+    }
+    if (surfacePage === "coupon-builder") {
+      if (!isAuthReady) {
+        return (
+          <main data-coupon-surface="" className="mx-auto grid w-full max-w-[1320px] place-items-center py-24">
+            <CircleNotch size={28} className="mb-3 animate-spin text-(--accent)" />
+            <p className="text-sm text-(--muted)">Loading coupon builder...</p>
+          </main>
+        );
+      }
+      if (!activeUser || !isStaffRole(userRoles)) {
+        return <CouponsAccessDenied onNavigatePage={onNavigatePage} />;
+      }
+      return (
+        <CouponBuilderPage
+          couponId={couponId}
+          onNavigatePage={onNavigatePage}
+          setNotice={setNotice}
+        />
+      );
+    }
+    if (surfacePage === "coupons" || surfaceActiveSection === "Coupons") {
+      return (
+        <CouponsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
       );
     }
     if (surfacePage === "orders" || surfaceActiveSection === "Orders") {
@@ -3258,6 +3394,9 @@ export function CoursesPage({
       );
     }
     if (surfacePage === "quiz-builder") {
+      if (effectiveRole !== "creator") {
+        return null;
+      }
       return (
         <QuizBuilderPage quizId={quizId} onNavigatePage={onNavigatePage} />
       );
@@ -3272,6 +3411,26 @@ export function CoursesPage({
     }
     if (surfacePage === "quizzes") {
       return <QuizAnalyticsPage role={role} onNavigatePage={onNavigatePage} />;
+    }
+    if (surfacePage === "student-details") {
+      if (effectiveRole !== "creator") {
+        return null;
+      }
+      return (
+        <StudentDetailsPage
+          username={surfaceUsername}
+          onNavigatePage={onNavigatePage}
+          setNotice={setNotice}
+        />
+      );
+    }
+    if (surfacePage === "students" || surfaceActiveSection === "Students") {
+      if (effectiveRole !== "creator") {
+        return null;
+      }
+      return (
+        <StudentsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+      );
     }
     if (surfacePage === "placeholder") {
       return (
@@ -3600,7 +3759,10 @@ export function CoursesPage({
                   aria-expanded={profileMenu}
                   onClick={() => setProfileMenu((current) => !current)}
                 >
-                  <ShellProfileAvatar avatarUrl={shellProfileAvatarUrl} />
+                  <ShellProfileAvatar
+                    avatarUrl={shellProfileAvatarUrl}
+                    avatarSrcSet={shellProfileAvatarSrcSet}
+                  />
                   <span>
                     <strong>{shellProfileDisplayName}</strong>
                     <small>
@@ -4096,12 +4258,13 @@ export function CoursesPage({
                   aria-label={`${shellProfileDisplayName}, ${getRoleDisplayName(role, userRoles)}. Open role menu`}
                   onClick={() => setProfileMenu((current) => !current)}
                 >
-                  <ShellProfileAvatar avatarUrl={shellProfileAvatarUrl} />
+                  <ShellProfileAvatar
+                    avatarUrl={shellProfileAvatarUrl}
+                    avatarSrcSet={shellProfileAvatarSrcSet}
+                  />
                   <span>
                     <strong>{shellProfileDisplayName}</strong>
-                    <small>
-                      {getRoleDisplayName(role, userRoles)}
-                    </small>
+                    <small>{getRoleDisplayName(role, userRoles)}</small>
                   </span>
                   <CaretDown size={17} aria-hidden="true" />
                 </button>

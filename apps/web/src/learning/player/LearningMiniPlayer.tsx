@@ -13,9 +13,14 @@ import {
   writeResumePosition,
 } from "./lessonPlayerPersistence";
 import {
+  getLearningMiniPlayerSnapshot,
   openLearningMiniPlayerSession,
   registerLearningMiniPlayerRuntime,
 } from "./learningMiniPlayerStore";
+import {
+  getCachedVideoPlaybackBootstrap,
+  getVideoPlaybackBootstrap,
+} from "../videoPlaybackBootstrap";
 import { useLearningMiniPlayerGestures } from "./useLearningMiniPlayerGestures";
 import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
 import { MiniPlayerControls } from "./MiniPlayerControls";
@@ -155,6 +160,12 @@ export function LearningMiniPlayer({
           lessonNumber,
           lessonPath: session.lessonPath,
         }) ?? session.lessonPath;
+      const cachedBootstrap = session.courseSlug
+        ? getCachedVideoPlaybackBootstrap({
+            courseSlug: session.courseSlug,
+            lessonNumber,
+          })
+        : null;
       const newSession: LearningMiniPlayerSession = {
         ...session,
         lessonTitle: newLesson[1],
@@ -162,16 +173,41 @@ export function LearningMiniPlayer({
         totalLessons: defaultLessonSequence.length,
         selectedLesson: lessonNumber,
         source: {
-          src: newMedia.src,
+          src: cachedBootstrap?.manifestUrl ?? newMedia.src,
           type: "application/x-mpegurl",
           startTime: 0,
         },
-        mediaKey: newMedia.fileName,
+        mediaKey: cachedBootstrap?.mediaKey ?? newMedia.fileName,
         currentTime: 0,
         playing: true,
         lessonPath,
       };
       openLearningMiniPlayerSession(newSession);
+
+      if (session.courseSlug && !cachedBootstrap) {
+        void getVideoPlaybackBootstrap({
+          courseSlug: session.courseSlug,
+          lessonNumber,
+        })
+          .then((bootstrap) => {
+            const current = getLearningMiniPlayerSnapshot();
+            if (
+              current &&
+              current.courseSlug === session.courseSlug &&
+              current.selectedLesson === lessonNumber
+            ) {
+              openLearningMiniPlayerSession({
+                ...current,
+                source: {
+                  ...current.source,
+                  src: bootstrap.manifestUrl,
+                },
+                mediaKey: bootstrap.mediaKey,
+              });
+            }
+          })
+          .catch(() => undefined);
+      }
     },
     [session],
   );

@@ -11,6 +11,8 @@ export const productName = "ProCodrr";
 export type ShellPage =
   | "home"
   | "courses"
+  | "coupons"
+  | "coupon-builder"
   | "reviews"
   | "quizzes"
   | "quiz-builder"
@@ -22,7 +24,9 @@ export type ShellPage =
   | "settings"
   | "course-create"
   | "course-overview"
-  | "workspace";
+  | "workspace"
+  | "students"
+  | "student-details";
 
 export interface ShellRouteDescriptor {
   kind: "shell";
@@ -116,10 +120,17 @@ export const routeDescriptors = {
   },
   students: {
     kind: "shell",
-    page: "placeholder",
+    page: "students",
     section: "Students",
     title: "Students",
     description: "Review learners, access, and progress across your academy.",
+  },
+  "student-details": {
+    kind: "shell",
+    page: "student-details",
+    section: "Students",
+    title: "Student profile",
+    description: "Review learner details, enrolled courses, and progress.",
   },
   reviews: {
     kind: "shell",
@@ -287,6 +298,29 @@ export const routeDescriptors = {
     title: "Sign out",
     description: "End your session safely on this device.",
   },
+  coupons: {
+    kind: "shell",
+    page: "coupons",
+    section: "Coupons",
+    title: "Coupons & Promotions",
+    description:
+      "Create and manage discount coupons, promotional offers and special campaigns for your learners.",
+  },
+  "coupon-create": {
+    kind: "shell",
+    page: "coupon-builder",
+    section: "Coupons",
+    title: "Create Coupon",
+    description:
+      "Create and publish a new discount coupon for your learners.",
+  },
+  "coupon-edit": {
+    kind: "shell",
+    page: "coupon-builder",
+    section: "Coupons",
+    title: "Edit Coupon",
+    description: "Maintain coupon parameters, limits, and validity.",
+  },
   "home-fallback": {
     kind: "shell",
     page: "home",
@@ -312,9 +346,13 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   home: "/",
   dashboard: "/dashboard",
   courses: "/courses",
+  coupons: "/coupons",
+  "coupon-create": "/coupons/create",
+  "coupon-edit": "/coupons/:couponId",
   "create-course": "/courses/create",
   wishlist: "/wishlist",
   students: "/students",
+  "student-details": "/students/:username",
   reviews: "/reviews",
   quizzes: "/quizzes",
   "quiz-create": "/quizzes/create",
@@ -329,6 +367,9 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   logout: "/logout",
   Courses: "/courses",
   "/Courses": "/courses",
+  Coupons: "/coupons",
+  "/Coupons": "/coupons",
+  "/coupons": "/coupons",
   "/explore-courses": "/courses",
   "/my-courses": "/courses",
   "/my-learning": "/courses",
@@ -351,9 +392,13 @@ const canonicalPathsByRouteId = {
   "home-alias": "/home",
   dashboard: "/dashboard",
   courses: "/courses",
+  coupons: "/coupons",
+  "coupon-create": "/coupons/create",
+  "coupon-edit": "/coupons/:couponId",
   "course-create": "/courses/create",
   wishlist: "/wishlist",
   students: "/students",
+  "student-details": "/students/:username",
   reviews: "/reviews",
   quizzes: "/quizzes",
   "quiz-create": "/quizzes/create",
@@ -441,8 +486,20 @@ export const getEffectiveRouteId = (
       : "home-fallback";
   }
 
+  if (routeId === "coupon-edit") {
+    return /^\/coupons\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
   if (routeId === "quiz-attempt") {
     return /^\/quizzes\/attempt\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "student-details") {
+    return /^\/students\/[^/]+$/.test(normalizedPath)
       ? routeId
       : "home-fallback";
   }

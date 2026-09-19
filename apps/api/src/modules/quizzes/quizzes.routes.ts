@@ -6,6 +6,7 @@ import {
   courseQuizAssignmentsResponseSchema,
   createQuizQuestionRequestSchema,
   createQuizRequestSchema,
+  createQuizWithQuestionsRequestSchema,
   learnerQuizAttemptSchema,
   myQuizAssignmentsResponseSchema,
   quizAnalyticsSchema,
@@ -80,6 +81,22 @@ const quizRoutes: RoutePlugin = async (app, options) => {
       preHandler: author,
     },
     controller.create,
+  );
+  app.post(
+    "/quizzes/complete",
+    {
+      schema: {
+        operationId: "createQuizWithQuestions",
+        tags: ["Quizzes"],
+        body: createQuizWithQuestionsRequestSchema,
+        response: {
+          201: jsonResponse("Quiz created", quizSchema),
+          ...errors,
+        },
+      },
+      preHandler: author,
+    },
+    controller.createWithQuestions,
   );
   app.get(
     "/quizzes/mine",

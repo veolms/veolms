@@ -33,6 +33,17 @@ export function createQuizController({
       reply.code(201);
       return result;
     },
+    createWithQuestions: async (
+      request: FastifyRequest,
+      reply: FastifyReply,
+    ) => {
+      const result = await authoring.createQuizWithQuestions(
+        actor(request),
+        request.body as never,
+      );
+      reply.code(201);
+      return result;
+    },
     listMine: async (request: FastifyRequest) =>
       authoring.listMine(actor(request)),
     get: async (request: FastifyRequest) =>

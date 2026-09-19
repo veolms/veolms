@@ -9,6 +9,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 const CDN_URL = import.meta.env.VITE_CDN_URL || "/cdn";
 
 const bootstrapRequests = new Map<string, Promise<VideoPlaybackBootstrap>>();
+const bootstrapCache = new Map<string, VideoPlaybackBootstrap>();
 const playbackTokenRequests = new Map<string, Promise<VideoPlaybackToken>>();
 
 export class VideoPlaybackBootstrapError extends Error {
@@ -240,15 +241,27 @@ export function getVideoPlaybackBootstrap(
 
   const promise = requestBootstrap(options);
   bootstrapRequests.set(key, promise);
-  void promise.catch(() => {
-    if (bootstrapRequests.get(key) === promise) {
-      bootstrapRequests.delete(key);
-    }
-  });
+  void promise
+    .then((bootstrap) => {
+      bootstrapCache.set(key, bootstrap);
+    })
+    .catch(() => {
+      if (bootstrapRequests.get(key) === promise) {
+        bootstrapRequests.delete(key);
+      }
+      bootstrapCache.delete(key);
+    });
   return promise;
+}
+
+export function getCachedVideoPlaybackBootstrap(
+  options: VideoPlaybackBootstrapRequest,
+): VideoPlaybackBootstrap | null {
+  return bootstrapCache.get(requestKey(options)) ?? null;
 }
 
 export function clearVideoPlaybackBootstrapCache(): void {
   bootstrapRequests.clear();
   playbackTokenRequests.clear();
+  bootstrapCache.clear();
 }

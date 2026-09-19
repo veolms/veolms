@@ -8,7 +8,7 @@ import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { TargetIcon as Target } from "@phosphor-icons/react/Target";
-import type { CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
 import javascriptThumbnail from "./assets/course-thumbnails/javascript-960.webp";
 import nodeThumbnail from "./assets/course-thumbnails/nodejs-960.webp";
 import typescriptThumbnail from "./assets/course-thumbnails/typescript-960.webp";
@@ -16,7 +16,11 @@ import typescriptInstructorHero512 from "./assets/learning-thumbnails/typescript
 import typescriptInstructorHero640 from "./assets/learning-thumbnails/typescript-instructor-hero-640.webp";
 import typescriptInstructorHero800 from "./assets/learning-thumbnails/typescript-instructor-hero-800.webp";
 import typescriptInstructorHero from "./assets/learning-thumbnails/typescript-instructor-hero.webp";
-import type { LearningCourse } from "./StudentPages";
+import {
+  adaptEnrolledCourseToLearningCourse,
+  type LearningCourse,
+} from "./StudentPages";
+import { useEnrolledCourses } from "./services/enrollments";
 
 interface StudentHomeProps {
   onOpenCourse: (course: LearningCourse) => void;
@@ -31,7 +35,9 @@ interface SectionHeaderProps {
   onAction?: () => void;
 }
 
-const currentCourse: LearningCourse = {
+/*
+// LEGACY CODE REFERENCE:
+const legacyCurrentCourse: LearningCourse = {
   id: "typescript-course",
   title: "The Ultimate TypeScript Course",
   sections: 24,
@@ -43,7 +49,7 @@ const currentCourse: LearningCourse = {
   thumbnail: typescriptThumbnail,
 };
 
-const javascriptCourse: LearningCourse = {
+const legacyJavascriptCourse: LearningCourse = {
   id: "javascript-course",
   title: "The Complete JavaScript Course",
   sections: 20,
@@ -55,7 +61,7 @@ const javascriptCourse: LearningCourse = {
   thumbnail: javascriptThumbnail,
 };
 
-const backendCourse: LearningCourse = {
+const legacyBackendCourse: LearningCourse = {
   id: "backend-nodejs",
   title: "Complete Backend with Node.js",
   sections: 23,
@@ -66,11 +72,12 @@ const backendCourse: LearningCourse = {
   accessed: "1d ago",
   thumbnail: nodeThumbnail,
 };
+*/
 
 const resumeLessons = [
-  { number: 84, title: "Conditional Types", duration: "18:35", active: true },
-  { number: 85, title: "Mapped Types Deep Dive", duration: "22:10" },
-  { number: 86, title: "Template Literal Types", duration: "16:40" },
+  { number: 1, title: "Course Introduction & Setup", duration: "12:30", active: true },
+  { number: 2, title: "Core Concepts Deep Dive", duration: "18:45" },
+  { number: 3, title: "Practical Application & Hands-on", duration: "22:10" },
 ];
 
 const progressMetrics = [
@@ -127,6 +134,27 @@ export function StudentHome({
   const firstName =
     (studentName?.trim() || "Ashi Singh").split(/\s+/)[0] || "Ashi";
 
+  const { data: enrolledData } = useEnrolledCourses();
+  const enrolledCourses = useMemo(() => {
+    return (enrolledData?.courses || []).map(adaptEnrolledCourseToLearningCourse);
+  }, [enrolledData?.courses]);
+
+  const heroCourse = useMemo(() => {
+    return (
+      enrolledCourses.find((c) => c.status === "in-progress") ||
+      enrolledCourses[0] ||
+      null
+    );
+  }, [enrolledCourses]);
+
+  const miniCourses = useMemo(() => {
+    return enrolledCourses.filter((c) => c.id !== heroCourse?.id).slice(0, 2);
+  }, [enrolledCourses, heroCourse]);
+
+  const updateCourses = useMemo(() => {
+    return enrolledCourses.slice(0, 2);
+  }, [enrolledCourses]);
+
   return (
     <div className="student-home">
       <header className="home-greeting-row">
@@ -168,71 +196,120 @@ export function StudentHome({
         </div>
       </header>
 
-      <section
-        className="home-resume-card"
-        aria-labelledby="continue-learning-title"
-      >
-        <div className="home-resume-layout">
-          <div className="home-resume-visual">
-            <img
-              src={typescriptInstructorHero800}
-              srcSet={`${typescriptInstructorHero512} 512w, ${typescriptInstructorHero640} 640w, ${typescriptInstructorHero800} 800w, ${typescriptInstructorHero} 1600w`}
-              sizes="(max-width: 820px) calc(100vw - 50px), (max-width: 1180px) 40vw, 430px"
-              alt="TypeScript instructor pointing toward the TS course mark"
-              width={1600}
-              height={900}
-              decoding="sync"
-              fetchPriority="high"
-            />
-          </div>
-          <div className="home-resume-copy">
-            <span className="learning-status in-progress">In Progress</span>
-            <h2 id="continue-learning-title">The Ultimate TypeScript Course</h2>
-            <strong>
-              Section 12 <i /> Advanced Generics
-            </strong>
-            <p>Lecture 84: Conditional Types</p>
-            <div className="home-resume-progress">
-              <ProgressBar value={52} />
-              <span>52%</span>
+      {heroCourse ? (
+        <section
+          className="home-resume-card"
+          aria-labelledby="continue-learning-title"
+        >
+          <div className="home-resume-layout">
+            <div className="home-resume-visual">
+              <img
+                src={typescriptInstructorHero800}
+                srcSet={`${typescriptInstructorHero512} 512w, ${typescriptInstructorHero640} 640w, ${typescriptInstructorHero800} 800w, ${typescriptInstructorHero} 1600w`}
+                sizes="(max-width: 820px) calc(100vw - 50px), (max-width: 1180px) 40vw, 430px"
+                alt="Course instructor"
+                width={1600}
+                height={900}
+                decoding="sync"
+                fetchPriority="high"
+              />
             </div>
-            <button
-              type="button"
-              className="primary-learning-action"
-              onClick={() => onOpenCourse(currentCourse)}
-            >
-              <Play size={18} weight="fill" /> Continue Learning
-            </button>
-          </div>
-          <div className="home-resume-list">
-            <h3>Resume from</h3>
-            {resumeLessons.map((lesson) => (
+            <div className="home-resume-copy">
+              <span className={`learning-status ${heroCourse.status}`}>
+                {heroCourse.status === "completed"
+                  ? "Completed"
+                  : heroCourse.status === "not-started"
+                    ? "Not Started"
+                    : "In Progress"}
+              </span>
+              <h2 id="continue-learning-title">{heroCourse.title}</h2>
+              <strong>
+                {heroCourse.sections} Sections <i /> {heroCourse.lectures} Lectures
+              </strong>
+              <p>
+                {heroCourse.lastLesson
+                  ? `Last watched: ${heroCourse.lastLesson}`
+                  : heroCourse.enrolledOn
+                    ? `Enrolled on ${heroCourse.enrolledOn}`
+                    : "Ready to learn"}
+              </p>
+              <div className="home-resume-progress">
+                <ProgressBar value={heroCourse.progress} />
+                <span>{heroCourse.progress}%</span>
+              </div>
               <button
-                key={lesson.number}
                 type="button"
-                className={lesson.active ? "is-active" : ""}
-                onClick={() => onOpenCourse(currentCourse)}
+                className="primary-learning-action"
+                onClick={() => onOpenCourse(heroCourse)}
               >
-                <span className="resume-play">
-                  <Play size={14} weight="fill" />
-                </span>
-                <span>
-                  <small>Lecture {lesson.number}</small>
-                  <strong>{lesson.title}</strong>
-                </span>
-                <time>{lesson.duration}</time>
+                <Play size={18} weight="fill" />{" "}
+                {heroCourse.status === "completed"
+                  ? "Review Course"
+                  : heroCourse.status === "not-started"
+                    ? "Start Learning"
+                    : "Continue Learning"}
               </button>
-            ))}
-            <button
-              type="button"
-              className="resume-view-all"
-              onClick={() => onNavigatePage("courses")}
-            >
-              View all in this section <ArrowRight size={17} />
-            </button>
+            </div>
+            <div className="home-resume-list">
+              <h3>Resume from</h3>
+              {resumeLessons.map((lesson) => (
+                <button
+                  key={lesson.number}
+                  type="button"
+                  className={lesson.active ? "is-active" : ""}
+                  onClick={() => onOpenCourse(heroCourse)}
+                >
+                  <span className="resume-play">
+                    <Play size={14} weight="fill" />
+                  </span>
+                  <span>
+                    <small>Lesson {lesson.number}</small>
+                    <strong>{lesson.title}</strong>
+                  </span>
+                  <time>{lesson.duration}</time>
+                </button>
+              ))}
+              <button
+                type="button"
+                className="resume-view-all"
+                onClick={() => onNavigatePage("courses")}
+              >
+                View all courses <ArrowRight size={17} />
+              </button>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : (
+        <section
+          className="home-resume-card"
+          aria-labelledby="explore-courses-title"
+        >
+          <div className="home-resume-layout">
+            <div className="home-resume-visual">
+              <img
+                src={typescriptInstructorHero800}
+                alt="Course explore"
+                width={1600}
+                height={900}
+                decoding="sync"
+                fetchPriority="high"
+              />
+            </div>
+            <div className="home-resume-copy">
+              <span className="learning-status in-progress">Start Learning</span>
+              <h2 id="explore-courses-title">Discover Top Courses</h2>
+              <p>Explore our library and enroll in courses to begin your journey.</p>
+              <button
+                type="button"
+                className="primary-learning-action mt-4"
+                onClick={() => onNavigatePage("courses")}
+              >
+                <BookOpen size={18} weight="fill" /> Browse Course Catalogue
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="home-dashboard-grid">
         <section className="dashboard-panel home-continue-panel">
@@ -243,42 +320,65 @@ export function StudentHome({
             onAction={() => onNavigatePage("courses")}
           />
           <div className="home-mini-course-grid">
-            {[javascriptCourse, backendCourse].map((course) => (
-              <article key={course.id} className="home-mini-course">
+            {miniCourses.length > 0 ? (
+              miniCourses.map((course) => (
+                <article key={course.id} className="home-mini-course">
+                  <img
+                    src={course.thumbnail}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <div>
+                    <h3>{course.title}</h3>
+                    <p>
+                      {course.sections} Sections · {course.lectures} Lectures
+                    </p>
+                  </div>
+                  <div className="home-mini-progress">
+                    <ProgressBar value={course.progress} />
+                    <span>{course.progress}%</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="primary-learning-action home-mini-action"
+                    onClick={() => onOpenCourse(course)}
+                  >
+                    <Play size={16} weight="fill" />
+                    <span>Continue Learning</span>
+                  </button>
+                </article>
+              ))
+            ) : heroCourse ? (
+              <article className="home-mini-course">
                 <img
-                  src={course.thumbnail}
+                  src={heroCourse.thumbnail}
                   alt=""
                   loading="lazy"
                   decoding="async"
                 />
                 <div>
-                  <h3>{course.title}</h3>
+                  <h3>{heroCourse.title}</h3>
                   <p>
-                    {course.id === "backend-nodejs"
-                      ? "Section 14 · Performance & Optimization"
-                      : "Section 8 · Modern JavaScript Patterns"}
+                    {heroCourse.sections} Sections · {heroCourse.lectures} Lectures
                   </p>
                 </div>
                 <div className="home-mini-progress">
-                  <ProgressBar
-                    value={
-                      course.id === "backend-nodejs" ? 35 : course.progress
-                    }
-                  />
-                  <span>
-                    {course.id === "backend-nodejs" ? 35 : course.progress}%
-                  </span>
+                  <ProgressBar value={heroCourse.progress} />
+                  <span>{heroCourse.progress}%</span>
                 </div>
                 <button
                   type="button"
                   className="primary-learning-action home-mini-action"
-                  onClick={() => onOpenCourse(course)}
+                  onClick={() => onOpenCourse(heroCourse)}
                 >
                   <Play size={16} weight="fill" />
                   <span>Continue Learning</span>
                 </button>
               </article>
-            ))}
+            ) : (
+              <p className="text-sm text-(--muted) p-4">No other enrolled courses yet.</p>
+            )}
           </div>
         </section>
 
@@ -368,33 +468,35 @@ export function StudentHome({
             onAction={() => onNavigatePage("courses")}
           />
           <div className="home-update-list">
-            {[currentCourse, backendCourse].map((course, index) => (
-              <button
-                type="button"
-                key={course.id}
-                onClick={() => onOpenCourse(course)}
-              >
-                <img
-                  src={course.thumbnail}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                />
-                <span>
-                  <strong>{course.title}</strong>
-                  <small>
-                    {index ? "2 new lectures added" : "3 new lectures added"}
-                  </small>
-                  <em>
-                    {index
-                      ? "Section 14: Performance & Optimization"
-                      : "Section 18: TypeScript Compiler Internals"}
-                  </em>
-                </span>
-                <time>{index ? "1d ago" : "2h ago"}</time>
-                <i aria-hidden="true" />
-              </button>
-            ))}
+            {updateCourses.length > 0 ? (
+              updateCourses.map((course, index) => (
+                <button
+                  type="button"
+                  key={course.id}
+                  onClick={() => onOpenCourse(course)}
+                >
+                  <img
+                    src={course.thumbnail}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <span>
+                    <strong>{course.title}</strong>
+                    <small>
+                      {index ? "2 new lectures added" : "3 new lectures added"}
+                    </small>
+                    <em>
+                      {course.sections} Sections Available
+                    </em>
+                  </span>
+                  <time>{index ? "1d ago" : "2h ago"}</time>
+                  <i aria-hidden="true" />
+                </button>
+              ))
+            ) : (
+              <p className="text-sm text-(--muted) p-4">No recent updates.</p>
+            )}
           </div>
         </section>
       </div>

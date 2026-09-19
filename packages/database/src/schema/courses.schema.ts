@@ -23,6 +23,7 @@ export interface CourseTable {
   category_id: string | null;
   difficulty: CourseDifficulty | null;
   thumbnail_media_id: string | null;
+  thumbnail_url: string | null;
   trailer_media_id: string | null;
   instructor_alias: string | null;
   version: Generated<number>;
@@ -105,6 +106,7 @@ export interface CourseSettingsTable {
   allow_qa: Generated<boolean>;
   allow_comments: Generated<boolean>;
   allow_downloads: Generated<boolean>;
+  allow_notes: Generated<boolean>;
   certificate_enabled: Generated<boolean>;
   show_instructor_name: Generated<boolean>;
   language: Generated<string>;

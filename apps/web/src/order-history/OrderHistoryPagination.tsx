@@ -1,3 +1,7 @@
+/*
+// LEGACY CODE REFERENCE:
+// The OrderHistoryPage previously used traditional page-based pagination.
+// This is now replaced with infinite scrolling using TanStack useInfiniteQuery.
 import { CaretLeftIcon as CaretLeft } from "@phosphor-icons/react/CaretLeft";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 
@@ -25,16 +29,13 @@ export function OrderHistoryPagination({
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-3 px-1 text-xs md:text-sm text-(--muted)">
-      {/* Range indicator */}
       <div>
         Showing <span className="font-semibold text-(--text)">{startItem}</span> to{" "}
         <span className="font-semibold text-(--text)">{endItem}</span> of{" "}
         <span className="font-semibold text-(--text)">{totalFilteredCount}</span> orders
       </div>
 
-      {/* Pagination button controls */}
       <div className="flex items-center gap-1.5" role="navigation" aria-label="Pagination Navigation">
-        {/* Prev Page Button */}
         <button
           type="button"
           onClick={() => onPageChange(Math.max(1, currentPage - 1))}
@@ -45,7 +46,6 @@ export function OrderHistoryPagination({
           <CaretLeft size={15} weight="bold" />
         </button>
 
-        {/* Page Numbers */}
         {pageNumbers.map((page) => {
           const isActive = page === currentPage;
           return (
@@ -66,7 +66,6 @@ export function OrderHistoryPagination({
           );
         })}
 
-        {/* Next Page Button */}
         <button
           type="button"
           onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
@@ -80,3 +79,17 @@ export function OrderHistoryPagination({
     </div>
   );
 }
+*/
+
+export interface OrderHistoryPaginationProps {
+  currentPage?: number;
+  totalPages?: number;
+  totalFilteredCount?: number;
+  pageSize?: number;
+  onPageChange?: (page: number) => void;
+}
+
+export function OrderHistoryPagination(_props: OrderHistoryPaginationProps) {
+  return null;
+}
+

@@ -30,6 +30,7 @@ export interface ReplyRowWithAuthor {
   updatedAt: Date;
   authorName: string | null;
   authorUsername: string | null;
+  authorAvatarUrl: string | null;
   authorEmail: string | null;
   authorRole: string | null;
   replyToUsername: string | null;
@@ -141,6 +142,7 @@ export function createRepliesRepository(): RepliesRepository {
           "r.updated_at as updatedAt",
           "u.display_name as authorName",
           "u.username as authorUsername",
+          "u.avatar_data_url as authorAvatarUrl",
           "u.email as authorEmail",
           authorRoleSql("r.user_id"),
           "ru.username as replyToUsername",
@@ -176,6 +178,7 @@ export function createRepliesRepository(): RepliesRepository {
           "r.updated_at as updatedAt",
           "u.display_name as authorName",
           "u.username as authorUsername",
+          "u.avatar_data_url as authorAvatarUrl",
           "u.email as authorEmail",
           authorRoleSql("r.user_id"),
           "ru.username as replyToUsername",
@@ -193,10 +196,10 @@ export function createRepliesRepository(): RepliesRepository {
             (
               r.is_accepted = ${accepted}
               and (
-                r.created_at > ${cursor.createdAt}
+                r.created_at < ${cursor.createdAt}
                 or (
                   r.created_at = ${cursor.createdAt}
-                  and r.id > ${cursor.id}::uuid
+                  and r.id < ${cursor.id}::uuid
                 )
               )
             )
@@ -207,8 +210,8 @@ export function createRepliesRepository(): RepliesRepository {
 
       const rows = await query
         .orderBy("r.is_accepted", "desc")
-        .orderBy("r.created_at", "asc")
-        .orderBy("r.id", "asc")
+        .orderBy("r.created_at", "desc")
+        .orderBy("r.id", "desc")
         .limit(options.limit + 1)
         .execute();
 

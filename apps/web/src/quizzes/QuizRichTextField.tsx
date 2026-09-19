@@ -60,6 +60,7 @@ export function QuizRichTextField({
           <CommentFormattingToolbar
             editor={controller}
             formattingState={formattingState}
+            attachmentsEnabled={false}
           />
         ) : null}
       </div>

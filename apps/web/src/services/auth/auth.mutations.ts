@@ -32,6 +32,12 @@ import { clearCoursePlayerSessions } from "../../learning/coursePlayerNavigation
 import { authKeys } from "./auth.keys";
 import { authService, type TotpSetupResponse } from "./auth.service";
 import { navigationKeys } from "../navigation";
+import {
+  learningInteractionKeys,
+  desiredStateCoordinator,
+  interactionCreationCoordinator,
+  optimisticDeletionCoordinator,
+} from "../learning-interactions";
 
 function persistAuthenticatedSession(
   queryClient: QueryClient,
@@ -42,6 +48,7 @@ function persistAuthenticatedSession(
     username: data.user.username,
     displayName: data.user.displayName,
     avatarDataUrl: data.user.avatarDataUrl,
+    avatarSrcSet: data.user.avatarSrcSet,
     bio: data.user.bio,
     emailPublic: data.user.emailPublic,
     mobilePublic: data.user.mobilePublic,
@@ -67,6 +74,11 @@ function persistAuthenticatedSession(
   // associated with the newly authenticated account.
   clearCoursePlayerSessions();
   authStore.setUser(data.user);
+  desiredStateCoordinator.reset();
+  interactionCreationCoordinator.reset();
+  optimisticDeletionCoordinator.reset();
+  queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
+  queryClient.removeQueries({ queryKey: authKeys.avatars() });
   queryClient.setQueryData(authKeys.me(), currentUser);
   queryClient.invalidateQueries({ queryKey: navigationKeys.all });
 }
@@ -157,10 +169,37 @@ export function useUpdateProfile() {
     onSuccess: async (profile) => {
       authStore.setUser(profile);
       queryClient.setQueryData(authKeys.me(), profile);
+      queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
       // The PATCH response updates the UI immediately, but `/auth/me` remains
       // the canonical source after a reload. Re-fetch it here so visibility
       // flags and any server-side guards are reflected before the save settles.
       await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+    },
+  });
+}
+
+export function useSelectAvatar() {
+  const queryClient = useQueryClient();
+
+  return useMutation<UserProfileResponse, ApiError, string>({
+    mutationFn: (avatarId) => authService.selectAvatar(avatarId),
+    onSuccess: (profile) => {
+      authStore.setUser(profile);
+      queryClient.setQueryData(authKeys.me(), profile);
+      queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
+    },
+  });
+}
+
+export function useDeleteUploadedAvatars() {
+  const queryClient = useQueryClient();
+
+  return useMutation<UserProfileResponse, ApiError, void>({
+    mutationFn: () => authService.deleteUploadedAvatars(),
+    onSuccess: (profile) => {
+      authStore.setUser(profile);
+      queryClient.setQueryData(authKeys.me(), profile);
+      queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
     },
   });
 }
@@ -295,9 +334,14 @@ export function useLogout() {
     mutationFn: () => authService.logout(),
     onSettled: () => {
       authStore.clearAuth();
+      desiredStateCoordinator.reset();
+      interactionCreationCoordinator.reset();
+      optimisticDeletionCoordinator.reset();
       clearCoursePlayerSessions();
       queryClient.setQueryData(authKeys.me(), null);
       queryClient.removeQueries({ queryKey: authKeys.me() });
+      queryClient.removeQueries({ queryKey: authKeys.avatars() });
+      queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
       queryClient.removeQueries({ queryKey: navigationKeys.all });
       queryClient.invalidateQueries({ queryKey: authKeys.me() });
       queryClient.invalidateQueries({ queryKey: navigationKeys.all });
@@ -312,6 +356,9 @@ export function useDeactivateAccount() {
     mutationFn: () => authService.deactivateAccount(),
     onSettled: () => {
       authStore.clearAuth();
+      desiredStateCoordinator.reset();
+      interactionCreationCoordinator.reset();
+      optimisticDeletionCoordinator.reset();
       clearCoursePlayerSessions();
 
       // A deactivated account must not leave protected data in the client

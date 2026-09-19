@@ -63,6 +63,12 @@ export const CommerceErrors = {
     new AppError(400, "PAYMENT_NOT_CAPTURED", `Payment cannot be finalized because gateway status is "${status}" (expected "captured").`),
   REFUND_NOT_ALLOWED: (reason: string) =>
     new AppError(400, "REFUND_NOT_ALLOWED", `Refund could not be processed: ${reason}`),
+  REFUND_IDEMPOTENCY_KEY_REUSED: () =>
+    new AppError(
+      409,
+      "REFUND_IDEMPOTENCY_KEY_REUSED",
+      "This idempotency key was already used for a different refund request on this order.",
+    ),
   WEBHOOK_SIGNATURE_INVALID: () =>
     new AppError(400, "WEBHOOK_SIGNATURE_INVALID", "Webhook signature verification failed."),
   PRICE_CALCULATION_FAILED: (reason: string) =>

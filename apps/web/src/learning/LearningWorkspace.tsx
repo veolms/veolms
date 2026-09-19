@@ -79,10 +79,15 @@ import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { adaptCourseOverviewToCurriculum } from "./courseCurriculumAdapter";
 import {
+  getCachedVideoPlaybackBootstrap,
   getVideoPlaybackBootstrap,
   refreshVideoPlaybackToken,
 } from "./videoPlaybackBootstrap";
-import { Discussion, PrerenderedMobileCommentComposer } from "./Discussion";
+import {
+  Discussion,
+  PrerenderedMobileCommentComposer,
+  type InteractionCapabilities,
+} from "./Discussion";
 import {
   clampLearningCurriculumWidth,
   CURRICULUM_COLLAPSED_STORAGE_KEY,
@@ -336,6 +341,23 @@ export function LearningWorkspace({
   } = useCourseOverview(courseSlug, {
     enabled: isApiRoute,
   });
+  const isInteractionCapabilitiesLoading =
+    isApiRoute && isCourseOverviewLoading && !courseOverview;
+
+  const interactionCapabilities: InteractionCapabilities = useMemo(() => {
+    if (courseOverview?.settings) {
+      return {
+        allowComments: courseOverview.settings.allowComments,
+        allowNotes: courseOverview.settings.allowNotes,
+        allowQa: courseOverview.settings.allowQa,
+      };
+    }
+    return {
+      allowComments: true,
+      allowNotes: true,
+      allowQa: true,
+    };
+  }, [courseOverview?.settings]);
   const publicPreviewLessonNumbers = useMemo(
     () => getPublicPreviewLessonNumbers(courseOverview),
     [courseOverview],
@@ -653,9 +675,9 @@ export function LearningWorkspace({
   );
 
   useEffect(() => {
-    if (initialLessonView && initialLessonView !== activeLessonView) {
-      setActiveLessonView(initialLessonView);
-    }
+    setActiveLessonView((currentView) =>
+      currentView === initialLessonView ? currentView : initialLessonView,
+    );
   }, [initialLessonView]);
 
   const getLessonUuid = useCallback(
@@ -673,14 +695,16 @@ export function LearningWorkspace({
       if (!uuid) {
         const les = curriculumLessonsById.get(lessonNumber);
         if (les && les[5] === "quiz") return true;
-        return lessonNumber === selectedLesson ? Boolean(quizAssignment) : false;
+        return lessonNumber === selectedLesson
+          ? Boolean(quizAssignment)
+          : false;
       }
       return Boolean(
         quizAssignments?.some((a) => a.lessonId === uuid) ||
-          courseQuizAssignments.data?.some((a) => a.lessonId === uuid) ||
-          (lessonNumber === selectedLesson &&
-            quizAssignment &&
-            (!quizAssignment.lessonId || quizAssignment.lessonId === uuid)),
+        courseQuizAssignments.data?.some((a) => a.lessonId === uuid) ||
+        (lessonNumber === selectedLesson &&
+          quizAssignment &&
+          (!quizAssignment.lessonId || quizAssignment.lessonId === uuid)),
       );
     },
     [
@@ -838,7 +862,13 @@ export function LearningWorkspace({
   );
   const protectedPlayback = Boolean(courseSlug && !publicPlaybackBootstrap);
   const [playbackBootstrap, setPlaybackBootstrap] =
-    useState<VideoPlaybackBootstrap | null>(null);
+    useState<VideoPlaybackBootstrap | null>(() => {
+      if (!courseSlug || publicPlaybackBootstrap) return null;
+      return getCachedVideoPlaybackBootstrap({
+        courseSlug,
+        lessonNumber: selectedLesson,
+      });
+    });
   const refreshPlaybackToken = useCallback(async () => {
     if (!courseSlug) {
       throw new Error("A course is required to refresh playback access.");
@@ -855,8 +885,15 @@ export function LearningWorkspace({
       return;
     }
 
+    const cached = getCachedVideoPlaybackBootstrap({
+      courseSlug,
+      lessonNumber: selectedLesson,
+    });
+    if (cached) {
+      setPlaybackBootstrap(cached);
+    }
+
     let active = true;
-    setPlaybackBootstrap(null);
     void getVideoPlaybackBootstrap({
       courseSlug,
       lessonNumber: selectedLesson,
@@ -867,7 +904,7 @@ export function LearningWorkspace({
       .catch(() => {
         // The early request is an optimization. The player keeps its normal
         // fallback source and error UI when authorization or the network fails.
-        if (active) setPlaybackBootstrap(null);
+        if (active && !cached) setPlaybackBootstrap(null);
       });
 
     return () => {
@@ -951,12 +988,14 @@ export function LearningWorkspace({
     lessonSequence,
     nextLessonId,
   ]);
-  const selectedLessonDescription = useMemo(() => {
+
+  const selectedLessonRecord = useMemo(() => {
     if (!adaptedCurriculum) return null;
-    return (
-      adaptedCurriculum.lessonsByNumber.get(selectedLesson)?.description ?? null
-    );
+    return adaptedCurriculum.lessonsByNumber.get(selectedLesson) ?? null;
   }, [adaptedCurriculum, selectedLesson]);
+  const selectedLessonDescription = selectedLessonRecord?.description ?? null;
+  const courseId = courseOverview?.course.id;
+  const backendLessonId = selectedLessonRecord?.id;
   const curriculumShortcutLabel = shortcutPlatform === "mac" ? "⌥+C" : "Alt+C";
 
   useLayoutEffect(() => {
@@ -1180,11 +1219,20 @@ export function LearningWorkspace({
           : roundedProgress;
       setLocalLessonProgress((current) => {
         if (current[selectedLesson] === nextProgress) return current;
-        return { ...current, [selectedLesson]: nextProgress };
+        const updated = { ...current, [selectedLesson]: nextProgress };
+        try {
+          localStorage.setItem(
+            `veolms-learning-${coursePersistenceKey}-progress`,
+            JSON.stringify(updated),
+          );
+        } catch {
+          // Ignore storage write errors
+        }
+        return updated;
       });
       recordProgress(selectedLesson, nextProgress);
     },
-    [recordProgress, selectedLesson],
+    [coursePersistenceKey, recordProgress, selectedLesson],
   );
 
   const handleLessonEnded = useCallback(() => {
@@ -2379,7 +2427,11 @@ export function LearningWorkspace({
                         <span>Back to video</span>
                       </button>
                       <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
-                        <Exam size={14} className="text-(--accent)" weight="bold" />
+                        <Exam
+                          size={14}
+                          className="text-(--accent)"
+                          weight="bold"
+                        />
                         <span>Lesson {selectedLesson} Quiz</span>
                       </div>
                     </div>
@@ -2407,7 +2459,8 @@ export function LearningWorkspace({
                   Quiz Assessment Not Available
                 </h2>
                 <p className="mt-1.5 text-xs sm:text-sm text-(--muted) max-w-md mx-auto">
-                  This lesson does not currently have an active quiz assessment assigned.
+                  This lesson does not currently have an active quiz assessment
+                  assigned.
                 </p>
               </div>
             ) : registerPersistentPlayer ? (
@@ -2487,7 +2540,9 @@ export function LearningWorkspace({
                   >
                     <Exam size={14} weight="bold" className="text-(--accent)" />
                     <span>
-                      {activeLessonView === "quiz" ? "Back to video" : "Lesson Quiz"}
+                      {activeLessonView === "quiz"
+                        ? "Back to video"
+                        : "Lesson Quiz"}
                     </span>
                   </button>
                 ) : null}
@@ -2495,12 +2550,15 @@ export function LearningWorkspace({
               <Discussion
                 key={discussionPersistenceKey}
                 persistenceKey={discussionPersistenceKey}
+                courseSlug={courseSlug}
+                courseId={courseId}
+                lessonId={backendLessonId}
                 mobileBottomNavigation={mobileBottomNavigation}
                 mobileBottomNavigationHidden={mobileBottomNavigationHidden}
                 lessonDescription={selectedLessonDescription}
-                isLessonDescriptionLoading={
-                  isApiRoute && isCourseOverviewLoading
-                }
+                isLessonDescriptionLoading={isApiRoute && isCourseOverviewLoading}
+                interactionCapabilities={interactionCapabilities}
+                isInteractionCapabilitiesLoading={isInteractionCapabilitiesLoading}
               />
             </article>
           </div>

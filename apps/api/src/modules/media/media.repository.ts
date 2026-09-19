@@ -1,5 +1,10 @@
 import type { Kysely } from "kysely";
-import type { Database, Json, MediaAssetStatus } from "@veolms/database";
+import type {
+  Database,
+  DatabaseExecutor,
+  Json,
+  MediaAssetStatus,
+} from "@veolms/database";
 import type { VideoJobStatus, VideoQualityLevel } from "@veolms/contracts";
 
 export async function findMediaAssetById(
@@ -84,7 +89,7 @@ export async function deleteMediaAssets(
 }
 
 export async function insertMediaAsset(
-  database: Kysely<Database>,
+  database: DatabaseExecutor,
   values: {
     id: string;
     owner_id: string;

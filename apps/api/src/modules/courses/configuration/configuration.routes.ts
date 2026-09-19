@@ -34,11 +34,11 @@ const configurationRoutes: RoutePlugin = async (app, options) => {
         body: updateCourseAccessRuleRequestSchema,
         response: {
           200: jsonResponse("Access rules updated", courseAccessRuleSchema),
-          403: errorResponse("Forbidden - not course owner"),
+          403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Course not found"),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: ctx.authorize("course.details.update", "course"),
     },
     controller.upsertCourseAccessRules,
   );
@@ -57,11 +57,11 @@ const configurationRoutes: RoutePlugin = async (app, options) => {
             "Pricing configuration updated",
             coursePricingSchema,
           ),
-          403: errorResponse("Forbidden - not course owner"),
+          403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Course not found"),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: ctx.authorize("course.pricing.update", "course"),
     },
     controller.upsertCoursePricing,
   );
@@ -77,11 +77,11 @@ const configurationRoutes: RoutePlugin = async (app, options) => {
         body: updateCourseSettingsRequestSchema,
         response: {
           200: jsonResponse("Settings updated", courseSettingsSchema),
-          403: errorResponse("Forbidden - not course owner"),
+          403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Course not found"),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: ctx.authorize("course.details.update", "course"),
     },
     controller.upsertCourseSettings,
   );

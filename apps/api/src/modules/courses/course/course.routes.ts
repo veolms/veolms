@@ -165,7 +165,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
           201: jsonResponse("Course draft created", courseSchema),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: ctx.authorize("course.create", "platform"),
     },
     controller.createCourse,
   );
@@ -184,7 +184,11 @@ const courseRoutes: RoutePlugin = async (app, options) => {
           ),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: [
+        ctx.middleware.authenticate,
+        ctx.middleware.requireAuthenticated,
+        ctx.middleware.requireMfaVerified,
+      ],
     },
     controller.listMyCourses,
   );
@@ -205,7 +209,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("Course not found"),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: ctx.authorize("course.read", "course"),
     },
     controller.getCourseEditor,
   );
@@ -238,9 +242,78 @@ const courseRoutes: RoutePlugin = async (app, options) => {
           409: errorResponse("Optimistic lock conflict"),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: ctx.authorize("course.details.update", "course"),
     },
     controller.updateCourseBasics,
+  );
+
+  app.patch(
+    "/courses/:id/details",
+    {
+      schema: {
+        operationId: "updateCourseDetails",
+        tags: ["Course Authoring"],
+        summary: "Update course metadata details",
+        params: z.object({ id: z.uuid() }),
+        body: z.object({
+          title: z.string().min(1).max(200).optional(),
+          subtitle: z.string().max(500).optional().nullable(),
+          description: z.string().max(20000).optional().nullable(),
+          language: z.string().max(10).optional(),
+          level: z.enum(["beginner", "intermediate", "advanced", "all_levels"]).optional(),
+          categoryId: z.string().uuid().optional().nullable(),
+        }),
+        response: {
+          200: jsonResponse("Course details updated", courseSchema),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("Course not found"),
+        },
+      },
+      preHandler: ctx.authorize("course.details.update", "course"),
+    },
+    controller.updateCourseDetails,
+  );
+
+  app.patch(
+    "/courses/:id/thumbnail",
+    {
+      schema: {
+        operationId: "updateCourseThumbnail",
+        tags: ["Course Authoring"],
+        summary: "Update course thumbnail only",
+        params: z.object({ id: z.uuid() }),
+        body: z.object({
+          thumbnailUrl: z.string().url().max(2048),
+          thumbnailMediaId: z.string().uuid().optional().nullable(),
+        }).strict(),
+        response: {
+          200: jsonResponse("Course thumbnail updated", courseSchema),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("Course not found"),
+        },
+      },
+      preHandler: ctx.authorize("course.thumbnail.update", "course"),
+    },
+    controller.updateCourseThumbnail,
+  );
+
+  app.post(
+    "/courses/:id/archive",
+    {
+      schema: {
+        operationId: "archiveCourse",
+        tags: ["Course Authoring"],
+        summary: "Archive a course",
+        params: z.object({ id: z.uuid() }),
+        response: {
+          200: jsonResponse("Course archived", courseSchema),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("Course not found"),
+        },
+      },
+      preHandler: ctx.authorize("course.archive", "course"),
+    },
+    controller.archiveCourse,
   );
 
   app.delete(
@@ -253,11 +326,11 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid() }),
         response: {
           200: jsonResponse("Course deleted", courseDeleteResponseSchema),
-          403: errorResponse("Forbidden - not course owner"),
+          403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Course not found"),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: ctx.authorize("course.delete", "course"),
     },
     controller.deleteCourse,
   );
