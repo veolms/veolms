@@ -1818,10 +1818,10 @@ function VideoFileSummary({
           type="button"
           onClick={onUpload}
           aria-label={uploadIconOnly ? "Upload video" : "Upload Video"}
-          className={`inline-flex h-9 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--accent)_55%,var(--text)_18%)] bg-transparent text-(--accent) transition-all hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] hover:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_12%,transparent)] active:scale-95 ${uploadIconOnly ? "w-9 px-0" : "px-3.5"}`}
+          className={`inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 transition-all active:scale-95 ${uploadIconOnly ? "h-7 w-7 rounded-full border-none bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-0 text-(--muted) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:text-(--text)" : "h-8.5 rounded-[9px] border-none bg-(--accent) px-3.5 text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] hover:bg-(--accent-hover,var(--accent))"}`}
         >
           {uploadIconOnly ? (
-            <AppIcon name="cloudUpload" aria-hidden="true" className="size-7" />
+            <AppIcon name="cloudUpload" aria-hidden="true" className="size-[13px]" />
           ) : (
             <CloudArrowUp size={15} weight="bold" />
           )}
