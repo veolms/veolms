@@ -37,6 +37,10 @@ export default [
       id: "discussions-comments",
       caseSensitive: true,
     }),
+    route("discussions/notes", marker, {
+      id: "discussions-notes",
+      caseSensitive: true,
+    }),
     route("discussions/mentions", marker, {
       id: "discussions-mentions",
       caseSensitive: true,

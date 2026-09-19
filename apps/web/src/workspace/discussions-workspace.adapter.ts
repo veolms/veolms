@@ -1,41 +1,50 @@
 import type { WorkspaceDiscussionItem } from "@veolms/contracts";
 
 export type DiscussionWorkspaceStatus =
-  | "answered"
-  | "mentioned"
-  | "solved"
-  | "open";
+  "answered" | "mentioned" | "solved" | "open";
 
 export interface DiscussionWorkspaceCard {
   id: string;
-  title: string;
+  title?: string;
   excerpt: string;
   content: string;
   plainText: string;
   courseId: string;
   course: string;
-  lessonId?: string;
+  courseTitle: string | null;
+  lessonId?: string | null;
   lesson: string;
+  lessonTitle: string | null;
+  timestampSeconds: number | null;
   author: string;
   authorUsername: string;
   avatar: string;
   isOwn: boolean;
   status?: DiscussionWorkspaceStatus;
   visibility?: WorkspaceDiscussionItem["visibility"];
-  isLocked: boolean;
+  isLocked?: boolean;
   replies: number;
   likes: number;
+  isLiked?: boolean;
+  isBookmarked?: boolean;
+  isFollowing?: boolean;
+  isMentioned?: boolean;
   activity: string;
   attachmentSummary: WorkspaceDiscussionItem["attachmentSummary"];
   itemType: WorkspaceDiscussionItem["itemType"];
   kind: WorkspaceDiscussionItem["kind"];
+  createdAt: string;
+  updatedAt: string;
 }
 
 function formatRelativeTime(dateValue: string): string {
   const date = new Date(dateValue);
   if (Number.isNaN(date.getTime())) return "Recently";
 
-  const diffSeconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+  const diffSeconds = Math.max(
+    0,
+    Math.floor((Date.now() - date.getTime()) / 1000),
+  );
   if (diffSeconds < 60) return "Just now";
   const diffMinutes = Math.floor(diffSeconds / 60);
   if (diffMinutes < 60) {
@@ -66,11 +75,12 @@ function getTitle(item: WorkspaceDiscussionItem, excerpt: string): string {
 
 export function adaptDiscussionWorkspaceItem(
   item: WorkspaceDiscussionItem,
-  options?: { comments?: boolean },
+  options?: { comments?: boolean; notes?: boolean },
 ): DiscussionWorkspaceCard {
   const excerpt = getExcerpt(item);
+  const isNote = options?.notes === true || item.kind === "note";
   const status =
-    options?.comments
+    options?.comments || isNote
       ? undefined
       : item.status && item.status !== "all"
         ? item.status
@@ -78,26 +88,39 @@ export function adaptDiscussionWorkspaceItem(
 
   return {
     id: item.id,
-    title: options?.comments ? item.title?.trim() || "" : getTitle(item, excerpt),
+    title: isNote
+      ? item.title?.trim() || undefined
+      : options?.comments
+        ? item.title?.trim() || ""
+        : getTitle(item, excerpt),
     excerpt,
     content: item.content,
-    plainText: excerpt,
+    plainText: isNote ? item.plainText : excerpt,
     courseId: item.courseId,
     course: item.courseTitle?.trim() || "",
-    ...(item.lessonId ? { lessonId: item.lessonId } : {}),
+    courseTitle: item.courseTitle ?? null,
+    lessonId: item.lessonId,
     lesson: item.lessonTitle?.trim() || "",
+    lessonTitle: item.lessonTitle ?? null,
+    timestampSeconds: item.timestampSeconds ?? null,
     author: item.author.displayName || item.author.username,
     authorUsername: item.author.username?.trim() || "",
     avatar: item.author.avatarUrl ?? "",
     isOwn: item.isOwn === true,
     status,
     visibility: item.visibility,
-    isLocked: item.isLocked === true,
+    isLocked: item.isLocked,
     replies: item.repliesCount,
     likes: item.likesCount,
+    isLiked: item.isLiked,
+    isBookmarked: item.isBookmarked,
+    isFollowing: item.isFollowing,
+    isMentioned: item.isMentioned,
     activity: formatRelativeTime(item.updatedAt || item.createdAt),
     attachmentSummary: item.attachmentSummary,
     itemType: item.itemType,
     kind: item.kind,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
   };
 }
