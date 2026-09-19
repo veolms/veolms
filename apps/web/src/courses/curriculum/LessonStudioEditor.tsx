@@ -132,6 +132,9 @@ export const LessonStudioEditor = forwardRef<
   const [isPreview, setIsPreview] = useState(initialIsPreview);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isResourceDragOver, setIsResourceDragOver] = useState(false);
+  const [activeContentTab, setActiveContentTab] = useState<
+    "resources" | "description" | "quiz"
+  >("resources");
 
   const resourceFileInputRef = useRef<HTMLInputElement | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
@@ -198,6 +201,96 @@ export const LessonStudioEditor = forwardRef<
       void onAddResourceFile(file);
     }
   };
+
+  const resourcesTabContent = resourcesSection ?? (
+    <div className="flex flex-col">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--text)">
+          <Paperclip size={18} weight="bold" className="rotate-45" />
+        </div>
+        <div>
+          <h4 className="m-0 text-[0.85rem] sm:text-[0.88rem] font-bold text-(--text)">
+            Resources ({resources.length})
+          </h4>
+          <p className="m-0 mt-0.5 text-[0.72rem] sm:text-[0.74rem] text-(--muted)">
+            Attach files, links, or other resources for this lesson.
+          </p>
+        </div>
+      </div>
+
+      <input
+        ref={resourceFileInputRef}
+        type="file"
+        aria-label="Upload resource file"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file && onAddResourceFile) void onAddResourceFile(file);
+        }}
+      />
+
+      <div
+        onClick={() => resourceFileInputRef.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsResourceDragOver(true);
+        }}
+        onDragLeave={() => setIsResourceDragOver(false)}
+        onDrop={handleResourceDrop}
+        className={`mt-3 flex cursor-pointer flex-col items-center justify-center rounded-[12px] border-2 border-dashed p-5 text-center transition-all ${
+          isResourceDragOver
+            ? "border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
+            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] hover:border-[color-mix(in_srgb,var(--text)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_4%,var(--surface))]"
+        }`}
+      >
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted)">
+          <CloudArrowUp size={20} weight="bold" />
+        </div>
+        <p className="m-0 mt-2 text-[0.80rem] sm:text-[0.84rem] font-bold text-(--text)">
+          Drag and drop files here
+        </p>
+        <p className="m-0 mt-0.5 text-[0.68rem] sm:text-[0.70rem] text-(--muted)">
+          Supports PDFs, documents, images, ZIP files (max 500 MB).
+        </p>
+      </div>
+
+      {resources.length > 0 && (
+        <div className="mt-3 flex flex-col gap-2">
+          {resources.map((res) => (
+            <div
+              key={res.id}
+              className="flex items-center justify-between gap-2.5 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] p-2.5"
+            >
+              <div className="flex min-w-0 items-center gap-2.5">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--accent)">
+                  <FileText size={15} weight="fill" />
+                </div>
+                <div className="min-w-0">
+                  <p className="m-0 truncate text-[0.76rem] sm:text-[0.78rem] font-semibold text-(--text)">
+                    {res.name}
+                  </p>
+                  <p className="m-0 text-[0.66rem] text-(--muted)">
+                    {res.size || "1.2 MB"}
+                  </p>
+                </div>
+              </div>
+
+              {onDeleteResource && (
+                <button
+                  type="button"
+                  onClick={() => onDeleteResource(res.id)}
+                  aria-label="Remove resource"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-(--muted) hover:text-red-500 transition-colors cursor-pointer"
+                >
+                  <X size={13} weight="bold" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   const editorPanel = (
     <div
@@ -419,8 +512,6 @@ export const LessonStudioEditor = forwardRef<
               />
             ) : null}
             onUploadThumbnail={onUploadThumbnail}
-            descriptionSection={descriptionSection}
-            quizSection={quizSection}
             playbackSuspended={playbackSuspended}
           />
         </div>
@@ -485,102 +576,60 @@ export const LessonStudioEditor = forwardRef<
             />
           </div>
 
-          {/* Card 4: Resources */}
-          {resourcesSection ?? (
-          <div className="flex flex-col rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-4.5 shadow-(--card-shadow)">
-            {/* Header */}
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--text)">
-                <Paperclip size={18} weight="bold" className="rotate-45" />
-              </div>
-              <div>
-                <h4 className="m-0 text-[0.85rem] sm:text-[0.88rem] font-bold text-(--text)">
-                  Resources ({resources.length})
-                </h4>
-                <p className="m-0 mt-0.5 text-[0.72rem] sm:text-[0.74rem] text-(--muted)">
-                  Attach files, links, or other resources for this lesson.
-                </p>
-              </div>
-            </div>
+        </div>
+      </div>
 
-            {/* Hidden Resource File Input */}
-            <input
-              ref={resourceFileInputRef}
-              type="file"
-              aria-label="Upload resource file"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file && onAddResourceFile) {
-                  void onAddResourceFile(file);
-                }
-              }}
-            />
+      {/* Full-width lesson content tabs */}
+      <div className="flex w-full flex-col overflow-hidden rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) shadow-(--card-shadow)">
+        <div className="flex items-center border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--text)_2%,transparent)] px-3">
+          <button
+            type="button"
+            onClick={() => setActiveContentTab("resources")}
+            className={`flex items-center gap-1.5 !rounded-none border-b-2 px-3.5 py-2.5 text-[0.80rem] sm:text-[0.82rem] font-bold cursor-pointer transition-colors ${
+              activeContentTab === "resources"
+                ? "border-(--accent) text-(--accent)"
+                : "border-transparent text-(--muted) hover:text-(--text)"
+            }`}
+          >
+            <Paperclip size={15} weight="bold" className="rotate-45" />
+            <span>Resources</span>
+          </button>
 
-            {/* Resource Dropzone */}
-            <div
-              onClick={() => resourceFileInputRef.current?.click()}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsResourceDragOver(true);
-              }}
-              onDragLeave={() => setIsResourceDragOver(false)}
-              onDrop={handleResourceDrop}
-              className={`mt-3 flex cursor-pointer flex-col items-center justify-center rounded-[12px] border-2 border-dashed p-5 text-center transition-all ${
-                isResourceDragOver
-                  ? "border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
-                  : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] hover:border-[color-mix(in_srgb,var(--text)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_4%,var(--surface))]"
+          {descriptionSection && (
+            <button
+              type="button"
+              onClick={() => setActiveContentTab("description")}
+              className={`flex items-center gap-1.5 !rounded-none border-b-2 px-3.5 py-2.5 text-[0.80rem] sm:text-[0.82rem] font-bold cursor-pointer transition-colors ${
+                activeContentTab === "description"
+                  ? "border-(--accent) text-(--accent)"
+                  : "border-transparent text-(--muted) hover:text-(--text)"
               }`}
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted)">
-                <CloudArrowUp size={20} weight="bold" />
-              </div>
-              <p className="m-0 mt-2 text-[0.80rem] sm:text-[0.84rem] font-bold text-(--text)">
-                Drag and drop files here
-              </p>
-              <p className="m-0 mt-0.5 text-[0.68rem] sm:text-[0.70rem] text-(--muted)">
-                Supports PDFs, documents, images, ZIP files (max 500 MB).
-              </p>
-            </div>
-
-            {/* Attached Resources List */}
-            {resources.length > 0 && (
-              <div className="mt-3 flex flex-col gap-2">
-                {resources.map((res) => (
-                  <div
-                    key={res.id}
-                    className="flex items-center justify-between gap-2.5 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] p-2.5"
-                  >
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--accent)">
-                        <FileText size={15} weight="fill" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="m-0 truncate text-[0.76rem] sm:text-[0.78rem] font-semibold text-(--text)">
-                          {res.name}
-                        </p>
-                        <p className="m-0 text-[0.66rem] text-(--muted)">
-                          {res.size || "1.2 MB"}
-                        </p>
-                      </div>
-                    </div>
-
-                    {onDeleteResource && (
-                      <button
-                        type="button"
-                        onClick={() => onDeleteResource(res.id)}
-                        aria-label="Remove resource"
-                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-(--muted) hover:text-red-500 transition-colors cursor-pointer"
-                      >
-                        <X size={13} weight="bold" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+              <FileText size={15} weight="bold" />
+              <span>Description</span>
+            </button>
           )}
+
+          {quizSection && (
+            <button
+              type="button"
+              onClick={() => setActiveContentTab("quiz")}
+              className={`flex items-center gap-1.5 !rounded-none border-b-2 px-3.5 py-2.5 text-[0.80rem] sm:text-[0.82rem] font-bold cursor-pointer transition-colors ${
+                activeContentTab === "quiz"
+                  ? "border-(--accent) text-(--accent)"
+                  : "border-transparent text-(--muted) hover:text-(--text)"
+              }`}
+            >
+              <CaretRight size={15} className="rotate-90" />
+              <span>Quiz Assessment</span>
+            </button>
+          )}
+        </div>
+
+        <div className="w-full p-4">
+          {activeContentTab === "resources" && resourcesTabContent}
+          {activeContentTab === "description" && descriptionSection}
+          {activeContentTab === "quiz" && quizSection}
         </div>
       </div>
     </div>

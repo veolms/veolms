@@ -7,7 +7,6 @@ import {
   MusicNotesIcon as MusicNotes,
   PlayCircleIcon as PlayCircle,
   PlayIcon as Play,
-  PuzzlePieceIcon as PuzzlePiece,
   UploadSimpleIcon as UploadSimple,
   VideoIcon as Video,
   XIcon as X,
@@ -62,8 +61,6 @@ export interface LessonMediaWorkspaceProps {
   onChangeVideoClick?: () => void;
   videoUploadSection?: ReactNode;
   onUploadThumbnail?: (file: File) => void | Promise<void>;
-  descriptionSection?: ReactNode;
-  quizSection?: ReactNode;
   playbackSuspended?: boolean;
 }
 
@@ -80,14 +77,11 @@ export function LessonMediaWorkspace({
   onChangeVideoClick,
   videoUploadSection,
   onUploadThumbnail,
-  descriptionSection,
-  quizSection,
   playbackSuspended = false,
 }: LessonMediaWorkspaceProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [activeTab, setActiveTab] = useState<"media" | "description" | "quiz">("media");
   const [playbackBootstrap, setPlaybackBootstrap] =
     useState<VideoPlaybackBootstrap | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -595,59 +589,6 @@ export function LessonMediaWorkspace({
 
       </div>
 
-      {/* 4. Integrated Accordion Tabs for Lesson Description & Quiz Assessment */}
-      {(descriptionSection || quizSection) && (
-        <div className="mt-1 flex w-full flex-col rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) shadow-(--card-shadow) overflow-hidden">
-          {/* Tab Bar */}
-          <div className="flex items-center border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--text)_2%,transparent)] px-3">
-            {descriptionSection && (
-              <button
-                type="button"
-                onClick={() =>
-                  setActiveTab((prev) => (prev === "description" ? "media" : "description"))
-                }
-                className={`flex items-center gap-1.5 !rounded-none border-b-2 px-3.5 py-2.5 text-[0.80rem] sm:text-[0.82rem] font-bold cursor-pointer transition-colors ${
-                  activeTab === "description"
-                    ? "border-(--accent) text-(--accent)"
-                    : "border-transparent text-(--muted) hover:text-(--text)"
-                }`}
-              >
-                <FileText size={15} weight="bold" />
-                <span>Description</span>
-              </button>
-            )}
-
-            {quizSection && (
-              <button
-                type="button"
-                onClick={() =>
-                  setActiveTab((prev) => (prev === "quiz" ? "media" : "quiz"))
-                }
-                className={`flex items-center gap-1.5 !rounded-none border-b-2 px-3.5 py-2.5 text-[0.80rem] sm:text-[0.82rem] font-bold cursor-pointer transition-colors ${
-                  activeTab === "quiz"
-                    ? "border-(--accent) text-(--accent)"
-                    : "border-transparent text-(--muted) hover:text-(--text)"
-                }`}
-              >
-                <PuzzlePiece size={15} weight="fill" />
-                <span>Quiz Assessment</span>
-              </button>
-            )}
-
-          </div>
-
-          {/* Tab Content */}
-          <div className="w-full p-4">
-            {activeTab === "description" && descriptionSection}
-            {activeTab === "quiz" && quizSection}
-            {activeTab === "media" && (
-              <p className="m-0 text-xs text-(--muted) italic">
-                Click a tab above to edit the lesson description or attach a quiz assessment.
-              </p>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
