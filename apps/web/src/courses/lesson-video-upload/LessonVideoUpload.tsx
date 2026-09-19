@@ -1818,10 +1818,10 @@ function VideoFileSummary({
           type="button"
           onClick={onUpload}
           aria-label={uploadIconOnly ? "Upload video" : "Upload Video"}
-          className={`inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 transition-all active:scale-95 ${uploadIconOnly ? "h-7 w-7 rounded-full border-none bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-0 text-(--muted) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:text-(--text)" : "h-8.5 rounded-[9px] border-none bg-(--accent) px-3.5 text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] hover:bg-(--accent-hover,var(--accent))"}`}
+          className={`inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 transition-all active:scale-95 ${uploadIconOnly ? "h-8 w-8 rounded-full border-none bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-0 text-(--accent) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:text-(--accent-hover,var(--accent))" : "h-8.5 rounded-[9px] border-none bg-(--accent) px-3.5 text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] hover:bg-(--accent-hover,var(--accent))"}`}
         >
           {uploadIconOnly ? (
-            <AppIcon name="cloudUpload" aria-hidden="true" className="size-[13px]" />
+            <AppIcon name="cloudUpload" aria-hidden="true" className="size-[15px]" />
           ) : (
             <CloudArrowUp size={15} weight="bold" />
           )}
@@ -1840,9 +1840,9 @@ function VideoFileSummary({
           type="button"
           onClick={onRemove}
           aria-label="Remove selected video"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-none bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent)] transition-all hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:text-(--text) active:scale-95 cursor-pointer"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-none bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent)] transition-all hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:text-(--text) active:scale-95 cursor-pointer"
         >
-          <X size={13} weight="bold" />
+          <X size={15} weight="bold" />
         </button>
       )}
     </div>
