@@ -761,11 +761,6 @@ export const LessonVideoUpload = forwardRef<
     ],
   );
 
-  useEffect(() => {
-    if (!inline || !selectedFile || phase !== "idle") return;
-    void startUpload(selectedFile);
-  }, [inline, phase, selectedFile, startUpload]);
-
   const handleFileInputChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -1141,6 +1136,27 @@ export const LessonVideoUpload = forwardRef<
           )}
 
           {stageContent}
+
+          {inline &&
+            (uploadStage === "select" || isReplacingVideo) &&
+            selectedFile && (
+              <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-2.5">
+                <button
+                  type="button"
+                  onClick={removeSelectedFile}
+                  className={`${SECONDARY_ACTION_CLASS} min-w-[100px] px-4`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void startUpload(selectedFile)}
+                  className={`${PRIMARY_ACTION_CLASS} min-w-[120px] px-4`}
+                >
+                  {isReplacingVideo ? "Upload Replacement" : "Upload Video"}
+                </button>
+              </div>
+            )}
 
         </div>
       ) : null}
