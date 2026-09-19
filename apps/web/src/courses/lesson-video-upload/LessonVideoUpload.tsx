@@ -4,7 +4,6 @@ import {
   CircleNotch,
   CloudArrowUp,
   FileVideo,
-  Info,
   PlayCircle,
   UploadSimple,
   WarningCircle,
@@ -986,9 +985,7 @@ export const LessonVideoUpload = forwardRef<
     <TranscodingProgressStage
       file={selectedFile}
       mediaAttached={!selectedFile && Boolean(activeMediaId)}
-      progress={transcodeProgress}
       status={transcodeStatus}
-      attachmentError={attachmentError}
       errorMessage={isStreamError ? null : errorMessage}
       hasReceivedProgress={hasReceivedProgress}
       streamConnectionState={streamConnectionState}
@@ -1471,18 +1468,10 @@ function UploadProgressStage({
   progress,
   embedded = false,
 }: UploadProgressStageProps) {
-  const uploadState: ProgressState =
-    phase === "confirming" ? "complete" : progress > 0 ? "active" : "pending";
-  const preparingState: ProgressState =
-    phase === "uploading" && progress === 0 ? "active" : "complete";
-  const finalizingState: ProgressState =
-    phase === "confirming" ? "active" : "pending";
-
   return (
     <div className="min-w-0 space-y-3.5 sm:space-y-4">
       <VideoFileSummary file={file} embedded={embedded} />
 
-      {/* Progress Card: 3D raised surface, 0 borders */}
       <section
         className={`min-w-0 ${
           embedded
@@ -1511,56 +1500,6 @@ function UploadProgressStage({
           <span>{phase === "confirming" ? "Finalizing" : "Uploading"}</span>
         </div>
       </section>
-
-      {/* Checklist Card: 3D raised surface, 0 borders, clear opacity hierarchy */}
-      <section
-        className={`${
-          embedded
-            ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-4"
-            : `${RAISED_CARD_CLASS} p-3.5 sm:p-4`
-        } space-y-1`}
-      >
-        <UploadChecklistItem
-          description="Getting your video ready to upload..."
-          label="Preparing upload"
-          state={preparingState}
-        />
-        <UploadChecklistItem
-          description="Uploading video file"
-          label="Uploading file"
-          state={uploadState}
-          value={progress > 0 ? `${progress}%` : undefined}
-        />
-        <UploadChecklistItem
-          description="Confirming upload completion"
-          label="Finalizing upload"
-          state={finalizingState}
-        />
-        <UploadChecklistItem
-          description="Queued for transcoding"
-          label="Starting video processing"
-          state="pending"
-        />
-      </section>
-
-      {/* Background info note: 0 borders, subtle tinted depth */}
-      <div
-        className={`flex items-start gap-2.5 px-3.5 py-3 text-[0.72rem] sm:text-[0.73rem] leading-relaxed text-(--text-secondary) ${
-          embedded
-            ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface))"
-            : "rounded-[12px] border-none bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_8%,transparent))]"
-        }`}
-      >
-        <Info
-          size={16}
-          weight="fill"
-          className="mt-0.5 shrink-0 text-(--accent)"
-        />
-        <span>
-          You can close this modal and the upload will continue in the
-          background.
-        </span>
-      </div>
     </div>
   );
 }
@@ -1568,9 +1507,7 @@ function UploadProgressStage({
 interface TranscodingProgressStageProps {
   file: File | null;
   mediaAttached: boolean;
-  progress: number;
   status?: string;
-  attachmentError?: string | null;
   errorMessage?: string | null;
   hasReceivedProgress: boolean;
   streamConnectionState: StreamConnectionState;
@@ -1582,9 +1519,7 @@ interface TranscodingProgressStageProps {
 function TranscodingProgressStage({
   file,
   mediaAttached,
-  progress,
   status,
-  attachmentError,
   errorMessage,
   hasReceivedProgress,
   streamConnectionState,
@@ -1602,8 +1537,6 @@ function TranscodingProgressStage({
     streamConnectionState === "reconnecting" ||
     streamConnectionState === "closed";
   const isWaitingForWorker = status === "queued" || status === "provisioning";
-  const hasDeterminateProgress = isReady || isFailed || progress > 0;
-  const visibleProgress = hasDeterminateProgress ? progress : null;
   const isCheckingStatus =
     !isFailed &&
     !isReady &&
@@ -1629,124 +1562,26 @@ function TranscodingProgressStage({
             : `${RAISED_CARD_CLASS} p-3.5 sm:p-4`
         }`}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="m-0 text-[0.84rem] sm:text-[0.86rem] font-semibold text-(--text)">
-              {isFailed
-                ? "Video processing failed"
-                : isReady
-                  ? "Video processing complete"
-                  : isConnectionDegraded
-                    ? "Processing status unavailable"
-                    : isWaitingForWorker
-                      ? "Waiting for transcoder"
-                      : isCheckingStatus
-                        ? "Checking video status"
-                        : "Video is being processed"}
-            </h3>
-            <p className="m-0 mt-0.5 sm:mt-1 text-[0.72rem] sm:text-[0.74rem] leading-relaxed text-(--muted)">
-              {isFailed
-                ? errorMessage || "The video could not be transcoded."
-                : isReady
-                  ? "Your playback files are ready for this lesson."
-                  : isConnectionDegraded
-                    ? "The last known status is preserved. Reconnect to continue receiving live updates."
-                    : isWaitingForWorker
-                      ? "Your upload is complete. A transcoding worker will start processing it shortly."
-                      : isCheckingStatus
-                        ? "Loading the latest transcoding status."
-                        : "Your video has been uploaded. We're now transcoding it into playback files for the best learning experience."}
-            </p>
-          </div>
-          <div className="shrink-0">
-            <span className="text-[0.88rem] sm:text-[0.92rem] font-bold text-(--text) tabular-nums">
-              {visibleProgress === null
-                ? isWaitingForWorker
-                  ? "Preparing…"
-                  : "Checking…"
-                : `${visibleProgress}%`}
-            </span>
-          </div>
-        </div>
-        <ProgressBar
-          label="Video transcoding progress"
-          value={visibleProgress}
-        />
-        <p className="m-0 mt-2.5 text-[0.7rem] sm:text-[0.72rem] text-(--muted)">
+        <h3 className="m-0 text-[0.84rem] sm:text-[0.86rem] font-semibold text-(--text)">
           {isFailed
-            ? isReplacement
-              ? "The current lesson video is still available. Retry this replacement or choose another video."
-              : "Click Retry above to reconnect the status stream or restart the job."
+            ? "Video processing failed"
             : isReady
-              ? "The video can now be used when publishing the course."
+              ? "Video processing complete"
               : isConnectionDegraded
-                ? "Processing continues in the background while live updates reconnect."
-                : "This may take a few minutes. Processing will continue in the background."}
-        </p>
-        <div className="mt-3.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-3.5">
-          <h3 className="m-0 text-[0.8rem] sm:text-[0.82rem] font-semibold text-(--text)">
-            Transcoding status
-          </h3>
-          <div
-            className={`mt-2.5 sm:mt-3 overflow-hidden ${
-              embedded
-                ? "rounded-none border-none bg-(--surface) shadow-none"
-                : INSET_WELL_CLASS
-            } divide-y divide-[color-mix(in_srgb,var(--text)_8%,transparent)]`}
-          >
-            <TranscodingStatusRow
-              label="Transcoding job"
-              state={isFailed ? "failed" : isReady ? "complete" : "active"}
-              value={
-                isFailed
-                  ? status === "cancelled"
-                    ? "Transcoding cancelled"
-                    : "Transcoding failed"
-                  : getJobLabel(status)
-              }
-            />
-            <TranscodingStatusRow
-              label="Playback output"
-              state={isReady ? "complete" : isFailed ? "failed" : "pending"}
-              value={
-                isReady
-                  ? "Verified"
-                  : isFailed
-                    ? "Not generated"
-                    : isConnectionDegraded
-                      ? "Last known status"
-                      : "Pending verification"
-              }
-            />
-            <TranscodingStatusRow
-              label="Lesson attachment"
-              state={
-                attachmentError
-                  ? "failed"
-                  : isReady
-                    ? "complete"
-                    : isFailed
-                      ? "failed"
-                      : "pending"
-              }
-              value={
-                attachmentError
-                  ? "Attachment failed"
-                  : isReady
-                    ? isReplacement
-                      ? "Will replace current"
-                      : "Ready"
-                    : isFailed
-                      ? isReplacement
-                        ? "Current video kept"
-                        : "Not attached"
-                      : isReplacement
-                        ? "Current video kept"
-                        : "Pending"
-              }
-            />
-          </div>
-        </div>
+                ? "Processing status unavailable"
+                : isWaitingForWorker || isCheckingStatus
+                  ? "Video is being processed"
+                  : "Video is being processed"}
+        </h3>
+        {(isFailed || isReady || isConnectionDegraded) && (
+          <p className="m-0 mt-1 text-[0.72rem] sm:text-[0.74rem] leading-relaxed text-(--muted)">
+            {isFailed
+              ? errorMessage || "The video could not be transcoded."
+              : isReady
+                ? "Video processing complete."
+                : "Processing continues in the background."}
+          </p>
+        )}
       </section>
 
     </div>
@@ -1921,153 +1756,6 @@ function VideoThumbnail({ file }: { file: File | null }) {
         className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]"
       />
     </div>
-  );
-}
-
-type ProgressState = "pending" | "active" | "complete" | "failed";
-
-function UploadChecklistItem({
-  description,
-  label,
-  state,
-  value,
-}: {
-  description: string;
-  label: string;
-  state: ProgressState;
-  value?: string;
-}) {
-  const isPending = state === "pending";
-  const isActive = state === "active";
-  const isComplete = state === "complete";
-  const isFailed = state === "failed";
-
-  return (
-    <div className="flex items-center gap-2.5 sm:gap-3 py-1.5">
-      <ProgressStateIcon state={state} />
-      <div className="min-w-0 flex-1">
-        <p
-          className={`m-0 text-[0.76rem] sm:text-[0.78rem] ${
-            isActive
-              ? "font-semibold text-(--text)"
-              : isComplete
-                ? "font-medium text-(--text-secondary)"
-                : isFailed
-                  ? "font-semibold text-red-400"
-                  : "font-normal text-[color-mix(in_srgb,var(--muted)_65%,transparent)]"
-          }`}
-        >
-          {label}
-        </p>
-        <p
-          className={`m-0 mt-0.5 text-[0.68rem] sm:text-[0.7rem] ${
-            isActive
-              ? "text-(--text-secondary)"
-              : isComplete
-                ? "text-(--muted)"
-                : isFailed
-                  ? "text-red-400/85"
-                  : "text-[color-mix(in_srgb,var(--muted)_40%,transparent)]"
-          }`}
-        >
-          {description}
-        </p>
-      </div>
-      {value && (
-        <span
-          className={`text-[0.72rem] sm:text-[0.74rem] tabular-nums ${
-            isActive
-              ? "font-semibold text-(--accent)"
-              : isPending
-                ? "text-[color-mix(in_srgb,var(--muted)_60%,transparent)]"
-                : isFailed
-                  ? "font-semibold text-red-400"
-                  : "text-(--muted)"
-          }`}
-        >
-          {value}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function TranscodingStatusRow({
-  label,
-  state,
-  value,
-}: {
-  label: string;
-  state: ProgressState;
-  value: string;
-}) {
-  const isPending = state === "pending";
-  const isActive = state === "active";
-  const isComplete = state === "complete";
-  const isFailed = state === "failed";
-
-  return (
-    <div className="flex items-center justify-between gap-2.5 px-3 py-2.5">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <ProgressStateIcon state={state} />
-        <span
-          className={`truncate text-[0.72rem] sm:text-[0.74rem] ${
-            isPending
-              ? "text-[color-mix(in_srgb,var(--muted)_65%,transparent)]"
-              : isFailed
-                ? "font-medium text-(--text)"
-                : "text-(--text-secondary)"
-          }`}
-        >
-          {label}
-        </span>
-      </div>
-      <span
-        className={`shrink-0 text-right text-[0.72rem] sm:text-[0.74rem] ${
-          isActive
-            ? "font-semibold text-(--accent)"
-            : isComplete
-              ? "font-semibold text-emerald-400"
-              : isFailed
-                ? "font-semibold text-red-400"
-                : "font-normal text-[color-mix(in_srgb,var(--muted)_45%,transparent)]"
-        }`}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function ProgressStateIcon({ state }: { state: ProgressState }) {
-  if (state === "complete") {
-    return (
-      <CheckCircle
-        size={18}
-        weight="fill"
-        className="shrink-0 text-emerald-400 drop-shadow-[0_1px_3px_rgba(0,0,0,0.2)]"
-      />
-    );
-  }
-  if (state === "active") {
-    return (
-      <CircleNotch
-        size={18}
-        className="shrink-0 animate-spin text-(--accent) drop-shadow-[0_1px_3px_var(--accent-shadow)]"
-      />
-    );
-  }
-  if (state === "failed") {
-    return (
-      <WarningCircle
-        size={18}
-        weight="fill"
-        className="shrink-0 text-red-400 drop-shadow-[0_1px_3px_rgba(0,0,0,0.2)]"
-      />
-    );
-  }
-  return (
-    <span className="h-[18px] w-[18px] shrink-0 rounded-full border-none bg-[color-mix(in_srgb,var(--text)_12%,transparent)] shadow-[inset_0_1px_2px_color-mix(in_srgb,black_20%,transparent)]" />
   );
 }
 
