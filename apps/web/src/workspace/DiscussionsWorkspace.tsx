@@ -31,6 +31,7 @@ import { SealCheckIcon as SealCheck } from "@phosphor-icons/react/SealCheck";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import type { CourseRole } from "../courses/catalogue";
+import { formatRelativeDate } from "../settings/sessionDisplay";
 import {
   handleRovingTabKeyDown,
   scrollKeyboardFocusedTabIntoView,
@@ -106,7 +107,7 @@ const tabs: readonly {
     Icon: ChatCircleDots,
     tone: "green",
   },
-  { id: "saved", label: "Saved", Icon: BookmarkSimple, tone: "gold" },
+  { id: "saved", label: "Bookmarks", Icon: BookmarkSimple, tone: "gold" },
 ];
 
 const discussionTabIds = tabs.map(({ id }) => id);
@@ -1363,6 +1364,188 @@ function DiscussionWorkspaceNoteCard({
   );
 }
 
+function DiscussionWorkspaceBookmarkCard({
+  bookmark,
+  onNavigatePage,
+}: {
+  bookmark: DiscussionWorkspaceCard;
+  onNavigatePage: NavigateTo;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const isNote = bookmark.itemType === "note" || bookmark.kind === "note";
+  const isQuestion =
+    !isNote && (bookmark.kind === "question" || bookmark.kind === "qna");
+  const sourceLabel = isNote ? "Note" : isQuestion ? "Q&A" : "Comment";
+  const SourceIcon = isNote ? Note : isQuestion ? Question : ChatTeardropText;
+  const attachmentLabel = getAttachmentLabel(bookmark.attachmentSummary);
+  const visibilityLabel = getVisibilityLabel(bookmark.visibility);
+  const VisibilityIcon =
+    bookmark.visibility === "private"
+      ? Lock
+      : bookmark.visibility === "unlisted"
+        ? EyeSlash
+        : Globe;
+  const title = isQuestion ? bookmark.title?.trim() : undefined;
+  const destination = isNote
+    ? null
+    : getDiscussionThreadDestination(bookmark, "/discussions/saved");
+  const destinationLabel = [bookmark.course, bookmark.lesson]
+    .filter(Boolean)
+    .join(", ");
+  const metadataItems: Array<{ key: string; content: ReactNode }> = [];
+
+  if (bookmark.course) {
+    metadataItems.push({
+      key: "course",
+      content: <span>{bookmark.course}</span>,
+    });
+  }
+  if (bookmark.lesson) {
+    metadataItems.push({
+      key: "lesson",
+      content: (
+        <small className="discussion-thread__lesson">
+          <BookOpen size={13} aria-hidden="true" />
+          <span>{bookmark.lesson}</span>
+        </small>
+      ),
+    });
+  }
+  if (attachmentLabel) {
+    metadataItems.push({
+      key: "attachments",
+      content: (
+        <DiscussionWorkspaceAttachmentIndicator label={attachmentLabel} />
+      ),
+    });
+  }
+  if (visibilityLabel) {
+    metadataItems.push({
+      key: "visibility",
+      content: (
+        <small className="discussion-thread__visibility">
+          <VisibilityIcon size={13} aria-hidden="true" />
+          <span>{visibilityLabel}</span>
+        </small>
+      ),
+    });
+  }
+
+  return (
+    <article
+      className={[
+        "discussion-thread",
+        "discussion-thread--bookmark",
+        "discussion-thread--bookmark-" +
+          (isNote ? "note" : isQuestion ? "question" : "comment"),
+        destination ? "is-navigable" : "is-static",
+        expanded ? "is-expanded" : "is-collapsed",
+      ].join(" ")}
+    >
+      {destination && (
+        <a
+          className="discussion-thread__navigation-link"
+          href={destination}
+          aria-label={
+            "Open bookmarked " +
+            sourceLabel.toLowerCase() +
+            (destinationLabel ? " in " + destinationLabel : "")
+          }
+          onClick={(event) => {
+            if (
+              event.defaultPrevented ||
+              event.button !== 0 ||
+              event.metaKey ||
+              event.ctrlKey ||
+              event.shiftKey ||
+              event.altKey
+            ) {
+              return;
+            }
+            event.preventDefault();
+            onNavigatePage(destination, { exact: true });
+          }}
+        />
+      )}
+      <div className="discussion-thread__open discussion-thread__open--overview">
+        <div className="discussion-thread__avatar">
+          <DiscussionAvatar
+            src={bookmark.avatar || null}
+            className="discussion-thread__avatar-image"
+          />
+        </div>
+        <div className="discussion-thread__body">
+          <div className="discussion-thread__author">
+            <span className="discussion-thread__author-name">
+              {bookmark.isOwn ? "You" : bookmark.author}
+            </span>
+            {bookmark.authorUsername && (
+              <>
+                <span
+                  className="discussion-thread__author-separator"
+                  aria-hidden="true"
+                >
+                  ·
+                </span>
+                <span className="discussion-thread__author-username">
+                  @{bookmark.authorUsername.replace(/^@+/, "")}
+                </span>
+              </>
+            )}
+          </div>
+          {title && (
+            <div className="discussion-thread__bookmark-title">{title}</div>
+          )}
+          {isQuestion ? (
+            <DiscussionWorkspaceQuestionContent
+              thread={bookmark}
+              expanded={expanded}
+              onExpandedChange={setExpanded}
+            />
+          ) : isNote ? (
+            <DiscussionWorkspaceNoteContent
+              note={bookmark}
+              expanded={expanded}
+              onExpandedChange={setExpanded}
+            />
+          ) : (
+            <DiscussionWorkspaceCommentContent
+              thread={bookmark}
+              expanded={expanded}
+              onExpandedChange={setExpanded}
+            />
+          )}
+          {metadataItems.length > 0 && (
+            <div className="discussion-thread__context">
+              {metadataItems.map((item, index) => (
+                <Fragment key={item.key}>
+                  {index > 0 && <span aria-hidden="true" />}
+                  {item.content}
+                </Fragment>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="discussion-thread__meta">
+          <span className="discussion-thread__bookmark-source">
+            <SourceIcon size={15} weight="fill" aria-hidden="true" />
+            <span>{sourceLabel}</span>
+          </span>
+          {!isNote && (
+            <span>
+              <ChatTeardropText size={17} aria-hidden="true" />{" "}
+              {bookmark.replies} {bookmark.replies === 1 ? "reply" : "replies"}
+            </span>
+          )}
+          <time dateTime={bookmark.bookmarkedAt}>
+            Saved · {formatRelativeDate(bookmark.bookmarkedAt)}
+          </time>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export function DiscussionsWorkspace({
   tab = "q-and-a",
   onNavigatePage,
@@ -1399,6 +1582,7 @@ export function DiscussionsWorkspace({
   const isNotesTab = activeTab === "notes";
   const isMentionsTab = activeTab === "mentions";
   const isFollowingTab = activeTab === "following";
+  const isBookmarksTab = activeTab === "saved";
   const workspaceStatus = isQnaTab ? qnaStatus : status;
   const workspaceSort = isQnaTab ? qnaSort : sort;
 
@@ -1424,6 +1608,8 @@ export function DiscussionsWorkspace({
         sort: "activity" as const,
       };
     }
+
+    if (isBookmarksTab) return sharedQuery;
 
     if (isMentionsTab) return sharedQuery;
 
@@ -1462,9 +1648,17 @@ export function DiscussionsWorkspace({
             mentions: isMentionsTab,
             notes: isNotesTab,
             following: isFollowingTab,
+            bookmarks: isBookmarksTab,
           }),
         ) ?? [],
-    [isCommentsTab, isFollowingTab, isMentionsTab, isNotesTab, workspaceData],
+    [
+      isBookmarksTab,
+      isCommentsTab,
+      isFollowingTab,
+      isMentionsTab,
+      isNotesTab,
+      workspaceData,
+    ],
   );
 
   const [knownCourseOptions, setKnownCourseOptions] = useState<
@@ -1532,6 +1726,7 @@ export function DiscussionsWorkspace({
     debouncedQuery,
     isCommentsTab,
     isFollowingTab,
+    isBookmarksTab,
     isNotesTab,
     isQnaTab,
     notesSort,
@@ -1704,11 +1899,13 @@ export function DiscussionsWorkspace({
                   className={`discussion-hub__filters ${
                     isFollowingTab
                       ? "discussion-hub__filters--following"
-                      : isMentionsTab
-                        ? "discussion-hub__filters--mentions"
-                        : isCommentsTab || isNotesTab
-                          ? "discussion-hub__filters--comments"
-                          : ""
+                      : isBookmarksTab
+                        ? "discussion-hub__filters--bookmarks"
+                        : isMentionsTab
+                          ? "discussion-hub__filters--mentions"
+                          : isCommentsTab || isNotesTab
+                            ? "discussion-hub__filters--comments"
+                            : ""
                   }`}
                   aria-label="Filter discussions"
                 >
@@ -1730,7 +1927,9 @@ export function DiscussionsWorkspace({
                                 ? "Search mentions..."
                                 : isFollowingTab
                                   ? "Search followed discussions..."
-                                  : "Search discussions by title or keyword..."
+                                  : isBookmarksTab
+                                    ? "Search bookmarks"
+                                    : "Search discussions by title or keyword..."
                       }
                       data-search-shortcut-target
                       aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
@@ -1748,7 +1947,8 @@ export function DiscussionsWorkspace({
                         isCommentsTab ||
                         isNotesTab ||
                         isMentionsTab ||
-                        isFollowingTab
+                        isFollowingTab ||
+                        isBookmarksTab
                       }
                       value={selectedCourseId}
                       options={courseOptions}
@@ -1757,7 +1957,8 @@ export function DiscussionsWorkspace({
                   {!isCommentsTab &&
                     !isNotesTab &&
                     !isMentionsTab &&
-                    !isFollowingTab && (
+                    !isFollowingTab &&
+                    !isBookmarksTab && (
                       <div className="discussion-hub__select">
                         <ThemedSelect
                           value={isQnaTab ? qnaStatus : status}
@@ -1786,7 +1987,9 @@ export function DiscussionsWorkspace({
                         />
                       </div>
                     )}
-                  {isMentionsTab || isFollowingTab ? null : isNotesTab ? (
+                  {isMentionsTab ||
+                  isFollowingTab ||
+                  isBookmarksTab ? null : isNotesTab ? (
                     <div className="discussion-hub__select discussion-hub__select--sort">
                       <Funnel size={17} aria-hidden="true" />
                       <ThemedSelect<"activity" | "latest">
@@ -1862,7 +2065,9 @@ export function DiscussionsWorkspace({
                               ? "Loading mentions…"
                               : isFollowingTab
                                 ? "Loading followed discussions…"
-                                : "Loading discussions…"}
+                                : isBookmarksTab
+                                  ? "Loading bookmarks…"
+                                  : "Loading discussions…"}
                       </h2>
                     </div>
                   ) : isWorkspaceError ? (
@@ -1876,7 +2081,9 @@ export function DiscussionsWorkspace({
                               ? "Unable to load mentions"
                               : isFollowingTab
                                 ? "Failed to load followed discussions"
-                                : "Unable to load discussions"}
+                                : isBookmarksTab
+                                  ? "Unable to load bookmarks"
+                                  : "Unable to load discussions"}
                       </h2>
                       <p>
                         {workspaceError instanceof Error
@@ -1889,7 +2096,9 @@ export function DiscussionsWorkspace({
                                 ? "There was a problem loading mentions."
                                 : isFollowingTab
                                   ? "There was a problem loading followed discussions."
-                                  : "There was a problem loading discussions."}
+                                  : isBookmarksTab
+                                    ? "There was a problem loading bookmarks."
+                                    : "There was a problem loading discussions."}
                       </p>
                       <button type="button" onClick={() => void refetch()}>
                         Retry
@@ -1897,6 +2106,16 @@ export function DiscussionsWorkspace({
                     </div>
                   ) : cards.length > 0 ? (
                     cards.map((thread) => {
+                      if (isBookmarksTab) {
+                        return (
+                          <DiscussionWorkspaceBookmarkCard
+                            key={thread.id}
+                            bookmark={thread}
+                            onNavigatePage={onNavigatePage}
+                          />
+                        );
+                      }
+
                       if (isNotesTab) {
                         return (
                           <DiscussionWorkspaceNoteCard
@@ -2021,7 +2240,11 @@ export function DiscussionsWorkspace({
                                 ? query.trim() || selectedCourseId !== "all"
                                   ? "No followed discussions found"
                                   : "No followed discussions yet"
-                                : "No discussions match these filters"}
+                                : isBookmarksTab
+                                  ? query.trim() || selectedCourseId !== "all"
+                                    ? "No bookmarks found"
+                                    : "No bookmarks yet"
+                                  : "No discussions match these filters"}
                       </h2>
                       <p>
                         {isNotesTab
@@ -2032,7 +2255,9 @@ export function DiscussionsWorkspace({
                               ? "Try clearing a filter or choosing another course."
                               : isFollowingTab
                                 ? "Try clearing a filter or choosing another course."
-                                : "Try clearing a filter or start a new question for the course."}
+                                : isBookmarksTab
+                                  ? "Bookmarked discussions and notes will appear here."
+                                  : "Try clearing a filter or start a new question for the course."}
                       </p>
                       <button
                         type="button"
@@ -2065,7 +2290,9 @@ export function DiscussionsWorkspace({
                               ? "Loading more mentions…"
                               : isFollowingTab
                                 ? "Loading more followed discussions…"
-                                : "Loading more discussions…"}
+                                : isBookmarksTab
+                                  ? "Loading more bookmarks…"
+                                  : "Loading more discussions…"}
                       </p>
                     )}
                     {isFetchNextPageError && (

@@ -39,6 +39,8 @@ export interface DiscussionWorkspaceCard {
   kind: WorkspaceDiscussionItem["kind"];
   createdAt: string;
   updatedAt: string;
+  bookmarkedAt?: string;
+  bookmarkActivity?: string;
 }
 
 function formatRelativeTime(dateValue: string): string {
@@ -84,30 +86,44 @@ export function adaptDiscussionWorkspaceItem(
     mentions?: boolean;
     notes?: boolean;
     following?: boolean;
+    bookmarks?: boolean;
   },
 ): DiscussionWorkspaceCard {
   const excerpt = getExcerpt(item);
   const isNote = options?.notes === true || item.kind === "note";
   const isMention = options?.mentions === true;
   const isFollowing = options?.following === true;
+  const isBookmark = options?.bookmarks === true;
+  const isQuestion = item.kind === "question" || item.kind === "qna";
   const status =
-    options?.comments || isMention || isNote || isFollowing
+    options?.comments ||
+    isMention ||
+    isNote ||
+    isFollowing ||
+    (isBookmark && !isQuestion)
       ? undefined
-      : item.status && item.status !== "all"
-        ? item.status
-        : "open";
+      : isBookmark
+        ? item.status && item.status !== "all"
+          ? item.status
+          : undefined
+        : item.status && item.status !== "all"
+          ? item.status
+          : "open";
 
   return {
     id: item.id,
     title:
-      isNote || isMention
+      isNote || isMention || isBookmark
         ? item.title?.trim() || undefined
         : options?.comments || isFollowing
           ? item.title?.trim() || ""
           : getTitle(item, excerpt),
     excerpt,
     content: item.content,
-    plainText: isNote || isMention || isFollowing ? item.plainText : excerpt,
+    plainText:
+      isNote || isMention || isFollowing || isBookmark
+        ? item.plainText
+        : excerpt,
     courseId: item.courseId,
     course: item.courseTitle?.trim() || "",
     courseTitle: item.courseTitle ?? null,
@@ -136,6 +152,10 @@ export function adaptDiscussionWorkspaceItem(
     mentionedAt: item.mentionedAt,
     mentionActivity: item.mentionedAt
       ? formatRelativeTime(item.mentionedAt)
+      : undefined,
+    bookmarkedAt: item.bookmarkedAt,
+    bookmarkActivity: item.bookmarkedAt
+      ? formatRelativeTime(item.bookmarkedAt)
       : undefined,
     attachmentSummary: item.attachmentSummary,
     itemType: item.itemType,
