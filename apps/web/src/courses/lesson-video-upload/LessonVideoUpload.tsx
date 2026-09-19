@@ -1143,13 +1143,6 @@ export const LessonVideoUpload = forwardRef<
               <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-2.5">
                 <button
                   type="button"
-                  onClick={removeSelectedFile}
-                  className={`${SECONDARY_ACTION_CLASS} min-w-[100px] px-4`}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
                   onClick={() => void startUpload(selectedFile)}
                   className={`${PRIMARY_ACTION_CLASS} min-w-[120px] px-4`}
                 >
@@ -1397,7 +1390,7 @@ function SelectVideoStage({
         </p>
       )}
 
-      {/* Tactile 3D sunken socket dropzone - 0 borders */}
+      {!selectedFile && (
       <div
         className={`flex min-h-[210px] sm:min-h-[250px] flex-col items-center justify-center rounded-[16px] ${minimal ? "border-2 border-dashed" : "border-none"} p-4 sm:p-6 text-center transition-all duration-150 ${
           isDragging
@@ -1453,6 +1446,7 @@ function SelectVideoStage({
           </button>
         )}
       </div>
+      )}
 
       {selectedFile && (
         <VideoFileSummary file={selectedFile} onRemove={onRemoveFile} />
