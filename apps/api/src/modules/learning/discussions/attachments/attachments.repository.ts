@@ -9,10 +9,12 @@ import type {
 import { sql } from "kysely";
 import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 
-export interface ThreadAttachmentSummary {
+export interface AttachmentSummaryRow {
   targetId: string;
   attachmentSummary: DiscussionAttachmentSummary;
 }
+
+export type ThreadAttachmentSummary = AttachmentSummaryRow;
 
 export interface AttachmentsRepository {
   createAttachment(
@@ -47,7 +49,12 @@ export interface AttachmentsRepository {
   listThreadAttachmentSummaries(
     db: DatabaseExecutor,
     threadIds: readonly string[],
-  ): Promise<ThreadAttachmentSummary[]>;
+  ): Promise<AttachmentSummaryRow[]>;
+
+  listNoteAttachmentSummaries(
+    db: DatabaseExecutor,
+    noteIds: readonly string[],
+  ): Promise<AttachmentSummaryRow[]>;
 
   linkAttachmentsToTarget(
     db: DatabaseExecutor,
@@ -58,6 +65,51 @@ export interface AttachmentsRepository {
 }
 
 export function createAttachmentsRepository(): AttachmentsRepository {
+  async function listAttachmentSummaries(
+    db: DatabaseExecutor,
+    targetType: AttachmentTargetType,
+    targetIds: readonly string[],
+  ): Promise<AttachmentSummaryRow[]> {
+    if (targetIds.length === 0) return [];
+
+    const rows = await db
+      .selectFrom("learning_attachments")
+      .select([
+        "target_id as targetId",
+        sql<number>`count(*)::int`.as("count"),
+        sql<boolean>`bool_or(
+          kind in ('image', 'screenshot') or mime_type like 'image/%'
+        )`.as("hasImages"),
+        sql<boolean>`bool_or(mime_type like 'video/%')`.as("hasVideos"),
+        sql<boolean>`bool_or(
+          kind in ('code', 'document')
+          and mime_type not like 'image/%'
+          and mime_type not like 'video/%'
+        )`.as("hasFiles"),
+      ])
+      .where("target_type", "=", targetType)
+      .where("target_id", "in", [...targetIds])
+      .where("status", "=", "ready")
+      .groupBy("target_id")
+      .execute();
+
+    return rows.flatMap((row) =>
+      row.targetId
+        ? [
+            {
+              targetId: row.targetId,
+              attachmentSummary: {
+                count: Number(row.count),
+                hasImages: Boolean(row.hasImages),
+                hasVideos: Boolean(row.hasVideos),
+                hasFiles: Boolean(row.hasFiles),
+              },
+            },
+          ]
+        : [],
+    );
+  }
+
   return {
     async createAttachment(db, attachment) {
       await db
@@ -149,44 +201,11 @@ export function createAttachmentsRepository(): AttachmentsRepository {
     },
 
     async listThreadAttachmentSummaries(db, threadIds) {
-      if (threadIds.length === 0) return [];
+      return listAttachmentSummaries(db, "thread", threadIds);
+    },
 
-      const rows = await db
-        .selectFrom("learning_attachments")
-        .select([
-          "target_id as targetId",
-          sql<number>`count(*)::int`.as("count"),
-          sql<boolean>`bool_or(
-            kind in ('image', 'screenshot') or mime_type like 'image/%'
-          )`.as("hasImages"),
-          sql<boolean>`bool_or(mime_type like 'video/%')`.as("hasVideos"),
-          sql<boolean>`bool_or(
-            kind in ('code', 'document')
-            and mime_type not like 'image/%'
-            and mime_type not like 'video/%'
-          )`.as("hasFiles"),
-        ])
-        .where("target_type", "=", "thread")
-        .where("target_id", "in", [...threadIds])
-        .where("status", "=", "ready")
-        .groupBy("target_id")
-        .execute();
-
-      return rows.flatMap((row) =>
-        row.targetId
-          ? [
-              {
-                targetId: row.targetId,
-                attachmentSummary: {
-                  count: Number(row.count),
-                  hasImages: Boolean(row.hasImages),
-                  hasVideos: Boolean(row.hasVideos),
-                  hasFiles: Boolean(row.hasFiles),
-                },
-              },
-            ]
-          : [],
-      );
+    async listNoteAttachmentSummaries(db, noteIds) {
+      return listAttachmentSummaries(db, "note", noteIds);
     },
 
     async linkAttachmentsToTarget(db, attachmentIds, targetType, targetId) {

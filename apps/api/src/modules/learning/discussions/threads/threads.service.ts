@@ -32,6 +32,7 @@ import {
   resolveAcademyId,
   takePage,
   toDate,
+  updatedAtIdDescSql,
 } from "../shared/discussion.utils.ts";
 import {
   createDiscussionAccess,
@@ -45,7 +46,7 @@ import type {
 } from "./threads.repository.ts";
 import type {
   AttachmentsRepository,
-  ThreadAttachmentSummary,
+  AttachmentSummaryRow,
 } from "../attachments/attachments.repository.ts";
 
 type LearningAttachmentRow = Selectable<LearningAttachmentTable>;
@@ -136,11 +137,15 @@ export function createThreadsService(
   });
 
   const indexAttachmentSummaries = (
-    summaries: readonly ThreadAttachmentSummary[],
+    summaries: readonly AttachmentSummaryRow[],
   ): Map<string, DiscussionAttachmentSummary> =>
     new Map(
       summaries.map((summary) => [summary.targetId, summary.attachmentSummary]),
     );
+
+  const normalizeNotesWorkspaceSort = (
+    sort: ListLearningThreadsQuery["sort"] | undefined,
+  ): "latest" | "activity" => (sort === "activity" ? "activity" : "latest");
 
   function mapThreadRow(
     row: ThreadRowWithAuthor,
@@ -713,10 +718,15 @@ export function createThreadsService(
         await courseAccess.assertCanAccessCourse(db, actor, query.courseId);
       }
 
-      // Determine accessible courses for student / staff
-      const accessibleCourseIds = isStaff
-        ? "all"
-        : await courseAccess.listAccessibleCourseIds(db, actor);
+      const tab = query.tab || "q-and-a";
+
+      // Notes use the canonical course-access policy for every role. The
+      // broader staff shortcut remains unchanged for the existing thread and
+      // report tabs below.
+      const accessibleCourseIds =
+        tab === "notes" || !isStaff
+          ? await courseAccess.listAccessibleCourseIds(db, actor)
+          : "all";
 
       if (accessibleCourseIds !== "all" && accessibleCourseIds.length === 0) {
         return { items: [], courses: [], nextCursor: null, totalCount: 0 };
@@ -741,13 +751,20 @@ export function createThreadsService(
       }));
 
       const academyId = await resolveAcademyId(db);
-      const tab = query.tab || "q-and-a";
       const limit = query.limit || 20;
       const sort = normalizeThreadSort(query.sort);
       const pageCursor = decodeDiscussionCursor(query.cursor);
 
       // Tab: Notes
       if (tab === "notes") {
+        const noteSort = normalizeNotesWorkspaceSort(query.sort);
+        if (pageCursor?.sort && pageCursor.sort !== noteSort) {
+          throw httpError(
+            400,
+            "INVALID_CURSOR",
+            "The pagination cursor does not match the requested Note sort.",
+          );
+        }
         let notesQuery = db
           .selectFrom("learning_notes as n")
           .innerJoin("users as u", "u.id", "n.user_id")
@@ -778,6 +795,17 @@ export function createThreadsService(
           .selectFrom("learning_notes as n")
           .select(sql<number>`count(*)::int`.as("count"));
 
+        notesQuery = notesQuery
+          .where("n.academy_id", "=", academyId)
+          .where("c.deleted_at", "is", null)
+          .whereRef("l.course_id", "=", "n.course_id");
+        notesCountQuery = notesCountQuery
+          .innerJoin("courses as c", "c.id", "n.course_id")
+          .innerJoin("course_lessons as l", "l.id", "n.lesson_id")
+          .where("n.academy_id", "=", academyId)
+          .where("c.deleted_at", "is", null)
+          .whereRef("l.course_id", "=", "n.course_id");
+
         if (query.courseId) {
           notesQuery = notesQuery.where("n.course_id", "=", query.courseId);
           notesCountQuery = notesCountQuery.where(
@@ -803,20 +831,57 @@ export function createThreadsService(
           );
         }
 
-        if (!isStaff) {
-          // Student only sees their own notes
+        if (query.mine === true) {
+          // `mine=true` is an ownership constraint for every role.
           notesQuery = notesQuery.where("n.user_id", "=", actor.userId);
           notesCountQuery = notesCountQuery.where(
             "n.user_id",
             "=",
             actor.userId,
           );
-        } else if (query.mine) {
-          notesQuery = notesQuery.where("n.user_id", "=", actor.userId);
+          if (query.visibility) {
+            notesQuery = notesQuery.where(
+              "n.visibility",
+              "=",
+              query.visibility,
+            );
+            notesCountQuery = notesCountQuery.where(
+              "n.visibility",
+              "=",
+              query.visibility,
+            );
+          }
+        } else if (
+          query.visibility === "private" ||
+          query.visibility === "unlisted"
+        ) {
+          // Canonical Note discovery does not list another user's private or
+          // unlisted Notes. Preserve that rule for the workspace feed.
+          notesQuery = notesQuery
+            .where("n.user_id", "=", actor.userId)
+            .where("n.visibility", "=", query.visibility);
+          notesCountQuery = notesCountQuery
+            .where("n.user_id", "=", actor.userId)
+            .where("n.visibility", "=", query.visibility);
+        } else if (query.visibility === "public") {
+          notesQuery = notesQuery.where("n.visibility", "=", "public");
           notesCountQuery = notesCountQuery.where(
-            "n.user_id",
+            "n.visibility",
             "=",
-            actor.userId,
+            "public",
+          );
+        } else {
+          notesQuery = notesQuery.where((eb) =>
+            eb.or([
+              eb("n.user_id", "=", actor.userId),
+              eb("n.visibility", "=", "public"),
+            ]),
+          );
+          notesCountQuery = notesCountQuery.where((eb) =>
+            eb.or([
+              eb("n.user_id", "=", actor.userId),
+              eb("n.visibility", "=", "public"),
+            ]),
           );
         }
 
@@ -837,13 +902,23 @@ export function createThreadsService(
         }
 
         if (pageCursor) {
-          notesQuery = notesQuery.where(createdAtIdDescSql("n", pageCursor));
+          notesQuery = notesQuery.where(
+            noteSort === "activity"
+              ? updatedAtIdDescSql("n", pageCursor)
+              : createdAtIdDescSql("n", pageCursor),
+          );
         }
 
-        notesQuery = notesQuery
-          .orderBy("n.created_at", "desc")
-          .orderBy("n.id", "desc")
-          .limit(limit + 1);
+        notesQuery =
+          noteSort === "activity"
+            ? notesQuery
+                .orderBy("n.updated_at", "desc")
+                .orderBy("n.id", "desc")
+                .limit(limit + 1)
+            : notesQuery
+                .orderBy("n.created_at", "desc")
+                .orderBy("n.id", "desc")
+                .limit(limit + 1);
 
         const [noteRows, countRow] = await Promise.all([
           notesQuery.execute(),
@@ -855,10 +930,14 @@ export function createThreadsService(
 
         let likedNoteIds = new Set<string>();
         let bookmarkedNoteIds = new Set<string>();
+        let attachmentSummariesByNoteId = new Map<
+          string,
+          DiscussionAttachmentSummary
+        >();
 
         if (page.length > 0 && actor.userId) {
           const noteIds = page.map((n) => n.id);
-          const [likes, bookmarks] = await Promise.all([
+          const [likes, bookmarks, attachmentSummaryRows] = await Promise.all([
             db
               .selectFrom("learning_likes")
               .select("target_id")
@@ -872,10 +951,14 @@ export function createThreadsService(
               .where("user_id", "=", actor.userId)
               .where("note_id", "in", noteIds)
               .execute(),
+            attachmentsRepo.listNoteAttachmentSummaries(db, noteIds),
           ]);
           likedNoteIds = new Set(likes.map((l) => l.target_id));
           bookmarkedNoteIds = new Set(
             bookmarks.flatMap((b) => (b.note_id ? [b.note_id] : [])),
+          );
+          attachmentSummariesByNoteId = indexAttachmentSummaries(
+            attachmentSummaryRows,
           );
         }
 
@@ -891,6 +974,7 @@ export function createThreadsService(
           lessonId: row.lessonId ?? null,
           lessonTitle: row.lessonTitle ?? null,
           timestampSeconds: row.timestampSeconds ?? null,
+          visibility: row.visibility,
           author: {
             id: row.userId,
             displayName: row.authorName || "Anonymous Learner",
@@ -905,7 +989,8 @@ export function createThreadsService(
           isFollowing: false,
           isMentioned: false,
           isOwn: row.userId === actor.userId,
-          attachmentSummary: emptyAttachmentSummary(),
+          attachmentSummary:
+            attachmentSummariesByNoteId.get(row.id) ?? emptyAttachmentSummary(),
           createdAt:
             row.createdAt instanceof Date
               ? row.createdAt.toISOString()
@@ -922,6 +1007,10 @@ export function createThreadsService(
           nextCursor = encodeDiscussionCursor({
             id: last.id,
             createdAt: toDate(last.createdAt),
+            ...(noteSort === "activity"
+              ? { updatedAt: toDate(last.updatedAt) }
+              : {}),
+            sort: noteSort,
           });
         }
 
