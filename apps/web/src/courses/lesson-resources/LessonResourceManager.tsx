@@ -65,18 +65,13 @@ export function LessonResourceManager({
     fileInputRef.current?.click();
   };
 
-  const handleFile = async (file: File | undefined) => {
-    if (!file) return;
-
-    setErrorMessage(null);
+  const uploadResourceFile = async (file: File) => {
     const validationError = validateResourceFile(file);
     if (validationError) {
       setErrorMessage(validationError);
       return;
     }
-    if (!courseId || disabled || isUploading) return;
 
-    setIsUploading(true);
     setUploadFileName(file.name);
     setUploadProgress(0);
 
@@ -118,16 +113,29 @@ export function LessonResourceManager({
           : "The resource could not be uploaded.",
       );
     } finally {
-      setIsUploading(false);
       setUploadFileName(null);
       setUploadProgress(0);
     }
   };
 
+  const handleFiles = async (files: File[]) => {
+    if (!courseId || disabled || isUploading || files.length === 0) return;
+
+    setErrorMessage(null);
+    setIsUploading(true);
+    try {
+      for (const file of files) {
+        await uploadResourceFile(file);
+      }
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    await handleFile(file);
+    await handleFiles(files);
   };
 
   const handleDragEnter = (event: DragEvent<HTMLButtonElement>) => {
@@ -155,7 +163,7 @@ export function LessonResourceManager({
     event.preventDefault();
     setIsDragActive(false);
     if (!courseId || disabled || isUploading) return;
-    void handleFile(event.dataTransfer.files?.[0]);
+    void handleFiles(Array.from(event.dataTransfer.files ?? []));
   };
 
   const handleRemove = async (resource: LessonResourceItem) => {
@@ -179,12 +187,6 @@ export function LessonResourceManager({
 
   return (
     <section className="mb-3 flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-3">
-        <label className="flex items-center gap-1.5 text-(--text-secondary) text-[0.84rem] font-semibold">
-          Lesson Resources
-        </label>
-      </div>
-
       <button
         type="button"
         disabled={!courseId || disabled || isUploading}
@@ -195,7 +197,7 @@ export function LessonResourceManager({
         onDrop={handleDrop}
         aria-label="Choose a lesson resource"
         aria-busy={isUploading}
-        className={`group flex min-h-24 w-full items-center justify-center gap-3 rounded-[10px] border border-dashed px-4 py-3 text-left transition-[border-color,background-color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) disabled:cursor-not-allowed disabled:opacity-60 ${
+        className={`group flex min-h-48 w-full items-center justify-center gap-3 rounded-[10px] border border-dashed px-4 py-3 text-left transition-[border-color,background-color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) disabled:cursor-not-allowed disabled:opacity-60 ${
           isDragActive
             ? "border-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_12%,transparent)]"
             : "border-[color-mix(in_srgb,var(--text)_18%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] hover:border-[color-mix(in_srgb,var(--accent)_52%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))]"
@@ -226,6 +228,7 @@ export function LessonResourceManager({
       <input
         ref={fileInputRef}
         type="file"
+        multiple
         accept={RESOURCE_ACCEPT}
         onChange={(event) => void handleFileChange(event)}
         className="sr-only"
