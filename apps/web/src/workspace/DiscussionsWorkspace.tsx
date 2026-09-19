@@ -1,5 +1,6 @@
 import {
   Fragment,
+  cloneElement,
   useCallback,
   useEffect,
   useMemo,
@@ -7,7 +8,7 @@ import {
   useState,
 } from "react";
 import type { FormEvent } from "react";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "../hooks/useDebounce";
 import { AtIcon as At } from "@phosphor-icons/react/At";
@@ -201,184 +202,6 @@ function DiscussionComposer({
   );
 }
 
-const QUESTION_PREVIEW_MAX_HEIGHT_PX = 48;
-
-function isPlainQuestionContent(thread: DiscussionWorkspaceCard): boolean {
-  const content = thread.content.trim();
-  return !content || content === thread.plainText.trim();
-}
-
-function DiscussionWorkspaceQuestionContent({
-  thread,
-  expanded,
-  onExpandedChange,
-}: {
-  thread: DiscussionWorkspaceCard;
-  expanded: boolean;
-  onExpandedChange: (expanded: boolean) => void;
-}) {
-  const [needsClamp, setNeedsClamp] = useState(false);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const isPlainText = isPlainQuestionContent(thread);
-  const content = useMemo<DiscussionContent>(
-    () => ({
-      format: "markdown",
-      markdown: thread.content.trim() || thread.plainText,
-      plainText: thread.plainText,
-    }),
-    [thread.content, thread.plainText],
-  );
-
-  useEffect(() => {
-    const node = contentRef.current;
-    if (!node) return undefined;
-
-    const measure = () => {
-      setNeedsClamp(node.scrollHeight > QUESTION_PREVIEW_MAX_HEIGHT_PX + 4);
-    };
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [content]);
-
-  return (
-    <div
-      className={`discussion-hub__question-content ${
-        isPlainText ? "is-plain" : ""
-      }`}
-    >
-      <div className="relative">
-        <div
-          ref={contentRef}
-          className="discussion-hub__question-markdown overflow-hidden transition-[max-height] duration-300 ease-in-out"
-          style={
-            needsClamp && !expanded
-              ? { maxHeight: `${QUESTION_PREVIEW_MAX_HEIGHT_PX}px` }
-              : undefined
-          }
-        >
-          <DiscussionMarkdown
-            content={content}
-            label={`Question by ${thread.author}`}
-            className="max-w-none"
-          />
-        </div>
-        {needsClamp && !expanded && (
-          <div
-            aria-hidden="true"
-            className="discussion-hub__question-fade pointer-events-none absolute bottom-0 left-0 right-0 h-8"
-          />
-        )}
-      </div>
-      {needsClamp && (
-        <button
-          type="button"
-          className="discussion-hub__question-toggle"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onExpandedChange(!expanded);
-          }}
-          aria-expanded={expanded}
-        >
-          {expanded ? "Show less" : "Read more"}
-        </button>
-      )}
-    </div>
-  );
-}
-
-const COMMENT_PREVIEW_MAX_HEIGHT_PX = 48;
-
-function DiscussionWorkspaceCommentContent({
-  thread,
-  expanded,
-  onExpandedChange,
-}: {
-  thread: DiscussionWorkspaceCard;
-  expanded: boolean;
-  onExpandedChange: (expanded: boolean) => void;
-}) {
-  const [needsClamp, setNeedsClamp] = useState(false);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const content = useMemo<DiscussionContent>(
-    () => ({
-      format: "markdown",
-      markdown: thread.content.trim() || thread.plainText,
-      plainText: thread.plainText,
-    }),
-    [thread.content, thread.plainText],
-  );
-
-  useEffect(() => {
-    const node = contentRef.current;
-    if (!node) return undefined;
-
-    let frame = 0;
-    const measure = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
-        const nextNeedsClamp =
-          node.scrollHeight > COMMENT_PREVIEW_MAX_HEIGHT_PX + 4;
-        setNeedsClamp((current) =>
-          current === nextNeedsClamp ? current : nextNeedsClamp,
-        );
-      });
-    };
-
-    measure();
-    window.addEventListener("resize", measure);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("resize", measure);
-    };
-  }, [content]);
-
-  return (
-    <div className="discussion-hub__comment-content">
-      <div className="relative">
-        <div
-          ref={contentRef}
-          className="discussion-hub__comment-markdown overflow-hidden transition-[max-height] duration-300 ease-in-out"
-          style={
-            needsClamp && !expanded
-              ? { maxHeight: `${COMMENT_PREVIEW_MAX_HEIGHT_PX}px` }
-              : undefined
-          }
-        >
-          <DiscussionMarkdown
-            content={content}
-            label={`Comment by ${thread.author}`}
-            className="max-w-none"
-          />
-        </div>
-        {needsClamp && !expanded && (
-          <div
-            aria-hidden="true"
-            className="discussion-hub__comment-fade pointer-events-none absolute bottom-0 left-0 right-0 h-8"
-          />
-        )}
-      </div>
-      {needsClamp && (
-        <button
-          type="button"
-          className="discussion-hub__comment-toggle"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onExpandedChange(!expanded);
-          }}
-          aria-expanded={expanded}
-        >
-          {expanded ? "Show less" : "Read more"}
-        </button>
-      )}
-    </div>
-  );
-}
-
 function getAttachmentLabel(
   summary: DiscussionWorkspaceCard["attachmentSummary"],
 ): string | null {
@@ -431,6 +254,358 @@ function DiscussionWorkspaceAttachmentIndicator({ label }: { label: string }) {
   );
 }
 
+type DiscussionWorkspaceMetadataItem = {
+  key: string;
+  content: ReactNode;
+};
+
+function getDiscussionWorkspaceMetadataItems(
+  thread: DiscussionWorkspaceCard,
+  options?: { timestampLabel?: string | null },
+): DiscussionWorkspaceMetadataItem[] {
+  const items: DiscussionWorkspaceMetadataItem[] = [];
+  const attachmentLabel = getAttachmentLabel(thread.attachmentSummary);
+  const visibilityLabel = getVisibilityLabel(thread.visibility);
+  const VisibilityIcon =
+    thread.visibility === "private"
+      ? Lock
+      : thread.visibility === "unlisted"
+        ? EyeSlash
+        : Globe;
+
+  if (thread.course) {
+    items.push({ key: "course", content: <span>{thread.course}</span> });
+  }
+  if (thread.lesson) {
+    items.push({
+      key: "lesson",
+      content: (
+        <small className="discussion-thread__lesson">
+          <BookOpen size={13} aria-hidden="true" />
+          <span>{thread.lesson}</span>
+        </small>
+      ),
+    });
+  }
+  if (options?.timestampLabel) {
+    items.push({
+      key: "timestamp",
+      content: (
+        <small className="discussion-thread__timestamp">
+          <Clock size={13} aria-hidden="true" />
+          <span>{options.timestampLabel}</span>
+        </small>
+      ),
+    });
+  }
+  if (attachmentLabel) {
+    items.push({
+      key: "attachments",
+      content: (
+        <DiscussionWorkspaceAttachmentIndicator label={attachmentLabel} />
+      ),
+    });
+  }
+  if (visibilityLabel) {
+    items.push({
+      key: "visibility",
+      content: (
+        <small className="discussion-thread__visibility">
+          <VisibilityIcon size={13} aria-hidden="true" />
+          <span>{visibilityLabel}</span>
+        </small>
+      ),
+    });
+  }
+
+  return items;
+}
+
+function DiscussionWorkspaceMetadataRow({
+  items,
+}: {
+  items: readonly DiscussionWorkspaceMetadataItem[];
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="discussion-thread__context">
+      {items.map((item, index) => (
+        <Fragment key={item.key}>
+          {index > 0 && <span aria-hidden="true" />}
+          {item.content}
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
+function normalizeWorkspacePreviewText(
+  value: string | null | undefined,
+): string {
+  return value?.replace(/\s+/g, " ").trim() ?? "";
+}
+
+function DiscussionWorkspaceCardContent({
+  thread,
+  label,
+  expanded,
+  onExpandedChange,
+  expandedTitle,
+  previewText,
+  parentContext,
+}: {
+  thread: DiscussionWorkspaceCard;
+  label: string;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+  expandedTitle?: string | null;
+  previewText?: string | null;
+  parentContext?: string | null;
+}) {
+  const [isPreviewTruncated, setIsPreviewTruncated] = useState(false);
+  const previewRef = useRef<HTMLSpanElement>(null);
+  const normalizedTitle = normalizeWorkspacePreviewText(expandedTitle);
+  const normalizedBody = normalizeWorkspacePreviewText(
+    thread.plainText || thread.excerpt || thread.content,
+  );
+  const collapsedPreview =
+    normalizeWorkspacePreviewText(previewText) ||
+    normalizedTitle ||
+    normalizedBody;
+  const hasAdditionalContent =
+    (Boolean(normalizedTitle) && normalizedTitle !== collapsedPreview) ||
+    (Boolean(normalizedBody) && normalizedBody !== collapsedPreview);
+  const canExpand = hasAdditionalContent || isPreviewTruncated;
+  const content = useMemo<DiscussionContent>(
+    () => ({
+      format: "markdown",
+      markdown: thread.content.trim() || thread.plainText,
+      plainText: thread.plainText,
+    }),
+    [thread.content, thread.plainText],
+  );
+
+  useEffect(() => {
+    if (expanded) return undefined;
+
+    const node = previewRef.current;
+    if (!node) return undefined;
+
+    const measure = () => {
+      const nextIsTruncated = node.scrollWidth > node.clientWidth + 1;
+      setIsPreviewTruncated((current) =>
+        current === nextIsTruncated ? current : nextIsTruncated,
+      );
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [collapsedPreview, expanded]);
+
+  const utility = (showExpandedLabel: boolean) =>
+    (canExpand || parentContext) && (
+      <span className="discussion-hub__card-content-utility">
+        {parentContext && (
+          <span className="discussion-thread__parent-context">
+            <ChatTeardropText size={14} aria-hidden="true" />
+            <span>{parentContext}</span>
+          </span>
+        )}
+        {canExpand && parentContext && (
+          <span
+            className="discussion-hub__card-content-utility-separator"
+            aria-hidden="true"
+          >
+            ·
+          </span>
+        )}
+        {canExpand && (
+          <button
+            type="button"
+            className="discussion-hub__card-content-toggle"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onExpandedChange(!expanded);
+            }}
+            aria-expanded={expanded}
+          >
+            {showExpandedLabel ? "Show less" : "Read more"}
+          </button>
+        )}
+      </span>
+    );
+
+  return (
+    <div className="discussion-hub__card-content">
+      {expanded ? (
+        <div className="discussion-hub__card-content-expanded">
+          {normalizedTitle && (
+            <div className="discussion-hub__card-content-title">
+              {normalizedTitle}
+            </div>
+          )}
+          <DiscussionMarkdown
+            content={content}
+            label={`${label} by ${thread.author}`}
+            className="max-w-none"
+          />
+          {utility(true)}
+        </div>
+      ) : (
+        <div className="discussion-hub__card-preview-row">
+          <span ref={previewRef} className="discussion-hub__card-preview">
+            {collapsedPreview}
+          </span>
+          {utility(false)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DiscussionWorkspaceIdentity({
+  thread,
+}: {
+  thread: DiscussionWorkspaceCard;
+}) {
+  return (
+    <div className="discussion-thread__author">
+      <span className="discussion-thread__author-name">
+        {thread.isOwn ? "You" : thread.author}
+      </span>
+      {thread.authorUsername && (
+        <>
+          <span
+            className="discussion-thread__author-separator"
+            aria-hidden="true"
+          >
+            ·
+          </span>
+          <span className="discussion-thread__author-username">
+            @{thread.authorUsername.replace(/^@+/, "")}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+function DiscussionWorkspaceNavigationLink({
+  destination,
+  label,
+  onNavigatePage,
+}: {
+  destination: string;
+  label: string;
+  onNavigatePage: NavigateTo;
+}) {
+  return (
+    <a
+      className="discussion-thread__navigation-link"
+      href={destination}
+      aria-label={label}
+      onClick={(event) => {
+        if (
+          event.defaultPrevented ||
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        ) {
+          return;
+        }
+        event.preventDefault();
+        onNavigatePage(destination, { exact: true });
+      }}
+    />
+  );
+}
+
+type DiscussionWorkspaceRailElement = ReactElement<{ className?: string }>;
+
+function withDiscussionWorkspaceRailSlot(
+  element: DiscussionWorkspaceRailElement,
+  slot: "top" | "middle" | "bottom",
+) {
+  return cloneElement(element, {
+    className: [
+      element.props.className,
+      `discussion-thread__rail-slot--${slot}`,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  });
+}
+
+function DiscussionWorkspaceCardRail({
+  top,
+  middle,
+  bottom,
+}: {
+  top: DiscussionWorkspaceRailElement;
+  middle?: DiscussionWorkspaceRailElement;
+  bottom: DiscussionWorkspaceRailElement;
+}) {
+  return (
+    <>
+      {withDiscussionWorkspaceRailSlot(top, "top")}
+      {middle && withDiscussionWorkspaceRailSlot(middle, "middle")}
+      {withDiscussionWorkspaceRailSlot(bottom, "bottom")}
+    </>
+  );
+}
+
+function DiscussionWorkspaceCardShell({
+  thread,
+  className,
+  expanded,
+  navigation,
+  children,
+  rail,
+}: {
+  thread: DiscussionWorkspaceCard;
+  className: string;
+  expanded: boolean;
+  navigation?: ReactNode;
+  children: ReactNode;
+  rail: {
+    top: DiscussionWorkspaceRailElement;
+    middle?: DiscussionWorkspaceRailElement;
+    bottom: DiscussionWorkspaceRailElement;
+  };
+}) {
+  return (
+    <article
+      className={[
+        "discussion-thread",
+        "discussion-thread--workspace-card",
+        className,
+        navigation ? "is-navigable" : "is-static",
+        expanded ? "is-expanded" : "is-collapsed",
+      ].join(" ")}
+    >
+      {navigation}
+      <div className="discussion-thread__open discussion-thread__open--overview">
+        <div className="discussion-thread__avatar">
+          <DiscussionAvatar
+            src={thread.avatar || null}
+            className="discussion-thread__avatar-image"
+          />
+        </div>
+        <div className="discussion-thread__body">{children}</div>
+        <div className="discussion-thread__meta">
+          <DiscussionWorkspaceCardRail {...rail} />
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function DiscussionWorkspaceQuestionCard({
   thread,
   onNavigatePage,
@@ -439,15 +614,7 @@ function DiscussionWorkspaceQuestionCard({
   onNavigatePage: NavigateTo;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const attachmentLabel = getAttachmentLabel(thread.attachmentSummary);
-  const visibilityLabel = getVisibilityLabel(thread.visibility);
-  const isPlainText = isPlainQuestionContent(thread);
-  const VisibilityIcon =
-    thread.visibility === "private"
-      ? Lock
-      : thread.visibility === "unlisted"
-        ? EyeSlash
-        : Globe;
+  const metadataItems = getDiscussionWorkspaceMetadataItems(thread);
   const lifecycleStatus: "open" | "answered" | "solved" =
     thread.status === "answered"
       ? "answered"
@@ -461,102 +628,21 @@ function DiscussionWorkspaceQuestionCard({
     .join(", ");
 
   return (
-    <article
-      className={`discussion-thread discussion-thread--question ${
-        expanded ? "is-expanded" : "is-collapsed"
-      }`}
-    >
-      <a
-        className="discussion-thread__navigation-link"
-        href={destination}
-        aria-label={`Open question${
-          destinationLabel ? ` in ${destinationLabel}` : ""
-        }`}
-        onClick={(event) => {
-          if (
-            event.defaultPrevented ||
-            event.button !== 0 ||
-            event.metaKey ||
-            event.ctrlKey ||
-            event.shiftKey ||
-            event.altKey
-          ) {
-            return;
-          }
-          event.preventDefault();
-          onNavigatePage(destination, { exact: true });
-        }}
-      />
-      <div className="discussion-thread__open discussion-thread__open--overview">
-        <div className="discussion-thread__avatar">
-          <DiscussionAvatar
-            src={thread.avatar || null}
-            className="discussion-thread__avatar-image"
-          />
-        </div>
-        <div
-          className={`discussion-thread__body ${isPlainText ? "is-plain" : ""}`}
-        >
-          <div className="discussion-thread__author">
-            <span className="discussion-thread__author-name">
-              {thread.isOwn ? "You" : thread.author}
-            </span>
-            {thread.authorUsername && (
-              <>
-                <span
-                  className="discussion-thread__author-separator"
-                  aria-hidden="true"
-                >
-                  ·
-                </span>
-                <span className="discussion-thread__author-username">
-                  @{thread.authorUsername.replace(/^@+/, "")}
-                </span>
-              </>
-            )}
-          </div>
-          <DiscussionWorkspaceQuestionContent
-            thread={thread}
-            expanded={expanded}
-            onExpandedChange={setExpanded}
-          />
-          {(thread.course ||
-            thread.lesson ||
-            attachmentLabel ||
-            visibilityLabel) && (
-            <div className="discussion-thread__context">
-              {thread.course && <span>{thread.course}</span>}
-              {thread.course &&
-                (thread.lesson || attachmentLabel || visibilityLabel) && (
-                  <span aria-hidden="true" />
-                )}
-              {thread.lesson && (
-                <small className="discussion-thread__lesson">
-                  <BookOpen size={13} aria-hidden="true" />
-                  <span>{thread.lesson}</span>
-                </small>
-              )}
-              {thread.lesson && (attachmentLabel || visibilityLabel) && (
-                <span aria-hidden="true" />
-              )}
-              {attachmentLabel && (
-                <DiscussionWorkspaceAttachmentIndicator
-                  label={attachmentLabel}
-                />
-              )}
-              {attachmentLabel && visibilityLabel && (
-                <span aria-hidden="true" />
-              )}
-              {visibilityLabel && (
-                <small className="discussion-thread__visibility">
-                  <VisibilityIcon size={13} aria-hidden="true" />
-                  <span>{visibilityLabel}</span>
-                </small>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="discussion-thread__meta">
+    <DiscussionWorkspaceCardShell
+      thread={thread}
+      className="discussion-thread--question"
+      expanded={expanded}
+      navigation={
+        <DiscussionWorkspaceNavigationLink
+          destination={destination}
+          label={`Open question${
+            destinationLabel ? ` in ${destinationLabel}` : ""
+          }`}
+          onNavigatePage={onNavigatePage}
+        />
+      }
+      rail={{
+        top: (
           <span
             className={[
               "discussion-thread__status",
@@ -580,14 +666,26 @@ function DiscussionWorkspaceQuestionCard({
               </span>
             )}
           </span>
+        ),
+        middle: (
           <span>
             <ChatTeardropText size={17} /> {thread.replies}{" "}
             {thread.replies === 1 ? "reply" : "replies"}
           </span>
-          <time>{thread.activity}</time>
-        </div>
-      </div>
-    </article>
+        ),
+        bottom: <time>{thread.activity}</time>,
+      }}
+    >
+      <DiscussionWorkspaceIdentity thread={thread} />
+      <DiscussionWorkspaceCardContent
+        thread={thread}
+        label="Question"
+        expanded={expanded}
+        onExpandedChange={setExpanded}
+        expandedTitle={thread.title}
+      />
+      <DiscussionWorkspaceMetadataRow items={metadataItems} />
+    </DiscussionWorkspaceCardShell>
   );
 }
 
@@ -599,9 +697,7 @@ function DiscussionWorkspaceCommentCard({
   onNavigatePage: NavigateTo;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const attachmentLabel = getAttachmentLabel(thread.attachmentSummary);
-  const visibilityLabel = getVisibilityLabel(thread.visibility);
-  const VisibilityIcon = thread.visibility === "unlisted" ? EyeSlash : Globe;
+  const metadataItems = getDiscussionWorkspaceMetadataItems(thread);
   const destination = getDiscussionThreadDestination(
     thread,
     "/discussions/comments",
@@ -611,114 +707,46 @@ function DiscussionWorkspaceCommentCard({
     .join(", ");
 
   return (
-    <article
-      className={`discussion-thread discussion-thread--comment ${
-        expanded ? "is-expanded" : "is-collapsed"
-      }`}
-    >
-      <a
-        className="discussion-thread__navigation-link"
-        href={destination}
-        aria-label={`Open comment${
-          destinationLabel ? ` in ${destinationLabel}` : ""
-        }`}
-        onClick={(event) => {
-          if (
-            event.defaultPrevented ||
-            event.button !== 0 ||
-            event.metaKey ||
-            event.ctrlKey ||
-            event.shiftKey ||
-            event.altKey
-          ) {
-            return;
-          }
-          event.preventDefault();
-          onNavigatePage(destination, { exact: true });
-        }}
-      />
-      <div className="discussion-thread__open discussion-thread__open--overview">
-        <div className="discussion-thread__avatar">
-          <DiscussionAvatar
-            src={thread.avatar || null}
-            className="discussion-thread__avatar-image"
-          />
-        </div>
-        <div className="discussion-thread__body">
-          <div className="discussion-thread__author">
-            <span className="discussion-thread__author-name">
-              {thread.isOwn ? "You" : thread.author}
-            </span>
-            {thread.authorUsername && (
-              <>
-                <span
-                  className="discussion-thread__author-separator"
-                  aria-hidden="true"
-                >
-                  ·
-                </span>
-                <span className="discussion-thread__author-username">
-                  @{thread.authorUsername.replace(/^@+/, "")}
-                </span>
-              </>
-            )}
-          </div>
-          <DiscussionWorkspaceCommentContent
-            thread={thread}
-            expanded={expanded}
-            onExpandedChange={setExpanded}
-          />
-          {(thread.course ||
-            thread.lesson ||
-            attachmentLabel ||
-            visibilityLabel) && (
-            <div className="discussion-thread__context">
-              {thread.course && <span>{thread.course}</span>}
-              {thread.course &&
-                (thread.lesson || attachmentLabel || visibilityLabel) && (
-                  <span aria-hidden="true" />
-                )}
-              {thread.lesson && (
-                <small className="discussion-thread__lesson">
-                  <BookOpen size={13} aria-hidden="true" />
-                  <span>{thread.lesson}</span>
-                </small>
-              )}
-              {thread.lesson && (attachmentLabel || visibilityLabel) && (
-                <span aria-hidden="true" />
-              )}
-              {attachmentLabel && (
-                <DiscussionWorkspaceAttachmentIndicator
-                  label={attachmentLabel}
-                />
-              )}
-              {attachmentLabel && visibilityLabel && (
-                <span aria-hidden="true" />
-              )}
-              {visibilityLabel && (
-                <small className="discussion-thread__visibility">
-                  <VisibilityIcon size={13} aria-hidden="true" />
-                  <span>{visibilityLabel}</span>
-                </small>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="discussion-thread__meta">
+    <DiscussionWorkspaceCardShell
+      thread={thread}
+      className="discussion-thread--comment"
+      expanded={expanded}
+      navigation={
+        <DiscussionWorkspaceNavigationLink
+          destination={destination}
+          label={`Open comment${
+            destinationLabel ? ` in ${destinationLabel}` : ""
+          }`}
+          onNavigatePage={onNavigatePage}
+        />
+      }
+      rail={{
+        top: (
           <span className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge">
             <ThumbsUp size={15} weight="fill" aria-hidden="true" />
             <span>
               {thread.likes} {thread.likes === 1 ? "like" : "likes"}
             </span>
           </span>
+        ),
+        middle: (
           <span>
             <ChatTeardropText size={17} /> {thread.replies}{" "}
             {thread.replies === 1 ? "reply" : "replies"}
           </span>
-          <time>{thread.activity}</time>
-        </div>
-      </div>
-    </article>
+        ),
+        bottom: <time>{thread.activity}</time>,
+      }}
+    >
+      <DiscussionWorkspaceIdentity thread={thread} />
+      <DiscussionWorkspaceCardContent
+        thread={thread}
+        label="Comment"
+        expanded={expanded}
+        onExpandedChange={setExpanded}
+      />
+      <DiscussionWorkspaceMetadataRow items={metadataItems} />
+    </DiscussionWorkspaceCardShell>
   );
 }
 
@@ -731,15 +759,7 @@ function DiscussionWorkspaceFollowingCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const isQuestion = thread.kind === "question" || thread.kind === "qna";
-  const hasTitle = isQuestion && Boolean(thread.title?.trim());
-  const attachmentLabel = getAttachmentLabel(thread.attachmentSummary);
-  const visibilityLabel = getVisibilityLabel(thread.visibility);
-  const VisibilityIcon =
-    thread.visibility === "private"
-      ? Lock
-      : thread.visibility === "unlisted"
-        ? EyeSlash
-        : Globe;
+  const metadataItems = getDiscussionWorkspaceMetadataItems(thread);
   const destination = getDiscussionThreadDestination(
     thread,
     "/discussions/following",
@@ -747,116 +767,23 @@ function DiscussionWorkspaceFollowingCard({
   const destinationLabel = [thread.course, thread.lesson]
     .filter(Boolean)
     .join(", ");
-  const isPlainQuestion = isQuestion && isPlainQuestionContent(thread);
 
   return (
-    <article
-      className={`discussion-thread discussion-thread--following ${
-        expanded ? "is-expanded" : "is-collapsed"
-      }`}
-    >
-      <a
-        className="discussion-thread__navigation-link"
-        href={destination}
-        aria-label={`Open followed ${isQuestion ? "question" : "comment"}${destinationLabel ? ` in ${destinationLabel}` : ""}`}
-        onClick={(event) => {
-          if (
-            event.defaultPrevented ||
-            event.button !== 0 ||
-            event.metaKey ||
-            event.ctrlKey ||
-            event.shiftKey ||
-            event.altKey
-          ) {
-            return;
-          }
-          event.preventDefault();
-          onNavigatePage(destination, { exact: true });
-        }}
-      />
-      <div className="discussion-thread__open discussion-thread__open--overview">
-        <div className="discussion-thread__avatar">
-          <DiscussionAvatar
-            src={thread.avatar || null}
-            className="discussion-thread__avatar-image"
-          />
-        </div>
-        <div
-          className={`discussion-thread__body ${isPlainQuestion ? "is-plain" : ""}`}
-        >
-          <div className="discussion-thread__author">
-            <span className="discussion-thread__author-name">
-              {thread.isOwn ? "You" : thread.author}
-            </span>
-            {thread.authorUsername && (
-              <>
-                <span
-                  className="discussion-thread__author-separator"
-                  aria-hidden="true"
-                >
-                  ·
-                </span>
-                <span className="discussion-thread__author-username">
-                  @{thread.authorUsername.replace(/^@+/, "")}
-                </span>
-              </>
-            )}
-          </div>
-          {hasTitle && (
-            <div className="discussion-thread__following-title">
-              {thread.title}
-            </div>
-          )}
-          {isQuestion ? (
-            <DiscussionWorkspaceQuestionContent
-              thread={thread}
-              expanded={expanded}
-              onExpandedChange={setExpanded}
-            />
-          ) : (
-            <DiscussionWorkspaceCommentContent
-              thread={thread}
-              expanded={expanded}
-              onExpandedChange={setExpanded}
-            />
-          )}
-          {(thread.course ||
-            thread.lesson ||
-            attachmentLabel ||
-            visibilityLabel) && (
-            <div className="discussion-thread__context">
-              {thread.course && <span>{thread.course}</span>}
-              {thread.course &&
-                (thread.lesson || attachmentLabel || visibilityLabel) && (
-                  <span aria-hidden="true" />
-                )}
-              {thread.lesson && (
-                <small className="discussion-thread__lesson">
-                  <BookOpen size={13} aria-hidden="true" />
-                  <span>{thread.lesson}</span>
-                </small>
-              )}
-              {thread.lesson && (attachmentLabel || visibilityLabel) && (
-                <span aria-hidden="true" />
-              )}
-              {attachmentLabel && (
-                <DiscussionWorkspaceAttachmentIndicator
-                  label={attachmentLabel}
-                />
-              )}
-              {attachmentLabel && visibilityLabel && (
-                <span aria-hidden="true" />
-              )}
-              {visibilityLabel && (
-                <small className="discussion-thread__visibility">
-                  <VisibilityIcon size={13} aria-hidden="true" />
-                  <span>{visibilityLabel}</span>
-                </small>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="discussion-thread__meta">
+    <DiscussionWorkspaceCardShell
+      thread={thread}
+      className="discussion-thread--following"
+      expanded={expanded}
+      navigation={
+        <DiscussionWorkspaceNavigationLink
+          destination={destination}
+          label={`Open followed ${isQuestion ? "question" : "comment"}${
+            destinationLabel ? ` in ${destinationLabel}` : ""
+          }`}
+          onNavigatePage={onNavigatePage}
+        />
+      }
+      rail={{
+        top: (
           <span
             className={[
               "discussion-thread__following-indicator",
@@ -871,123 +798,26 @@ function DiscussionWorkspaceFollowingCard({
             )}
             <span>{isQuestion ? "Q&A" : "Comment"}</span>
           </span>
+        ),
+        middle: (
           <span>
             <ChatTeardropText size={17} /> {thread.replies}{" "}
             {thread.replies === 1 ? "reply" : "replies"}
           </span>
-          <time dateTime={thread.updatedAt}>{thread.activity}</time>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-const MENTION_PREVIEW_MAX_HEIGHT_PX = 48;
-
-function DiscussionWorkspaceMentionContent({
-  mention,
-  expanded,
-  onExpandedChange,
-  parentContext,
-}: {
-  mention: DiscussionWorkspaceCard;
-  expanded: boolean;
-  onExpandedChange: (expanded: boolean) => void;
-  parentContext?: string | null;
-}) {
-  const [needsClamp, setNeedsClamp] = useState(false);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const content = useMemo<DiscussionContent>(
-    () => ({
-      format: "markdown",
-      markdown: mention.content.trim() || mention.plainText,
-      plainText: mention.plainText,
-    }),
-    [mention.content, mention.plainText],
-  );
-
-  useEffect(() => {
-    const node = contentRef.current;
-    if (!node) return undefined;
-
-    let frame = 0;
-    const measure = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
-        const nextNeedsClamp =
-          node.scrollHeight > MENTION_PREVIEW_MAX_HEIGHT_PX + 4;
-        setNeedsClamp((current) =>
-          current === nextNeedsClamp ? current : nextNeedsClamp,
-        );
-      });
-    };
-
-    measure();
-    window.addEventListener("resize", measure);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("resize", measure);
-    };
-  }, [content]);
-
-  return (
-    <div className="discussion-hub__mention-content">
-      <div className="relative">
-        <div
-          ref={contentRef}
-          className="discussion-hub__mention-markdown overflow-hidden transition-[max-height] duration-300 ease-in-out"
-          style={
-            needsClamp && !expanded
-              ? { maxHeight: `${MENTION_PREVIEW_MAX_HEIGHT_PX}px` }
-              : undefined
-          }
-        >
-          <DiscussionMarkdown
-            content={content}
-            label={`Mention by ${mention.author}`}
-            className="max-w-none"
-          />
-        </div>
-        {needsClamp && !expanded && (
-          <div
-            aria-hidden="true"
-            className="discussion-hub__mention-fade pointer-events-none absolute bottom-0 left-0 right-0 h-8"
-          />
-        )}
-      </div>
-      {(needsClamp || parentContext) && (
-        <div className="discussion-hub__mention-utility">
-          {needsClamp && (
-            <button
-              type="button"
-              className="discussion-hub__mention-toggle"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onExpandedChange(!expanded);
-              }}
-              aria-expanded={expanded}
-            >
-              {expanded ? "Show less" : "Read more"}
-            </button>
-          )}
-          {needsClamp && parentContext && (
-            <span
-              className="discussion-hub__mention-utility-separator"
-              aria-hidden="true"
-            >
-              ·
-            </span>
-          )}
-          {parentContext && (
-            <span className="discussion-thread__parent-context">
-              <ChatTeardropText size={14} aria-hidden="true" />
-              <span>{parentContext}</span>
-            </span>
-          )}
-        </div>
-      )}
-    </div>
+        ),
+        bottom: <time dateTime={thread.updatedAt}>{thread.activity}</time>,
+      }}
+    >
+      <DiscussionWorkspaceIdentity thread={thread} />
+      <DiscussionWorkspaceCardContent
+        thread={thread}
+        label={isQuestion ? "Question" : "Comment"}
+        expanded={expanded}
+        onExpandedChange={setExpanded}
+        expandedTitle={isQuestion ? thread.title : undefined}
+      />
+      <DiscussionWorkspaceMetadataRow items={metadataItems} />
+    </DiscussionWorkspaceCardShell>
   );
 }
 
@@ -1002,14 +832,7 @@ function DiscussionWorkspaceMentionCard({
   const isReply = mention.itemType === "reply";
   const isRootQuestion =
     !isReply && (mention.kind === "question" || mention.kind === "qna");
-  const attachmentLabel = getAttachmentLabel(mention.attachmentSummary);
-  const visibilityLabel = getVisibilityLabel(mention.visibility);
-  const VisibilityIcon =
-    mention.visibility === "private"
-      ? Lock
-      : mention.visibility === "unlisted"
-        ? EyeSlash
-        : Globe;
+  const metadataItems = getDiscussionWorkspaceMetadataItems(mention);
   const isQuestionMention =
     mention.kind === "question" || mention.kind === "qna";
   const parentKindLabel = isQuestionMention ? "Q&A" : "Comment";
@@ -1034,104 +857,21 @@ function DiscussionWorkspaceMentionCard({
   const mentionActivity = mention.mentionActivity ?? "Recently";
 
   return (
-    <article
-      className={`discussion-thread discussion-thread--mention ${
-        expanded ? "is-expanded" : "is-collapsed"
-      }`}
-    >
-      <a
-        className="discussion-thread__navigation-link"
-        href={destination}
-        aria-label={`${isReply ? "Open parent discussion" : "Open mentioned discussion"}${destinationLabel ? ` in ${destinationLabel}` : ""}`}
-        onClick={(event) => {
-          if (
-            event.defaultPrevented ||
-            event.button !== 0 ||
-            event.metaKey ||
-            event.ctrlKey ||
-            event.shiftKey ||
-            event.altKey
-          ) {
-            return;
-          }
-          event.preventDefault();
-          onNavigatePage(destination, { exact: true });
-        }}
-      />
-      <div className="discussion-thread__open discussion-thread__open--overview">
-        <div className="discussion-thread__avatar">
-          <DiscussionAvatar
-            src={mention.avatar || null}
-            className="discussion-thread__avatar-image"
-          />
-        </div>
-        <div className="discussion-thread__body">
-          <div className="discussion-thread__author">
-            <span className="discussion-thread__author-name">
-              {mention.isOwn ? "You" : mention.author}
-            </span>
-            {mention.authorUsername && (
-              <>
-                <span
-                  className="discussion-thread__author-separator"
-                  aria-hidden="true"
-                >
-                  ·
-                </span>
-                <span className="discussion-thread__author-username">
-                  @{mention.authorUsername.replace(/^@+/, "")}
-                </span>
-              </>
-            )}
-          </div>
-          {isRootQuestion && mention.title && (
-            <div className="discussion-thread__mention-title">
-              {mention.title}
-            </div>
-          )}
-          <DiscussionWorkspaceMentionContent
-            mention={mention}
-            expanded={expanded}
-            onExpandedChange={setExpanded}
-            parentContext={parentContext}
-          />
-          {(mention.course ||
-            mention.lesson ||
-            attachmentLabel ||
-            visibilityLabel) && (
-            <div className="discussion-thread__context">
-              {mention.course && <span>{mention.course}</span>}
-              {mention.course &&
-                (mention.lesson || attachmentLabel || visibilityLabel) && (
-                  <span aria-hidden="true" />
-                )}
-              {mention.lesson && (
-                <small className="discussion-thread__lesson">
-                  <BookOpen size={13} aria-hidden="true" />
-                  <span>{mention.lesson}</span>
-                </small>
-              )}
-              {mention.lesson && (attachmentLabel || visibilityLabel) && (
-                <span aria-hidden="true" />
-              )}
-              {attachmentLabel && (
-                <DiscussionWorkspaceAttachmentIndicator
-                  label={attachmentLabel}
-                />
-              )}
-              {attachmentLabel && visibilityLabel && (
-                <span aria-hidden="true" />
-              )}
-              {visibilityLabel && (
-                <small className="discussion-thread__visibility">
-                  <VisibilityIcon size={13} aria-hidden="true" />
-                  <span>{visibilityLabel}</span>
-                </small>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="discussion-thread__meta">
+    <DiscussionWorkspaceCardShell
+      thread={mention}
+      className="discussion-thread--mention"
+      expanded={expanded}
+      navigation={
+        <DiscussionWorkspaceNavigationLink
+          destination={destination}
+          label={`${
+            isReply ? "Open parent discussion" : "Open mentioned discussion"
+          }${destinationLabel ? ` in ${destinationLabel}` : ""}`}
+          onNavigatePage={onNavigatePage}
+        />
+      }
+      rail={{
+        top: (
           <span
             className={[
               "discussion-thread__mention-indicator",
@@ -1142,18 +882,30 @@ function DiscussionWorkspaceMentionCard({
             <MentionSourceIcon size={15} weight="fill" aria-hidden="true" />
             <span>{mentionTypeLabel}</span>
           </span>
+        ),
+        middle: (
           <span>
             <ChatTeardropText size={17} /> {mention.replies}{" "}
             {mention.replies === 1 ? "reply" : "replies"}
           </span>
-          <time dateTime={mention.mentionedAt}>{mentionActivity}</time>
-        </div>
-      </div>
-    </article>
+        ),
+        bottom: <time dateTime={mention.mentionedAt}>{mentionActivity}</time>,
+      }}
+    >
+      <DiscussionWorkspaceIdentity thread={mention} />
+      <DiscussionWorkspaceCardContent
+        thread={mention}
+        label="Mention"
+        expanded={expanded}
+        onExpandedChange={setExpanded}
+        expandedTitle={isRootQuestion ? mention.title : undefined}
+        previewText={mention.plainText}
+        parentContext={parentContext}
+      />
+      <DiscussionWorkspaceMetadataRow items={metadataItems} />
+    </DiscussionWorkspaceCardShell>
   );
 }
-
-const NOTE_PREVIEW_MAX_HEIGHT_PX = 48;
 
 function formatNoteTimestamp(seconds: number | null): string | null {
   if (seconds === null || !Number.isFinite(seconds) || seconds < 0) {
@@ -1174,219 +926,48 @@ function formatNoteTimestamp(seconds: number | null): string | null {
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
-function DiscussionWorkspaceNoteContent({
-  note,
-  expanded,
-  onExpandedChange,
-}: {
-  note: DiscussionWorkspaceCard;
-  expanded: boolean;
-  onExpandedChange: (expanded: boolean) => void;
-}) {
-  const [needsClamp, setNeedsClamp] = useState(false);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const content = useMemo<DiscussionContent>(
-    () => ({
-      format: "markdown",
-      markdown: note.content.trim() || note.plainText,
-      plainText: note.plainText,
-    }),
-    [note.content, note.plainText],
-  );
-
-  useEffect(() => {
-    const node = contentRef.current;
-    if (!node) return undefined;
-
-    let frame = 0;
-    const measure = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
-        const nextNeedsClamp =
-          node.scrollHeight > NOTE_PREVIEW_MAX_HEIGHT_PX + 4;
-        setNeedsClamp((current) =>
-          current === nextNeedsClamp ? current : nextNeedsClamp,
-        );
-      });
-    };
-
-    measure();
-    window.addEventListener("resize", measure);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("resize", measure);
-    };
-  }, [content, note.title]);
-
-  return (
-    <div className="discussion-hub__note-content">
-      <div className="relative">
-        <div
-          ref={contentRef}
-          className="discussion-hub__note-markdown overflow-hidden transition-[max-height] duration-300 ease-in-out"
-          style={
-            needsClamp && !expanded
-              ? { maxHeight: `${NOTE_PREVIEW_MAX_HEIGHT_PX}px` }
-              : undefined
-          }
-        >
-          {note.title && (
-            <div className="discussion-thread__title">{note.title}</div>
-          )}
-          <DiscussionMarkdown
-            content={content}
-            label={`Note by ${note.author}`}
-            className="max-w-none"
-          />
-        </div>
-        {needsClamp && !expanded && (
-          <div
-            aria-hidden="true"
-            className="discussion-hub__note-fade pointer-events-none absolute bottom-0 left-0 right-0 h-8"
-          />
-        )}
-      </div>
-      {needsClamp && (
-        <button
-          type="button"
-          className="discussion-hub__note-toggle"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onExpandedChange(!expanded);
-          }}
-          aria-expanded={expanded}
-        >
-          {expanded ? "Show less" : "Read more"}
-        </button>
-      )}
-    </div>
-  );
-}
-
 function DiscussionWorkspaceNoteCard({
   note,
 }: {
   note: DiscussionWorkspaceCard;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const attachmentLabel = getAttachmentLabel(note.attachmentSummary);
   const timestampLabel = formatNoteTimestamp(note.timestampSeconds);
-  const visibilityLabel = getVisibilityLabel(note.visibility);
-  const VisibilityIcon =
-    note.visibility === "private"
-      ? Lock
-      : note.visibility === "unlisted"
-        ? EyeSlash
-        : Globe;
-  const metadataItems: Array<{ key: string; content: ReactNode }> = [];
-
-  if (note.course) {
-    metadataItems.push({ key: "course", content: <span>{note.course}</span> });
-  }
-  if (note.lesson) {
-    metadataItems.push({
-      key: "lesson",
-      content: (
-        <small className="discussion-thread__lesson">
-          <BookOpen size={13} aria-hidden="true" />
-          <span>{note.lesson}</span>
-        </small>
-      ),
-    });
-  }
-  if (timestampLabel) {
-    metadataItems.push({
-      key: "timestamp",
-      content: (
-        <small className="discussion-thread__timestamp">
-          <Clock size={13} aria-hidden="true" />
-          <span>{timestampLabel}</span>
-        </small>
-      ),
-    });
-  }
-  if (attachmentLabel) {
-    metadataItems.push({
-      key: "attachments",
-      content: (
-        <DiscussionWorkspaceAttachmentIndicator label={attachmentLabel} />
-      ),
-    });
-  }
-  if (visibilityLabel) {
-    metadataItems.push({
-      key: "visibility",
-      content: (
-        <small className="discussion-thread__visibility">
-          <VisibilityIcon size={13} aria-hidden="true" />
-          <span>{visibilityLabel}</span>
-        </small>
-      ),
-    });
-  }
+  const metadataItems = getDiscussionWorkspaceMetadataItems(note, {
+    timestampLabel,
+  });
 
   return (
-    <article
-      className={`discussion-thread discussion-thread--note ${
-        expanded ? "is-expanded" : "is-collapsed"
-      }`}
-    >
-      <div className="discussion-thread__open discussion-thread__open--overview">
-        <div className="discussion-thread__avatar">
-          <DiscussionAvatar
-            src={note.avatar || null}
-            className="discussion-thread__avatar-image"
-          />
-        </div>
-        <div className="discussion-thread__body">
-          <div className="discussion-thread__author">
-            <span className="discussion-thread__author-name">
-              {note.isOwn ? "You" : note.author}
-            </span>
-            {note.authorUsername && (
-              <>
-                <span
-                  className="discussion-thread__author-separator"
-                  aria-hidden="true"
-                >
-                  ·
-                </span>
-                <span className="discussion-thread__author-username">
-                  @{note.authorUsername.replace(/^@+/, "")}
-                </span>
-              </>
-            )}
-          </div>
-          <DiscussionWorkspaceNoteContent
-            note={note}
-            expanded={expanded}
-            onExpandedChange={setExpanded}
-          />
-          {metadataItems.length > 0 && (
-            <div className="discussion-thread__context">
-              {metadataItems.map((item, index) => (
-                <Fragment key={item.key}>
-                  {index > 0 && <span aria-hidden="true" />}
-                  {item.content}
-                </Fragment>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="discussion-thread__meta">
+    <DiscussionWorkspaceCardShell
+      thread={note}
+      className="discussion-thread--note"
+      expanded={expanded}
+      rail={{
+        top: (
           <span className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge">
             <ThumbsUp size={15} weight="fill" aria-hidden="true" />
             <span>
               {note.likes} {note.likes === 1 ? "like" : "likes"}
             </span>
           </span>
+        ),
+        bottom: (
           <time dateTime={note.updatedAt || note.createdAt}>
             {note.activity}
           </time>
-        </div>
-      </div>
-    </article>
+        ),
+      }}
+    >
+      <DiscussionWorkspaceIdentity thread={note} />
+      <DiscussionWorkspaceCardContent
+        thread={note}
+        label="Note"
+        expanded={expanded}
+        onExpandedChange={setExpanded}
+        expandedTitle={note.title}
+      />
+      <DiscussionWorkspaceMetadataRow items={metadataItems} />
+    </DiscussionWorkspaceCardShell>
   );
 }
 
@@ -1403,156 +984,36 @@ function DiscussionWorkspaceBookmarkCard({
     !isNote && (bookmark.kind === "question" || bookmark.kind === "qna");
   const sourceLabel = isNote ? "Note" : isQuestion ? "Q&A" : "Comment";
   const SourceIcon = isNote ? Note : isQuestion ? Question : ChatTeardropText;
-  const attachmentLabel = getAttachmentLabel(bookmark.attachmentSummary);
-  const visibilityLabel = getVisibilityLabel(bookmark.visibility);
-  const VisibilityIcon =
-    bookmark.visibility === "private"
-      ? Lock
-      : bookmark.visibility === "unlisted"
-        ? EyeSlash
-        : Globe;
-  const title = isQuestion ? bookmark.title?.trim() : undefined;
+  const metadataItems = getDiscussionWorkspaceMetadataItems(bookmark);
   const destination = isNote
     ? null
     : getDiscussionThreadDestination(bookmark, "/discussions/saved");
   const destinationLabel = [bookmark.course, bookmark.lesson]
     .filter(Boolean)
     .join(", ");
-  const metadataItems: Array<{ key: string; content: ReactNode }> = [];
-
-  if (bookmark.course) {
-    metadataItems.push({
-      key: "course",
-      content: <span>{bookmark.course}</span>,
-    });
-  }
-  if (bookmark.lesson) {
-    metadataItems.push({
-      key: "lesson",
-      content: (
-        <small className="discussion-thread__lesson">
-          <BookOpen size={13} aria-hidden="true" />
-          <span>{bookmark.lesson}</span>
-        </small>
-      ),
-    });
-  }
-  if (attachmentLabel) {
-    metadataItems.push({
-      key: "attachments",
-      content: (
-        <DiscussionWorkspaceAttachmentIndicator label={attachmentLabel} />
-      ),
-    });
-  }
-  if (visibilityLabel) {
-    metadataItems.push({
-      key: "visibility",
-      content: (
-        <small className="discussion-thread__visibility">
-          <VisibilityIcon size={13} aria-hidden="true" />
-          <span>{visibilityLabel}</span>
-        </small>
-      ),
-    });
-  }
 
   return (
-    <article
-      className={[
-        "discussion-thread",
-        "discussion-thread--bookmark",
-        "discussion-thread--bookmark-" +
-          (isNote ? "note" : isQuestion ? "question" : "comment"),
-        destination ? "is-navigable" : "is-static",
-        expanded ? "is-expanded" : "is-collapsed",
-      ].join(" ")}
-    >
-      {destination && (
-        <a
-          className="discussion-thread__navigation-link"
-          href={destination}
-          aria-label={
-            "Open bookmarked " +
-            sourceLabel.toLowerCase() +
-            (destinationLabel ? " in " + destinationLabel : "")
-          }
-          onClick={(event) => {
-            if (
-              event.defaultPrevented ||
-              event.button !== 0 ||
-              event.metaKey ||
-              event.ctrlKey ||
-              event.shiftKey ||
-              event.altKey
-            ) {
-              return;
+    <DiscussionWorkspaceCardShell
+      thread={bookmark}
+      className={`discussion-thread--bookmark discussion-thread--bookmark-${
+        isNote ? "note" : isQuestion ? "question" : "comment"
+      }`}
+      expanded={expanded}
+      navigation={
+        destination ? (
+          <DiscussionWorkspaceNavigationLink
+            destination={destination}
+            label={
+              "Open bookmarked " +
+              sourceLabel.toLowerCase() +
+              (destinationLabel ? " in " + destinationLabel : "")
             }
-            event.preventDefault();
-            onNavigatePage(destination, { exact: true });
-          }}
-        />
-      )}
-      <div className="discussion-thread__open discussion-thread__open--overview">
-        <div className="discussion-thread__avatar">
-          <DiscussionAvatar
-            src={bookmark.avatar || null}
-            className="discussion-thread__avatar-image"
+            onNavigatePage={onNavigatePage}
           />
-        </div>
-        <div className="discussion-thread__body">
-          <div className="discussion-thread__author">
-            <span className="discussion-thread__author-name">
-              {bookmark.isOwn ? "You" : bookmark.author}
-            </span>
-            {bookmark.authorUsername && (
-              <>
-                <span
-                  className="discussion-thread__author-separator"
-                  aria-hidden="true"
-                >
-                  ·
-                </span>
-                <span className="discussion-thread__author-username">
-                  @{bookmark.authorUsername.replace(/^@+/, "")}
-                </span>
-              </>
-            )}
-          </div>
-          {title && (
-            <div className="discussion-thread__bookmark-title">{title}</div>
-          )}
-          {isQuestion ? (
-            <DiscussionWorkspaceQuestionContent
-              thread={bookmark}
-              expanded={expanded}
-              onExpandedChange={setExpanded}
-            />
-          ) : isNote ? (
-            <DiscussionWorkspaceNoteContent
-              note={bookmark}
-              expanded={expanded}
-              onExpandedChange={setExpanded}
-            />
-          ) : (
-            <DiscussionWorkspaceCommentContent
-              thread={bookmark}
-              expanded={expanded}
-              onExpandedChange={setExpanded}
-            />
-          )}
-          {metadataItems.length > 0 && (
-            <div className="discussion-thread__context">
-              {metadataItems.map((item, index) => (
-                <Fragment key={item.key}>
-                  {index > 0 && <span aria-hidden="true" />}
-                  {item.content}
-                </Fragment>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="discussion-thread__meta">
+        ) : undefined
+      }
+      rail={{
+        top: (
           <span
             className={[
               "discussion-thread__bookmark-source",
@@ -1563,18 +1024,30 @@ function DiscussionWorkspaceBookmarkCard({
             <SourceIcon size={15} weight="fill" aria-hidden="true" />
             <span>{sourceLabel}</span>
           </span>
-          {!isNote && (
-            <span>
-              <ChatTeardropText size={17} aria-hidden="true" />{" "}
-              {bookmark.replies} {bookmark.replies === 1 ? "reply" : "replies"}
-            </span>
-          )}
+        ),
+        middle: isNote ? undefined : (
+          <span>
+            <ChatTeardropText size={17} aria-hidden="true" /> {bookmark.replies}{" "}
+            {bookmark.replies === 1 ? "reply" : "replies"}
+          </span>
+        ),
+        bottom: (
           <time dateTime={bookmark.bookmarkedAt}>
             Saved · {formatRelativeDate(bookmark.bookmarkedAt)}
           </time>
-        </div>
-      </div>
-    </article>
+        ),
+      }}
+    >
+      <DiscussionWorkspaceIdentity thread={bookmark} />
+      <DiscussionWorkspaceCardContent
+        thread={bookmark}
+        label={`Bookmarked ${sourceLabel}`}
+        expanded={expanded}
+        onExpandedChange={setExpanded}
+        expandedTitle={isQuestion || isNote ? bookmark.title : undefined}
+      />
+      <DiscussionWorkspaceMetadataRow items={metadataItems} />
+    </DiscussionWorkspaceCardShell>
   );
 }
 

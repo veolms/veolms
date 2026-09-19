@@ -73,12 +73,6 @@ function getExcerpt(item: WorkspaceDiscussionItem): string {
   return item.content.replace(/\s+/g, " ").trim();
 }
 
-function getTitle(item: WorkspaceDiscussionItem, excerpt: string): string {
-  const title = item.title?.trim();
-  if (title) return title;
-  return excerpt.split("\n", 1)[0]?.slice(0, 120) || "Untitled discussion";
-}
-
 export function adaptDiscussionWorkspaceItem(
   item: WorkspaceDiscussionItem,
   options?: {
@@ -112,12 +106,7 @@ export function adaptDiscussionWorkspaceItem(
 
   return {
     id: item.id,
-    title:
-      isNote || isMention || isBookmark
-        ? item.title?.trim() || undefined
-        : options?.comments || isFollowing
-          ? item.title?.trim() || ""
-          : getTitle(item, excerpt),
+    title: item.title?.trim() || undefined,
     excerpt,
     content: item.content,
     plainText:
