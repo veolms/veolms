@@ -1774,6 +1774,35 @@ function VideoFileSummary({
   onReplace,
   uploadTextOnly = false,
 }: VideoFileSummaryProps) {
+  const [videoDimensions, setVideoDimensions] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!file) {
+      setVideoDimensions(null);
+      return;
+    }
+
+    let active = true;
+    const previewUrl = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      if (active && video.videoWidth > 0 && video.videoHeight > 0) {
+        setVideoDimensions(`${video.videoWidth} × ${video.videoHeight}`);
+      }
+    };
+    video.src = previewUrl;
+    video.load();
+
+    return () => {
+      active = false;
+      video.onloadedmetadata = null;
+      video.removeAttribute("src");
+      video.load();
+      URL.revokeObjectURL(previewUrl);
+    };
+  }, [file]);
+
   const badgeClasses =
     badge === "Ready"
       ? "bg-emerald-500/15 text-emerald-400 font-semibold shadow-[inset_0_1px_0_color-mix(in_srgb,white_12%,transparent),0_1px_3px_rgba(0,0,0,0.15)]"
@@ -1791,12 +1820,20 @@ function VideoFileSummary({
     >
       <VideoThumbnail file={file} />
       <div className="min-w-0 flex-1">
-        <p className="m-0 truncate text-[0.78rem] sm:text-[0.82rem] font-medium text-(--text)">
+        <p
+          className="m-0 truncate text-[0.78rem] sm:text-[0.82rem] font-medium text-(--text)"
+          title={
+            file?.name ||
+            (mediaAttached ? "Current lesson video" : "Selected video")
+          }
+        >
           {file?.name ||
             (mediaAttached ? "Current lesson video" : "Selected video")}
         </p>
         <p className="m-0 mt-0.5 text-[0.7rem] sm:text-[0.72rem] text-(--muted)">
-          {file ? formatBytes(file.size) : "Existing lesson media"}
+          {file
+            ? `${formatBytes(file.size)}${videoDimensions ? ` • ${videoDimensions}` : ""}`
+            : "Existing lesson media"}
         </p>
       </div>
       {onReplace && (
