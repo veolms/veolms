@@ -1111,7 +1111,7 @@ export const LessonVideoUpload = forwardRef<
           {displayErrorMessage && (
             <div
               role="alert"
-              className={`flex flex-col items-start justify-between gap-3 p-3.5 sm:flex-row sm:items-center sm:p-4 ${RAISED_CARD_CLASS}`}
+              className={`flex flex-col items-start justify-between gap-3 p-3.5 sm:flex-row sm:items-center sm:p-4 ${inline ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface))" : RAISED_CARD_CLASS}`}
             >
               <div className="flex min-w-0 items-center gap-3">
                 <WarningCircle
