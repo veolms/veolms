@@ -97,6 +97,7 @@ export function createAttemptService(options: QuizServiceOptions) {
     if (isAdmin({ id: userId, roles })) return true;
     const course = await courseService.findCourseById(courseId);
     if (course?.creator_id === userId) return true;
+    if (await repo.isPublishedFreeCourse(database, courseId)) return true;
     return accessService.hasActiveAccess(database, userId, courseId);
   }
 
@@ -784,13 +785,19 @@ export function createAttemptService(options: QuizServiceOptions) {
 
   async function listAssignments(userId: string) {
     const grants = await accessService.listUserGrants(database, userId);
-    const courseIds = grants
+    const accessibleCourseIds = grants
       .filter(
         (grant) =>
           grant.status === "active" &&
           (!grant.validUntil || grant.validUntil > new Date()),
       )
       .map((grant) => grant.courseId);
+    const courseIds = [
+      ...new Set([
+        ...accessibleCourseIds,
+        ...(await repo.listPublishedFreeCourseIds(database)),
+      ]),
+    ];
     const assignments = await repo.listAssignmentsForCourses(
       database,
       courseIds,

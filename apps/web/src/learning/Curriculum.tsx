@@ -641,85 +641,110 @@ export function Curriculum({
                             const active = selectedLesson === number;
                             const available =
                               isLessonAvailable?.(number) ?? true;
+                            const hasQuiz = hasLessonQuiz?.(number) ?? false;
+                            const quizActive =
+                              isLessonQuizActive?.(number) ?? false;
                             const progress = getLessonProgress(number, status);
                             const completed =
                               status === "done" ||
                               progress >= LESSON_PROGRESS_COMPLETE_THRESHOLD;
                             const showProgress = active || progress > 0;
                             return (
-                              <button
-                                type="button"
-                                key={number}
-                                ref={active ? activeLessonRef : undefined}
-                                disabled={!available}
-                                title={
-                                  available
-                                    ? undefined
-                                    : "Log in to watch this lecture"
-                                }
-                                aria-label={
-                                  available
-                                    ? undefined
-                                    : `${title} (log in to watch)`
-                                }
-                                onClick={() => {
-                                  if (!available) return;
-                                  onSelectLesson(number);
-                                  onClose?.();
-                                }}
-                                className={`learning-curriculum__lesson ${active ? "is-active" : ""} ${!available ? "cursor-not-allowed opacity-50" : ""}`}
-                              >
-                                {completed ? (
-                                  <span
-                                    className="learning-curriculum__lesson-status"
-                                    aria-label="Completed"
-                                  >
-                                    <Check size={12} weight="bold" />
+                              <div key={number} className="flex min-w-0 items-center">
+                                <button
+                                  type="button"
+                                  ref={active ? activeLessonRef : undefined}
+                                  disabled={!available}
+                                  title={
+                                    available
+                                      ? undefined
+                                      : "Log in to watch this lecture"
+                                  }
+                                  aria-label={
+                                    available
+                                      ? undefined
+                                      : `${title} (log in to watch)`
+                                  }
+                                  onClick={() => {
+                                    if (!available) return;
+                                    onSelectLesson(number);
+                                    onClose?.();
+                                  }}
+                                  className={`learning-curriculum__lesson min-w-0 flex-1 ${active ? "is-active" : ""} ${!available ? "cursor-not-allowed opacity-50" : ""}`}
+                                >
+                                  {completed ? (
+                                    <span
+                                      className="learning-curriculum__lesson-status"
+                                      aria-label="Completed"
+                                    >
+                                      <Check size={12} weight="bold" />
+                                    </span>
+                                  ) : showProgress ? (
+                                    <span
+                                      className="learning-curriculum__lesson-progress"
+                                      role="progressbar"
+                                      aria-label={`Lecture ${number} progress`}
+                                      aria-valuemin={0}
+                                      aria-valuemax={100}
+                                      aria-valuenow={Math.round(progress)}
+                                      aria-valuetext={`${Math.round(progress)}% watched`}
+                                    >
+                                      <svg viewBox="0 0 20 20" aria-hidden="true">
+                                        <circle
+                                          className="learning-curriculum__lesson-progress-track"
+                                          cx="10"
+                                          cy="10"
+                                          r="8"
+                                        />
+                                        <circle
+                                          className="learning-curriculum__lesson-progress-value"
+                                          cx="10"
+                                          cy="10"
+                                          r="8"
+                                          pathLength="100"
+                                          strokeDasharray="100"
+                                          strokeDashoffset={100 - progress}
+                                        />
+                                      </svg>
+                                    </span>
+                                  ) : (
+                                    <Circle
+                                      size={20}
+                                      className="learning-curriculum__lesson-status learning-curriculum__lesson-status--todo"
+                                    />
+                                  )}
+                                  <span className="learning-curriculum__lesson-number">
+                                    {number}.
                                   </span>
-                                ) : showProgress ? (
-                                  <span
-                                    className="learning-curriculum__lesson-progress"
-                                    role="progressbar"
-                                    aria-label={`Lecture ${number} progress`}
-                                    aria-valuemin={0}
-                                    aria-valuemax={100}
-                                    aria-valuenow={Math.round(progress)}
-                                    aria-valuetext={`${Math.round(progress)}% watched`}
-                                  >
-                                    <svg viewBox="0 0 20 20" aria-hidden="true">
-                                      <circle
-                                        className="learning-curriculum__lesson-progress-track"
-                                        cx="10"
-                                        cy="10"
-                                        r="8"
-                                      />
-                                      <circle
-                                        className="learning-curriculum__lesson-progress-value"
-                                        cx="10"
-                                        cy="10"
-                                        r="8"
-                                        pathLength="100"
-                                        strokeDasharray="100"
-                                        strokeDashoffset={100 - progress}
-                                      />
-                                    </svg>
+                                  <span className="min-w-0 flex-1 truncate">
+                                    {title}
                                   </span>
-                                ) : (
-                                  <Circle
-                                    size={20}
-                                    className="learning-curriculum__lesson-status learning-curriculum__lesson-status--todo"
-                                  />
-                                )}
-                                <span className="learning-curriculum__lesson-number">
-                                  {number}.
-                                </span>
-                                <span className="min-w-0 flex-1 truncate">
-                                  {title}
-                                </span>
-                                <span className="learning-curriculum__lesson-duration">
-                                  {duration}
-                                </span>
-                              </button>
+                                  <span className="learning-curriculum__lesson-duration">
+                                    {duration}
+                                  </span>
+                                </button>
+                                {hasQuiz && onOpenLessonQuiz ? (
+                                  <button
+                                    type="button"
+                                    className={`learning-curriculum__quiz-trigger ${quizActive ? "is-active" : ""} ${!available ? "cursor-not-allowed opacity-50" : ""}`}
+                                    disabled={!available}
+                                    aria-label={`Open quiz for lesson ${number}: ${title}`}
+                                    title={
+                                      available
+                                        ? "Open lesson quiz"
+                                        : "Log in to take this quiz"
+                                    }
+                                    onClick={() => {
+                                      if (!available) return;
+                                      onOpenLessonQuiz(number);
+                                      onClose?.();
+                                    }}
+                                  >
+                                    <Exam size={13} weight="bold" />
+                                    <span>Quiz</span>
+                                  </button>
+                                ) : null}
+                              </div>
                             );
                           },
                         )}
