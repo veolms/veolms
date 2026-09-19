@@ -152,6 +152,17 @@ const getStoredSidebarMaxWidth = (): number => {
   }
 };
 
+export const applySidebarShellToDocument = (state: SidebarShellState) => {
+  const root = document.documentElement;
+  root.dataset.sidebarState = state.mode;
+  root.style.setProperty("--sidebar-width", `${state.width}px`);
+  root.style.setProperty("--sidebar-expanded-width", `${state.width}px`);
+  window.__VEO_BOOTSTRAP__ = {
+    ...window.__VEO_BOOTSTRAP__,
+    sidebar: state,
+  };
+};
+
 export const getInitialSidebarShellState = (): SidebarShellState => {
   if (typeof window === "undefined") {
     return { mode: "expanded", width: SIDEBAR_DEFAULT_WIDTH };

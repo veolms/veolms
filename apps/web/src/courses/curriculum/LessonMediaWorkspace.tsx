@@ -48,6 +48,20 @@ export interface AttachedMediaInfo {
   thumbnailUrl?: string | null;
 }
 
+function isVideoFile(file: File) {
+  if (file.type.toLowerCase().startsWith("video/")) return true;
+  return /\.(mp4|m4v|mov|webm|avi|mkv|mpeg|mpg)$/i.test(file.name);
+}
+
+function isImageFile(file: File) {
+  if (file.type.toLowerCase().startsWith("image/")) return true;
+  return /\.(jpe?g|png|webp|gif|avif|bmp)$/i.test(file.name);
+}
+
+function hasDraggedFiles(event: DragEvent) {
+  return Array.from(event.dataTransfer?.types ?? []).includes("Files");
+}
+
 export interface LessonMediaWorkspaceProps {
   contentType: StudioLessonContentType;
   lessonTitle: string;
@@ -74,7 +88,6 @@ export function LessonMediaWorkspace({
   previewFile = null,
   disabled = false,
   onUploadFile,
-  onChangeVideoClick,
   videoUploadSection,
   onUploadThumbnail,
   playbackSuspended = false,
@@ -85,6 +98,9 @@ export function LessonMediaWorkspace({
   const [playbackBootstrap, setPlaybackBootstrap] =
     useState<VideoPlaybackBootstrap | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [thumbnailPreviewFile, setThumbnailPreviewFile] = useState<File | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!previewFile) {
@@ -131,6 +147,12 @@ export function LessonMediaWorkspace({
       previewFile?.name ||
       mediaInfo?.name ||
       "The Complete JavaScript Course Trailer.mp4";
+    const thumbnailSrc = previewUrl
+      ? undefined
+      : mediaInfo?.thumbnailUrl ||
+        resolveCourseVideoThumbnailSrc(
+          "The Complete JavaScript Course Trailer.mp4",
+        );
 
     return {
       fileName,
@@ -139,9 +161,7 @@ export function LessonMediaWorkspace({
         previewUrl ||
         mediaInfo?.url ||
         resolveCourseHlsSrc("The Complete JavaScript Course Trailer.mp4"),
-      thumbnailSrc:
-        mediaInfo?.thumbnailUrl ||
-        resolveCourseVideoThumbnailSrc("The Complete JavaScript Course Trailer.mp4"),
+      thumbnailSrc,
     };
   }, [
     mediaInfo?.durationSeconds,
@@ -159,6 +179,7 @@ export function LessonMediaWorkspace({
   const isGroupedVideo =
     contentType === "video" &&
     (isAttachedVideo || (hasVideoSource && Boolean(videoUploadSection)));
+  const hasPersistedThumbnail = Boolean(mediaInfo?.thumbnailUrl);
 
   const formatFileSize = (bytes?: number) => {
     if (!bytes || bytes <= 0) return "0 MB";
@@ -175,6 +196,15 @@ export function LessonMediaWorkspace({
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
+  const applyThumbnail = useCallback(
+    (file: File) => {
+      if (disabled || !isImageFile(file)) return;
+      setThumbnailPreviewFile(file);
+      void onUploadThumbnail?.(file);
+    },
+    [disabled, onUploadThumbnail],
+  );
+
   const handleFileDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragOver(false);
@@ -185,12 +215,35 @@ export function LessonMediaWorkspace({
     }
   };
 
-  const handleChooseFile = () => {
-    if (disabled) return;
-    if (contentType === "video" && onChangeVideoClick) {
-      onChangeVideoClick();
+  const handleCardDragOver = (e: DragEvent<HTMLDivElement>) => {
+    if (disabled || !hasDraggedFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  };
+
+  const handleCardDrop = (e: DragEvent<HTMLDivElement>) => {
+    if (disabled || !hasDraggedFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const file =
+      e.dataTransfer.files?.[0] ||
+      (e.dataTransfer.items
+        ? Array.from(e.dataTransfer.items)
+            .find((item) => item.kind === "file")
+            ?.getAsFile()
+        : null);
+    if (!file) return;
+    if (isVideoFile(file)) {
+      void onUploadFile?.(file);
       return;
     }
+    if (isImageFile(file)) {
+      applyThumbnail(file);
+    }
+  };
+
+  const handleChooseFile = () => {
+    if (disabled) return;
     fileInputRef.current?.click();
   };
 
@@ -246,6 +299,7 @@ export function LessonMediaWorkspace({
         disabled={disabled}
         onChange={(e) => {
           const file = e.target.files?.[0];
+          e.currentTarget.value = "";
           if (file && onUploadFile) {
             void onUploadFile(file);
           }
@@ -260,9 +314,8 @@ export function LessonMediaWorkspace({
         disabled={disabled}
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file && onUploadThumbnail) {
-            void onUploadThumbnail(file);
-          }
+          e.currentTarget.value = "";
+          if (file) applyThumbnail(file);
         }}
       />
 
@@ -272,6 +325,8 @@ export function LessonMediaWorkspace({
             ? "overflow-hidden rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) shadow-(--card-shadow)"
             : "contents"
         }
+        onDragOverCapture={isGroupedVideo ? handleCardDragOver : undefined}
+        onDropCapture={isGroupedVideo ? handleCardDrop : undefined}
       >
 
       {/* 1. Main 16:9 Workspace (Player or Empty Dropzone) */}
@@ -393,7 +448,9 @@ export function LessonMediaWorkspace({
       )}
 
       {/* 2. Media Settings Card (Video Settings, Audio Settings, etc.) */}
-      {(contentType !== "video" || isAttachedVideo || !videoUploadSection) && (
+      {(contentType !== "video" ||
+        (isAttachedVideo && !hasVideoPreview) ||
+        !videoUploadSection) && (
       <div
         className={`flex flex-col ${
           isGroupedVideo
@@ -433,23 +490,7 @@ export function LessonMediaWorkspace({
                       : "bg-amber-500/15 text-amber-500"
               }`}
             >
-              {hasMediaAttached ? (
-                mediaInfo?.thumbnailUrl ? (
-                  <img
-                    src={mediaInfo.thumbnailUrl}
-                    alt="File thumbnail"
-                    className="h-full w-full rounded-[8px] object-cover"
-                  />
-                ) : contentType === "video" ? (
-                  <Video size={20} weight="fill" />
-                ) : contentType === "audio" ? (
-                  <MusicNotes size={20} weight="fill" />
-                ) : contentType === "image" ? (
-                  <Image size={20} weight="fill" />
-                ) : (
-                  <FileText size={20} weight="fill" />
-                )
-              ) : contentType === "video" ? (
+              {contentType === "video" ? (
                 <Video size={20} weight="fill" />
               ) : contentType === "audio" ? (
                 <MusicNotes size={20} weight="fill" />
@@ -472,7 +513,7 @@ export function LessonMediaWorkspace({
                   <span>
                     {formatFileSize(mediaInfo?.sizeBytes || 128 * 1024 * 1024)}
                     {mediaInfo?.dimensions ? ` • ${mediaInfo.dimensions}` : contentType === "video" || contentType === "image" ? " • 1920 × 1080" : ""}
-                    {contentType === "video" || contentType === "audio" ? ` • ${formatDuration(mediaInfo?.durationSeconds)}` : ""}
+                    {contentType === "audio" ? ` • ${formatDuration(mediaInfo?.durationSeconds)}` : ""}
                     {contentType === "audio" ? " • .mp3" : ""}
                   </span>
                 ) : (
@@ -530,20 +571,28 @@ export function LessonMediaWorkspace({
           >
             <div className="flex min-w-0 items-center gap-3">
               <div className="relative flex h-10 w-14 sm:h-11 sm:w-16 shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[radial-gradient(ellipse_at_center,_#1e1b4b_0%,_#09090b_100%)]">
-                {mediaInfo?.thumbnailUrl ? (
+                {hasPersistedThumbnail ? (
                   <img
-                    src={mediaInfo.thumbnailUrl}
+                    src={mediaInfo?.thumbnailUrl || ""}
                     alt="Current thumbnail"
                     className="h-full w-full object-cover"
                   />
+                ) : contentType === "audio" ? (
+                  <Headphones
+                    size={20}
+                    weight="fill"
+                    className="text-rose-400"
+                  />
                 ) : (
-                  <Headphones size={20} weight="fill" className="text-purple-400" />
+                  <Video size={20} weight="fill" className="text-blue-400" />
                 )}
               </div>
 
               <div className="min-w-0">
                 <p className="m-0 truncate text-[0.82rem] sm:text-[0.86rem] font-bold text-(--text)">
-                  Current thumbnail
+                  {hasPersistedThumbnail
+                    ? "Current thumbnail"
+                    : "No thumbnail"}
                 </p>
                 <p className="m-0 mt-0.5 truncate text-[0.70rem] sm:text-[0.74rem] text-(--muted)">
                   Recommended size: 1280 × 720
@@ -558,7 +607,11 @@ export function LessonMediaWorkspace({
               className="inline-flex h-8.5 shrink-0 items-center justify-center gap-1.5 rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_7%,var(--surface))] px-3.5 text-[0.76rem] font-semibold text-(--text) shadow-sm transition-all hover:bg-[color-mix(in_srgb,var(--text)_12%,var(--surface))] active:scale-95 cursor-pointer whitespace-nowrap"
             >
               <Image size={15} weight="bold" />
-              <span>Change Thumbnail</span>
+              <span>
+                {hasPersistedThumbnail || thumbnailPreviewFile
+                  ? "Change Thumbnail"
+                  : "Add Thumbnail"}
+              </span>
             </button>
           </div>
         </div>

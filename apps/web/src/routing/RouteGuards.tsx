@@ -114,15 +114,17 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
-  if (
+  const blockRender =
     (pending && authenticationRequired) ||
     shouldBlockAcademyRender(path, access) ||
-    courseAuthorRouteDenied
-  ) {
-    return <AppLoadingScreen />;
-  }
+    courseAuthorRouteDenied;
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      {blockRender ? <AppLoadingScreen /> : null}
+    </>
+  );
 }
 
 export function AuthRouteGuard() {

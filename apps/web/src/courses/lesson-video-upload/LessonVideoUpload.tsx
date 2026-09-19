@@ -649,18 +649,20 @@ export const LessonVideoUpload = forwardRef<
     ref,
     () => ({
       open: (file) => {
+        if (disabled) return;
         if (inline) {
-          if (activeMediaId) setIsReplacingVideo(true);
-          if (!file) {
-            window.setTimeout(() => fileInputRef.current?.click(), 0);
+          if (file) {
+            selectFile(file);
+            return;
           }
-        } else {
-          openModal();
+          fileInputRef.current?.click();
+          return;
         }
+        openModal();
         if (file) selectFile(file);
       },
     }),
-    [activeMediaId, inline, openModal, selectFile],
+    [disabled, inline, openModal, selectFile],
   );
 
   const startUpload = useCallback(
@@ -891,10 +893,9 @@ export const LessonVideoUpload = forwardRef<
   const removeSelectedFile = useCallback(() => {
     setSelectedFile(null);
     setErrorMessage(null);
-    if (!isReplacingVideo) {
-      setPhase(activeMediaId ? "attached" : "idle");
-    }
-  }, [activeMediaId, isReplacingVideo]);
+    setIsReplacingVideo(false);
+    setPhase(mediaAssetId ? "attached" : "idle");
+  }, [mediaAssetId]);
 
   const displayErrorMessage =
     errorMessage ||
@@ -993,7 +994,7 @@ export const LessonVideoUpload = forwardRef<
       embedded={inline}
       onReplace={
         mediaAssetId && !isReplacingVideo && !selectedFile
-          ? () => setIsReplacingVideo(true)
+          ? () => fileInputRef.current?.click()
           : undefined
       }
     />
@@ -1091,7 +1092,7 @@ export const LessonVideoUpload = forwardRef<
           className="min-w-0 space-y-3.5 sm:space-y-4"
           data-inline-video-upload="true"
         >
-          {isReplacementFlow && (
+          {isReplacementFlow && phase !== "idle" && (
             <div className="flex items-start gap-2.5 rounded-[12px] border-none bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] p-3.5 text-[0.74rem] leading-relaxed text-(--text-secondary) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_8%,transparent))]">
               <CheckCircle
                 size={18}

@@ -1,5 +1,6 @@
 import {
   ArrowLeftIcon as ArrowLeft,
+  BrainIcon as Brain,
   CaretRightIcon as CaretRight,
   CircleNotchIcon as CircleNotch,
   CloudArrowUpIcon as CloudArrowUp,
@@ -113,7 +114,6 @@ export const LessonStudioEditor = forwardRef<
   onUploadMedia,
   onMediaAttached,
   onProcessingComplete,
-  onChangeVideoClick,
   onUploadThumbnail,
   onAddResourceFile,
   onDeleteResource,
@@ -490,13 +490,6 @@ export const LessonStudioEditor = forwardRef<
               }
               void onUploadMedia?.(file);
             }}
-            onChangeVideoClick={() => {
-              if (contentType === "video") {
-                videoUploadRef.current?.open();
-                return;
-              }
-              onChangeVideoClick?.();
-            }}
             videoUploadSection={onMediaAttached ? (
               <LessonVideoUpload
                 ref={videoUploadRef}
@@ -620,8 +613,8 @@ export const LessonStudioEditor = forwardRef<
                   : "border-transparent text-(--muted) hover:text-(--text)"
               }`}
             >
-              <CaretRight size={15} className="rotate-90" />
-              <span>Quiz Assessment</span>
+              <Brain size={15} weight="bold" />
+              <span>Quiz</span>
             </button>
           )}
         </div>

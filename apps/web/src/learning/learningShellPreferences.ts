@@ -13,6 +13,25 @@ export interface LearningShellState {
 export const clampLearningCurriculumWidth = (value: number) =>
   Math.min(CURRICULUM_MAX_WIDTH, Math.max(CURRICULUM_MIN_WIDTH, value));
 
+export const applyLearningShellToDocument = (state: LearningShellState) => {
+  const root = document.documentElement;
+  const width = state.curriculumCollapsed
+    ? CURRICULUM_COLLAPSED_WIDTH
+    : state.curriculumWidth;
+  root.dataset.learningCurriculumState = state.curriculumCollapsed
+    ? "collapsed"
+    : "expanded";
+  root.style.setProperty("--learning-curriculum-width", `${width}px`);
+  root.style.setProperty(
+    "--learning-curriculum-expanded-width",
+    `${state.curriculumWidth}px`,
+  );
+  window.__VEO_BOOTSTRAP__ = {
+    ...window.__VEO_BOOTSTRAP__,
+    learning: state,
+  };
+};
+
 export const getInitialLearningShellState = (): LearningShellState => {
   if (typeof window === "undefined") {
     return {
