@@ -557,7 +557,15 @@ function DiscussionWorkspaceQuestionCard({
           )}
         </div>
         <div className="discussion-thread__meta">
-          <span className={`discussion-thread__status is-${lifecycleStatus}`}>
+          <span
+            className={[
+              "discussion-thread__status",
+              `is-${lifecycleStatus}`,
+              lifecycleStatus === "open" ? "" : "discussion-thread__rail-badge",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
             <span className="discussion-thread__status-label">
               <LifecycleIcon size={15} weight="fill" aria-hidden="true" />
               <span>{qnaStatusLabels[lifecycleStatus]}</span>
@@ -697,7 +705,7 @@ function DiscussionWorkspaceCommentCard({
           )}
         </div>
         <div className="discussion-thread__meta">
-          <span className="discussion-thread__engagement">
+          <span className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge">
             <ThumbsUp size={15} weight="fill" aria-hidden="true" />
             <span>
               {thread.likes} {thread.likes === 1 ? "like" : "likes"}
@@ -849,7 +857,13 @@ function DiscussionWorkspaceFollowingCard({
           )}
         </div>
         <div className="discussion-thread__meta">
-          <span className="discussion-thread__following-indicator">
+          <span
+            className={[
+              "discussion-thread__following-indicator",
+              "discussion-thread__rail-badge",
+              isQuestion ? "is-qna" : "is-comment",
+            ].join(" ")}
+          >
             {isQuestion ? (
               <Question size={15} weight="fill" aria-hidden="true" />
             ) : (
@@ -996,7 +1010,13 @@ function DiscussionWorkspaceMentionCard({
       : mention.visibility === "unlisted"
         ? EyeSlash
         : Globe;
-  const parentKindLabel = mention.kind === "comment" ? "Comment" : "Q&A";
+  const isQuestionMention =
+    mention.kind === "question" || mention.kind === "qna";
+  const parentKindLabel = isQuestionMention ? "Q&A" : "Comment";
+  const MentionSourceIcon = isQuestionMention ? Question : ChatTeardropText;
+  const mentionTypeLabel = isReply
+    ? parentKindLabel + " Reply"
+    : parentKindLabel;
   const parentContext = isReply
     ? mention.parentThreadTitle?.trim()
       ? `Reply in ${mention.parentThreadTitle.trim()} · ${parentKindLabel}`
@@ -1112,9 +1132,15 @@ function DiscussionWorkspaceMentionCard({
           )}
         </div>
         <div className="discussion-thread__meta">
-          <span className="discussion-thread__mention-indicator">
-            <At size={15} weight="fill" aria-hidden="true" />
-            <span>Mentioned</span>
+          <span
+            className={[
+              "discussion-thread__mention-indicator",
+              "discussion-thread__rail-badge",
+              isQuestionMention ? "is-qna" : "is-comment",
+            ].join(" ")}
+          >
+            <MentionSourceIcon size={15} weight="fill" aria-hidden="true" />
+            <span>{mentionTypeLabel}</span>
           </span>
           <span>
             <ChatTeardropText size={17} /> {mention.replies}{" "}
@@ -1349,7 +1375,7 @@ function DiscussionWorkspaceNoteCard({
           )}
         </div>
         <div className="discussion-thread__meta">
-          <span className="discussion-thread__engagement">
+          <span className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge">
             <ThumbsUp size={15} weight="fill" aria-hidden="true" />
             <span>
               {note.likes} {note.likes === 1 ? "like" : "likes"}
@@ -1527,7 +1553,13 @@ function DiscussionWorkspaceBookmarkCard({
           )}
         </div>
         <div className="discussion-thread__meta">
-          <span className="discussion-thread__bookmark-source">
+          <span
+            className={[
+              "discussion-thread__bookmark-source",
+              "discussion-thread__rail-badge",
+              isNote ? "is-note" : isQuestion ? "is-qna" : "is-comment",
+            ].join(" ")}
+          >
             <SourceIcon size={15} weight="fill" aria-hidden="true" />
             <span>{sourceLabel}</span>
           </span>
