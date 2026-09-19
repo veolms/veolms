@@ -7621,10 +7621,17 @@ export function CourseCreatePage({
   };
 
   const currencySymbol = getCurrencySymbol(pricing.currency || "INR");
+  const previewCurrency = pricing.currency || "INR";
+  const previewSellingAmount = pricing.sellingPrice.trim()
+    ? parseFloat(pricing.sellingPrice.replace(/,/g, ""))
+    : 0;
+  const previewOriginalAmount = pricing.originalPrice.trim()
+    ? parseFloat(pricing.originalPrice.replace(/,/g, ""))
+    : 0;
 
   const previewPricing: CourseOverviewPricingProps =
     pricing.pricingType === "free"
-      ? { price: "Free" }
+      ? { price: "Free", amount: 0, currency: previewCurrency }
       : {
           price: pricing.sellingPrice.trim()
             ? `${currencySymbol}${pricing.sellingPrice.trim()}`
@@ -7635,15 +7642,17 @@ export function CourseCreatePage({
           discount:
             pricing.originalPrice.trim() &&
             pricing.sellingPrice.trim() &&
-            parseFloat(pricing.originalPrice.replace(/,/g, "")) >
-              parseFloat(pricing.sellingPrice.replace(/,/g, ""))
+            previewOriginalAmount > previewSellingAmount
               ? `${Math.round(
-                  ((parseFloat(pricing.originalPrice.replace(/,/g, "")) -
-                    parseFloat(pricing.sellingPrice.replace(/,/g, ""))) /
-                    parseFloat(pricing.originalPrice.replace(/,/g, ""))) *
+                  ((previewOriginalAmount - previewSellingAmount) /
+                    previewOriginalAmount) *
                     100,
                 )}% OFF`
               : undefined,
+          amount: Number.isFinite(previewSellingAmount)
+            ? previewSellingAmount
+            : 0,
+          currency: previewCurrency,
         };
 
   const editorCourseSlug = editorData?.course?.slug;

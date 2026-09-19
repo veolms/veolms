@@ -22,7 +22,11 @@ export const courseBundleSchema = z.strictObject({
   description: z.string().nullable().optional(),
   thumbnailMediaId: z.uuid().nullable().optional(),
   status: bundleStatusSchema,
-  price: z.number().int().nonnegative().meta({ description: "Price in smallest currency unit (e.g. paise)" }),
+  price: z
+    .number()
+    .int()
+    .nonnegative()
+    .meta({ description: "Price in smallest currency unit (e.g. paise)" }),
   currency: z.string().length(3).default("INR"),
   items: z.array(bundleItemSchema).optional(),
   createdAt: z.string().or(z.date()),
@@ -57,15 +61,37 @@ export type UpdateBundleRequest = z.infer<typeof updateBundleRequestSchema>;
 export const orderItemTypeSchema = z.enum(["course", "bundle"]);
 export type OrderItemType = z.infer<typeof orderItemTypeSchema>;
 
-export const cartItemInputSchema = z.strictObject({
-  itemType: orderItemTypeSchema,
-  courseId: z.uuid().optional(),
-  bundleId: z.uuid().optional(),
-}).refine(
-  (data) => (data.itemType === "course" && !!data.courseId && !data.bundleId) ||
-            (data.itemType === "bundle" && !!data.bundleId && !data.courseId),
-  { message: "Either courseId or bundleId must be provided matching itemType" },
-);
+/** Lowest voluntary contribution, in major currency units (e.g. ₹1). */
+export const MIN_VOLUNTARY_AMOUNT = 1;
+/** Highest voluntary contribution, in major currency units (e.g. ₹5,00,000). */
+export const MAX_VOLUNTARY_AMOUNT = 500_000;
+
+export const cartItemInputSchema = z
+  .strictObject({
+    itemType: orderItemTypeSchema,
+    courseId: z.uuid().optional(),
+    bundleId: z.uuid().optional(),
+    customAmount: z
+      .number()
+      .int()
+      .min(MIN_VOLUNTARY_AMOUNT, { message: "Minimum voluntary amount is 1" })
+      .max(MAX_VOLUNTARY_AMOUNT, {
+        message: "Maximum voluntary amount is 500000",
+      })
+      .optional(),
+  })
+  .refine(
+    (data) =>
+      (data.itemType === "course" && !!data.courseId && !data.bundleId) ||
+      (data.itemType === "bundle" && !!data.bundleId && !data.courseId),
+    {
+      message: "Either courseId or bundleId must be provided matching itemType",
+    },
+  )
+  .refine(
+    (data) => data.itemType === "course" || data.customAmount === undefined,
+    { message: "Custom amount is only supported on course items" },
+  );
 export type CartItemInput = z.infer<typeof cartItemInputSchema>;
 
 export const cartItemSchema = z.strictObject({
@@ -192,7 +218,9 @@ export const couponValidationResultSchema = z.strictObject({
   discountAmount: z.number().int().nonnegative().default(0),
   message: z.string().optional(),
 });
-export type CouponValidationResult = z.infer<typeof couponValidationResultSchema>;
+export type CouponValidationResult = z.infer<
+  typeof couponValidationResultSchema
+>;
 
 export const couponRedemptionSchema = z.strictObject({
   id: z.uuid(),
@@ -225,7 +253,9 @@ export const pricingItemCalculationSchema = z.strictObject({
   taxAmount: z.number().int().nonnegative().default(0),
   finalAmount: z.number().int().nonnegative(),
 });
-export type PricingItemCalculation = z.infer<typeof pricingItemCalculationSchema>;
+export type PricingItemCalculation = z.infer<
+  typeof pricingItemCalculationSchema
+>;
 
 export const pricingCalculationSchema = z.strictObject({
   subtotalAmount: z.number().int().nonnegative(),
@@ -269,7 +299,11 @@ export const orderCursorPayloadSchema = z.object({
 export type OrderCursorPayload = z.infer<typeof orderCursorPayloadSchema>;
 
 function toBase64Url(str: string): string {
-  const g = globalThis as unknown as { Buffer?: { from: (s: string, enc: string) => { toString: (enc: string) => string } } };
+  const g = globalThis as unknown as {
+    Buffer?: {
+      from: (s: string, enc: string) => { toString: (enc: string) => string };
+    };
+  };
   if (typeof g.Buffer !== "undefined") {
     return g.Buffer.from(str, "utf-8").toString("base64url");
   }
@@ -280,7 +314,11 @@ function toBase64Url(str: string): string {
 }
 
 function fromBase64Url(str: string): string {
-  const g = globalThis as unknown as { Buffer?: { from: (s: string, enc: string) => { toString: (enc: string) => string } } };
+  const g = globalThis as unknown as {
+    Buffer?: {
+      from: (s: string, enc: string) => { toString: (enc: string) => string };
+    };
+  };
   if (typeof g.Buffer !== "undefined") {
     return g.Buffer.from(str, "base64url").toString("utf-8");
   }
@@ -428,20 +466,26 @@ export const checkoutPreviewRequestSchema = z.strictObject({
   items: z.array(cartItemInputSchema).min(1),
   couponCode: z.string().max(50).toUpperCase().optional(),
 });
-export type CheckoutPreviewRequest = z.infer<typeof checkoutPreviewRequestSchema>;
+export type CheckoutPreviewRequest = z.infer<
+  typeof checkoutPreviewRequestSchema
+>;
 
 export const checkoutPreviewResponseSchema = z.strictObject({
   pricing: pricingCalculationSchema,
   couponValidation: couponValidationResultSchema.optional(),
 });
-export type CheckoutPreviewResponse = z.infer<typeof checkoutPreviewResponseSchema>;
+export type CheckoutPreviewResponse = z.infer<
+  typeof checkoutPreviewResponseSchema
+>;
 
 export const createCheckoutOrderRequestSchema = z.strictObject({
   items: z.array(cartItemInputSchema).min(1),
   couponCode: z.string().max(50).toUpperCase().optional(),
   idempotencyKey: z.string().max(255).optional(),
 });
-export type CreateCheckoutOrderRequest = z.infer<typeof createCheckoutOrderRequestSchema>;
+export type CreateCheckoutOrderRequest = z.infer<
+  typeof createCheckoutOrderRequestSchema
+>;
 export const createPurchaseRequestSchema = createCheckoutOrderRequestSchema;
 export type CreatePurchaseRequest = CreateCheckoutOrderRequest;
 
@@ -534,4 +578,6 @@ export const orderDirectRefundRequestSchema = z.strictObject({
   preserveAccess: z.boolean().default(false),
   idempotencyKey: z.string().min(1).max(255).optional(),
 });
-export type OrderDirectRefundRequest = z.infer<typeof orderDirectRefundRequestSchema>;
+export type OrderDirectRefundRequest = z.infer<
+  typeof orderDirectRefundRequestSchema
+>;

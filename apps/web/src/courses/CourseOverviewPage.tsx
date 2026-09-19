@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { useParams } from "react-router";
 import {
@@ -23,10 +23,12 @@ import {
   User,
   X,
 } from "@phosphor-icons/react";
-import type {
-  Category,
-  CourseEditorDataResponse,
-  CourseOverviewResponse,
+import {
+  MAX_VOLUNTARY_AMOUNT,
+  type Category,
+  type CheckoutPreviewResponse,
+  type CourseEditorDataResponse,
+  type CourseOverviewResponse,
 } from "@veolms/contracts";
 import {
   getCourseRouteKey,
@@ -42,7 +44,8 @@ import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
 import type { NavigateTo } from "../routing/navigation";
 import { useAuthStore } from "../store/auth.store";
 import { useCourseOverview } from "../services/courses";
-import { useEnrolledCourses, useEnrollFreeCourse } from "../services/enrollments";
+import { useEnrolledCourses } from "../services/enrollments";
+import { getApiError } from "../lib/api-error";
 import {
   useCheckoutPreview,
   useCreateCheckoutOrder,
@@ -177,15 +180,92 @@ export interface CourseOverviewPricingProps {
   price?: string;
   originalPrice?: string;
   discount?: string;
+  /** Catalog charge in major currency units. */
+  amount?: number;
+  currency?: string;
 }
 
 export function isFreeCoursePricing(
   pricing?: CourseOverviewPricingProps | null,
 ): boolean {
-  if (!pricing || !pricing.price) return true;
+  if (!pricing) return true;
+  if (typeof pricing.amount === "number") return pricing.amount <= 0;
+  if (!pricing.price) return true;
   const p = pricing.price.trim().toLowerCase();
   if (p === "free" || p === "0") return true;
   return /^(?:[$₹€£]\s*0+(?:\.0+)?|0+(?:\.0+)?)$/.test(p);
+}
+
+function toOverviewPricingProps(
+  pr?: {
+    pricingType: "free" | "paid";
+    price: number;
+    currency?: string;
+    salePrice?: number | null;
+  } | null,
+): CourseOverviewPricingProps {
+  const currency = pr?.currency || "INR";
+  if (!pr || pr.pricingType === "free") {
+    return { price: "Free", amount: 0, currency };
+  }
+
+  const activeSale = isCourseSaleActive(pr.salePrice, pr.price);
+  if (activeSale && pr.salePrice != null) {
+    const discountPct = Math.round(
+      ((pr.price - pr.salePrice) / pr.price) * 100,
+    );
+    return {
+      price: formatPriceWithCurrency(pr.salePrice, currency),
+      originalPrice: formatPriceWithCurrency(pr.price, currency),
+      discount: `${discountPct}% OFF`,
+      amount: pr.salePrice,
+      currency,
+    };
+  }
+
+  return {
+    price: formatPriceWithCurrency(pr.price, currency),
+    amount: pr.price,
+    currency,
+  };
+}
+
+type ContributionPresetId = "0" | "100" | "250" | "500" | "custom";
+
+function checkoutCourseItem(
+  courseId: string,
+  options: { isFree: boolean; amount: number; catalogPrice: number },
+) {
+  const includeCustom =
+    options.amount > 0 &&
+    (options.isFree || options.amount >= options.catalogPrice);
+  return {
+    itemType: "course" as const,
+    courseId,
+    ...(includeCustom ? { customAmount: options.amount } : {}),
+  };
+}
+
+function appliedCouponFromPreview(code: string, res: CheckoutPreviewResponse) {
+  const discountAmount = res.pricing.discountAmount;
+  const currency = res.pricing.currency || "INR";
+  const totalAmount = res.pricing.totalAmount;
+  let discountLabel: string | undefined;
+  if (res.couponValidation?.discountValue) {
+    discountLabel =
+      res.couponValidation.discountType === "percentage"
+        ? `${res.couponValidation.discountValue}% OFF`
+        : `${formatPriceWithCurrency(res.couponValidation.discountValue, currency)} OFF`;
+  } else if (discountAmount > 0) {
+    discountLabel = `${formatPriceWithCurrency(discountAmount, currency)} OFF`;
+  }
+  return {
+    code,
+    discountAmount,
+    totalAmount,
+    currency,
+    discountLabel,
+  };
 }
 
 // ─── sub-components ──────────────────────────────────────────────────────────
@@ -227,10 +307,11 @@ function CurriculumSectionItem({
 
   return (
     <div
-      className={`rounded-xl border bg-(--surface) shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow] duration-150 ${isOpen
+      className={`rounded-xl border bg-(--surface) shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow] duration-150 ${
+        isOpen
           ? "border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
           : "border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
-        }`}
+      }`}
       role="listitem"
     >
       <button
@@ -253,8 +334,9 @@ function CurriculumSectionItem({
           {durationLabel ? ` • ${durationLabel}` : ""}
         </span>
         <span
-          className={`shrink-0 text-(--muted) inline-flex items-center justify-center transition-transform duration-200 ease-out motion-reduce:transition-none ${isOpen ? "rotate-180" : ""
-            }`}
+          className={`shrink-0 text-(--muted) inline-flex items-center justify-center transition-transform duration-200 ease-out motion-reduce:transition-none ${
+            isOpen ? "rotate-180" : ""
+          }`}
           aria-hidden="true"
         >
           <CaretDown size={16} weight="bold" />
@@ -266,10 +348,11 @@ function CurriculumSectionItem({
         role="region"
         aria-labelledby={buttonId}
         aria-hidden={!isOpen}
-        className={`grid motion-reduce:transition-none ${isOpen
+        className={`grid motion-reduce:transition-none ${
+          isOpen
             ? "grid-rows-[1fr] opacity-100 visible transition-[grid-template-rows,opacity,visibility] duration-300 ease-in-out"
             : "grid-rows-[0fr] opacity-0 invisible transition-[grid-template-rows,opacity,visibility] duration-250 ease-[cubic-bezier(0,1,0,1)]"
-          }`}
+        }`}
       >
         <div className="overflow-hidden min-h-0">
           <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,var(--text))]">
@@ -413,9 +496,15 @@ function CourseHeroSection({
   const preview = useCheckoutPreview();
   const createOrder = useCreateCheckoutOrder();
   const verify = useVerifyPayment();
+  const isEnrolled = Boolean(user && course.enrolled);
 
   const [isPaymentBusy, setIsPaymentBusy] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  const [selectedPreset, setSelectedPreset] =
+    useState<ContributionPresetId>("0");
+  const [voluntaryAmount, setVoluntaryAmount] = useState<number>(0);
+  const [customAmountInput, setCustomAmountInput] = useState<string>("");
 
   const [couponInputOpen, setCouponInputOpen] = useState(false);
   const [couponCodeInput, setCouponCodeInput] = useState("");
@@ -429,6 +518,62 @@ function CourseHeroSection({
     discountLabel?: string;
   } | null>(null);
 
+  const courseCurrency = pricing?.currency ?? "INR";
+  const currencySymbol = getCurrencySymbol(courseCurrency);
+  const baseNumericPrice = pricing?.amount ?? 0;
+  const isPreview = Boolean(isReadOnlyPreview);
+  const isCreatorNormal = Boolean(isCreator && !isPreview);
+  const isFree = isFreeCoursePricing(pricing);
+
+  const checkoutItem = useMemo(
+    () =>
+      checkoutCourseItem(course.id, {
+        isFree,
+        amount: voluntaryAmount,
+        catalogPrice: baseNumericPrice,
+      }),
+    [course.id, isFree, voluntaryAmount, baseNumericPrice],
+  );
+
+  const lastPreviewedAmount = useRef(voluntaryAmount);
+  useEffect(() => {
+    if (!appliedCoupon?.code || isFree) {
+      lastPreviewedAmount.current = voluntaryAmount;
+      return;
+    }
+    if (lastPreviewedAmount.current === voluntaryAmount) return;
+    lastPreviewedAmount.current = voluntaryAmount;
+
+    let cancelled = false;
+    const handle = window.setTimeout(async () => {
+      try {
+        const res = await preview.mutateAsync({
+          items: [checkoutItem],
+          couponCode: appliedCoupon.code,
+        });
+        if (cancelled) return;
+        if (res.couponValidation && !res.couponValidation.valid) {
+          setAppliedCoupon(null);
+          setCouponError(
+            res.couponValidation.message ||
+              "Coupon is no longer valid for this amount.",
+          );
+          return;
+        }
+        setAppliedCoupon(appliedCouponFromPreview(appliedCoupon.code, res));
+      } catch (err) {
+        if (cancelled) return;
+        setAppliedCoupon(null);
+        setCouponError(getApiError(err).message);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [appliedCoupon?.code, checkoutItem, isFree, preview, voluntaryAmount]);
+
   const basePrice = pricing?.price ?? "Free";
   const displayPrice = appliedCoupon
     ? appliedCoupon.totalAmount === 0
@@ -437,12 +582,14 @@ function CourseHeroSection({
           appliedCoupon.totalAmount,
           appliedCoupon.currency,
         )
-    : basePrice;
+    : voluntaryAmount > 0 && voluntaryAmount > baseNumericPrice
+      ? formatPriceWithCurrency(voluntaryAmount, courseCurrency)
+      : basePrice;
   const originalPrice = pricing?.originalPrice;
   const discount = pricing?.discount;
   const displayDiscount = appliedCoupon
     ? appliedCoupon.discountLabel ||
-    `${formatPriceWithCurrency(appliedCoupon.discountAmount, appliedCoupon.currency)} OFF`
+      `${formatPriceWithCurrency(appliedCoupon.discountAmount, appliedCoupon.currency)} OFF`
     : discount;
   const perksList = inclusions ?? [
     "Full lifetime access",
@@ -451,10 +598,6 @@ function CourseHeroSection({
   ];
   const priceSizeVariant = getPriceSizeVariant(displayPrice);
 
-  const isPreview = Boolean(isReadOnlyPreview);
-  const isCreatorNormal = Boolean(isCreator && !isPreview);
-  const isFree = isFreeCoursePricing(pricing);
-
   const handleApplyCoupon = async () => {
     const code = couponCodeInput.trim().toUpperCase();
     if (!code) return;
@@ -462,48 +605,22 @@ function CourseHeroSection({
     setCouponError(null);
 
     try {
-      const item = { itemType: "course" as const, courseId: course.id };
       const res = await preview.mutateAsync({
-        items: [item],
+        items: [checkoutItem],
         couponCode: code,
       });
 
       if (res.couponValidation && !res.couponValidation.valid) {
         setCouponError(res.couponValidation.message || "Invalid coupon code.");
-        setCouponBusy(false);
         return;
       }
 
-      const discountAmount = res.pricing.discountAmount;
-      const currency = res.pricing.currency || "INR";
-      const totalAmount = res.pricing.totalAmount;
-
-      let discountLabel: string | undefined;
-      if (res.couponValidation?.discountValue) {
-        discountLabel =
-          res.couponValidation.discountType === "percentage"
-            ? `${res.couponValidation.discountValue}% OFF`
-            : `${formatPriceWithCurrency(res.couponValidation.discountValue, currency)} OFF`;
-      } else if (discountAmount > 0) {
-        discountLabel = `${formatPriceWithCurrency(discountAmount, currency)} OFF`;
-      }
-
-      setAppliedCoupon({
-        code,
-        discountAmount,
-        totalAmount,
-        currency,
-        discountLabel,
-      });
-
+      lastPreviewedAmount.current = voluntaryAmount;
+      setAppliedCoupon(appliedCouponFromPreview(code, res));
       setCouponInputOpen(false);
       setCouponCodeInput("");
     } catch (err) {
-      const msg =
-        err && typeof err === "object" && "message" in err
-          ? String((err as { message: unknown }).message)
-          : "Invalid coupon code. Please retry.";
-      setCouponError(msg);
+      setCouponError(getApiError(err).message);
     } finally {
       setCouponBusy(false);
     }
@@ -515,10 +632,10 @@ function CourseHeroSection({
     setCouponCodeInput("");
   };
 
-  const handlePayNow = async () => {
+  const handlePayNow = async (voluntaryContributionAmount?: number) => {
     if (isReadOnlyPreview) return;
     if (!user) {
-      setPaymentError("Please log in before purchasing this course.");
+      setPaymentError("Please log in before enrolling.");
       return;
     }
 
@@ -526,11 +643,15 @@ function CourseHeroSection({
     setPaymentError(null);
 
     try {
-      const item = { itemType: "course" as const, courseId: course.id };
+      const item = checkoutCourseItem(course.id, {
+        isFree,
+        amount: voluntaryContributionAmount ?? 0,
+        catalogPrice: baseNumericPrice,
+      });
       const coupon = appliedCoupon?.code?.trim();
       const order = await createOrder.mutateAsync({
         items: [item],
-        ...(coupon ? { couponCode: coupon.toUpperCase() } : {}),
+        ...(!isFree && coupon ? { couponCode: coupon.toUpperCase() } : {}),
         idempotencyKey: crypto.randomUUID(),
       });
 
@@ -552,7 +673,11 @@ function CourseHeroSection({
         amount: order.gateway.amount,
         currency: order.gateway.currency,
         name: "VeoLMS",
-        description: course.title,
+        description:
+          (voluntaryContributionAmount ?? 0) > baseNumericPrice ||
+          (isFree && (voluntaryContributionAmount ?? 0) > 0)
+            ? `Support Creator - ${course.title}`
+            : course.title,
         order_id: order.gateway.gatewayOrderId,
         prefill: {
           name: user.displayName || user.username,
@@ -614,9 +739,14 @@ function CourseHeroSection({
   };
 
   const showApplyCoupon = !isCreatorNormal && !isFree;
+  const isCustomUnderPrice =
+    !isFree &&
+    selectedPreset === "custom" &&
+    voluntaryAmount > 0 &&
+    voluntaryAmount < baseNumericPrice;
 
-  if (isCreatorNormal) {
-    // 1. Creator viewing their course normally:
+  if (isCreatorNormal || isEnrolled) {
+    // 1. Creator viewing their course normally or already enrolled student:
     // Show only "Continue Learning". Clicking it opens the course player.
     // Do not show Pay Now or Apply Coupon.
     ctaLabel = "Continue Learning";
@@ -638,20 +768,32 @@ function CourseHeroSection({
     };
   } else if (isPreview) {
     // 2. Creator Preview:
-    // Paid course: show existing price, "Apply coupon", and "Pay Now" as demo UI.
-    // Free course: show "Free" and "Enroll for Free" as demo UI.
     if (isFree) {
-      ctaLabel = "Enroll for Free";
-      ctaIcon = (
-        <BookOpen
-          size="1.15em"
-          weight="bold"
-          className="shrink-0"
-          aria-hidden="true"
-        />
-      );
+      if (voluntaryAmount > 0) {
+        ctaLabel = `Pay ${formatPriceWithCurrency(voluntaryAmount, courseCurrency)} & Enroll`;
+        ctaIcon = (
+          <Heart
+            size="1.15em"
+            weight="fill"
+            className="shrink-0 text-rose-300"
+            aria-hidden="true"
+          />
+        );
+      } else {
+        ctaLabel = "Enroll for Free";
+        ctaIcon = (
+          <BookOpen
+            size="1.15em"
+            weight="bold"
+            className="shrink-0"
+            aria-hidden="true"
+          />
+        );
+      }
     } else {
-      ctaLabel = "Pay Now";
+      const payable =
+        voluntaryAmount > baseNumericPrice ? voluntaryAmount : baseNumericPrice;
+      ctaLabel = `Pay ${formatPriceWithCurrency(payable, courseCurrency)} & Enroll`;
       ctaIcon = (
         <ShoppingBag
           size="1.15em"
@@ -664,29 +806,54 @@ function CourseHeroSection({
     ctaDisabled = false;
     ctaOnClick = undefined; // Preview actions stay non-functional.
   } else {
-    // 3. Student / Learner:
-    // Free course: show "Free" and "Continue Learning", which opens the course player.
-    // Paid course: show price, "Apply coupon", and "Pay Now" which triggers direct checkout.
+    // 3. Student / Learner (not yet enrolled):
     if (isFree) {
-      ctaLabel = "Continue Learning";
-      ctaIcon = (
-        <Play
-          size="1.15em"
-          weight="fill"
-          className="shrink-0"
-          aria-hidden="true"
-        />
-      );
-      ctaDisabled = false;
-      ctaOnClick = () => {
-        if (onNavigatePage) {
-          onNavigatePage(
-            `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
-          );
-        }
-      };
+      if (voluntaryAmount > 0) {
+        ctaLabel = isPaymentBusy
+          ? "Processing…"
+          : `Pay ${formatPriceWithCurrency(voluntaryAmount, courseCurrency)} & Enroll`;
+        ctaIcon = isPaymentBusy ? (
+          <CircleNotch
+            size="1.15em"
+            className="animate-spin shrink-0"
+            aria-hidden="true"
+          />
+        ) : (
+          <Heart
+            size="1.15em"
+            weight="fill"
+            className="shrink-0 text-rose-300"
+            aria-hidden="true"
+          />
+        );
+        ctaDisabled = isPaymentBusy;
+        ctaOnClick = () => handlePayNow(voluntaryAmount);
+      } else {
+        ctaLabel = isPaymentBusy ? "Enrolling…" : "Enroll for Free";
+        ctaIcon = isPaymentBusy ? (
+          <CircleNotch
+            size="1.15em"
+            className="animate-spin shrink-0"
+            aria-hidden="true"
+          />
+        ) : (
+          <BookOpen
+            size="1.15em"
+            weight="bold"
+            className="shrink-0"
+            aria-hidden="true"
+          />
+        );
+        ctaDisabled = isPaymentBusy;
+        ctaOnClick = () => handlePayNow(0);
+      }
     } else {
-      ctaLabel = isPaymentBusy ? "Processing…" : "Pay Now";
+      const payable =
+        voluntaryAmount > baseNumericPrice ? voluntaryAmount : baseNumericPrice;
+      const finalPayable = appliedCoupon ? appliedCoupon.totalAmount : payable;
+      ctaLabel = isPaymentBusy
+        ? "Processing…"
+        : `Pay ${formatPriceWithCurrency(finalPayable, appliedCoupon?.currency ?? courseCurrency)} & Enroll`;
       ctaIcon = isPaymentBusy ? (
         <CircleNotch
           size="1.15em"
@@ -701,8 +868,18 @@ function CourseHeroSection({
           aria-hidden="true"
         />
       );
-      ctaDisabled = isPaymentBusy;
-      ctaOnClick = handlePayNow;
+      ctaDisabled = isPaymentBusy || isCustomUnderPrice;
+      ctaOnClick = () => {
+        if (isCustomUnderPrice) {
+          setPaymentError(
+            `Amount cannot be less than the course price (${formatPriceWithCurrency(baseNumericPrice, courseCurrency)}).`,
+          );
+          return;
+        }
+        handlePayNow(
+          voluntaryAmount > baseNumericPrice ? voluntaryAmount : undefined,
+        );
+      };
     }
   }
 
@@ -832,10 +1009,11 @@ function CourseHeroSection({
 
                 <button
                   type="button"
-                  className={`inline-flex items-center justify-center w-9.5 h-9.5 shrink-0 rounded-full border border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] text-(--muted) cursor-pointer transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-[color-mix(in_srgb,var(--text)_32%,transparent)] hover:text-(--text) hover:bg-(--hover) hover:scale-[1.06] ${wishlisted
+                  className={`inline-flex items-center justify-center w-9.5 h-9.5 shrink-0 rounded-full border border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] text-(--muted) cursor-pointer transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-[color-mix(in_srgb,var(--text)_32%,transparent)] hover:text-(--text) hover:bg-(--hover) hover:scale-[1.06] ${
+                    wishlisted
                       ? "border-[#ec4899]! text-[#ec4899]! bg-[rgba(236,72,153,0.14)]!"
                       : ""
-                    }`}
+                  }`}
                   aria-label={
                     wishlisted ? "Remove from wishlist" : "Add to wishlist"
                   }
@@ -949,6 +1127,186 @@ function CourseHeroSection({
                     {couponError}
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* Pay What You Want / Voluntary Contribution for Free and Paid Courses */}
+            {!isCreatorNormal && !isEnrolled && (
+              <div className="flex flex-col gap-2 pt-2 pb-0.5 border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
+                <div className="flex items-center justify-between gap-2 min-h-5">
+                  <span className="text-[0.8rem] font-bold text-(--text) uppercase tracking-wider flex items-center gap-1.5">
+                    <Heart
+                      size={14}
+                      weight="fill"
+                      className="text-rose-500"
+                      aria-hidden="true"
+                    />
+                    <span>Support Teacher (Optional)</span>
+                  </span>
+                  <span
+                    className={`text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full transition-opacity duration-150 ${
+                      voluntaryAmount > (isFree ? 0 : baseNumericPrice)
+                        ? "opacity-100"
+                        : "opacity-0 pointer-events-none"
+                    }`}
+                  >
+                    {formatPriceWithCurrency(voluntaryAmount, courseCurrency)}{" "}
+                    Total
+                  </span>
+                </div>
+                <p className="m-0 text-[0.8rem] text-(--muted) leading-snug">
+                  {isFree
+                    ? "This course is free. If you'd like to support the instructor, you can optionally contribute any amount."
+                    : `You can optionally pay more than the regular price (${formatPriceWithCurrency(baseNumericPrice, courseCurrency)}) to support the instructor.`}
+                </p>
+
+                {/* Preset Contribution Chips with Inline Custom Pill */}
+                <div className="flex flex-wrap items-center gap-1.5 min-h-8">
+                  {(isFree
+                    ? [
+                        {
+                          id: "0" as const,
+                          label: `Free (${formatPriceWithCurrency(0, courseCurrency)})`,
+                          value: 0,
+                        },
+                        {
+                          id: "100" as const,
+                          label: formatPriceWithCurrency(100, courseCurrency),
+                          value: 100,
+                        },
+                        {
+                          id: "250" as const,
+                          label: formatPriceWithCurrency(250, courseCurrency),
+                          value: 250,
+                        },
+                        {
+                          id: "500" as const,
+                          label: formatPriceWithCurrency(500, courseCurrency),
+                          value: 500,
+                        },
+                        { id: "custom" as const, label: "Custom", value: -1 },
+                      ]
+                    : [
+                        {
+                          id: "0" as const,
+                          label: `Regular (${formatPriceWithCurrency(baseNumericPrice, courseCurrency)})`,
+                          value: 0,
+                        },
+                        {
+                          id: "100" as const,
+                          label: `+${formatPriceWithCurrency(100, courseCurrency)} (${formatPriceWithCurrency(baseNumericPrice + 100, courseCurrency)})`,
+                          value: baseNumericPrice + 100,
+                        },
+                        {
+                          id: "250" as const,
+                          label: `+${formatPriceWithCurrency(250, courseCurrency)} (${formatPriceWithCurrency(baseNumericPrice + 250, courseCurrency)})`,
+                          value: baseNumericPrice + 250,
+                        },
+                        {
+                          id: "500" as const,
+                          label: `+${formatPriceWithCurrency(500, courseCurrency)} (${formatPriceWithCurrency(baseNumericPrice + 500, courseCurrency)})`,
+                          value: baseNumericPrice + 500,
+                        },
+                        { id: "custom" as const, label: "Custom", value: -1 },
+                      ]
+                  ).map((preset) => {
+                    if (preset.id === "custom") {
+                      if (selectedPreset === "custom") {
+                        return (
+                          <div
+                            key="custom-input-pill"
+                            className="inline-flex items-center gap-1 h-8 rounded-[8px] bg-[color-mix(in_srgb,var(--surface-strong)_85%,var(--canvas))] border border-(--accent) focus-within:ring-2 focus-within:ring-[color-mix(in_srgb,var(--accent)_25%,transparent)] px-2.5 transition-all"
+                          >
+                            <span className="text-xs font-bold text-(--accent)">
+                              {currencySymbol}
+                            </span>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              value={customAmountInput}
+                              onChange={(e) => {
+                                const raw = e.target.value.replace(/\D/g, "");
+                                if (!raw) {
+                                  setCustomAmountInput("");
+                                  setVoluntaryAmount(0);
+                                  return;
+                                }
+                                const parsed = parseInt(raw, 10);
+                                if (Number.isNaN(parsed) || parsed <= 0) {
+                                  setCustomAmountInput(raw);
+                                  setVoluntaryAmount(0);
+                                  return;
+                                }
+                                const clamped = Math.min(
+                                  parsed,
+                                  MAX_VOLUNTARY_AMOUNT,
+                                );
+                                setCustomAmountInput(String(clamped));
+                                setVoluntaryAmount(clamped);
+                              }}
+                              placeholder={
+                                isFree ? "Amount" : `>= ${baseNumericPrice}`
+                              }
+                              className="w-24 bg-transparent border-0 text-(--text) placeholder-(--muted) text-[0.82rem] font-bold outline-none"
+                              autoFocus
+                            />
+                            {customAmountInput && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCustomAmountInput("");
+                                  setVoluntaryAmount(0);
+                                }}
+                                className="inline-flex items-center justify-center w-4 h-4 rounded-full text-(--muted) hover:text-(--text) cursor-pointer"
+                              >
+                                <X size={11} weight="bold" />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      }
+                      return (
+                        <button
+                          key="custom-btn"
+                          type="button"
+                          onClick={() => {
+                            setSelectedPreset("custom");
+                            const parsed = parseInt(customAmountInput, 10);
+                            setVoluntaryAmount(
+                              !Number.isNaN(parsed) && parsed > 0
+                                ? Math.min(parsed, MAX_VOLUNTARY_AMOUNT)
+                                : 0,
+                            );
+                          }}
+                          className="px-3 py-1.5 rounded-[8px] text-[0.82rem] font-bold border transition-all cursor-pointer bg-[color-mix(in_srgb,var(--surface-strong)_70%,var(--canvas))] text-(--text) border-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:border-[color-mix(in_srgb,var(--text)_30%,transparent)] hover:bg-(--hover)"
+                        >
+                          Custom
+                        </button>
+                      );
+                    }
+
+                    const isSelected = selectedPreset === preset.id;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPreset(preset.id);
+                          setVoluntaryAmount(preset.value);
+                          setCustomAmountInput("");
+                        }}
+                        className={`px-3 py-1.5 rounded-[8px] text-[0.82rem] font-bold border transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-(--accent) text-(--on-accent,#ffffff) border-(--accent) shadow-xs"
+                            : "bg-[color-mix(in_srgb,var(--surface-strong)_70%,var(--canvas))] text-(--text) border-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:border-[color-mix(in_srgb,var(--text)_30%,transparent)] hover:bg-(--hover)"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -1330,8 +1688,8 @@ export function adaptCourseOverviewResponse(
   const showInstructor = overview.settings?.showInstructorName !== false;
   const resolvedInstructorName = showInstructor
     ? c.instructorAlias?.trim() ||
-    overview.creator?.displayName ||
-    defaultInstructorName
+      overview.creator?.displayName ||
+      defaultInstructorName
     : undefined;
 
   const resolvedDurationSeconds = resolveCourseDurationSeconds(
@@ -1391,35 +1749,16 @@ export function adaptCourseOverviewResponse(
 
   const finalPerks: string[] = Array.isArray(overview.includes)
     ? overview.includes
-      .slice()
-      .sort((a, b) => a.position - b.position)
-      .map((inc) => inc.text.trim())
-      .filter(Boolean)
-      .slice(0, 6)
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((inc) => inc.text.trim())
+        .filter(Boolean)
+        .slice(0, 6)
     : [];
 
-  let pricingProps: CourseOverviewPricingProps;
-  const pr = overview.pricing;
-  if (!pr || pr.pricingType === "free") {
-    pricingProps = { price: "Free" };
-  } else {
-    const activeSale = isCourseSaleActive(pr.salePrice, pr.price);
-
-    if (activeSale && pr.salePrice != null) {
-      const discountPct = Math.round(
-        ((pr.price - pr.salePrice) / pr.price) * 100,
-      );
-      pricingProps = {
-        price: formatPriceWithCurrency(pr.salePrice, pr.currency),
-        originalPrice: formatPriceWithCurrency(pr.price, pr.currency),
-        discount: `${discountPct}% OFF`,
-      };
-    } else {
-      pricingProps = {
-        price: formatPriceWithCurrency(pr.price, pr.currency),
-      };
-    }
-  }
+  let pricingProps: CourseOverviewPricingProps = toOverviewPricingProps(
+    overview.pricing,
+  );
 
   return {
     course: adaptedCourse,
@@ -1516,35 +1855,16 @@ export function adaptPreviewDataToOverview(
 
   const finalPerks: string[] = Array.isArray(previewData.includes)
     ? previewData.includes
-      .slice()
-      .sort((a, b) => a.position - b.position)
-      .map((inc) => inc.text.trim())
-      .filter(Boolean)
-      .slice(0, 6)
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((inc) => inc.text.trim())
+        .filter(Boolean)
+        .slice(0, 6)
     : [];
 
-  let pricingProps: CourseOverviewPricingProps;
-  const pr = previewData.pricing;
-  if (!pr || pr.pricingType === "free") {
-    pricingProps = { price: "Free" };
-  } else {
-    const activeSale = isCourseSaleActive(pr.salePrice, pr.price);
-
-    if (activeSale && pr.salePrice != null) {
-      const discountPct = Math.round(
-        ((pr.price - pr.salePrice) / pr.price) * 100,
-      );
-      pricingProps = {
-        price: formatPriceWithCurrency(pr.salePrice, pr.currency),
-        originalPrice: formatPriceWithCurrency(pr.price, pr.currency),
-        discount: `${discountPct}% OFF`,
-      };
-    } else {
-      pricingProps = {
-        price: formatPriceWithCurrency(pr.price, pr.currency),
-      };
-    }
-  }
+  const pricingProps: CourseOverviewPricingProps = toOverviewPricingProps(
+    previewData.pricing,
+  );
 
   return {
     course: adaptedCourse,
@@ -1653,10 +1973,10 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
   // If previewData is provided, adapt it cleanly from persisted server state
   const adaptedFromPreview = props.previewData
     ? adaptPreviewDataToOverview(
-      props.previewData,
-      serverCategories,
-      defaultInstructorName,
-    )
+        props.previewData,
+        serverCategories,
+        defaultInstructorName,
+      )
     : null;
 
   const adaptedFromOverview = apiOverview
@@ -1677,7 +1997,7 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
         ec.courseSlug === courseSlug ||
         (course?.slug && ec.courseSlug === course.slug),
     );
-  }, [enrolledData?.courses, course?.id, course?.slug, courseSlug]);
+  }, [enrolledData, course, courseSlug]);
 
   const courseWithEnrollment = useMemo(() => {
     if (!course) return undefined;
@@ -1860,20 +2180,20 @@ function CourseOverviewContent({
     ? adaptedFromPreview.inclusions
     : customInclusions !== undefined
       ? Array.from(
-        new Set(customInclusions.map((s) => s.trim()).filter(Boolean)),
-      )
+          new Set(customInclusions.map((s) => s.trim()).filter(Boolean)),
+        )
       : customIncludes !== undefined
         ? Array.from(
-          new Set(
-            customIncludes
-              .map((inc) => inc.label.trim())
-              .filter(
-                (label) =>
-                  !/^\d+\s+(sections|lectures)/i.test(label) &&
-                  !/on-demand content/i.test(label),
-              ),
-          ),
-        )
+            new Set(
+              customIncludes
+                .map((inc) => inc.label.trim())
+                .filter(
+                  (label) =>
+                    !/^\d+\s+(sections|lectures)/i.test(label) &&
+                    !/on-demand content/i.test(label),
+                ),
+            ),
+          )
         : undefined;
 
   const [openSections, setOpenSections] = useState<Set<number>>(
@@ -1937,10 +2257,11 @@ function CourseOverviewContent({
   return (
     <div
       data-course-overview
-      className={`w-full max-w-275 mx-auto flex flex-col gap-6 box-border text-(--text) ${isReadOnlyPreview
+      className={`w-full max-w-275 mx-auto flex flex-col gap-6 box-border text-(--text) ${
+        isReadOnlyPreview
           ? "p-[36px_24px_48px] max-[900px]:p-[24px_16px_48px] max-[900px]:gap-4.5 max-[640px]:p-[16px_14px_40px] max-[640px]:gap-4"
           : "max-[900px]:gap-4.5 max-[640px]:gap-4"
-        }`}
+      }`}
     >
       {/* 1. Two-Column Hero Section with Info & Pricing on Left, Trailer on Right */}
       <CourseHeroSection
