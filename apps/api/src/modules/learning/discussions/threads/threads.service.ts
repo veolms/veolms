@@ -727,7 +727,7 @@ export function createThreadsService(
       // broader staff shortcut remains unchanged for the existing thread and
       // report tabs below.
       const accessibleCourseIds =
-        tab === "notes" || tab === "mentions" || !isStaff
+        tab === "following" || tab === "notes" || tab === "mentions" || !isStaff
           ? await courseAccess.listAccessibleCourseIds(db, actor)
           : "all";
 

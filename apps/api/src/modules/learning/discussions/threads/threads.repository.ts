@@ -347,6 +347,8 @@ export interface ThreadsRepository {
     threadId: string,
   ): Promise<ThreadRowWithAuthor | null>;
 
+  lockThreadById(db: DatabaseExecutor, threadId: string): Promise<boolean>;
+
   listThreads(
     db: DatabaseExecutor,
     options: ThreadFilterOptions,
@@ -445,21 +447,59 @@ function applyThreadFilters<O>(
         .where("t.visibility", "=", "private")
         .where("t.user_id", "=", currentUserId);
     } else if (options.visibility === "unlisted") {
-      q = q
-        .where("t.visibility", "=", "unlisted")
-        .where("t.user_id", "=", currentUserId);
+      if (options.tab === "following") {
+        q = q
+          .where("t.visibility", "=", "unlisted")
+          .where((eb: ExpressionBuilder<ThreadsAliasedDB, "t">) =>
+            eb.or([
+              eb("t.user_id", "=", currentUserId),
+              eb.exists(
+                eb
+                  .selectFrom("learning_follows as lf")
+                  .select(sql`1`.as("one"))
+                  .whereRef("lf.thread_id", "=", "t.id")
+                  .where("lf.user_id", "=", currentUserId),
+              ),
+            ]),
+          );
+      } else {
+        q = q
+          .where("t.visibility", "=", "unlisted")
+          .where("t.user_id", "=", currentUserId);
+      }
     } else if (options.visibility === "public") {
       q = q.where("t.visibility", "=", "public");
     } else {
-      q = q.where((eb: ExpressionBuilder<ThreadsAliasedDB, "t">) =>
-        eb.or([
+      q = q.where((eb: ExpressionBuilder<ThreadsAliasedDB, "t">) => {
+        const visibilityConditions = [
           eb("t.visibility", "=", "public"),
           eb.and([
             eb("t.visibility", "in", ["private", "unlisted"]),
             eb("t.user_id", "=", currentUserId),
           ]),
-        ]),
-      );
+        ];
+
+        // An unlisted thread is not generally discoverable, but a user who
+        // explicitly follows one should still see it in their Following
+        // feed while canonical course access remains valid. The Following
+        // filter below still requires the relationship to exist.
+        if (options.tab === "following") {
+          visibilityConditions.push(
+            eb.and([
+              eb("t.visibility", "=", "unlisted"),
+              eb.exists(
+                eb
+                  .selectFrom("learning_follows as lf")
+                  .select(sql`1`.as("one"))
+                  .whereRef("lf.thread_id", "=", "t.id")
+                  .where("lf.user_id", "=", currentUserId),
+              ),
+            ]),
+          );
+        }
+
+        return eb.or(visibilityConditions);
+      });
     }
   } else {
     q = q.where("t.visibility", "=", "public");
@@ -518,6 +558,7 @@ function applyThreadFilters<O>(
   } else if (options.tab === "comments") {
     q = q.where("t.kind", "=", "comment");
   } else if (options.tab === "following") {
+    q = q.where("t.kind", "in", ["comment", "question"]);
     if (!options.currentUserId) {
       q = q.where(sql<boolean>`1 = 0`);
     } else {
@@ -690,6 +731,17 @@ export function createThreadsRepository(): ThreadsRepository {
       return (row as ThreadRowWithAuthor | undefined) ?? null;
     },
 
+    async lockThreadById(db, threadId) {
+      const row = await db
+        .selectFrom("learning_threads")
+        .select("id")
+        .where("id", "=", threadId)
+        .forUpdate()
+        .executeTakeFirst();
+
+      return Boolean(row);
+    },
+
     async listThreads(db, options) {
       let filtered = db.selectFrom("learning_threads as t");
       filtered = applyThreadFilters(filtered, options);
@@ -834,6 +886,11 @@ export function createThreadsRepository(): ThreadsRepository {
         })
         .where("thread_id", "=", threadId)
         .where("status", "!=", "deleted")
+        .execute();
+
+      await db
+        .deleteFrom("learning_follows")
+        .where("thread_id", "=", threadId)
         .execute();
 
       await db
