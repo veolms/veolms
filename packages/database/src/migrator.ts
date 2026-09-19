@@ -14,6 +14,7 @@ import type { Database } from "./schema.ts";
 export function createMigrator(database: Kysely<Database>): Migrator {
   return new Migrator({
     db: database,
+    allowUnorderedMigrations: true,
     provider: new FileMigrationProvider({
       fs,
       path,
