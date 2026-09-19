@@ -945,6 +945,9 @@ export const LessonVideoUpload = forwardRef<
         isDragging={isDragging}
         minimal={inline}
         onChooseFile={() => fileInputRef.current?.click()}
+        onUploadFile={() => {
+          if (selectedFile) void startUpload(selectedFile);
+        }}
         onDragEnter={handleDragOver}
         onDragLeave={() => setIsDragging(false)}
         onDragOver={handleDragOver}
@@ -960,6 +963,9 @@ export const LessonVideoUpload = forwardRef<
       isDragging={isDragging}
       minimal={inline}
       onChooseFile={() => fileInputRef.current?.click()}
+      onUploadFile={() => {
+        if (selectedFile) void startUpload(selectedFile);
+      }}
       onDragEnter={handleDragOver}
       onDragLeave={() => setIsDragging(false)}
       onDragOver={handleDragOver}
@@ -1136,20 +1142,6 @@ export const LessonVideoUpload = forwardRef<
           )}
 
           {stageContent}
-
-          {inline &&
-            (uploadStage === "select" || isReplacingVideo) &&
-            selectedFile && (
-              <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => void startUpload(selectedFile)}
-                  className={`${PRIMARY_ACTION_CLASS} min-w-[120px] px-4`}
-                >
-                  {isReplacingVideo ? "Upload Replacement" : "Upload Video"}
-                </button>
-              </div>
-            )}
 
         </div>
       ) : null}
@@ -1358,6 +1350,7 @@ interface SelectVideoStageProps {
   isReplacement?: boolean;
   minimal?: boolean;
   onChooseFile: () => void;
+  onUploadFile?: () => void;
   onDragEnter: (event: DragEvent<HTMLDivElement>) => void;
   onDragLeave: () => void;
   onDragOver: (event: DragEvent<HTMLDivElement>) => void;
@@ -1372,6 +1365,7 @@ function SelectVideoStage({
   isReplacement = false,
   minimal = false,
   onChooseFile,
+  onUploadFile,
   onDragEnter,
   onDragLeave,
   onDragOver,
@@ -1449,7 +1443,13 @@ function SelectVideoStage({
       )}
 
       {selectedFile && (
-        <VideoFileSummary file={selectedFile} onRemove={onRemoveFile} />
+        <VideoFileSummary
+          file={selectedFile}
+          embedded={minimal}
+          onUpload={minimal ? onUploadFile : undefined}
+          uploadIconOnly={minimal}
+          onRemove={onRemoveFile}
+        />
       )}
 
     </div>
@@ -1741,18 +1741,22 @@ interface VideoFileSummaryProps {
   badge?: string;
   embedded?: boolean;
   file: File | null;
+  onUpload?: () => void;
   mediaAttached?: boolean;
   onRemove?: () => void;
   onReplace?: () => void;
+  uploadIconOnly?: boolean;
 }
 
 function VideoFileSummary({
   badge,
   embedded = false,
   file,
+  onUpload,
   mediaAttached = false,
   onRemove,
   onReplace,
+  uploadIconOnly = false,
 }: VideoFileSummaryProps) {
   const badgeClasses =
     badge === "Ready"
@@ -1790,6 +1794,17 @@ function VideoFileSummary({
         >
           <ArrowsClockwise size={13} weight="bold" />
           <span>Replace</span>
+        </button>
+      )}
+      {onUpload && (
+        <button
+          type="button"
+          onClick={onUpload}
+          aria-label={uploadIconOnly ? "Upload video" : "Upload Video"}
+          className={`inline-flex h-8.5 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[9px] border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] transition-all hover:bg-(--accent-hover,var(--accent)) active:scale-95 ${uploadIconOnly ? "w-8.5 px-0" : "px-3.5"}`}
+        >
+          <UploadSimple size={15} weight="bold" />
+          {!uploadIconOnly && <span>Upload Video</span>}
         </button>
       )}
       {badge && (
