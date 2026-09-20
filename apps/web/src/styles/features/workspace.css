@@ -513,8 +513,8 @@
 .discussion-hub__filters {
   display: grid;
   grid-template-columns:
-    minmax(210px, 1.7fr) minmax(122px, 0.66fr) minmax(112px, 0.52fr)
-    minmax(150px, 0.75fr);
+    minmax(210px, 1.55fr) minmax(122px, 0.66fr) minmax(112px, 0.52fr)
+    minmax(112px, 0.52fr) minmax(150px, 0.75fr);
   gap: 10px;
   padding: 10px;
   border-radius: 14px;
@@ -523,10 +523,9 @@
 }
 
 .discussion-hub__filters--comments {
-  grid-template-columns: minmax(210px, 1.7fr) minmax(122px, 0.66fr) minmax(
-      150px,
-      0.75fr
-    );
+  grid-template-columns:
+    minmax(210px, 1.7fr) minmax(122px, 0.66fr) minmax(112px, 0.52fr)
+    minmax(150px, 0.75fr);
 }
 
 .discussion-hub__filters--mentions {
@@ -977,10 +976,22 @@
         0.42fr
       );
   }
+  .discussion-hub__filters:not(.discussion-hub__filters--mentions):not(
+      .discussion-hub__filters--following
+    ):not(.discussion-hub__filters--bookmarks) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
   .discussion-hub__search {
     grid-column: 1 / -1;
   }
   .discussion-hub__select--sort {
+    grid-column: span 1;
+  }
+  .discussion-hub__filters--comments .discussion-hub__select--sort {
+    grid-column: 1 / -1;
+  }
+  .discussion-hub__filters:not(.discussion-hub__filters--comments)
+    .discussion-hub__select--sort {
     grid-column: span 1;
   }
   .discussion-thread {
@@ -2633,6 +2644,18 @@
   }
   .discussion-thread--note .discussion-thread__open {
     grid-template-columns: 50px minmax(0, 1fr);
+    pointer-events: none;
+  }
+  .discussion-thread--note .discussion-thread__navigation-link {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    border-radius: inherit;
+    cursor: pointer;
+  }
+  .discussion-thread--note .discussion-thread__navigation-link:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
   }
   .discussion-thread--note .discussion-thread__meta {
     grid-column: 2 / -1;
@@ -3773,22 +3796,30 @@
   background: var(--discussion-badge-qna-fill);
 }
 
-.discussion-hub .discussion-thread__meta .discussion-thread__rail-badge.is-comment {
+.discussion-hub
+  .discussion-thread__meta
+  .discussion-thread__rail-badge.is-comment {
   color: var(--discussion-badge-comment-ink);
   background: var(--discussion-badge-comment-fill);
 }
 
-.discussion-hub .discussion-thread__meta .discussion-thread__rail-badge.is-note {
+.discussion-hub
+  .discussion-thread__meta
+  .discussion-thread__rail-badge.is-note {
   color: var(--discussion-badge-note-ink);
   background: var(--discussion-badge-note-fill);
 }
 
-.discussion-hub .discussion-thread__meta .discussion-thread__rail-badge.is-answered {
+.discussion-hub
+  .discussion-thread__meta
+  .discussion-thread__rail-badge.is-answered {
   color: var(--discussion-badge-answered-ink);
   background: var(--discussion-badge-answered-fill);
 }
 
-.discussion-hub .discussion-thread__meta .discussion-thread__rail-badge.is-solved {
+.discussion-hub
+  .discussion-thread__meta
+  .discussion-thread__rail-badge.is-solved {
   color: var(--discussion-badge-solved-ink);
   background: var(--discussion-badge-solved-fill);
 }

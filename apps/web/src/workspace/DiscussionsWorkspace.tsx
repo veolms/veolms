@@ -60,6 +60,12 @@ import {
 } from "./discussions-workspace.adapter";
 
 type DiscussionStatus = NonNullable<DiscussionWorkspaceCard["status"]>;
+type DiscussionOwnership = "all" | "mine";
+
+const ownershipOptions: readonly (readonly [DiscussionOwnership, string])[] = [
+  ["all", "All authors"],
+  ["mine", "Mine"],
+];
 
 type PageTabTone = "blue" | "green" | "gold" | "rose" | "violet";
 
@@ -1175,6 +1181,11 @@ export function DiscussionsWorkspace({
   const [qnaStatus, setQnaStatus] = useState("all");
   const [qnaSort, setQnaSort] = useState("activity");
   const [notesSort, setNotesSort] = useState<"activity" | "latest">("activity");
+  const [qnaOwnership, setQnaOwnership] = useState<DiscussionOwnership>("mine");
+  const [commentsOwnership, setCommentsOwnership] =
+    useState<DiscussionOwnership>("mine");
+  const [notesOwnership, setNotesOwnership] =
+    useState<DiscussionOwnership>("mine");
   const [composer, setComposer] = useState<"question" | "discussion" | null>(
     null,
   );
@@ -1187,6 +1198,11 @@ export function DiscussionsWorkspace({
   const isBookmarksTab = activeTab === "saved";
   const workspaceStatus = isQnaTab ? qnaStatus : status;
   const workspaceSort = isQnaTab ? qnaSort : sort;
+  const workspaceOwnership = isQnaTab
+    ? qnaOwnership
+    : isCommentsTab
+      ? commentsOwnership
+      : notesOwnership;
 
   const workspaceQuery = (() => {
     const sharedQuery = {
@@ -1199,7 +1215,7 @@ export function DiscussionsWorkspace({
     if (isNotesTab) {
       return {
         ...sharedQuery,
-        mine: true,
+        ...(notesOwnership === "mine" ? { mine: true } : {}),
         sort: notesSort,
       };
     }
@@ -1217,7 +1233,11 @@ export function DiscussionsWorkspace({
 
     return {
       ...sharedQuery,
-      ...(isQnaTab || isCommentsTab ? { mine: true } : {}),
+      ...(isQnaTab || isCommentsTab
+        ? workspaceOwnership === "mine"
+          ? { mine: true }
+          : {}
+        : {}),
       ...(isCommentsTab
         ? {}
         : {
@@ -1311,6 +1331,16 @@ export function DiscussionsWorkspace({
     );
   };
 
+  const setOwnership = (ownership: DiscussionOwnership) => {
+    if (isQnaTab) {
+      setQnaOwnership(ownership);
+    } else if (isCommentsTab) {
+      setCommentsOwnership(ownership);
+    } else if (isNotesTab) {
+      setNotesOwnership(ownership);
+    }
+  };
+
   const loadMore = useCallback(() => {
     if (!hasNextPage || isFetchingNextPage || fetchingNextPageRef.current) {
       return;
@@ -1333,6 +1363,7 @@ export function DiscussionsWorkspace({
     isQnaTab,
     notesSort,
     selectedCourseId,
+    workspaceOwnership,
     workspaceSort,
     workspaceStatus,
   ]);
@@ -1556,6 +1587,21 @@ export function DiscussionsWorkspace({
                       options={courseOptions}
                     />
                   </div>
+                  {(isQnaTab || isCommentsTab || isNotesTab) && (
+                    <div className="discussion-hub__select">
+                      <ThemedSelect<DiscussionOwnership>
+                        value={workspaceOwnership}
+                        onValueChange={setOwnership}
+                        ariaLabel="Filter discussions by ownership"
+                        triggerClassName="discussion-hub__select-trigger"
+                        contentClassName="discussion-hub__select-content"
+                        matchMenuToContainer={
+                          isQnaTab || isCommentsTab || isNotesTab
+                        }
+                        options={ownershipOptions}
+                      />
+                    </div>
+                  )}
                   {!isCommentsTab &&
                     !isNotesTab &&
                     !isMentionsTab &&
@@ -1576,7 +1622,6 @@ export function DiscussionsWorkspace({
                                   ["open", "Open"],
                                   ["answered", "Answered"],
                                   ["solved", "Solved"],
-                                  ["mentioned", "Mentioned"],
                                 ] as const)
                               : ([
                                   ["all", "Status"],

@@ -1624,18 +1624,16 @@ export function createThreadsService(
       }
 
       // Other tabs: "comments", "q-and-a", "following", "all"
-      // Apply role-based rules:
-      // - For students on comments & q-and-a: only what the student has created (mine = true)
-      // - Status filter is ONLY applicable to "q-and-a" tab
+      // Status filtering is only applicable to the "q-and-a" tab. Ownership
+      // is controlled by the explicit `mine` query value; the repository
+      // continues to enforce accessible visibility when it is omitted.
       const effectiveStatus = tab === "q-and-a" ? query.status : "all";
-      const isStudentTab =
-        !isStaff && (tab === "comments" || tab === "q-and-a");
 
       const threadOptions = {
         ...query,
         tab,
         status: effectiveStatus,
-        mine: isStudentTab ? true : query.mine,
+        mine: query.mine,
         academyId,
         currentUserId: actor.userId,
         pageCursor,
