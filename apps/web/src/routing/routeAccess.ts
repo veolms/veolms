@@ -2,6 +2,7 @@ import type { MfaGateUser } from "../auth/mfaGate";
 import { resolveMfaSetupView } from "../auth/mfaGate";
 import { normalizeNavigationPath } from "./routeDescriptors";
 import { CREATOR_ROLES, normalizeRoles } from "../shell/workspaceRole";
+import { isCourseEditorPath } from "../courses/courseEditorRouting";
 
 export const APP_HOME_PATH = "/courses";
 export const LOGIN_PATH = "/login";
@@ -37,7 +38,7 @@ export function isCourseAuthorPath(pathname: string): boolean {
   const path = pathname.split(/[?#]/, 1)[0] || "/";
   const normalized = normalizeAppPath(path);
   return (
-    normalized === "/courses/create" ||
+    isCourseEditorPath(normalized) ||
     normalized === "/students" ||
     normalized.startsWith("/students/") ||
     normalized === "/quizzes/create" ||
@@ -70,12 +71,16 @@ export function isCoursesPublicPath(pathname: string): boolean {
 export function isLearningPath(pathname: string): boolean {
   const path = normalizeAppPath(pathname);
 
+  if (isCourseEditorPath(path)) {
+    return false;
+  }
+
   if (/^\/learn\/[^/]+(?:\/[^/]+)?$/.test(path)) {
     return true;
   }
 
   return (
-    path !== "/courses/create" && /^\/courses\/[^/]+(?:\/[^/]+)?$/.test(path)
+    /^\/courses\/[^/]+(?:\/[^/]+)?$/.test(path)
   );
 }
 

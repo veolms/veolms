@@ -277,10 +277,11 @@ export function LessonMediaWorkspace({
           media={videoMedia}
           lessonTitle={lessonTitle}
           resumePersistenceKey={previewUrl || undefined}
-          playbackBootstrap={null}
+          playbackBootstrap={playbackBootstrap}
           refreshPlaybackToken={refreshPlaybackToken}
           protectedPlayback={false}
           showAutoplayControl={false}
+          showCompletionOverlay={false}
           circularSettingsControl
           showLessonNavigation={false}
           playbackSuspended={playbackSuspended}

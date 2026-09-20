@@ -7,7 +7,7 @@ import {
   memo,
   Fragment,
 } from "react";
-import { useLocation } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 import { createPortal } from "react-dom";
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
@@ -75,6 +75,7 @@ import ISO6391 from "iso-639-1";
 import { ThemedSelect } from "../ThemedSelect";
 import { SettingsToggle } from "../settings/SettingsControls";
 import type { NavigateTo } from "../routing/navigation";
+import { getCourseEditorPath } from "./courseEditorRouting";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
 import {
   getNumberShortcutIndex,
@@ -355,6 +356,7 @@ interface MemoizedLessonCardProps {
   isReorderPending: boolean;
   isResourceBusy: boolean;
   isLessonEditorMounted: boolean;
+  isUrlFocused: boolean;
   onLessonEditorOpen: (lessonId: string) => void;
   render: (state: {
     isExpanded: boolean;
@@ -373,6 +375,7 @@ const MemoizedLessonCard = memo(
   function MemoizedLessonCard({
     lesson,
     isLessonEditorMounted,
+    isUrlFocused,
     onLessonEditorOpen,
     render,
   }: MemoizedLessonCardProps) {
@@ -380,10 +383,24 @@ const MemoizedLessonCard = memo(
     const [isEditorOpen, setEditorOpen] = useState(Boolean(lesson.isExpanded));
     const [isQuizOpen, setQuizOpen] = useState(false);
     const lessonEditorRef = useRef<LessonStudioEditorHandle>(null);
+    const wasUrlFocusedRef = useRef(isUrlFocused);
 
     useEffect(() => {
       setExpanded(lesson.isExpanded);
     }, [lesson.isExpanded]);
+
+    useEffect(() => {
+      if (isUrlFocused) {
+        setExpanded(true);
+        setEditorOpen(true);
+        onLessonEditorOpen(lesson.id);
+      } else if (wasUrlFocusedRef.current) {
+        setExpanded(false);
+        setEditorOpen(false);
+        setQuizOpen(false);
+      }
+      wasUrlFocusedRef.current = isUrlFocused;
+    }, [isUrlFocused, lesson.id, onLessonEditorOpen]);
 
     return render({
       isExpanded,
@@ -409,6 +426,7 @@ const MemoizedLessonCard = memo(
     previous.isReorderPending === next.isReorderPending &&
     previous.isResourceBusy === next.isResourceBusy &&
     previous.isLessonEditorMounted === next.isLessonEditorMounted &&
+    previous.isUrlFocused === next.isUrlFocused &&
     previous.onLessonEditorOpen === next.onLessonEditorOpen,
 );
 
@@ -439,6 +457,18 @@ export const WIZARD_STEPS: readonly WizardStepDefinition[] = [
 export const WIZARD_STEP_IDS: readonly CourseWizardStepId[] = WIZARD_STEPS.map(
   ({ id }) => id,
 );
+
+const COURSE_WIZARD_ARROW_KEY_OWNER_SELECTOR = [
+  '[role="dialog"]',
+  '[role="grid"]',
+  '[role="listbox"]',
+  '[role="menu"]',
+  '[role="radio"]',
+  '[role="slider"]',
+  '[role="spinbutton"]',
+  '[role="tab"]',
+  '[role="tree"]',
+].join(",");
 
 function getAdjacentWizardSteps(
   activeStep: CourseWizardStepId,
@@ -2709,6 +2739,11 @@ export function CourseCreatePage({
   bottomNavHidden = false,
 }: CourseCreatePageProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { courseId: routeCourseId, editTab: routeEditTab } = useParams<{
+    courseId?: string;
+    editTab?: string;
+  }>();
   const searchParams = useMemo(
     () => new URLSearchParams(location?.search ?? ""),
     [location?.search],
@@ -2716,16 +2751,21 @@ export function CourseCreatePage({
   const activeEditId =
     propCourseId ||
     propEditCourseId ||
+    routeCourseId ||
     searchParams.get("edit") ||
     searchParams.get("courseId") ||
     null;
 
-  const initialStep = activeEditId
-    ? parseWizardTab(searchParams.get("tab")) ||
-      parseWizardTab(searchParams.get("step")) ||
-      "basics"
-    : "basics";
+  const requestedSectionId = searchParams.get("sectionId");
+  const requestedLessonId = searchParams.get("lessonId");
+  const routeRequestedStep =
+    parseWizardTab(routeEditTab) ||
+    parseWizardTab(searchParams.get("tab")) ||
+    parseWizardTab(searchParams.get("step"));
+  const initialStep = routeRequestedStep || "basics";
+  const editorRouteIdentity = `${activeEditId || "create"}:${routeRequestedStep || "basics"}`;
   const [activeStep, setActiveStep] = useState<CourseWizardStepId>(initialStep);
+  const pendingWizardNavigationRef = useRef<CourseWizardStepId | null>(null);
   const [slideDirection, setSlideDirection] = useState<"right" | "left">(
     "right",
   );
@@ -2744,6 +2784,7 @@ export function CourseCreatePage({
     sectionId: string;
     lessonId: string;
   } | null>(null);
+  const previousEditorRouteIdentityRef = useRef(editorRouteIdentity);
 
   // Automatically reset lesson editor if navigating away from curriculum step
   useEffect(() => {
@@ -2888,15 +2929,30 @@ export function CourseCreatePage({
 
   useEffect(() => {
     const navigateWizardTab = (event: KeyboardEvent) => {
-      if (
-        event.defaultPrevented ||
-        !event.altKey ||
-        isEditingShortcutTarget(event.target)
-      )
+      if (event.defaultPrevented || isEditingShortcutTarget(event.target))
         return;
-      const index = getNumberShortcutIndex(event);
-      if (index === null) return;
-      const destination = WIZARD_STEPS[index];
+
+      let destination: WizardStepDefinition | undefined;
+      if (event.altKey) {
+        const index = getNumberShortcutIndex(event);
+        destination = index === null ? undefined : WIZARD_STEPS[index];
+      } else if (
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        (event.key === "ArrowLeft" || event.key === "ArrowRight") &&
+        !(
+          event.target instanceof Element &&
+          event.target.closest(COURSE_WIZARD_ARROW_KEY_OWNER_SELECTOR)
+        )
+      ) {
+        const offset = event.key === "ArrowRight" ? 1 : -1;
+        const currentIndex = WIZARD_STEP_IDS.indexOf(activeStep);
+        const nextIndex =
+          (currentIndex + offset + WIZARD_STEPS.length) % WIZARD_STEPS.length;
+        destination = WIZARD_STEPS[nextIndex];
+      }
+
       if (!destination) return;
       event.preventDefault();
       void navigateToStepRef.current(destination.id);
@@ -2904,26 +2960,56 @@ export function CourseCreatePage({
 
     document.addEventListener("keydown", navigateWizardTab);
     return () => document.removeEventListener("keydown", navigateWizardTab);
-  }, []);
-
-  // Synchronize URL search params with active wizard tab
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const currentUrl = new URL(window.location.href);
-    const currentTabInUrl = currentUrl.searchParams.get("tab");
-    if (currentTabInUrl !== activeStep) {
-      if (
-        activeStep === "basics" &&
-        !currentTabInUrl &&
-        !currentUrl.searchParams.has("step")
-      ) {
-        return;
-      }
-      currentUrl.searchParams.set("tab", activeStep);
-      currentUrl.searchParams.delete("step");
-      window.history.replaceState(null, "", currentUrl.toString());
-    }
   }, [activeStep]);
+
+  // Keep the URL as the canonical source for the active editor step. Legacy
+  // query-string URLs are replaced with the same route structure used by new
+  // create and edit links.
+  useEffect(() => {
+    const canonicalPath = getCourseEditorPath({
+      mode: activeEditId ? "edit" : "create",
+      courseId: activeEditId,
+      step: activeStep,
+      sectionId: activeStep === "curriculum" ? requestedSectionId : null,
+      lessonId: activeStep === "curriculum" ? requestedLessonId : null,
+    });
+    const currentPath = `${location.pathname}${location.search}`;
+    if (currentPath === canonicalPath) return;
+
+    // Let the route-to-state effect below settle when the user navigates to a
+    // different course or enters the editor through a different tab URL.
+    if (previousEditorRouteIdentityRef.current !== editorRouteIdentity) {
+      return;
+    }
+
+    const hasLegacyQueryParams =
+      searchParams.has("edit") ||
+      searchParams.has("courseId") ||
+      searchParams.has("tab") ||
+      searchParams.has("step");
+    const shouldReplace =
+      location.pathname === "/courses/create" || hasLegacyQueryParams;
+    void navigate(canonicalPath, { replace: shouldReplace });
+  }, [
+    activeEditId,
+    activeStep,
+    editorRouteIdentity,
+    location.pathname,
+    location.search,
+    navigate,
+    requestedLessonId,
+    requestedSectionId,
+    searchParams,
+  ]);
+
+  useEffect(() => {
+    if (previousEditorRouteIdentityRef.current === editorRouteIdentity) {
+      return;
+    }
+    previousEditorRouteIdentityRef.current = editorRouteIdentity;
+    setActiveStep(initialStep);
+    setEditingLessonTarget(null);
+  }, [editorRouteIdentity, initialStep]);
 
   // Basics server-confirmed baseline and local draft states
   const [serverBasics, setServerBasics] =
@@ -2985,6 +3071,13 @@ export function CourseCreatePage({
   const courseVersionRef = useRef<number>(courseVersion);
   courseVersionRef.current = courseVersion;
   const currentCourseIdRef = useRef<string | null>(currentCourseId);
+
+  useEffect(() => {
+    setCurrentCourseId(activeEditId);
+    currentCourseIdRef.current = activeEditId;
+    setCourseVersion(1);
+    courseVersionRef.current = 1;
+  }, [activeEditId]);
 
   const [thumbnail, setThumbnail] = useState<string | null>(null);
   const [thumbnailMediaId, setThumbnailMediaId] = useState<
@@ -3499,8 +3592,17 @@ export function CourseCreatePage({
   // Keep state synced if URL params change (e.g. popstate / back-forward navigation)
   useEffect(() => {
     const tabFromUrl =
+      parseWizardTab(routeEditTab) ||
       parseWizardTab(searchParams.get("tab")) ||
       parseWizardTab(searchParams.get("step"));
+    const pendingWizardNavigation = pendingWizardNavigationRef.current;
+    if (pendingWizardNavigation) {
+      if (tabFromUrl === pendingWizardNavigation) {
+        pendingWizardNavigationRef.current = null;
+      } else {
+        return;
+      }
+    }
     if (
       tabFromUrl &&
       tabFromUrl !== activeStep &&
@@ -3508,7 +3610,13 @@ export function CourseCreatePage({
     ) {
       setActiveStep(tabFromUrl);
     }
-  }, [searchParams, isDownstreamUnlocked, activeEditId]);
+  }, [
+    searchParams,
+    routeEditTab,
+    isDownstreamUnlocked,
+    activeEditId,
+    activeStep,
+  ]);
 
   const {
     data: serverCategories = EMPTY_CATEGORIES,
@@ -3788,6 +3896,21 @@ export function CourseCreatePage({
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
   const lessonTitleDraftsRef = useRef<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    if (activeStep !== "curriculum" || !requestedSectionId) return;
+    setSections((previous) => {
+      let changed = false;
+      const next = previous.map((section) => {
+        if (section.id !== requestedSectionId || section.isExpanded) {
+          return section;
+        }
+        changed = true;
+        return { ...section, isExpanded: true };
+      });
+      return changed ? next : previous;
+    });
+  }, [activeStep, requestedSectionId, sections.length]);
 
   const isCollapsingSectionRef = useRef(false);
   const inFlightLessonSavesRef = useRef<Map<string, Promise<boolean>>>(
@@ -7072,6 +7195,21 @@ export function CourseCreatePage({
     return true;
   };
 
+  const navigateToCurriculumFocus = (
+    sectionId?: string | null,
+    lessonId?: string | null,
+  ) => {
+    void navigate(
+      getCourseEditorPath({
+        mode: isEditing ? "edit" : "create",
+        courseId: activeEditId,
+        step: "curriculum",
+        sectionId,
+        lessonId,
+      }),
+    );
+  };
+
   const handleToggleSectionExpand = async (sectionId: string) => {
     const currentSections = sectionsRef.current || sections;
     const sec = currentSections.find((s) => s.id === sectionId);
@@ -7086,6 +7224,7 @@ export function CourseCreatePage({
         sectionsRef.current = next;
         return next;
       });
+      navigateToCurriculumFocus(sectionId);
       return;
     }
 
@@ -7104,6 +7243,7 @@ export function CourseCreatePage({
         sectionsRef.current = next;
         return next;
       });
+      navigateToCurriculumFocus();
       return;
     }
 
@@ -7140,6 +7280,7 @@ export function CourseCreatePage({
         sectionsRef.current = next;
         return next;
       });
+      navigateToCurriculumFocus();
     }
   };
 
@@ -8963,9 +9104,15 @@ export function CourseCreatePage({
       return;
     }
 
-    if (activeStep === "basics") {
+    const leavingStep = activeStep;
+
+    if (
+      leavingStep === "basics" &&
+      !currentCourseIdRef.current &&
+      !currentCourseId
+    ) {
       const flushed = await flushBasicsPersistence();
-      if (!currentCourseIdRef.current && !currentCourseId && !flushed) {
+      if (!flushed) {
         setShowTitleTooltip(true);
         titleInputRef.current?.focus();
         setToastMessage("Add a course title to continue.");
@@ -8984,57 +9131,58 @@ export function CourseCreatePage({
       return;
     }
 
-    if (activeStep === "access-rules") {
-      await flushFixedDurationPersistence();
-    }
-    if (activeStep === "pricing") {
-      await flushPricingPersistence();
-    }
+    const wasDirty = isStepDirty(leavingStep);
 
-    // Prepare the destination before the active step changes so a skipped tab
-    // never renders an empty panel during persistence or swipe setup.
+    // Prepare and activate the destination before persisting the previous
+    // step. This keeps the tab and panel responsive while draft persistence
+    // continues in the background.
     setMountedTabs((current) => {
       const next = getAdjacentWizardSteps(destination);
-      next.add(activeStep);
+      next.add(leavingStep);
       const hasSameTabs =
         next.size === current.size && [...next].every((id) => current.has(id));
       return hasSameTabs ? current : next;
     });
+    pendingWizardNavigationRef.current = destination;
+    setActiveStep(destination);
 
-    if (!isStepDirty(activeStep)) {
-      setActiveStep(destination);
-      return;
-    }
+    const persistPreviousStep = async () => {
+      if (wasDirty) setActionLoading("save");
 
-    if (activeStep === "curriculum") {
-      setActionLoading("save");
       try {
-        await saveCurriculumStep();
-        setActiveStep(destination);
+        if (leavingStep === "basics") {
+          await flushBasicsPersistence();
+        } else if (leavingStep === "access-rules") {
+          await flushFixedDurationPersistence();
+        } else if (leavingStep === "pricing") {
+          await flushPricingPersistence();
+        }
+
+        if (!wasDirty) return;
+
+        if (leavingStep === "curriculum") {
+          await saveCurriculumStep();
+        } else {
+          await saveCurrentStep();
+        }
       } catch (err: unknown) {
         const stepLabel =
-          WIZARD_STEPS.find((s) => s.id === activeStep)?.label || activeStep;
+          WIZARD_STEPS.find((s) => s.id === leavingStep)?.label || leavingStep;
         setToastMessage(
           `Failed to save ${stepLabel}. Your changes are kept locally.`,
         );
       } finally {
         setActionLoading(null);
       }
-      return;
-    }
+    };
 
-    setActionLoading("save");
-    try {
-      await saveCurrentStep();
-    } catch (err: unknown) {
-      const stepLabel =
-        WIZARD_STEPS.find((s) => s.id === activeStep)?.label || activeStep;
-      setToastMessage(
-        `Failed to save ${stepLabel}. Your changes are kept locally.`,
-      );
-    } finally {
-      setActionLoading(null);
-      setActiveStep(destination);
+    if (
+      wasDirty ||
+      leavingStep === "basics" ||
+      leavingStep === "access-rules" ||
+      leavingStep === "pricing"
+    ) {
+      void persistPreviousStep();
     }
   };
 
@@ -10714,6 +10862,10 @@ export function CourseCreatePage({
                                 isLessonEditorMounted={mountedLessonEditorIds.includes(
                                   les.id,
                                 )}
+                                isUrlFocused={
+                                  requestedSectionId === sec.id &&
+                                  requestedLessonId === les.id
+                                }
                                 onLessonEditorOpen={rememberLessonEditor}
                                 render={({
                                   isExpanded,
@@ -10748,6 +10900,12 @@ export function CourseCreatePage({
                                       setExpanded(false);
                                       setEditorOpen(false);
                                       setQuizOpen(false);
+                                    }
+                                    if (canToggle) {
+                                      navigateToCurriculumFocus(
+                                        nextExpanded ? sec.id : null,
+                                        nextExpanded ? les.id : null,
+                                      );
                                     }
                                   };
 

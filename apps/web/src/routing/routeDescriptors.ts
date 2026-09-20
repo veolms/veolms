@@ -5,6 +5,10 @@ import {
   readSettingsTab,
   resolveSessionTabPath,
 } from "./tabSessionState";
+import {
+  isCourseCreateEditorPath,
+  isCourseEditEditorPath,
+} from "../courses/courseEditorRouting";
 
 export const productName = "ProCodrr";
 
@@ -107,6 +111,20 @@ export const routeDescriptors = {
     section: "Create Course",
     title: "Create Course",
     description: "Create and publish a new ProCodrr course.",
+  },
+  "course-create-tab": {
+    kind: "shell",
+    page: "course-create",
+    section: "Create Course",
+    title: "Create Course",
+    description: "Create and publish a new ProCodrr course.",
+  },
+  "course-edit": {
+    kind: "shell",
+    page: "course-create",
+    section: "Edit Course",
+    title: "Edit Course",
+    description: "Edit and publish a ProCodrr course.",
   },
   // course-overview is now handled by a dedicated RouteDescriptor kind;
   // the shell descriptor entry is kept only for routeId lookup / meta.
@@ -350,6 +368,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   "coupon-create": "/coupons/create",
   "coupon-edit": "/coupons/:couponId",
   "create-course": "/courses/create",
+  "edit-course": "/courses/:courseId/edit/basics",
   wishlist: "/wishlist",
   students: "/students",
   "student-details": "/students/:username",
@@ -396,6 +415,8 @@ const canonicalPathsByRouteId = {
   "coupon-create": "/coupons/create",
   "coupon-edit": "/coupons/:couponId",
   "course-create": "/courses/create",
+  "course-create-tab": "/courses/create/:editTab",
+  "course-edit": "/courses/:courseId/edit/:editTab",
   wishlist: "/wishlist",
   students: "/students",
   "student-details": "/students/:username",
@@ -500,6 +521,25 @@ export const getEffectiveRouteId = (
 
   if (routeId === "student-details") {
     return /^\/students\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "course-create") {
+    return normalizedPath === "/courses/create"
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "course-create-tab") {
+    return isCourseCreateEditorPath(normalizedPath) &&
+      normalizedPath !== "/courses/create"
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "course-edit") {
+    return isCourseEditEditorPath(normalizedPath)
       ? routeId
       : "home-fallback";
   }
