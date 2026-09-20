@@ -245,9 +245,23 @@ function getDiscussionThreadDestination(
   return `${pathname}?${search.toString()}`;
 }
 
-function DiscussionWorkspaceAttachmentIndicator({ label }: { label: string }) {
+function DiscussionWorkspaceAttachmentIndicator({
+  label,
+  className,
+}: {
+  label: string;
+  className?: string;
+}) {
   return (
-    <span className="discussion-thread__attachment inline-flex items-center gap-1.5 text-xs text-(--muted)">
+    <span
+      className={[
+        "discussion-thread__attachment",
+        "inline-flex items-center gap-1.5 text-xs text-(--muted)",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <Paperclip size={15} aria-hidden="true" />
       <span>{label}</span>
     </span>
@@ -257,6 +271,7 @@ function DiscussionWorkspaceAttachmentIndicator({ label }: { label: string }) {
 type DiscussionWorkspaceMetadataItem = {
   key: string;
   content: ReactNode;
+  mobileHidden?: boolean;
 };
 
 function getDiscussionWorkspaceMetadataItems(
@@ -266,6 +281,7 @@ function getDiscussionWorkspaceMetadataItems(
   const items: DiscussionWorkspaceMetadataItem[] = [];
   const attachmentLabel = getAttachmentLabel(thread.attachmentSummary);
   const visibilityLabel = getVisibilityLabel(thread.visibility);
+  const hasPrimaryMobileMetadata = Boolean(thread.course && thread.lesson);
   const VisibilityIcon =
     thread.visibility === "private"
       ? Lock
@@ -290,8 +306,16 @@ function getDiscussionWorkspaceMetadataItems(
   if (options?.timestampLabel) {
     items.push({
       key: "timestamp",
+      mobileHidden: hasPrimaryMobileMetadata,
       content: (
-        <small className="discussion-thread__timestamp">
+        <small
+          className={[
+            "discussion-thread__timestamp",
+            hasPrimaryMobileMetadata ? "is-mobile-hidden" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
           <Clock size={13} aria-hidden="true" />
           <span>{options.timestampLabel}</span>
         </small>
@@ -301,16 +325,21 @@ function getDiscussionWorkspaceMetadataItems(
   if (attachmentLabel) {
     items.push({
       key: "attachments",
+      mobileHidden: hasPrimaryMobileMetadata,
       content: (
-        <DiscussionWorkspaceAttachmentIndicator label={attachmentLabel} />
+        <DiscussionWorkspaceAttachmentIndicator
+          label={attachmentLabel}
+          className={hasPrimaryMobileMetadata ? "is-mobile-hidden" : undefined}
+        />
       ),
     });
   }
   if (visibilityLabel) {
     items.push({
       key: "visibility",
+      mobileHidden: true,
       content: (
-        <small className="discussion-thread__visibility">
+        <small className="discussion-thread__visibility is-mobile-hidden">
           <VisibilityIcon size={13} aria-hidden="true" />
           <span>{visibilityLabel}</span>
         </small>
@@ -332,7 +361,17 @@ function DiscussionWorkspaceMetadataRow({
     <div className="discussion-thread__context">
       {items.map((item, index) => (
         <Fragment key={item.key}>
-          {index > 0 && <span aria-hidden="true" />}
+          {index > 0 && (
+            <span
+              className={[
+                "discussion-thread__metadata-separator",
+                item.mobileHidden ? "is-mobile-hidden" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              aria-hidden="true"
+            />
+          )}
           {item.content}
         </Fragment>
       ))}
@@ -469,8 +508,10 @@ function DiscussionWorkspaceCardContent({
 
 function DiscussionWorkspaceIdentity({
   thread,
+  activity,
 }: {
   thread: DiscussionWorkspaceCard;
+  activity?: string;
 }) {
   return (
     <div className="discussion-thread__author">
@@ -488,6 +529,17 @@ function DiscussionWorkspaceIdentity({
           <span className="discussion-thread__author-username">
             @{thread.authorUsername.replace(/^@+/, "")}
           </span>
+        </>
+      )}
+      {activity && (
+        <>
+          <span
+            className="discussion-thread__author-activity-separator"
+            aria-hidden="true"
+          >
+            ·
+          </span>
+          <time className="discussion-thread__author-activity">{activity}</time>
         </>
       )}
     </div>
@@ -552,11 +604,11 @@ function DiscussionWorkspaceCardRail({
   bottom: DiscussionWorkspaceRailElement;
 }) {
   return (
-    <>
+    <div className="discussion-thread__rail-inner">
       {withDiscussionWorkspaceRailSlot(top, "top")}
       {middle && withDiscussionWorkspaceRailSlot(middle, "middle")}
       {withDiscussionWorkspaceRailSlot(bottom, "bottom")}
-    </>
+    </div>
   );
 }
 
@@ -676,7 +728,7 @@ function DiscussionWorkspaceQuestionCard({
         bottom: <time>{thread.activity}</time>,
       }}
     >
-      <DiscussionWorkspaceIdentity thread={thread} />
+      <DiscussionWorkspaceIdentity thread={thread} activity={thread.activity} />
       <DiscussionWorkspaceCardContent
         thread={thread}
         label="Question"
@@ -738,7 +790,7 @@ function DiscussionWorkspaceCommentCard({
         bottom: <time>{thread.activity}</time>,
       }}
     >
-      <DiscussionWorkspaceIdentity thread={thread} />
+      <DiscussionWorkspaceIdentity thread={thread} activity={thread.activity} />
       <DiscussionWorkspaceCardContent
         thread={thread}
         label="Comment"
@@ -808,7 +860,7 @@ function DiscussionWorkspaceFollowingCard({
         bottom: <time dateTime={thread.updatedAt}>{thread.activity}</time>,
       }}
     >
-      <DiscussionWorkspaceIdentity thread={thread} />
+      <DiscussionWorkspaceIdentity thread={thread} activity={thread.activity} />
       <DiscussionWorkspaceCardContent
         thread={thread}
         label={isQuestion ? "Question" : "Comment"}
@@ -892,7 +944,10 @@ function DiscussionWorkspaceMentionCard({
         bottom: <time dateTime={mention.mentionedAt}>{mentionActivity}</time>,
       }}
     >
-      <DiscussionWorkspaceIdentity thread={mention} />
+      <DiscussionWorkspaceIdentity
+        thread={mention}
+        activity={mentionActivity}
+      />
       <DiscussionWorkspaceCardContent
         thread={mention}
         label="Mention"
@@ -958,7 +1013,7 @@ function DiscussionWorkspaceNoteCard({
         ),
       }}
     >
-      <DiscussionWorkspaceIdentity thread={note} />
+      <DiscussionWorkspaceIdentity thread={note} activity={note.activity} />
       <DiscussionWorkspaceCardContent
         thread={note}
         label="Note"
