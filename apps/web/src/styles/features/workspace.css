@@ -369,27 +369,23 @@
     0px
   );
   --swipeable-tab-panel-inline-end: var(--application-page-inline-gutter, 0px);
-  --discussion-badge-qna-ink: color-mix(in srgb, #8b5cf6 88%, var(--text));
+  --discussion-badge-qna-ink: #8b5cf6;
   --discussion-badge-qna-fill: color-mix(in srgb, #8b5cf6 20%, var(--surface));
-  --discussion-badge-comment-ink: color-mix(in srgb, #3b82f6 88%, var(--text));
+  --discussion-badge-comment-ink: #3b82f6;
   --discussion-badge-comment-fill: color-mix(
     in srgb,
     #3b82f6 20%,
     var(--surface)
   );
-  --discussion-badge-note-ink: color-mix(in srgb, #eab308 88%, var(--text));
+  --discussion-badge-note-ink: #eab308;
   --discussion-badge-note-fill: color-mix(in srgb, #eab308 20%, var(--surface));
-  --discussion-badge-answered-ink: color-mix(in srgb, #f59e0b 88%, var(--text));
+  --discussion-badge-answered-ink: #f59e0b;
   --discussion-badge-answered-fill: color-mix(
     in srgb,
     #f59e0b 20%,
     var(--surface)
   );
-  --discussion-badge-solved-ink: color-mix(
-    in srgb,
-    var(--success) 85%,
-    var(--text)
-  );
+  --discussion-badge-solved-ink: var(--success);
   --discussion-badge-solved-fill: color-mix(
     in srgb,
     var(--success) 20%,
@@ -3772,32 +3768,36 @@
   flex-basis: 12px;
 }
 
-.discussion-hub .discussion-thread__rail-badge.is-qna {
+.discussion-hub .discussion-thread__meta .discussion-thread__rail-badge.is-qna {
   color: var(--discussion-badge-qna-ink);
   background: var(--discussion-badge-qna-fill);
 }
 
-.discussion-hub .discussion-thread__rail-badge.is-comment {
+.discussion-hub .discussion-thread__meta .discussion-thread__rail-badge.is-comment {
   color: var(--discussion-badge-comment-ink);
   background: var(--discussion-badge-comment-fill);
 }
 
-.discussion-hub .discussion-thread__rail-badge.is-note {
+.discussion-hub .discussion-thread__meta .discussion-thread__rail-badge.is-note {
   color: var(--discussion-badge-note-ink);
   background: var(--discussion-badge-note-fill);
 }
 
-.discussion-hub .discussion-thread__rail-badge.is-answered {
+.discussion-hub .discussion-thread__meta .discussion-thread__rail-badge.is-answered {
   color: var(--discussion-badge-answered-ink);
   background: var(--discussion-badge-answered-fill);
 }
 
-.discussion-hub .discussion-thread__rail-badge.is-solved {
+.discussion-hub .discussion-thread__meta .discussion-thread__rail-badge.is-solved {
   color: var(--discussion-badge-solved-ink);
   background: var(--discussion-badge-solved-fill);
 }
 
-.discussion-hub .discussion-thread__likes-badge {
+.discussion-hub .discussion-thread__meta > .discussion-thread__likes-badge,
+.discussion-hub
+  .discussion-thread__meta
+  > .discussion-thread__rail-inner
+  > .discussion-thread__likes-badge {
   color: var(--discussion-badge-comment-ink);
   background: var(--discussion-badge-comment-fill);
 }

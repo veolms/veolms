@@ -35,6 +35,8 @@ export type AttachmentVisualItem = Pick<
   | "height"
 >;
 
+const DISCUSSION_MEDIA_MAX_WIDTH_REM = 28;
+
 export function getAttachmentAspectRatioStyle(
   attachment: Pick<DiscussionAttachmentItem, "width" | "height">,
 ): { aspectRatio: string; width: string } {
@@ -51,10 +53,14 @@ export function getAttachmentAspectRatioStyle(
   const height = hasValidDimensions ? rawHeight! : 9;
   const ratio = width / height;
   const maxHeightRem = ratio < 1 ? 24 : 20;
+  const boundedWidthRem = Math.min(
+    maxHeightRem * ratio,
+    DISCUSSION_MEDIA_MAX_WIDTH_REM,
+  );
 
   return {
     aspectRatio: `${width} / ${height}`,
-    width: `min(100%, ${maxHeightRem * ratio}rem)`,
+    width: `min(100%, ${boundedWidthRem}rem)`,
   };
 }
 

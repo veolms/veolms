@@ -238,6 +238,8 @@ interface LearningWorkspaceProps {
   userId?: string;
   lessonId: number;
   deepLinkLessonUuid?: string | null;
+  isDiscussionDeepLink?: boolean;
+  deepLinkRouteSettled?: boolean;
   noteDeepLinkId?: string | null;
   courseNavigationActionLabel?: string;
   initialLessonView?: "video" | "quiz";
@@ -319,6 +321,8 @@ export function LearningWorkspace({
   userId,
   lessonId,
   deepLinkLessonUuid = null,
+  isDiscussionDeepLink = false,
+  deepLinkRouteSettled = true,
   noteDeepLinkId = null,
   courseNavigationActionLabel,
   initialLessonView = "video",
@@ -1005,13 +1009,15 @@ export function LearningWorkspace({
   const selectedLessonDescription = selectedLessonRecord?.description ?? null;
   const courseId = courseOverview?.course.id;
   const backendLessonId = selectedLessonRecord?.id;
-  const isLearningDeepLinkDeferred = Boolean(
-    deepLinkLessonUuid || deepLinkInitializationPending,
-  );
   const isLearningDeepLinkReady =
-    !isLearningDeepLinkDeferred ||
-    Boolean(courseId && backendLessonId && selectedLesson === lessonId);
-
+    !isDiscussionDeepLink ||
+    Boolean(
+      deepLinkRouteSettled &&
+      !deepLinkInitializationPending &&
+      courseId &&
+      backendLessonId &&
+      selectedLesson === lessonId,
+    );
   useEffect(() => {
     if (deepLinkLessonUuid) {
       setDeepLinkInitializationPending(true);
@@ -1021,6 +1027,7 @@ export function LearningWorkspace({
   useEffect(() => {
     if (
       !deepLinkInitializationPending ||
+      !deepLinkRouteSettled ||
       !courseId ||
       !backendLessonId ||
       selectedLesson !== lessonId
@@ -1031,6 +1038,7 @@ export function LearningWorkspace({
   }, [
     backendLessonId,
     courseId,
+    deepLinkRouteSettled,
     lessonId,
     selectedLesson,
     deepLinkInitializationPending,
@@ -2588,23 +2596,37 @@ export function LearningWorkspace({
                   </button>
                 ) : null}
               </header>
-              <Discussion
-                key={discussionPersistenceKey}
-                persistenceKey={discussionPersistenceKey}
-                courseSlug={courseSlug}
-                courseId={isLearningDeepLinkReady ? courseId : undefined}
-                lessonId={isLearningDeepLinkReady ? backendLessonId : undefined}
-                noteDeepLinkId={
-                  isLearningDeepLinkReady ? noteDeepLinkId : null
-                }
-                isThreadDeepLinkReady={isLearningDeepLinkReady}
-                mobileBottomNavigation={mobileBottomNavigation}
-                mobileBottomNavigationHidden={mobileBottomNavigationHidden}
-                lessonDescription={selectedLessonDescription}
-                isLessonDescriptionLoading={isApiRoute && isCourseOverviewLoading}
-                interactionCapabilities={interactionCapabilities}
-                isInteractionCapabilitiesLoading={isInteractionCapabilitiesLoading}
-              />
+              {isLearningDeepLinkReady ? (
+                <Discussion
+                  key={discussionPersistenceKey}
+                  persistenceKey={discussionPersistenceKey}
+                  courseSlug={courseSlug}
+                  courseId={courseId}
+                  lessonId={backendLessonId}
+                  noteDeepLinkId={noteDeepLinkId}
+                  isThreadDeepLinkReady
+                  mobileBottomNavigation={mobileBottomNavigation}
+                  mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+                  lessonDescription={selectedLessonDescription}
+                  isLessonDescriptionLoading={
+                    isApiRoute && isCourseOverviewLoading
+                  }
+                  interactionCapabilities={interactionCapabilities}
+                  isInteractionCapabilitiesLoading={
+                    isInteractionCapabilitiesLoading
+                  }
+                />
+              ) : (
+                <div
+                  className="flex min-h-48 flex-col items-center justify-center py-12 text-sm text-(--text-secondary)"
+                  data-testid="learning-discussion-loading"
+                  role="status"
+                  aria-label="Loading discussion"
+                >
+                  <div className="mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
+                  Loading discussion…
+                </div>
+              )}
             </article>
           </div>
         </section>

@@ -78,7 +78,7 @@ export function DiscussionAttachmentsList({
         data-testid="discussion-attachments-list"
         className={`mt-3 flex flex-col gap-2.5 ${className}`}
       >
-        <div className="flex flex-wrap gap-2.5">
+        <div className="flex flex-col items-start gap-2.5">
           {attachments.map((attachment) => {
             const category = getAttachmentCategory(
               attachment.mimeType,

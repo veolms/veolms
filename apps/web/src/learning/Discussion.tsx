@@ -663,6 +663,9 @@ function DiscussionInner({
   const rawThreadId = noteDeepLinkId ? null : searchParams.get("thread");
   const threadIdFromUrl =
     rawThreadId && rawThreadId.trim().length > 0 ? rawThreadId.trim() : null;
+  const initialThreadDeepLinkId = useState<string | null>(
+    () => threadIdFromUrl,
+  )[0];
 
   const {
     data: directThreadData,
@@ -1107,12 +1110,36 @@ function DiscussionInner({
     );
     return nextList;
   }, [combinedEntries, directThreadComment]);
-
+  const isInitialThreadDeepLink = Boolean(
+    initialThreadDeepLinkId &&
+      threadIdFromUrl === initialThreadDeepLinkId,
+  );
+  const isInitialThreadListPending = Boolean(
+    isInitialThreadDeepLink &&
+      isThreadDeepLinkReady &&
+      (isInteractionCapabilitiesLoading ||
+        (shouldFetchThreads && entryFilter !== "note" && isThreadsLoading)),
+  );
+  const isThreadDeepLinkPending = Boolean(
+    isInitialThreadListPending ||
+      (threadIdFromUrl &&
+        isThreadDeepLinkReady &&
+        !threadEntries.some(
+          (entry) => getServerEntityId(entry) === threadIdFromUrl,
+        ) &&
+        (isDirectThreadLoading ||
+          isThreadsLoading ||
+          isInteractionCapabilitiesLoading)),
+  );
   const lastHandledErrorThreadRef = useRef<string | null>(null);
   const suppressThreadUrlSyncRef = useRef(false);
 
   useEffect(() => {
-    if (threadIdFromUrl && !isThreadDeepLinkReady) return;
+    if (
+      threadIdFromUrl &&
+      (!isThreadDeepLinkReady || isInitialThreadListPending)
+    )
+      return;
 
     if (suppressThreadUrlSyncRef.current) {
       if (!threadIdFromUrl) {
@@ -1195,6 +1222,7 @@ function DiscussionInner({
   }, [
     isBackendMode,
     isInteractionCapabilitiesLoading,
+    isInitialThreadListPending,
     isThreadDeepLinkReady,
     openThread,
     setSearchParams,
@@ -2059,6 +2087,7 @@ function DiscussionInner({
         hasNextPage={isNoteDeepLinkPending ? false : hasNextDiscussionPage}
         isFetchingNextPage={isFetchingNextDiscussionPage}
         isThreadsLoading={isThreadsLoading}
+        isThreadDeepLinkPending={isThreadDeepLinkPending}
         isAllInitialLoading={isAllInitialLoading}
         isThreadsError={isThreadsError}
         onRetryThreads={() => refetchThreads()}
@@ -2302,6 +2331,7 @@ interface ThreadSurfaceProps {
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   isThreadsLoading?: boolean;
+  isThreadDeepLinkPending?: boolean;
   isAllInitialLoading?: boolean;
   isThreadsError?: boolean;
   onRetryThreads?: () => void;
@@ -2610,6 +2640,7 @@ function ThreadSurface({
   hasNextPage = false,
   isFetchingNextPage = false,
   isThreadsLoading = false,
+  isThreadDeepLinkPending = false,
   isAllInitialLoading = false,
   isThreadsError = false,
   onRetryThreads,
@@ -3093,7 +3124,18 @@ function ThreadSurface({
         className={`mt-2.5 ${isPhone ? "pb-36" : "pb-4"}`}
         data-discussion-feed-list
       >
-        {isAllInitialLoading ? (
+        {isThreadDeepLinkPending ? (
+          <div
+            className="py-12 text-center"
+            data-testid="learning-thread-deep-link-loading"
+            role="status"
+          >
+            <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
+            <p className="text-sm font-medium text-(--muted)">
+              Loading discussion…
+            </p>
+          </div>
+        ) : isAllInitialLoading ? (
           <div
             className="py-12 text-center"
             data-testid="learning-all-loading"

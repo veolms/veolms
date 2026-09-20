@@ -137,6 +137,7 @@ export default function LearningRoute() {
   const targetLessonUuid = searchParams.get("lessonId");
   const threadDeepLinkId = getCoursePlayerThread(location.search);
   const noteDeepLinkId = getCoursePlayerNote(location.search);
+  const hasDiscussionDeepLink = Boolean(threadDeepLinkId || noteDeepLinkId);
   const deepLinkLessonUuid =
     (threadDeepLinkId || noteDeepLinkId) && targetLessonUuid
       ? targetLessonUuid
@@ -183,10 +184,20 @@ export default function LearningRoute() {
 
   const lessonId = resolvedFromUuid ?? routeLessonId;
   const isLessonUuidResolutionPending = Boolean(
-    deepLinkLessonUuid &&
-      isCourseOverviewLoading &&
-      !courseOverview,
+    deepLinkLessonUuid && isCourseOverviewLoading && !courseOverview,
   );
+  const isDeepLinkRouteSettled =
+    !hasDiscussionDeepLink ||
+    Boolean(
+      courseOverview &&
+      canonicalCourseSlug &&
+      canonicalCourseSlug === courseSlug &&
+      hasExplicitLectureSlug &&
+      resolvedExplicitLessonId !== null &&
+      resolvedExplicitLessonId === lessonId &&
+      !targetLessonUuid &&
+      !isLessonUuidResolutionPending,
+    );
   const apiLesson = allApiLessons[lessonId - 1];
   const quizAssignment = myQuizAssignments?.assignments.find(
     (assignment) =>
@@ -212,6 +223,12 @@ export default function LearningRoute() {
 
   useEffect(() => {
     if (isLessonUuidResolutionPending) return;
+    if (
+      hasDiscussionDeepLink &&
+      (!courseOverview ||
+        (canonicalCourseSlug && canonicalCourseSlug !== courseSlug))
+    )
+      return;
 
     const currentPath = `${location.pathname}${location.search}`;
     const nextPath = courseSlug
@@ -226,6 +243,9 @@ export default function LearningRoute() {
     }
   }, [
     courseSlug,
+    canonicalCourseSlug,
+    courseOverview,
+    hasDiscussionDeepLink,
     isLessonUuidResolutionPending,
     lessonId,
     location.pathname,
@@ -243,6 +263,7 @@ export default function LearningRoute() {
       canonicalCourseSlug === courseSlug
     )
       return;
+    if (hasDiscussionDeepLink && isLessonUuidResolutionPending) return;
 
     migrateCoursePlayerSessionKey(courseSlug, canonicalCourseSlug);
     const threadId = noteDeepLinkId ? null : threadDeepLinkId;
@@ -261,7 +282,9 @@ export default function LearningRoute() {
   }, [
     canonicalCourseSlug,
     courseSlug,
+    hasDiscussionDeepLink,
     isQuizViewRequested,
+    isLessonUuidResolutionPending,
     lessonId,
     location.search,
     navigate,
@@ -343,6 +366,8 @@ export default function LearningRoute() {
       registerPersistentPlayer={registerPersistentPlayer}
       onMinimizePlayer={minimizePlayer}
       deepLinkLessonUuid={deepLinkLessonUuid}
+      isDiscussionDeepLink={hasDiscussionDeepLink}
+      deepLinkRouteSettled={isDeepLinkRouteSettled}
       noteDeepLinkId={noteDeepLinkId}
       quizAssignment={quizAssignment ?? null}
       quizAssignments={myQuizAssignments?.assignments ?? null}
