@@ -6,7 +6,7 @@ import type {
 import { AppError } from "../../../lib/errors.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 import * as repo from "../shared/quiz.repository.ts";
-import type { QuizServiceOptions } from "../shared/quiz.types.ts";
+import { isAdmin, type QuizServiceOptions } from "../shared/quiz.types.ts";
 import { gradeQuizQuestion, hasQuizAnswer } from "../shared/quiz.grading.ts";
 
 function assignmentDto(row: Awaited<ReturnType<typeof repo.findAssignment>>) {
@@ -89,19 +89,29 @@ export function createAttemptService(options: QuizServiceOptions) {
   const { database, accessService, courseService } = options;
   const outbox = createOutboxService();
 
+  async function hasCourseAccess(
+    userId: string,
+    courseId: string,
+    roles: readonly string[] = [],
+  ) {
+    if (isAdmin({ id: userId, roles })) return true;
+    const course = await courseService.findCourseById(courseId);
+    if (course?.creator_id === userId) return true;
+    if (await repo.isPublishedFreeCourse(database, courseId)) return true;
+    return accessService.hasActiveAccess(database, userId, courseId);
+  }
+
   async function getAssignment(assignmentId: string) {
     return assignmentDto(await repo.findAssignment(database, assignmentId));
   }
 
-  async function assertCanAttempt(assignmentId: string, userId: string) {
+  async function assertCanAttempt(
+    assignmentId: string,
+    userId: string,
+    roles: readonly string[] = [],
+  ) {
     const assignment = await getAssignment(assignmentId);
-    if (
-      !(await accessService.hasActiveAccess(
-        database,
-        userId,
-        assignment.course_id,
-      ))
-    )
+    if (!(await hasCourseAccess(userId, assignment.course_id, roles)))
       throw new AppError(
         403,
         "COURSE_ACCESS_REQUIRED",
@@ -174,17 +184,15 @@ export function createAttemptService(options: QuizServiceOptions) {
     };
   }
 
-  async function start(userId: string, assignmentId: string) {
-    checkRateLimit(
-      startAttemptTimestamps,
-      `${userId}:${assignmentId}`,
-      5,
-      60_000,
-      "Too many attempt start requests. Please wait a moment.",
-    );
+  async function start(
+    userId: string,
+    assignmentId: string,
+    roles: readonly string[] = [],
+  ) {
     const { assignment, version } = await assertCanAttempt(
       assignmentId,
       userId,
+      roles,
     );
     const existing = await repo.findActiveAttempt(
       database,
@@ -196,6 +204,13 @@ export function createAttemptService(options: QuizServiceOptions) {
         await repo.updateAttempt(database, existing.id, { status: "expired" });
       } else return buildAttempt(existing);
     }
+    checkRateLimit(
+      startAttemptTimestamps,
+      `${userId}:${assignmentId}`,
+      5,
+      60_000,
+      "Too many attempt start requests. Please wait a moment.",
+    );
     const now = new Date();
     if (assignment.available_from && assignment.available_from > now)
       throw new AppError(
@@ -252,18 +267,16 @@ export function createAttemptService(options: QuizServiceOptions) {
     }
   }
 
-  async function requireOwnedActiveAttempt(userId: string, attemptId: string) {
+  async function requireOwnedActiveAttempt(
+    userId: string,
+    attemptId: string,
+    roles: readonly string[] = [],
+  ) {
     const attempt = await repo.findAttempt(database, attemptId);
     if (!attempt || attempt.user_id !== userId)
       throw new AppError(404, "ATTEMPT_NOT_FOUND", "Quiz attempt not found.");
     const assignment = await getAssignment(attempt.assignment_id);
-    if (
-      !(await accessService.hasActiveAccess(
-        database,
-        userId,
-        assignment.course_id,
-      ))
-    )
+    if (!(await hasCourseAccess(userId, assignment.course_id, roles)))
       throw new AppError(
         403,
         "COURSE_ACCESS_REQUIRED",
@@ -332,6 +345,7 @@ export function createAttemptService(options: QuizServiceOptions) {
     userId: string,
     attemptId: string,
     payload: BulkQuizAnswersRequest,
+    roles: readonly string[] = [],
   ) {
     checkRateLimit(
       answerSaveTimestamps,
@@ -340,7 +354,7 @@ export function createAttemptService(options: QuizServiceOptions) {
       60_000,
       "Saving answers too rapidly. Please slow down.",
     );
-    const attempt = await requireOwnedActiveAttempt(userId, attemptId);
+    const attempt = await requireOwnedActiveAttempt(userId, attemptId, roles);
     const ids = payload.answers.map((answer) => answer.questionId);
     if (new Set(ids).size !== ids.length)
       throw new AppError(
@@ -523,13 +537,17 @@ export function createAttemptService(options: QuizServiceOptions) {
     };
   }
 
-  async function submit(userId: string, attemptId: string) {
+  async function submit(
+    userId: string,
+    attemptId: string,
+    roles: readonly string[] = [],
+  ) {
     const existing = await repo.findAttempt(database, attemptId);
     if (!existing || existing.user_id !== userId)
       throw new AppError(404, "ATTEMPT_NOT_FOUND", "Quiz attempt not found.");
     if (existing.status === "graded" || existing.status === "submitted")
       return result(userId, attemptId);
-    await requireOwnedActiveAttempt(userId, attemptId);
+    await requireOwnedActiveAttempt(userId, attemptId, roles);
     const attempt = existing;
     const assignment = await getAssignment(attempt.assignment_id);
     const now = new Date();
@@ -767,13 +785,19 @@ export function createAttemptService(options: QuizServiceOptions) {
 
   async function listAssignments(userId: string) {
     const grants = await accessService.listUserGrants(database, userId);
-    const courseIds = grants
+    const accessibleCourseIds = grants
       .filter(
         (grant) =>
           grant.status === "active" &&
           (!grant.validUntil || grant.validUntil > new Date()),
       )
       .map((grant) => grant.courseId);
+    const courseIds = [
+      ...new Set([
+        ...accessibleCourseIds,
+        ...(await repo.listPublishedFreeCourseIds(database)),
+      ]),
+    ];
     const assignments = await repo.listAssignmentsForCourses(
       database,
       courseIds,

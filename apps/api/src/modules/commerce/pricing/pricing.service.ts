@@ -1,4 +1,8 @@
-import type { CartItemInput, PricingCalculation, CouponValidationResult } from "@veolms/contracts";
+import type {
+  CartItemInput,
+  PricingCalculation,
+  CouponValidationResult,
+} from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import * as courseRepo from "../../courses/course/course.repository.ts";
@@ -6,6 +10,10 @@ import * as courseConfigRepo from "../../courses/configuration/configuration.rep
 import * as bundleRepo from "../bundles/bundle.repository.ts";
 import * as couponRepo from "../coupons/coupon.repository.ts";
 import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
+import {
+  computeCouponDiscount,
+  resolveCourseCharge,
+} from "./pricing.amount.ts";
 
 export interface CalculatePricingParams {
   userId?: string | null;
@@ -41,7 +49,9 @@ export function createPricingService({
 
     // 1. Fetch user enrollments if authenticated to prevent duplicate ownership
     const enrolledCourseIds = userId
-      ? new Set(await enrollmentRepo.listUserEnrolledCourseIds(database, userId))
+      ? new Set(
+          await enrollmentRepo.listUserEnrolledCourseIds(database, userId),
+        )
       : new Set<string>();
 
     const calculatedItems: Array<{
@@ -49,6 +59,8 @@ export function createPricingService({
       itemId: string;
       title: string;
       unitPrice: number;
+      /** Catalog amount coupons may discount. Excludes voluntary tips. */
+      couponBase: number;
       discountAmount: number;
       taxAmount: number;
       finalAmount: number;
@@ -68,18 +80,27 @@ export function createPricingService({
     //    order, same first-invalid-item-throws semantics — it just reads
     //    from these pre-fetched Maps instead of awaiting a query per item.
     const courseIds = [
-      ...new Set(items.filter((it) => it.itemType === "course").map((it) => it.courseId!)),
+      ...new Set(
+        items
+          .filter((it) => it.itemType === "course")
+          .map((it) => it.courseId!),
+      ),
     ];
     const bundleIds = [
-      ...new Set(items.filter((it) => it.itemType === "bundle").map((it) => it.bundleId!)),
+      ...new Set(
+        items
+          .filter((it) => it.itemType === "bundle")
+          .map((it) => it.bundleId!),
+      ),
     ];
 
-    const [courseRows, pricingRows, bundleRows, bundleCourseRows] = await Promise.all([
-      courseRepo.findCoursesByIds(database, courseIds),
-      courseConfigRepo.findPricingByCourseIds(database, courseIds),
-      bundleRepo.findBundlesByIds(database, bundleIds),
-      bundleRepo.listBundleCoursesForBundleIds(database, bundleIds),
-    ]);
+    const [courseRows, pricingRows, bundleRows, bundleCourseRows] =
+      await Promise.all([
+        courseRepo.findCoursesByIds(database, courseIds),
+        courseConfigRepo.findPricingByCourseIds(database, courseIds),
+        bundleRepo.findBundlesByIds(database, bundleIds),
+        bundleRepo.listBundleCoursesForBundleIds(database, bundleIds),
+      ]);
 
     const coursesById = new Map(courseRows.map((c) => [c.id, c]));
     const pricingByCourseId = new Map(pricingRows.map((p) => [p.course_id, p]));
@@ -105,25 +126,31 @@ export function createPricingService({
           throw CommerceErrors.COURSE_ALREADY_OWNED(course.title);
         }
 
-        // Fetch live pricing
         const pricing = pricingByCourseId.get(courseId);
-        let unitPrice = 0;
-        if (pricing && pricing.pricing_type === "paid") {
-          const isSaleActive =
-            pricing.sale_price !== null &&
-            pricing.sale_price !== undefined;
+        const isPaidCourse = Boolean(
+          pricing && pricing.pricing_type === "paid",
+        );
+        const catalogPrice =
+          isPaidCourse && pricing
+            ? pricing.sale_price !== null && pricing.sale_price !== undefined
+              ? pricing.sale_price
+              : pricing.price
+            : 0;
+        const itemCurrency = pricing?.currency ?? "INR";
+        const { unitPrice, couponBase } = resolveCourseCharge({
+          isPaidCourse,
+          catalogPrice,
+          customAmount: item.customAmount,
+          currency: itemCurrency,
+        });
 
-          unitPrice = isSaleActive && pricing.sale_price !== null ? pricing.sale_price : pricing.price;
-
-          const itemCurrency = pricing.currency ?? "INR";
-          if (!currencyInitialized) {
-            detectedCurrency = itemCurrency;
-            currencyInitialized = true;
-          } else if (itemCurrency !== detectedCurrency && unitPrice > 0) {
-            throw CommerceErrors.PRICE_CALCULATION_FAILED(
-              `Cart contains items with mixed currencies (${detectedCurrency} and ${itemCurrency}).`,
-            );
-          }
+        if (!currencyInitialized) {
+          detectedCurrency = itemCurrency;
+          currencyInitialized = true;
+        } else if (itemCurrency !== detectedCurrency && unitPrice > 0) {
+          throw CommerceErrors.PRICE_CALCULATION_FAILED(
+            `Cart contains items with mixed currencies (${detectedCurrency} and ${itemCurrency}).`,
+          );
         }
 
         calculatedItems.push({
@@ -131,6 +158,7 @@ export function createPricingService({
           itemId: courseId,
           title: course.title,
           unitPrice,
+          couponBase,
           discountAmount: 0,
           taxAmount: 0,
           finalAmount: unitPrice,
@@ -175,6 +203,7 @@ export function createPricingService({
           itemId: bundleId,
           title: bundle.title,
           unitPrice,
+          couponBase: unitPrice,
           discountAmount: 0,
           taxAmount: 0,
           finalAmount: unitPrice,
@@ -205,13 +234,26 @@ export function createPricingService({
       if (new Date(coupon.expires_at) < now) {
         throw CommerceErrors.COUPON_EXPIRED(codeUpper);
       }
-      if (subtotalAmount < coupon.min_order_amount) {
-        throw CommerceErrors.COUPON_MIN_ORDER_NOT_MET(codeUpper, coupon.min_order_amount);
+      const catalogSubtotal = calculatedItems.reduce(
+        (sum, it) => sum + it.couponBase,
+        0,
+      );
+      if (catalogSubtotal < coupon.min_order_amount) {
+        throw CommerceErrors.COUPON_MIN_ORDER_NOT_MET(
+          codeUpper,
+          coupon.min_order_amount,
+        );
       }
 
       // Check global limit
-      if (coupon.global_usage_limit !== null && coupon.global_usage_limit !== undefined) {
-        const globalUsed = await couponRepo.countCouponRedemptionsGlobal(database, coupon.id);
+      if (
+        coupon.global_usage_limit !== null &&
+        coupon.global_usage_limit !== undefined
+      ) {
+        const globalUsed = await couponRepo.countCouponRedemptionsGlobal(
+          database,
+          coupon.id,
+        );
         if (globalUsed >= coupon.global_usage_limit) {
           throw CommerceErrors.COUPON_USAGE_LIMIT_REACHED(codeUpper);
         }
@@ -219,7 +261,11 @@ export function createPricingService({
 
       // Check per-user limit
       if (userId && coupon.per_user_limit) {
-        const userUsed = await couponRepo.countCouponRedemptionsByUser(database, coupon.id, userId);
+        const userUsed = await couponRepo.countCouponRedemptionsByUser(
+          database,
+          coupon.id,
+          userId,
+        );
         if (userUsed >= coupon.per_user_limit) {
           throw CommerceErrors.COUPON_USER_LIMIT_REACHED(codeUpper);
         }
@@ -231,13 +277,25 @@ export function createPricingService({
 
       for (const item of calculatedItems) {
         let isEligible = true;
-        if (coupon.restricted_course_ids && coupon.restricted_course_ids.length > 0) {
+        if (item.itemType === "course") {
+          const p = pricingByCourseId.get(item.itemId);
+          if (!p || p.pricing_type !== "paid" || item.couponBase <= 0) {
+            isEligible = false;
+          }
+        }
+        if (
+          coupon.restricted_course_ids &&
+          coupon.restricted_course_ids.length > 0
+        ) {
           const restricted = new Set(coupon.restricted_course_ids);
           if (item.itemType === "course" && !restricted.has(item.itemId)) {
             isEligible = false;
           }
         }
-        if (coupon.restricted_bundle_ids && coupon.restricted_bundle_ids.length > 0) {
+        if (
+          coupon.restricted_bundle_ids &&
+          coupon.restricted_bundle_ids.length > 0
+        ) {
           const restricted = new Set(coupon.restricted_bundle_ids);
           if (item.itemType === "bundle" && !restricted.has(item.itemId)) {
             isEligible = false;
@@ -245,7 +303,7 @@ export function createPricingService({
         }
 
         if (isEligible) {
-          eligibleSubtotal += item.unitPrice;
+          eligibleSubtotal += item.couponBase;
           eligibleItems.push(item);
         }
       }
@@ -254,28 +312,24 @@ export function createPricingService({
         throw CommerceErrors.COUPON_NOT_APPLICABLE(codeUpper);
       }
 
-      // Calculate discount amount
-      if (coupon.discount_type === "percentage") {
-        const calculatedDiscount = Math.floor((eligibleSubtotal * coupon.discount_value) / 100);
-        totalDiscount = coupon.max_discount_amount
-          ? Math.min(calculatedDiscount, coupon.max_discount_amount)
-          : calculatedDiscount;
-      } else {
-        // fixed discount
-        totalDiscount = Math.min(coupon.discount_value, eligibleSubtotal);
-      }
+      totalDiscount = computeCouponDiscount({
+        discountType: coupon.discount_type,
+        discountValue: coupon.discount_value,
+        maxDiscountAmount: coupon.max_discount_amount,
+        eligibleCatalogSubtotal: eligibleSubtotal,
+      });
 
-      // Cap discount at eligible subtotal
-      totalDiscount = Math.min(totalDiscount, eligibleSubtotal);
-
-      // Allocate proportional discount among eligible items
+      // Allocate proportional discount among eligible items by catalog base.
+      // Tip remains on unitPrice, so finalAmount = catalog + tip - catalogDiscount.
       let remainingDiscountToDistribute = totalDiscount;
       for (let i = 0; i < eligibleItems.length; i++) {
         const it = eligibleItems[i]!;
         if (i === eligibleItems.length - 1) {
           it.discountAmount = remainingDiscountToDistribute;
         } else {
-          const itemDiscount = Math.floor((it.unitPrice / eligibleSubtotal) * totalDiscount);
+          const itemDiscount = Math.floor(
+            (it.couponBase / eligibleSubtotal) * totalDiscount,
+          );
           it.discountAmount = itemDiscount;
           remainingDiscountToDistribute -= itemDiscount;
         }
@@ -304,7 +358,15 @@ export function createPricingService({
       currency: detectedCurrency,
       couponCode: couponValidation?.code,
       couponId,
-      items: calculatedItems,
+      items: calculatedItems.map((it) => ({
+        itemType: it.itemType,
+        itemId: it.itemId,
+        title: it.title,
+        unitPrice: it.unitPrice,
+        discountAmount: it.discountAmount,
+        taxAmount: it.taxAmount,
+        finalAmount: it.finalAmount,
+      })),
     };
 
     return {

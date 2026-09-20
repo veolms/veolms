@@ -668,6 +668,7 @@ export function LearningWorkspace({
     fallbackEmptyLesson;
   const courseQuizAssignments = useCourseQuizAssignments(
     courseOverview?.course.id,
+    { enabled: isAuthenticated },
   );
   const [activeLessonView, setActiveLessonView] = useState<"video" | "quiz">(
     initialLessonView,
@@ -690,10 +691,10 @@ export function LearningWorkspace({
 
   const hasLessonQuiz = useCallback(
     (lessonNumber: number): boolean => {
+      const lesson = curriculumLessonsById.get(lessonNumber);
+      if (lesson?.[5] === "quiz") return true;
       const uuid = getLessonUuid(lessonNumber);
       if (!uuid) {
-        const les = curriculumLessonsById.get(lessonNumber);
-        if (les && les[5] === "quiz") return true;
         return lessonNumber === selectedLesson
           ? Boolean(quizAssignment)
           : false;
@@ -714,13 +715,6 @@ export function LearningWorkspace({
       quizAssignments,
       courseQuizAssignments.data,
     ],
-  );
-
-  const isLessonQuizActive = useCallback(
-    (lessonNumber: number): boolean => {
-      return lessonNumber === selectedLesson && activeLessonView === "quiz";
-    },
-    [selectedLesson, activeLessonView],
   );
 
   const currentLessonUuid = getLessonUuid(selectedLesson);
@@ -2198,9 +2192,6 @@ export function LearningWorkspace({
           courseThumbnail={courseThumbnail}
           focusRequest={fullscreenCurriculumFocusRequest}
           persistenceKey={coursePersistenceKey}
-          hasLessonQuiz={hasLessonQuiz}
-          isLessonQuizActive={isLessonQuizActive}
-          onOpenLessonQuiz={handleOpenLessonQuiz}
         />
       </FullscreenLandscapeCurriculumPanel>
     ),
@@ -2218,9 +2209,6 @@ export function LearningWorkspace({
       onOpenCourseOverview,
       selectLesson,
       selectedLesson,
-      hasLessonQuiz,
-      isLessonQuizActive,
-      handleOpenLessonQuiz,
     ],
   );
   const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
@@ -2525,7 +2513,7 @@ export function LearningWorkspace({
                         handleOpenLessonQuiz(selectedLesson);
                       }
                     }}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-(--card-compact-shadow) shrink-0 ${
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer shadow-(--card-compact-shadow) shrink-0 ${
                       activeLessonView === "quiz"
                         ? "border border-(--accent) bg-[color-mix(in_srgb,var(--accent)_15%,var(--surface))] text-(--accent)"
                         : "border border-[color-mix(in_srgb,var(--text)_15%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] text-(--text) hover:border-(--accent) hover:text-(--accent)"
@@ -2537,11 +2525,9 @@ export function LearningWorkspace({
                         : "Open lesson quiz"
                     }
                   >
-                    <Exam size={14} weight="bold" className="text-(--accent)" />
+                    <Exam size={12} weight="bold" className="text-(--accent)" />
                     <span>
-                      {activeLessonView === "quiz"
-                        ? "Back to video"
-                        : "Lesson Quiz"}
+                      {activeLessonView === "quiz" ? "Back to video" : "Quiz"}
                     </span>
                   </button>
                 ) : null}
@@ -2555,9 +2541,13 @@ export function LearningWorkspace({
                 mobileBottomNavigation={mobileBottomNavigation}
                 mobileBottomNavigationHidden={mobileBottomNavigationHidden}
                 lessonDescription={selectedLessonDescription}
-                isLessonDescriptionLoading={isApiRoute && isCourseOverviewLoading}
+                isLessonDescriptionLoading={
+                  isApiRoute && isCourseOverviewLoading
+                }
                 interactionCapabilities={interactionCapabilities}
-                isInteractionCapabilitiesLoading={isInteractionCapabilitiesLoading}
+                isInteractionCapabilitiesLoading={
+                  isInteractionCapabilitiesLoading
+                }
               />
             </article>
           </div>
@@ -2621,9 +2611,6 @@ export function LearningWorkspace({
                 focusRequest={curriculumFocusRequest}
                 persistenceKey={coursePersistenceKey}
                 isLoading={isApiRoute && isCourseOverviewLoading}
-                hasLessonQuiz={hasLessonQuiz}
-                isLessonQuizActive={isLessonQuizActive}
-                onOpenLessonQuiz={handleOpenLessonQuiz}
               />
             </div>
           </div>
@@ -2786,9 +2773,6 @@ export function LearningWorkspace({
               drawerHeroControlProps={
                 phoneLessonDrawer ? lessonDrawerHeroControlProps : undefined
               }
-              hasLessonQuiz={hasLessonQuiz}
-              isLessonQuizActive={isLessonQuizActive}
-              onOpenLessonQuiz={handleOpenLessonQuiz}
             />
           </div>
         </DrawerContent>

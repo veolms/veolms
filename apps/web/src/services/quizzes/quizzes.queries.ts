@@ -50,13 +50,16 @@ export function useQuizResult(id: string | null | undefined) {
     staleTime: 60_000,
   });
 }
-export function useCourseQuizAssignments(courseId: string | null | undefined) {
+export function useCourseQuizAssignments(
+  courseId: string | null | undefined,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: courseId
       ? quizKeys.courseAssignments(courseId)
       : [...quizKeys.assignments(), "course", null],
     queryFn: () => quizzesService.listCourseAssignments(courseId!),
-    enabled: Boolean(courseId),
+    enabled: Boolean(courseId) && (options?.enabled ?? true),
     staleTime: 15_000,
   });
 }

@@ -182,7 +182,9 @@ export function createAuthoringService(options: QuizServiceOptions) {
   }
 
   async function listMine(actor: QuizActor) {
-    const rows = await repo.listQuizzesByCreator(database, actor.id);
+    const rows = isAdmin(actor)
+      ? await repo.listQuizzesByAcademy(database, await academyId())
+      : await repo.listQuizzesByCreator(database, actor.id);
     return Promise.all(rows.map((quiz) => getQuiz(actor, quiz.id)));
   }
 

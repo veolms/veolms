@@ -23,6 +23,19 @@ export async function listQuizzesByCreator(
     .execute();
 }
 
+export async function listQuizzesByAcademy(
+  database: DatabaseExecutor,
+  academyId: string,
+) {
+  return await database
+    .selectFrom("quizzes")
+    .selectAll()
+    .where("academy_id", "=", academyId)
+    .where("deleted_at", "is", null)
+    .orderBy("updated_at", "desc")
+    .execute();
+}
+
 export async function findVersion(
   database: DatabaseExecutor,
   versionId: string,
@@ -277,6 +290,32 @@ export async function listAssignmentsForCourses(
     .where("course_id", "in", courseIds)
     .orderBy("created_at", "asc")
     .execute();
+}
+
+export async function isPublishedFreeCourse(
+  database: DatabaseExecutor,
+  courseId: string,
+) {
+  const row = await database
+    .selectFrom("courses")
+    .innerJoin("course_pricing", "course_pricing.course_id", "courses.id")
+    .select(["courses.status", "course_pricing.pricing_type"])
+    .where("courses.id", "=", courseId)
+    .where("courses.deleted_at", "is", null)
+    .executeTakeFirst();
+  return row?.status === "published" && row.pricing_type === "free";
+}
+
+export async function listPublishedFreeCourseIds(database: DatabaseExecutor) {
+  const rows = await database
+    .selectFrom("courses")
+    .innerJoin("course_pricing", "course_pricing.course_id", "courses.id")
+    .select("courses.id")
+    .where("courses.status", "=", "published")
+    .where("courses.deleted_at", "is", null)
+    .where("course_pricing.pricing_type", "=", "free")
+    .execute();
+  return rows.map((row) => row.id);
 }
 
 export async function listAssignmentsForQuizzes(

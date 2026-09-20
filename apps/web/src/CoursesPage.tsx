@@ -560,6 +560,9 @@ export function CoursesPage({
       return "student";
     }
   });
+  const [hydratedWorkspaceRoleKey, setHydratedWorkspaceRoleKey] = useState<
+    string | null
+  >(null);
   const publicNavigationItems = getPublicNavigationItems();
   const [savedShellProfiles, setSavedShellProfiles] = useState<
     Record<CourseRole, ProfilePreferences | null>
@@ -736,6 +739,12 @@ export function CoursesPage({
     [isAuthenticated, role, userRoles],
   );
   const isAuthReady = Boolean(storeUser) || authUserFetched;
+  const workspaceRoleKey =
+    storedPreferencesReady && authUserFetched
+      ? (activeUser?.id ?? "guest")
+      : null;
+  const isWorkspaceRoleHydrated =
+    workspaceRoleKey !== null && hydratedWorkspaceRoleKey === workspaceRoleKey;
   const { isPending: isSigningOut, signOut } = useSignOut();
   const signOutAfterSync = useCallback(async () => {
     try {
@@ -987,6 +996,7 @@ export function CoursesPage({
       getWorkspaceRoleStorageKey(activeUser?.id),
     );
     setRole(storedRole === "creator" ? "creator" : "student");
+    setHydratedWorkspaceRoleKey(activeUser?.id ?? "guest");
   }, [activeUser?.id, authUserFetched, storedPreferencesReady]);
 
   useEffect(() => {
@@ -1273,7 +1283,8 @@ export function CoursesPage({
   }, [role, userRoles]);
 
   useEffect(() => {
-    if (!storedPreferencesReady || !authUserFetched) return;
+    if (!storedPreferencesReady || !authUserFetched || !isWorkspaceRoleHydrated)
+      return;
     localStorage.setItem(getWorkspaceRoleStorageKey(activeUser?.id), role);
     setCourseMenu(null);
     setEnrollmentFilter("all");
@@ -1289,10 +1300,16 @@ export function CoursesPage({
     page,
     requestedSection,
     role,
+    isWorkspaceRoleHydrated,
     storedPreferencesReady,
   ]);
 
   useEffect(() => {
+    // The initial role is deterministic for SSR/hydration and may still be
+    // "student" while the account-specific workspace role is being restored.
+    // Do not redirect a valid creator route during that one render window.
+    if (!isWorkspaceRoleHydrated || !isAuthenticated) return;
+
     if (effectiveRole !== "creator") {
       const forbiddenPages = [
         "students",
@@ -1308,7 +1325,14 @@ export function CoursesPage({
         onNavigatePage?.("/");
       }
     }
-  }, [effectiveRole, onNavigatePage, page, requestedSection]);
+  }, [
+    effectiveRole,
+    isAuthenticated,
+    isWorkspaceRoleHydrated,
+    onNavigatePage,
+    page,
+    requestedSection,
+  ]);
 
   useEffect(() => {
     if (!storedPreferencesReady) return;
@@ -3409,11 +3433,7 @@ export function CoursesPage({
         />
       );
     }
-    if (
-      surfacePage === "quizzes" ||
-      surfaceActiveSection === "Analytics" ||
-      surfaceActiveSection === "Quizzes"
-    ) {
+    if (surfacePage === "quizzes") {
       return <QuizAnalyticsPage role={role} onNavigatePage={onNavigatePage} />;
     }
     if (surfacePage === "student-details") {

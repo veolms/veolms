@@ -99,24 +99,7 @@ export async function seedAdminUsers(
     )
     .execute();
 
-  const emails = ADMIN_USERS.map((u) => u.email.toLowerCase());
-  const ids = ADMIN_USERS.map((u) => u.id);
-  const usernames = ADMIN_USERS.map((u) => u.username.toLowerCase());
-
-  // 2. Remove any existing users matching these emails, ids, or usernames
-  // to ensure a completely clean fresh state (no stale sessions, old student roles, etc.)
-  await database
-    .deleteFrom("users")
-    .where((eb) =>
-      eb.or([
-        eb(sql`LOWER(email)`, "in", emails),
-        eb("id", "in", ids),
-        eb(sql`LOWER(username)`, "in", usernames),
-      ]),
-    )
-    .execute();
-
-  // 3. Seed fresh admin users
+  // 2. Upsert admin users and assign platform admin role
   for (const admin of ADMIN_USERS) {
     const normalizedEmail = admin.email.trim().toLowerCase();
 
@@ -133,6 +116,15 @@ export async function seedAdminUsers(
         mfa_mandatory: false,
         is_deleted: false,
       })
+      .onConflict((conflict) =>
+        conflict.column("id").doUpdateSet({
+          email: normalizedEmail,
+          username: admin.username,
+          display_name: admin.displayName,
+          is_deleted: false,
+          updated_at: new Date(),
+        }),
+      )
       .execute();
 
     // Assign the admin role in user_roles
@@ -145,18 +137,27 @@ export async function seedAdminUsers(
       .onConflict((conflict) => conflict.doNothing())
       .execute();
 
-    // Assign platform-scoped role_assignment
-    await database
-      .insertInto("role_assignments")
-      .values({
-        id: crypto.randomUUID(),
-        user_id: admin.id,
-        role_id: adminRoleId,
-        scope_type: "platform",
-        course_id: null,
-      })
-      .onConflict((conflict) => conflict.doNothing())
-      .execute();
+    // Ensure platform-scoped role_assignment exists
+    const existingAssignment = await database
+      .selectFrom("role_assignments")
+      .select("id")
+      .where("user_id", "=", admin.id)
+      .where("role_id", "=", adminRoleId)
+      .where("scope_type", "=", "platform")
+      .executeTakeFirst();
+
+    if (!existingAssignment) {
+      await database
+        .insertInto("role_assignments")
+        .values({
+          id: crypto.randomUUID(),
+          user_id: admin.id,
+          role_id: adminRoleId,
+          scope_type: "platform",
+          course_id: null,
+        })
+        .execute();
+    }
   }
 
   console.info(
