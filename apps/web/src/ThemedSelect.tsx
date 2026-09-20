@@ -53,6 +53,7 @@ export interface ThemedSelectProps<Value extends string = string> {
   searchPlaceholder?: string;
   searchDebounceMs?: number;
   menuMinWidth?: number;
+  menuMaxWidth?: number;
   defaultLimit?: number;
   action?: ThemedSelectAction;
   compactOnMobile?: boolean;
@@ -92,6 +93,7 @@ export function ThemedSelect<Value extends string>({
   searchPlaceholder = "Search...",
   searchDebounceMs = DEFAULT_DEBOUNCE_DELAY_MS,
   menuMinWidth,
+  menuMaxWidth = THEMED_SELECT_MENU_MAX_WIDTH,
   defaultLimit,
   action,
   compactOnMobile = false,
@@ -223,7 +225,7 @@ export function ThemedSelect<Value extends string>({
     );
     const width = Math.min(
       desiredWidth,
-      THEMED_SELECT_MENU_MAX_WIDTH,
+      menuMaxWidth,
       window.innerWidth - viewportPadding * 2,
     );
     let left = rect.left;
@@ -243,6 +245,7 @@ export function ThemedSelect<Value extends string>({
     filteredOptions.length,
     measureNaturalMenuWidth,
     matchMenuToContainer,
+    menuMaxWidth,
     menuMinWidth,
     searchable,
   ]);
