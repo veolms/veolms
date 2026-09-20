@@ -33,6 +33,7 @@ interface CurriculumProps {
   lessonProgress?: Readonly<Record<number, number>>;
   onSelectLesson: (lessonNumber: number) => void;
   onOpenCourseOverview?: () => void;
+  courseNavigationActionLabel?: string;
   courseTitle: string;
   courseThumbnail?: string;
   onClose?: () => void;
@@ -62,6 +63,7 @@ export function Curriculum({
   lessonProgress = {},
   onSelectLesson,
   onOpenCourseOverview,
+  courseNavigationActionLabel,
   courseTitle,
   courseThumbnail = "",
   onClose,
@@ -446,9 +448,14 @@ export function Curriculum({
               aria-label={
                 searchOpen
                   ? "Close lesson search"
-                  : `View course overview for ${courseTitle}`
+                  : (courseNavigationActionLabel ??
+                    `View course overview for ${courseTitle}`)
               }
-              title={searchOpen ? "Close search" : "View"}
+              title={
+                searchOpen
+                  ? "Close search"
+                  : (courseNavigationActionLabel ?? "View")
+              }
               onClick={() => {
                 if (searchOpen) {
                   setSearchOpen(false);

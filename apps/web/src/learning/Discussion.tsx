@@ -1672,12 +1672,15 @@ function DiscussionInner({
       if (!isBackendNote && openThread?.id === clientId) {
         suppressThreadUrlSyncRef.current = true;
         setOpenThread(null);
-        setSearchParams((prev) => {
-          if (!prev.has("thread")) return prev;
-          const next = new URLSearchParams(prev);
-          next.delete("thread");
-          return next;
-        });
+        setSearchParams(
+          (prev) => {
+            if (!prev.has("thread")) return prev;
+            const next = new URLSearchParams(prev);
+            next.delete("thread");
+            return next;
+          },
+          { replace: true },
+        );
       }
       return;
     }
@@ -2129,12 +2132,15 @@ function DiscussionInner({
           const clientId = getClientEntityId(entry);
           const serverId = getServerEntityId(entry);
           setOpenThread({ id: clientId, focusComposer });
-          setSearchParams((prev) => {
-            const next = new URLSearchParams(prev);
-            if (serverId) next.set("thread", serverId);
-            else next.delete("thread");
-            return next;
-          });
+          setSearchParams(
+            (prev) => {
+              const next = new URLSearchParams(prev);
+              if (serverId) next.set("thread", serverId);
+              else next.delete("thread");
+              return next;
+            },
+            { replace: true },
+          );
         }}
         isBackendMode={isBackendMode}
         currentUserId={currentUser?.id}
@@ -2168,12 +2174,15 @@ function DiscussionInner({
           if (!open) {
             suppressThreadUrlSyncRef.current = true;
             setOpenThread(null);
-            setSearchParams((prev) => {
-              if (!prev.has("thread")) return prev;
-              const next = new URLSearchParams(prev);
-              next.delete("thread");
-              return next;
-            });
+            setSearchParams(
+              (prev) => {
+                if (!prev.has("thread")) return prev;
+                const next = new URLSearchParams(prev);
+                next.delete("thread");
+                return next;
+              },
+              { replace: true },
+            );
           }
         }}
         onActiveEntryChange={(id) => {

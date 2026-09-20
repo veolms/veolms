@@ -239,6 +239,7 @@ interface LearningWorkspaceProps {
   lessonId: number;
   deepLinkLessonUuid?: string | null;
   noteDeepLinkId?: string | null;
+  courseNavigationActionLabel?: string;
   initialLessonView?: "video" | "quiz";
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden?: boolean;
@@ -319,6 +320,7 @@ export function LearningWorkspace({
   lessonId,
   deepLinkLessonUuid = null,
   noteDeepLinkId = null,
+  courseNavigationActionLabel,
   initialLessonView = "video",
   mobileBottomNavigation,
   mobileBottomNavigationHidden = false,
@@ -2232,6 +2234,7 @@ export function LearningWorkspace({
           onSelectLesson={selectLesson}
           isLessonAvailable={isLessonAvailable}
           onOpenCourseOverview={onOpenCourseOverview}
+          courseNavigationActionLabel={courseNavigationActionLabel}
           courseTitle={courseTitle}
           courseThumbnail={courseThumbnail}
           focusRequest={fullscreenCurriculumFocusRequest}
@@ -2245,6 +2248,7 @@ export function LearningWorkspace({
     [
       coursePersistenceKey,
       closeFullscreenLessonPanel,
+      courseNavigationActionLabel,
       courseThumbnail,
       courseTitle,
       curriculumLessonsById,
@@ -2658,6 +2662,7 @@ export function LearningWorkspace({
                 onSelectLesson={selectLesson}
                 isLessonAvailable={isLessonAvailable}
                 onOpenCourseOverview={onOpenCourseOverview}
+                courseNavigationActionLabel={courseNavigationActionLabel}
                 courseTitle={courseTitle}
                 courseThumbnail={courseThumbnail}
                 focusRequest={curriculumFocusRequest}
@@ -2807,6 +2812,7 @@ export function LearningWorkspace({
               onSelectLesson={selectLesson}
               isLessonAvailable={isLessonAvailable}
               onOpenCourseOverview={onOpenCourseOverview}
+              courseNavigationActionLabel={courseNavigationActionLabel}
               courseTitle={courseTitle}
               courseThumbnail={courseThumbnail}
               focusRequest={

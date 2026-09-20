@@ -426,6 +426,7 @@ export default function AcademyLayout() {
           locationPathRef.current = path;
           void navigate(path, {
             preventScrollReset: true,
+            replace: options?.replace,
           });
         }
       };
