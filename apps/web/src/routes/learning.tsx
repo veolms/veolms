@@ -102,9 +102,10 @@ export default function LearningRoute() {
   const activeUser = authUser || storeUser;
   const origin = getCoursePlayerOrigin(location.search);
   const routeReturnPath = getCoursePlayerReturnPath(location.search);
-  const { data: courseOverview } = useCourseOverview(courseSlug, {
-    enabled: Boolean(courseSlug),
-  });
+  const { data: courseOverview, isLoading: isCourseOverviewLoading } =
+    useCourseOverview(courseSlug, {
+      enabled: Boolean(courseSlug),
+    });
   const { data: publishedCoursesData } = useCourses({
     enabled: Boolean(activeUser),
   });
@@ -124,6 +125,7 @@ export default function LearningRoute() {
     [location.search],
   );
   const targetLessonUuid = searchParams.get("lessonId");
+  const threadDeepLinkId = getCoursePlayerThread(location.search);
   const isQuizViewRequested = searchParams.get("view") === "quiz";
 
   const canonicalCourseSlug = courseOverview?.course.slug;
@@ -154,6 +156,12 @@ export default function LearningRoute() {
   }, [targetLessonUuid, allApiLessons]);
 
   const lessonId = resolvedFromUuid ?? routeLessonId;
+  const isLessonUuidResolutionPending = Boolean(
+    threadDeepLinkId &&
+      targetLessonUuid &&
+      isCourseOverviewLoading &&
+      !courseOverview,
+  );
   const apiLesson = allApiLessons[lessonId - 1];
   const quizAssignment = myQuizAssignments?.assignments.find(
     (assignment) =>
@@ -178,6 +186,8 @@ export default function LearningRoute() {
   }, [courseSlug, lectureSlug]);
 
   useEffect(() => {
+    if (isLessonUuidResolutionPending) return;
+
     const currentPath = `${location.pathname}${location.search}`;
     const nextPath = courseSlug
       ? upsertCoursePlayerSessionFromRoute(
@@ -191,6 +201,7 @@ export default function LearningRoute() {
     }
   }, [
     courseSlug,
+    isLessonUuidResolutionPending,
     lessonId,
     location.pathname,
     location.search,
@@ -290,6 +301,11 @@ export default function LearningRoute() {
       persistentPlayerMounted={persistentPlayerMounted}
       registerPersistentPlayer={registerPersistentPlayer}
       onMinimizePlayer={minimizePlayer}
+      threadDeepLinkLessonUuid={
+        threadDeepLinkId && targetLessonUuid
+          ? targetLessonUuid
+          : null
+      }
       quizAssignment={quizAssignment ?? null}
       quizAssignments={myQuizAssignments?.assignments ?? null}
       quizAssignmentLoading={myQuizAssignmentsLoading}

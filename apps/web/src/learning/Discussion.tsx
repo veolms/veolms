@@ -294,6 +294,7 @@ export interface DiscussionProps {
   isLessonDescriptionLoading?: boolean;
   interactionCapabilities?: InteractionCapabilities;
   isInteractionCapabilitiesLoading?: boolean;
+  isThreadDeepLinkReady?: boolean;
 }
 
 const DEFAULT_CAPABILITIES: InteractionCapabilities = {
@@ -383,6 +384,7 @@ function DiscussionInner({
   isLessonDescriptionLoading = false,
   interactionCapabilities,
   isInteractionCapabilitiesLoading = false,
+  isThreadDeepLinkReady = true,
   searchParams,
   setSearchParams,
 }: DiscussionInnerProps) {
@@ -616,7 +618,13 @@ function DiscussionInner({
     isLoading: isDirectThreadLoading,
     isError: isDirectThreadError,
   } = useThreadDetails(threadIdFromUrl ?? "", {
-    enabled: Boolean(threadIdFromUrl && isBackendMode),
+    enabled: Boolean(
+      threadIdFromUrl &&
+      isBackendMode &&
+      isThreadDeepLinkReady &&
+      courseId &&
+      lessonId,
+    ),
   });
 
   const directThreadComment = useMemo<Comment | null>(() => {
@@ -909,6 +917,8 @@ function DiscussionInner({
   const suppressThreadUrlSyncRef = useRef(false);
 
   useEffect(() => {
+    if (threadIdFromUrl && !isThreadDeepLinkReady) return;
+
     if (suppressThreadUrlSyncRef.current) {
       if (!threadIdFromUrl) {
         suppressThreadUrlSyncRef.current = false;
@@ -990,6 +1000,7 @@ function DiscussionInner({
   }, [
     isBackendMode,
     isInteractionCapabilitiesLoading,
+    isThreadDeepLinkReady,
     openThread,
     setSearchParams,
     threadEntries,
@@ -997,7 +1008,7 @@ function DiscussionInner({
   ]);
 
   useEffect(() => {
-    if (!threadIdFromUrl || !isBackendMode) {
+    if (!threadIdFromUrl || !isBackendMode || !isThreadDeepLinkReady) {
       lastHandledErrorThreadRef.current = null;
       return;
     }
@@ -1041,6 +1052,7 @@ function DiscussionInner({
     isBackendMode,
     isDirectThreadError,
     isDirectThreadLoading,
+    isThreadDeepLinkReady,
     openThread,
     setSearchParams,
     threadEntries,

@@ -237,6 +237,7 @@ interface LearningWorkspaceProps {
   courseSlug: string | undefined;
   userId?: string;
   lessonId: number;
+  threadDeepLinkLessonUuid?: string | null;
   initialLessonView?: "video" | "quiz";
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden?: boolean;
@@ -315,6 +316,7 @@ export function LearningWorkspace({
   courseSlug,
   userId,
   lessonId,
+  threadDeepLinkLessonUuid = null,
   initialLessonView = "video",
   mobileBottomNavigation,
   mobileBottomNavigationHidden = false,
@@ -382,6 +384,10 @@ export function LearningWorkspace({
   const [selectedLesson, setSelectedLesson] = useState(
     isLessonAvailable(lessonId) ? lessonId : firstPublicPreviewLessonId,
   );
+  const [
+    threadDeepLinkInitializationPending,
+    setThreadDeepLinkInitializationPending,
+  ] = useState(Boolean(threadDeepLinkLessonUuid));
   const pendingLessonSelectionRef = useRef<number | null>(null);
   const [localLessonProgress, setLocalLessonProgress] = useState<
     Record<number, number>
@@ -995,6 +1001,36 @@ export function LearningWorkspace({
   const selectedLessonDescription = selectedLessonRecord?.description ?? null;
   const courseId = courseOverview?.course.id;
   const backendLessonId = selectedLessonRecord?.id;
+  const isThreadDeepLinkDeferred = Boolean(
+    threadDeepLinkLessonUuid || threadDeepLinkInitializationPending,
+  );
+  const isThreadDeepLinkReady =
+    !isThreadDeepLinkDeferred ||
+    Boolean(courseId && backendLessonId && selectedLesson === lessonId);
+
+  useEffect(() => {
+    if (threadDeepLinkLessonUuid) {
+      setThreadDeepLinkInitializationPending(true);
+    }
+  }, [threadDeepLinkLessonUuid]);
+
+  useEffect(() => {
+    if (
+      !threadDeepLinkInitializationPending ||
+      !courseId ||
+      !backendLessonId ||
+      selectedLesson !== lessonId
+    ) {
+      return;
+    }
+    setThreadDeepLinkInitializationPending(false);
+  }, [
+    backendLessonId,
+    courseId,
+    lessonId,
+    selectedLesson,
+    threadDeepLinkInitializationPending,
+  ]);
   const curriculumShortcutLabel = shortcutPlatform === "mac" ? "⌥+C" : "Alt+C";
 
   useLayoutEffect(() => {
@@ -2550,8 +2586,9 @@ export function LearningWorkspace({
                 key={discussionPersistenceKey}
                 persistenceKey={discussionPersistenceKey}
                 courseSlug={courseSlug}
-                courseId={courseId}
-                lessonId={backendLessonId}
+                courseId={isThreadDeepLinkReady ? courseId : undefined}
+                lessonId={isThreadDeepLinkReady ? backendLessonId : undefined}
+                isThreadDeepLinkReady={isThreadDeepLinkReady}
                 mobileBottomNavigation={mobileBottomNavigation}
                 mobileBottomNavigationHidden={mobileBottomNavigationHidden}
                 lessonDescription={selectedLessonDescription}
