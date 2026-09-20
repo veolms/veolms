@@ -245,6 +245,31 @@ function getDiscussionThreadDestination(
   return `${pathname}?${search.toString()}`;
 }
 
+function getDiscussionNoteDestination(
+  note: DiscussionWorkspaceCard,
+  returnPath = "/discussions/notes",
+): string | null {
+  if (
+    !note.id ||
+    note.id.startsWith("client-") ||
+    !note.courseId ||
+    !note.lessonId
+  )
+    return null;
+
+  const basePath = getCoursePlayerPath(
+    note.courseId,
+    "courses",
+    1,
+    returnPath,
+    { noteId: note.id },
+  );
+  const [pathname, query = ""] = basePath.split("?", 2);
+  const search = new URLSearchParams(query);
+  search.set("lessonId", note.lessonId);
+  return `${pathname}?${search.toString()}`;
+}
+
 function DiscussionWorkspaceAttachmentIndicator({
   label,
   className,
@@ -983,20 +1008,37 @@ function formatNoteTimestamp(seconds: number | null): string | null {
 
 function DiscussionWorkspaceNoteCard({
   note,
+  onNavigatePage,
 }: {
   note: DiscussionWorkspaceCard;
+  onNavigatePage: NavigateTo;
 }) {
   const [expanded, setExpanded] = useState(false);
   const timestampLabel = formatNoteTimestamp(note.timestampSeconds);
   const metadataItems = getDiscussionWorkspaceMetadataItems(note, {
     timestampLabel,
   });
+  const destination = getDiscussionNoteDestination(note);
+  const destinationLabel = [note.course, note.lesson]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <DiscussionWorkspaceCardShell
       thread={note}
       className="discussion-thread--note"
       expanded={expanded}
+      navigation={
+        destination ? (
+          <DiscussionWorkspaceNavigationLink
+            destination={destination}
+            label={`Open note${
+              destinationLabel ? ` in ${destinationLabel}` : ""
+            }`}
+            onNavigatePage={onNavigatePage}
+          />
+        ) : undefined
+      }
       rail={{
         top: (
           <span className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge">
@@ -1041,7 +1083,7 @@ function DiscussionWorkspaceBookmarkCard({
   const SourceIcon = isNote ? Note : isQuestion ? Question : ChatTeardropText;
   const metadataItems = getDiscussionWorkspaceMetadataItems(bookmark);
   const destination = isNote
-    ? null
+    ? getDiscussionNoteDestination(bookmark, "/discussions/saved")
     : getDiscussionThreadDestination(bookmark, "/discussions/saved");
   const destinationLabel = [bookmark.course, bookmark.lesson]
     .filter(Boolean)
@@ -1681,6 +1723,7 @@ export function DiscussionsWorkspace({
                           <DiscussionWorkspaceNoteCard
                             key={thread.id}
                             note={thread}
+                            onNavigatePage={onNavigatePage}
                           />
                         );
                       }

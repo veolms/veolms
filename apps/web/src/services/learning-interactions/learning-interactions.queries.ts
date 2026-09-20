@@ -770,6 +770,40 @@ export function useThreadDetails(
   };
 }
 
+export function useNoteDetails(
+  noteId: string | undefined,
+  options?: { enabled?: boolean },
+) {
+  const isPendingClientId =
+    isClientEntityId(noteId) ||
+    interactionCreationCoordinator.hasPendingClientId(noteId);
+  const result = useQuery<LearningNoteCacheItem, ApiError>({
+    queryKey: learningInteractionKeys.noteDetails(noteId ?? ""),
+    queryFn: async () => {
+      if (!noteId || isPendingClientId) {
+        throw new Error("A confirmed server note ID is required.");
+      }
+      return projectNoteLocalState(
+        await learningInteractionsService.getNote(noteId),
+      );
+    },
+    enabled:
+      (options?.enabled ?? Boolean(noteId)) &&
+      Boolean(noteId) &&
+      !isPendingClientId,
+    staleTime: 30 * 1000,
+  });
+  useOptimisticDeletionRevision();
+  return {
+    ...result,
+    data:
+      result.data &&
+      !optimisticDeletionCoordinator.isTombstoned("note", result.data)
+        ? result.data
+        : undefined,
+  };
+}
+
 export function useThreadReplies(
   threadId: string | undefined,
   query?: RepliesQuery,

@@ -21,6 +21,7 @@ import { resolveLessonIdentifier } from "../learning/courseContent";
 import { getApiCourseSlugForLegacyKey } from "../courses/catalogue";
 import {
   getCoursePlayerOrigin,
+  getCoursePlayerNote,
   getCoursePlayerPath,
   getCoursePlayerReturnPath,
   getCoursePlayerSession,
@@ -126,6 +127,11 @@ export default function LearningRoute() {
   );
   const targetLessonUuid = searchParams.get("lessonId");
   const threadDeepLinkId = getCoursePlayerThread(location.search);
+  const noteDeepLinkId = getCoursePlayerNote(location.search);
+  const deepLinkLessonUuid =
+    (threadDeepLinkId || noteDeepLinkId) && targetLessonUuid
+      ? targetLessonUuid
+      : null;
   const isQuizViewRequested = searchParams.get("view") === "quiz";
 
   const canonicalCourseSlug = courseOverview?.course.slug;
@@ -157,8 +163,7 @@ export default function LearningRoute() {
 
   const lessonId = resolvedFromUuid ?? routeLessonId;
   const isLessonUuidResolutionPending = Boolean(
-    threadDeepLinkId &&
-      targetLessonUuid &&
+    deepLinkLessonUuid &&
       isCourseOverviewLoading &&
       !courseOverview,
   );
@@ -220,13 +225,17 @@ export default function LearningRoute() {
       return;
 
     migrateCoursePlayerSessionKey(courseSlug, canonicalCourseSlug);
-    const threadId = getCoursePlayerThread(location.search);
+    const threadId = noteDeepLinkId ? null : threadDeepLinkId;
     const nextPath = getCoursePlayerPath(
       canonicalCourseSlug,
       origin,
       lessonId,
       routeReturnPath,
-      { threadId, view: isQuizViewRequested ? "quiz" : undefined },
+      {
+        threadId,
+        noteId: noteDeepLinkId,
+        view: isQuizViewRequested ? "quiz" : undefined,
+      },
     );
     void navigate(nextPath, { replace: true });
   }, [
@@ -236,24 +245,30 @@ export default function LearningRoute() {
     lessonId,
     location.search,
     navigate,
+    noteDeepLinkId,
     origin,
     routeReturnPath,
+    threadDeepLinkId,
   ]);
 
   const selectLesson = useCallback(
     (nextLessonId: number, view?: "video" | "quiz") => {
       if (!courseSlug) return;
-      const threadId = getCoursePlayerThread(location.search);
+      const noteId =
+        nextLessonId === lessonId
+          ? getCoursePlayerNote(location.search)
+          : null;
+      const threadId = noteId ? null : getCoursePlayerThread(location.search);
       const path = getCoursePlayerPath(
         courseSlug,
         origin,
         nextLessonId,
         getCoursePlayerSession(courseSlug)?.returnPath || routeReturnPath,
-        { threadId, view },
+        { threadId, noteId, view },
       );
       navigateTo(path, { exact: true });
     },
-    [courseSlug, location.search, navigateTo, origin, routeReturnPath],
+    [courseSlug, lessonId, location.search, navigateTo, origin, routeReturnPath],
   );
   const openCourseOverview = useCallback(() => {
     if (!courseSlug) return;
@@ -301,11 +316,8 @@ export default function LearningRoute() {
       persistentPlayerMounted={persistentPlayerMounted}
       registerPersistentPlayer={registerPersistentPlayer}
       onMinimizePlayer={minimizePlayer}
-      threadDeepLinkLessonUuid={
-        threadDeepLinkId && targetLessonUuid
-          ? targetLessonUuid
-          : null
-      }
+      deepLinkLessonUuid={deepLinkLessonUuid}
+      noteDeepLinkId={noteDeepLinkId}
       quizAssignment={quizAssignment ?? null}
       quizAssignments={myQuizAssignments?.assignments ?? null}
       quizAssignmentLoading={myQuizAssignmentsLoading}

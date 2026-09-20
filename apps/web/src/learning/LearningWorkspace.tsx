@@ -237,7 +237,8 @@ interface LearningWorkspaceProps {
   courseSlug: string | undefined;
   userId?: string;
   lessonId: number;
-  threadDeepLinkLessonUuid?: string | null;
+  deepLinkLessonUuid?: string | null;
+  noteDeepLinkId?: string | null;
   initialLessonView?: "video" | "quiz";
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden?: boolean;
@@ -316,7 +317,8 @@ export function LearningWorkspace({
   courseSlug,
   userId,
   lessonId,
-  threadDeepLinkLessonUuid = null,
+  deepLinkLessonUuid = null,
+  noteDeepLinkId = null,
   initialLessonView = "video",
   mobileBottomNavigation,
   mobileBottomNavigationHidden = false,
@@ -385,9 +387,9 @@ export function LearningWorkspace({
     isLessonAvailable(lessonId) ? lessonId : firstPublicPreviewLessonId,
   );
   const [
-    threadDeepLinkInitializationPending,
-    setThreadDeepLinkInitializationPending,
-  ] = useState(Boolean(threadDeepLinkLessonUuid));
+    deepLinkInitializationPending,
+    setDeepLinkInitializationPending,
+  ] = useState(Boolean(deepLinkLessonUuid));
   const pendingLessonSelectionRef = useRef<number | null>(null);
   const [localLessonProgress, setLocalLessonProgress] = useState<
     Record<number, number>
@@ -1001,35 +1003,35 @@ export function LearningWorkspace({
   const selectedLessonDescription = selectedLessonRecord?.description ?? null;
   const courseId = courseOverview?.course.id;
   const backendLessonId = selectedLessonRecord?.id;
-  const isThreadDeepLinkDeferred = Boolean(
-    threadDeepLinkLessonUuid || threadDeepLinkInitializationPending,
+  const isLearningDeepLinkDeferred = Boolean(
+    deepLinkLessonUuid || deepLinkInitializationPending,
   );
-  const isThreadDeepLinkReady =
-    !isThreadDeepLinkDeferred ||
+  const isLearningDeepLinkReady =
+    !isLearningDeepLinkDeferred ||
     Boolean(courseId && backendLessonId && selectedLesson === lessonId);
 
   useEffect(() => {
-    if (threadDeepLinkLessonUuid) {
-      setThreadDeepLinkInitializationPending(true);
+    if (deepLinkLessonUuid) {
+      setDeepLinkInitializationPending(true);
     }
-  }, [threadDeepLinkLessonUuid]);
+  }, [deepLinkLessonUuid]);
 
   useEffect(() => {
     if (
-      !threadDeepLinkInitializationPending ||
+      !deepLinkInitializationPending ||
       !courseId ||
       !backendLessonId ||
       selectedLesson !== lessonId
     ) {
       return;
     }
-    setThreadDeepLinkInitializationPending(false);
+    setDeepLinkInitializationPending(false);
   }, [
     backendLessonId,
     courseId,
     lessonId,
     selectedLesson,
-    threadDeepLinkInitializationPending,
+    deepLinkInitializationPending,
   ]);
   const curriculumShortcutLabel = shortcutPlatform === "mac" ? "⌥+C" : "Alt+C";
 
@@ -2586,9 +2588,12 @@ export function LearningWorkspace({
                 key={discussionPersistenceKey}
                 persistenceKey={discussionPersistenceKey}
                 courseSlug={courseSlug}
-                courseId={isThreadDeepLinkReady ? courseId : undefined}
-                lessonId={isThreadDeepLinkReady ? backendLessonId : undefined}
-                isThreadDeepLinkReady={isThreadDeepLinkReady}
+                courseId={isLearningDeepLinkReady ? courseId : undefined}
+                lessonId={isLearningDeepLinkReady ? backendLessonId : undefined}
+                noteDeepLinkId={
+                  isLearningDeepLinkReady ? noteDeepLinkId : null
+                }
+                isThreadDeepLinkReady={isLearningDeepLinkReady}
                 mobileBottomNavigation={mobileBottomNavigation}
                 mobileBottomNavigationHidden={mobileBottomNavigationHidden}
                 lessonDescription={selectedLessonDescription}
