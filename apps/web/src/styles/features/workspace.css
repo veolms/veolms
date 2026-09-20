@@ -1016,6 +1016,29 @@
   }
 }
 
+@media (max-width: 780px) {
+  .discussion-hub
+    .discussion-thread--workspace-card
+    .discussion-hub__card-content-toggle {
+    color: var(--muted);
+  }
+
+  .discussion-hub
+    .discussion-thread--workspace-card
+    .discussion-hub__card-content-toggle:focus-visible {
+    color: var(--accent-ink, var(--accent));
+  }
+
+  .discussion-hub
+    .discussion-thread--workspace-card
+    .discussion-hub__card-content-toggle::after {
+    position: absolute;
+    inset-block: -14px;
+    inset-inline: 0;
+    content: "";
+  }
+}
+
 @media (max-width: 520px) {
   .discussion-hub {
     padding-right: 12px;
@@ -3823,32 +3846,42 @@
   flex: 0 0 auto;
   border: 0;
   padding: 0;
-  color: var(--accent-ink, var(--accent));
+  color: var(--muted);
   background: transparent;
   font-size: 0.72rem;
   font-weight: 650;
   line-height: 1;
   cursor: pointer;
   pointer-events: auto;
+  text-decoration: none;
   transition: color 150ms ease;
+}
+
+.discussion-hub__card-content-toggle::before {
+  position: absolute;
+  right: 0;
+  bottom: -3px;
+  left: 0;
+  height: 1px;
+  border-radius: 1px;
+  background: currentColor;
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
 }
 
 .discussion-hub__card-content-toggle:hover {
   color: var(--accent-ink, var(--accent));
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
 }
 
-.discussion-thread--workspace-card.is-navigable:hover
-  .discussion-hub__card-content-toggle {
-  color: var(--accent-ink, var(--accent));
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
+.discussion-hub__card-content-toggle:hover::before,
+.discussion-hub__card-content-toggle:focus-visible::before {
+  opacity: 1;
 }
 
 .discussion-hub__card-content-toggle:focus-visible {
+  color: var(--accent-ink, var(--accent));
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
