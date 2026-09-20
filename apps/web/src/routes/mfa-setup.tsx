@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { AUTH_CARD_HEADING_ID } from "../auth/authFlow";
 import { MfaEnrollmentSetup } from "../auth/MfaEnrollmentSetup";
 import { MfaStepUp } from "../auth/MfaStepUp";
 import { resolveMfaSetupView, type MfaSetupView } from "../auth/mfaGate";
-import { APP_HOME_PATH } from "../routing/routeAccess";
+import { APP_HOME_PATH, resolveMfaBackPath } from "../routing/routeAccess";
 import { useCurrentUser } from "../services/auth";
 export default function MfaSetupRoute() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { data: user, isLoading } = useCurrentUser();
   const [error, setError] = useState<string | null>(null);
   const [initialView, setInitialView] = useState<MfaSetupView | null>(null);
@@ -26,6 +27,7 @@ export default function MfaSetupRoute() {
   }, [isLoading, initialView, navigate, user]);
 
   const view = initialView ?? (isLoading ? null : resolveMfaSetupView(user));
+  const backPath = resolveMfaBackPath(searchParams.get("returnTo"));
 
   if (isLoading || view === null || view === "login" || view === "done") {
     return (
@@ -48,6 +50,7 @@ export default function MfaSetupRoute() {
         <MfaStepUp
           allowAuthenticator={Boolean(user?.totpEnabled)}
           allowPasskey={Boolean(user?.passkeyEnabled)}
+          onBack={() => navigate(backPath, { replace: true })}
           onDone={() => navigate(APP_HOME_PATH, { replace: true })}
         />
       ) : (

@@ -21,6 +21,7 @@ export interface TwoFactorFormProps {
   errorMessage?: string;
   onSubmit: (code: string) => void;
   onUsePasskey: () => void;
+  onBack?: () => void;
   allowPasskey?: boolean;
   allowAuthenticator?: boolean;
 }
@@ -50,6 +51,7 @@ export function TwoFactorForm({
   onMethodChange,
   onSubmit,
   onUsePasskey,
+  onBack,
   status,
 }: TwoFactorFormProps) {
   const verifying = status === "verifying";
@@ -68,16 +70,28 @@ export function TwoFactorForm({
     setInvalidReason(null);
     onCodeChange(next);
 
-    if (!useBackupCode && next.length === 6 && !validateOtpCode(next) && !verifying) {
+    if (
+      !useBackupCode &&
+      next.length === 6 &&
+      !validateOtpCode(next) &&
+      !verifying
+    ) {
       onSubmit(next);
-    } else if (useBackupCode && next.length === 8 && !validateBackupCode(next) && !verifying) {
+    } else if (
+      useBackupCode &&
+      next.length === 8 &&
+      !validateBackupCode(next) &&
+      !verifying
+    ) {
       onSubmit(next);
     }
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const reason = useBackupCode ? validateBackupCode(code) : validateOtpCode(code);
+    const reason = useBackupCode
+      ? validateBackupCode(code)
+      : validateOtpCode(code);
     setInvalidReason(reason);
 
     if (reason) {
@@ -98,6 +112,17 @@ export function TwoFactorForm({
 
   return (
     <div className="auth-two-factor">
+      {onBack ? (
+        <button
+          className="auth-two-factor__back"
+          disabled={verifying}
+          onClick={onBack}
+          type="button"
+        >
+          <Icon aria-hidden name="arrowLeft" size={17} />
+          Back
+        </button>
+      ) : null}
       <AuthBrandMark />
       <h1 className="auth-card__heading" id={AUTH_CARD_HEADING_ID}>
         Two-factor authentication
@@ -215,7 +240,9 @@ export function TwoFactorForm({
                     inputMode="numeric"
                     maxLength={8}
                     onChange={(event) => {
-                      const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
+                      const digits = event.target.value
+                        .replace(/\D/g, "")
+                        .slice(0, 8);
                       changeCode(digits);
                     }}
                     placeholder="8-digit backup code"
@@ -236,7 +263,8 @@ export function TwoFactorForm({
 
               {useBackupCode ? (
                 <p className="auth-form__helper">
-                  Enter one of your 8-digit backup codes. Each code can only be used once.
+                  Enter one of your 8-digit backup codes. Each code can only be
+                  used once.
                 </p>
               ) : (
                 <>
@@ -244,7 +272,8 @@ export function TwoFactorForm({
                     Open your authenticator app and enter the 6-digit code.
                   </p>
                   <p className="auth-form__helper">
-                    Works with Google Authenticator, Authy, or Microsoft Authenticator.
+                    Works with Google Authenticator, Authy, or Microsoft
+                    Authenticator.
                   </p>
                 </>
               )}
@@ -279,7 +308,9 @@ export function TwoFactorForm({
               }}
               type="button"
             >
-              {useBackupCode ? USE_AUTHENTICATOR_ACTION : USE_BACKUP_CODE_ACTION}
+              {useBackupCode
+                ? USE_AUTHENTICATOR_ACTION
+                : USE_BACKUP_CODE_ACTION}
             </button>
 
             {hasBothMethods ? (

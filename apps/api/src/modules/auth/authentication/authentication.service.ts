@@ -41,7 +41,7 @@ import {
 import { createOutboxService } from "../../../events/outbox.service.ts";
 
 const AVATAR_VALIDATION_RANGE = "bytes=0-31";
-const USER_AVATAR_RETENTION_LIMIT = 5;
+const USER_AVATAR_RETENTION_LIMIT = 2;
 
 async function readObjectPrefix(
   body: AsyncIterable<Uint8Array>,
@@ -363,7 +363,7 @@ export function createAuthService({
     source: "google" | "github",
     sourceUrl?: string,
   ): Promise<void> {
-    if (!storage || !sourceUrl) return;
+    if (!storage || !sourceUrl || source !== "google") return;
     const avatarStorage = storage;
 
     await withAvatarLock(userId, async () => {
@@ -861,7 +861,7 @@ export function createAuthService({
           avatarDataUrl,
         });
 
-        if (providerAvatarStored) {
+        if (providerAvatarStored && input.avatarSource === "google") {
           await userRepository.insertUserAvatar(trx, {
             id: crypto.randomUUID(),
             userId,
@@ -1156,7 +1156,17 @@ export function createAuthService({
     }
 
     const avatars = await userRepository.listUserAvatars(database, userId);
-    return avatars.map((avatar) => ({
+    const googleAvatar = avatars.find((avatar) => avatar.source === "google");
+    const uploadedAvatars = avatars
+      .filter((avatar) => avatar.source === "upload")
+      .slice(0, USER_AVATAR_RETENTION_LIMIT);
+
+    const effectiveAvatars = [
+      ...(googleAvatar ? [googleAvatar] : []),
+      ...uploadedAvatars,
+    ];
+
+    return effectiveAvatars.map((avatar) => ({
       id: avatar.id,
       avatarDataUrl: avatar.avatar_data_url,
       avatarSrcSet: avatarSrcSetFromUrl(avatar.avatar_data_url),
@@ -1224,8 +1234,7 @@ export function createAuthService({
 
         if (currentUpload) {
           const providerAvatar = avatars.find(
-            (avatar) =>
-              avatar.source === "google" || avatar.source === "github",
+            (avatar) => avatar.source === "google",
           );
           avatarDataUrl =
             providerAvatar?.avatar_data_url ??

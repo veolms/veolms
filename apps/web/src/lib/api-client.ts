@@ -10,7 +10,7 @@ import { interactionCreationCoordinator } from "../services/learning-interaction
 import { desiredStateCoordinator } from "../services/learning-interactions/desired-state-coordinator";
 import { optimisticDeletionCoordinator } from "../services/learning-interactions/optimistic-deletion-coordinator";
 import {
-  MFA_CHALLENGE_PATH,
+  buildMfaChallengePath,
   shouldRedirectToMfaChallenge,
 } from "../routing/routeAccess";
 import { isReactRouterBuildRequest } from "./react-router-build";
@@ -33,7 +33,8 @@ function redirectToMfaSetup(apiError: ApiError): void {
     return;
   }
 
-  window.location.replace(MFA_CHALLENGE_PATH);
+  const returnTo = `${currentPath}${window.location.search}`;
+  window.location.replace(buildMfaChallengePath(returnTo));
 }
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: BACKEND_URL,
