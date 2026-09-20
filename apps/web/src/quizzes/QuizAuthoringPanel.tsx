@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AssignQuizRequest, QuizQuestionType } from "@veolms/contracts";
+import type {
+  AssignQuizRequest,
+  QuizQuestionType,
+} from "@veolms/contracts";
 import { Button } from "../components/Button";
 import {
   ArrowLeft,
@@ -12,6 +15,7 @@ import {
   CornersOut,
   DotsSixVertical,
   FileText,
+  Info,
   ListBullets,
   PencilSimple,
   Plus,
@@ -43,9 +47,11 @@ import {
   useCourseEditor,
   useCourseOverview,
   useMyCourses,
-} from "../services/courses/courses.queries";
+  useUpdateLesson,
+} from "../services/courses";
 import { ThemedSelect, type ThemedSelectOption } from "../ThemedSelect";
 import { ThemedDateTimePicker } from "../ThemedDateTimePicker";
+import { SettingsToggle } from "../settings/SettingsControls";
 import { QuizRichTextField } from "./QuizRichTextField";
 import { selectQuizAssignment } from "./quizAssignmentSelection";
 import { AutosaveStatus } from "../lib/autosync";
@@ -243,6 +249,15 @@ export function QuizAuthoringPanel({
   const courseOverview = useCourseOverview(effectiveCourseId, {
     enabled: Boolean(effectiveCourseId && !courseEditor.data),
   });
+  const updateLessonMutation = useUpdateLesson();
+  const currentLesson = useMemo(() => {
+    if (!effectiveLessonId || !courseEditor.data?.sections) return null;
+    for (const section of courseEditor.data.sections) {
+      const found = section.lessons?.find((l) => l.id === effectiveLessonId);
+      if (found) return found;
+    }
+    return null;
+  }, [courseEditor.data?.sections, effectiveLessonId]);
   const assignments = useCourseQuizAssignments(effectiveCourseId);
   const [quizId, setQuizId] = useState<string | null>(initialQuizId);
   const lastLoadedQuizIdRef = useRef<string | null>(null);
@@ -2412,6 +2427,49 @@ export function QuizAuthoringPanel({
                   />
                   <span>Required course assessment to complete lesson</span>
                 </label>
+
+                {/* Free Preview Toggle & Standalone Pricing Note */}
+                <div className="rounded-[10px] sm:rounded-[12px] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] p-3 sm:p-4 border border-[color-mix(in_srgb,var(--text)_8%,transparent)] space-y-3">
+                  <div>
+                    <span className="block text-xs font-bold text-(--text) tracking-tight mb-1">
+                      Free Preview & Access
+                    </span>
+                    <p className="text-[0.7rem] sm:text-xs text-(--muted) m-0">
+                      Configure whether prospective learners can preview and take this quiz before purchasing.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[8px] px-3 py-2 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                    <div className="pr-3">
+                      <strong className="block mb-0.5 text-(--text) text-[0.88rem] font-[650]">
+                        Free Preview
+                      </strong>
+                      <p className="m-0 text-(--muted) text-[0.78rem]">
+                        Allow prospective students to view and attempt this quiz before enrolling or purchasing.
+                      </p>
+                    </div>
+                    <SettingsToggle
+                      checked={Boolean(currentLesson?.isPreview)}
+                      onChange={(checked) => {
+                        if (effectiveCourseId && effectiveLessonId) {
+                          updateLessonMutation.mutate({
+                            courseId: effectiveCourseId,
+                            lessonId: effectiveLessonId,
+                            payload: { isPreview: checked },
+                          });
+                        }
+                      }}
+                      label="Toggle Free Preview"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 rounded-[8px] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] p-2.5 border border-[color-mix(in_srgb,var(--accent)_20%,transparent)] text-xs text-(--text-secondary)">
+                    <Info size={16} weight="bold" className="text-(--accent) shrink-0" />
+                    <span>
+                      Standalone pricing for this quiz is configured in the course <strong>Pricing</strong> tab.
+                    </span>
+                  </div>
+                </div>
 
                 {assignment && versionOptions.length > 0 ? (
                   <div>
