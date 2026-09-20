@@ -290,13 +290,17 @@ export function createAssignmentService(options: QuizServiceOptions) {
       );
     const rows = await repo.listAssignmentsForCourse(database, courseId);
     const pricing = await pricingRepo.findPricing(database, courseId);
-    return Promise.all(
-      rows.map(async (row) => ({
-        ...present(row, pricing),
-        quizTitle:
-          (await repo.findQuiz(database, row.quiz_id))?.title ?? "Quiz",
-      })),
+    const quizTitles = new Map(
+      (
+        await repo.listQuizzesByIds(database, [
+          ...new Set(rows.map((row) => row.quiz_id)),
+        ])
+      ).map((quiz) => [quiz.id, quiz.title] as const),
     );
+    return rows.map((row) => ({
+      ...present(row, pricing),
+      quizTitle: quizTitles.get(row.quiz_id) ?? "Quiz",
+    }));
   }
 
   async function get(assignmentId: string) {

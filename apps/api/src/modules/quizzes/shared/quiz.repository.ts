@@ -10,6 +10,33 @@ export async function findQuiz(database: DatabaseExecutor, quizId: string) {
     .executeTakeFirst();
 }
 
+/** Batch lookup so list endpoints avoid one query per assignment. */
+export async function listQuizzesByIds(
+  database: DatabaseExecutor,
+  quizIds: readonly string[],
+) {
+  if (quizIds.length === 0) return [];
+  return await database
+    .selectFrom("quizzes")
+    .selectAll()
+    .where("id", "in", quizIds)
+    .where("deleted_at", "is", null)
+    .execute();
+}
+
+export async function listLessonsByIds(
+  database: DatabaseExecutor,
+  lessonIds: readonly string[],
+) {
+  if (lessonIds.length === 0) return [];
+  return await database
+    .selectFrom("course_lessons")
+    .select(["id", "course_id", "title"])
+    .where("id", "in", lessonIds)
+    .where("deleted_at", "is", null)
+    .execute();
+}
+
 export async function listQuizzesByCreator(
   database: DatabaseExecutor,
   creatorId: string,

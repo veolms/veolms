@@ -885,19 +885,30 @@ export function createAttemptService(options: QuizServiceOptions) {
         },
       ),
     );
+    // Two batched lookups instead of a query per assignment.
+    const [quizRows, lessonRows] = await Promise.all([
+      repo.listQuizzesByIds(database, [
+        ...new Set(assignments.map((assignment) => assignment.quiz_id)),
+      ]),
+      repo.listLessonsByIds(database, [
+        ...new Set(assignments.map((assignment) => assignment.lesson_id)),
+      ]),
+    ]);
+    const quizzesById = new Map(quizRows.map((quiz) => [quiz.id, quiz]));
+    const lessonsById = new Map(lessonRows.map((lesson) => [lesson.id, lesson]));
     const items = [];
     for (const assignment of assignments) {
-      const quiz = await repo.findQuiz(database, assignment.quiz_id);
-      const lesson = await courseService.findLessonById(
-        assignment.course_id,
-        assignment.lesson_id,
-      );
-      const activeAttempt = await repo.findActiveAttempt(
-        database,
-        assignment.id,
-        userId,
-      );
+      const quiz = quizzesById.get(assignment.quiz_id);
+      const lessonRow = lessonsById.get(assignment.lesson_id);
+      const lesson =
+        lessonRow && lessonRow.course_id === assignment.course_id
+          ? lessonRow
+          : undefined;
       const attempts = attemptsByAssignment.get(assignment.id) ?? [];
+      // At most one attempt per assignment is in progress (partial unique index).
+      const activeAttempt = attempts.find(
+        (attempt) => attempt.status === "in_progress",
+      );
       const gradedAttempts = attempts.filter(
         (attempt) => attempt.status === "graded",
       );
