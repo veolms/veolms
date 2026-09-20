@@ -1,6 +1,5 @@
 import {
   CircleNotch,
-  FileText,
   UploadSimple,
   WarningCircle,
   X,
@@ -11,9 +10,9 @@ import type {
   LessonResource,
 } from "@veolms/contracts";
 import { mediaService } from "../../services/media";
+import { LessonResourceIcon } from "./LessonResourceIcon";
 
-const RESOURCE_ACCEPT =
-  ".pdf,.txt,.doc,.docx,.zip,.png,.jpg,.jpeg,.webp,.csv,.ppt,.pptx,.xls,.xlsx";
+const RESOURCE_ACCEPT = "*/*";
 const RESOURCE_MAX_SIZE_BYTES = 100 * 1024 * 1024;
 
 export interface LessonResourceItem {
@@ -221,7 +220,7 @@ export function LessonResourceManager({
           <span className="mt-0.5 block truncate text-[0.72rem] text-(--muted)">
             {isUploading
               ? "Your upload is in progress."
-              : "or click to browse · PDF, DOCX, ZIP, images, and more"}
+              : "or click to browse · Any file type"}
           </span>
         </span>
       </button>
@@ -268,7 +267,7 @@ export function LessonResourceManager({
         </div>
       )}
 
-      {resources.length > 0 ? (
+      {resources.length > 0 && (
         <div className="overflow-hidden rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
           {resources.map((resource) => {
             const isDeleting = deletingResourceId === resource.id;
@@ -277,10 +276,11 @@ export function LessonResourceManager({
                 key={resource.id}
                 className="flex items-center gap-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3 py-2 last:border-b-0 transition-colors hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)]"
               >
-                <FileText
-                  size={16}
-                  weight="fill"
-                  className="shrink-0 text-red-400"
+                <LessonResourceIcon
+                  name={resource.name}
+                  type={resource.type}
+                  mimeType={resource.mimeType}
+                  className="shrink-0"
                 />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[0.8rem] font-semibold text-(--text)">
@@ -311,10 +311,6 @@ export function LessonResourceManager({
               </div>
             );
           })}
-        </div>
-      ) : (
-        <div className="rounded-[8px] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3 py-2.5 text-[0.76rem] text-(--muted)">
-          No resources added to this lesson yet.
         </div>
       )}
     </section>

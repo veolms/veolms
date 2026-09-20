@@ -6,7 +6,6 @@ import {
   InfoIcon as Info,
   MusicNotesIcon as MusicNotes,
   PlayCircleIcon as PlayCircle,
-  PlayIcon as Play,
   UploadSimpleIcon as UploadSimple,
   VideoIcon as Video,
   XIcon as X,
@@ -22,6 +21,7 @@ import {
 } from "react";
 import { LessonAudioPlayer } from "./LessonAudioPlayer";
 import type { StudioLessonContentType } from "./LessonContentTypeSelector";
+import { LessonUploadDropzone } from "../LessonUploadDropzone";
 import { LessonVideoPlayer } from "../../learning/player";
 import {
   getVideoPlaybackBootstrap,
@@ -174,11 +174,13 @@ export function LessonMediaWorkspace({
 
   const hasMediaAttached = Boolean(mediaInfo?.url || mediaInfo?.id || mediaInfo?.name);
   const hasVideoPreview = Boolean(previewUrl) && contentType === "video";
+  const hasPendingVideoPreview = Boolean(previewFile) && contentType === "video";
   const hasVideoSource = hasMediaAttached || hasVideoPreview;
+  const hasVideoStage = hasVideoSource || hasPendingVideoPreview;
   const isAttachedVideo = hasMediaAttached && contentType === "video";
   const isGroupedVideo =
     contentType === "video" &&
-    (isAttachedVideo || (hasVideoSource && Boolean(videoUploadSection)));
+    (isAttachedVideo || (hasVideoStage && Boolean(videoUploadSection)));
   const hasPersistedThumbnail = Boolean(mediaInfo?.thumbnailUrl);
 
   const formatFileSize = (bytes?: number) => {
@@ -256,13 +258,13 @@ export function LessonMediaWorkspace({
       case "image":
         return "image/*";
       case "document":
-        return ".pdf,.doc,.docx,.txt";
+        return ".md,.pdf,.doc";
       default:
         return "*/*";
     }
   };
 
-  const videoPlayer = hasVideoSource && contentType === "video" ? (
+  const videoPlayer = hasVideoStage && contentType === "video" ? (
     <div
       className={`relative aspect-video w-full overflow-hidden bg-black ${
         isGroupedVideo
@@ -270,20 +272,24 @@ export function LessonMediaWorkspace({
           : "rounded-[14px] shadow-(--card-shadow)"
       }`}
     >
-      <LessonVideoPlayer
-        media={videoMedia}
-        lessonTitle={lessonTitle}
-        resumePersistenceKey={previewUrl || undefined}
-        playbackBootstrap={hasVideoPreview ? null : playbackBootstrap}
-        refreshPlaybackToken={refreshPlaybackToken}
-        protectedPlayback={Boolean(courseSlug) && !hasVideoPreview}
-        showAutoplayControl={false}
-        circularSettingsControl
-        showLessonNavigation={false}
-        playbackSuspended={playbackSuspended}
-        theaterMode={false}
-        onTheaterToggle={() => {}}
-      />
+      {hasVideoSource && (!hasPendingVideoPreview || previewUrl) ? (
+        <LessonVideoPlayer
+          media={videoMedia}
+          lessonTitle={lessonTitle}
+          resumePersistenceKey={previewUrl || undefined}
+          playbackBootstrap={null}
+          refreshPlaybackToken={refreshPlaybackToken}
+          protectedPlayback={false}
+          showAutoplayControl={false}
+          circularSettingsControl
+          showLessonNavigation={false}
+          playbackSuspended={playbackSuspended}
+          theaterMode={false}
+          onTheaterToggle={() => {}}
+        />
+      ) : (
+        <div className="h-full w-full bg-black" aria-hidden="true" />
+      )}
     </div>
   ) : null;
 
@@ -335,7 +341,7 @@ export function LessonMediaWorkspace({
           <div className="contents">{videoPlayer}</div>
           <div className="contents">{videoUploadSection}</div>
         </>
-      ) : hasVideoSource ? (
+      ) : hasVideoStage ? (
         contentType === "video" ? (
           videoPlayer
         ) : contentType === "audio" ? (
@@ -371,80 +377,36 @@ export function LessonMediaWorkspace({
         videoUploadSection
       ) : (
         /* Empty State Dropzone */
-        <div
-          onClick={handleChooseFile}
-          onDragOver={(e) => {
-            e.preventDefault();
+        <LessonUploadDropzone
+          title={
+            contentType === "video"
+              ? "Drag and drop your video here"
+              : contentType === "audio"
+                ? "Drag and drop your audio here"
+                : contentType === "image"
+                  ? "Drag and drop your image here"
+                  : "Drag and drop your document here"
+          }
+          supportText={
+            contentType === "video"
+              ? "Supports MP4, WebM, MOV."
+              : contentType === "audio"
+                ? "Supports MP3, WAV, M4A, OGG."
+                : contentType === "image"
+                  ? "Supports JPG, PNG, WebP."
+                  : "Supports MD, PDF, DOC."
+          }
+          isDragging={isDragOver}
+          disabled={disabled}
+          ariaLabel={`${contentType} upload dropzone`}
+          onChooseFile={handleChooseFile}
+          onDragOver={(event) => {
+            event.preventDefault();
             setIsDragOver(true);
           }}
           onDragLeave={() => setIsDragOver(false)}
           onDrop={handleFileDrop}
-          className={`group relative flex aspect-video w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[16px] border-2 border-dashed p-6 text-center transition-all duration-200 ${
-            isDragOver
-              ? "border-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] shadow-[0_0_24px_var(--accent-shadow)]"
-              : "border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[linear-gradient(155deg,color-mix(in_srgb,var(--canvas)_80%,var(--surface))_0%,color-mix(in_srgb,var(--surface)_65%,var(--canvas))_100%)] shadow-(--card-shadow) hover:border-[color-mix(in_srgb,var(--text)_25%,transparent)] hover:bg-[color-mix(in_srgb,var(--surface)_95%,var(--hover))]"
-          }`}
-        >
-          {/* Subtle Background Art for Audio/Image/Doc/Video */}
-          {contentType === "audio" && (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-15">
-              <div className="flex h-20 items-end gap-1.5">
-                {[15, 25, 45, 30, 60, 40, 80, 50, 70, 35, 20].map((h, i) => (
-                  <div
-                    key={i}
-                    style={{ height: `${h}%` }}
-                    className="w-1.5 rounded-full bg-rose-500"
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Centered Glowing Icon */}
-          <div
-            className={`relative mb-3 flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl shadow-lg transition-transform duration-200 group-hover:scale-105 ${
-              contentType === "video"
-                ? "bg-blue-500/15 text-blue-500 shadow-blue-500/20"
-                : contentType === "audio"
-                  ? "bg-rose-500/15 text-rose-500 shadow-rose-500/20"
-                  : contentType === "image"
-                    ? "bg-emerald-500/15 text-emerald-500 shadow-emerald-500/20"
-                    : "bg-amber-500/15 text-amber-500 shadow-amber-500/20"
-            }`}
-          >
-            {contentType === "video" ? (
-              <Play size={28} weight="fill" className="ml-0.5" />
-            ) : contentType === "audio" ? (
-              <Headphones size={28} weight="fill" />
-            ) : contentType === "image" ? (
-              <Image size={28} weight="fill" />
-            ) : (
-              <FileText size={28} weight="fill" />
-            )}
-          </div>
-
-          <p className="m-0 text-[0.94rem] sm:text-[1.02rem] font-bold text-(--text)">
-            {contentType === "video"
-              ? "Drag and drop a video file here"
-              : contentType === "audio"
-                ? "Drag and drop an audio file here"
-                : contentType === "image"
-                  ? "Drag and drop an image here"
-                  : "Drag and drop a document here"}
-          </p>
-          <p className="m-0 mt-1 text-[0.80rem] sm:text-[0.84rem] text-(--accent) font-medium group-hover:underline">
-            or click to browse
-          </p>
-          <p className="m-0 mt-2 text-[0.72rem] sm:text-[0.74rem] text-(--muted)">
-            {contentType === "video"
-              ? "Supports MP4, WebM, MOV (max 2 GB)."
-              : contentType === "audio"
-                ? "Supports MP3, WAV, M4A, OGG (max 500 MB)."
-                : contentType === "image"
-                  ? "Supports JPG, PNG, WebP (max 5 MB)."
-                  : "Supports PDF, DOC, DOCX, TXT (max 100 MB)."}
-          </p>
-        </div>
+        />
       )}
 
       {/* 2. Media Settings Card (Video Settings, Audio Settings, etc.) */}
@@ -632,8 +594,8 @@ export function LessonMediaWorkspace({
               </h4>
               <p className="m-0 mt-1 text-[0.74rem] sm:text-[0.78rem] text-(--muted) leading-relaxed">
                 {contentType === "image"
-                  ? "For best results, use a 16:9 ratio. Supported formats: JPG, PNG, WebP (max 5 MB)."
-                  : "Supported formats: PDF, DOC, DOCX, TXT. PDF is recommended for native in-browser reading."}
+                  ? "For best results, use a 16:9 ratio. Supported formats: JPG, PNG, WebP."
+                  : "Supported formats: MD, PDF, DOC. PDF is recommended for native in-browser reading."}
               </p>
             </div>
           </div>

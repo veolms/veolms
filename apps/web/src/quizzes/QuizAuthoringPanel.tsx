@@ -8,8 +8,6 @@ import {
   Check,
   CheckCircle,
   CircleNotch,
-  CornersIn,
-  CornersOut,
   DotsSixVertical,
   FileText,
   ListBullets,
@@ -66,8 +64,6 @@ interface Props {
   initialQuizId?: string | null;
   onBack?: () => void;
   onQuizDeleted?: () => void;
-  isFocusMode?: boolean;
-  onToggleFocusMode?: () => void;
 }
 
 type OptionDraft = QuizBuilderOptionDraft;
@@ -227,8 +223,6 @@ export function QuizAuthoringPanel({
   initialQuizId = null,
   onBack,
   onQuizDeleted,
-  isFocusMode = false,
-  onToggleFocusMode,
 }: Props) {
   const isEmbeddedAuthoring = Boolean(courseId && lessonId);
   const quizzes = useMyQuizzes();
@@ -1441,41 +1435,6 @@ export function QuizAuthoringPanel({
               />
               <span>Delete quiz</span>
             </button>
-
-            {onToggleFocusMode && (
-              <button
-                type="button"
-                onClick={onToggleFocusMode}
-                className={`w-8.5 sm:w-9 h-8.5 sm:h-9 inline-flex items-center justify-center rounded-[8px] sm:rounded-[9px] border p-0 shrink-0 transition-all cursor-pointer ${
-                  isFocusMode
-                    ? "border-(--accent) bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface))] text-(--accent) shadow-[var(--card-compact-shadow)]"
-                    : "border-[color-mix(in_srgb,var(--text)_18%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_85%,var(--canvas))] text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)_100%,transparent)] hover:border-[color-mix(in_srgb,var(--text)_35%,transparent)] shadow-[var(--card-compact-shadow)]"
-                }`}
-                title={
-                  isFocusMode
-                    ? "Exit focus mode (show topbar and bottom navigation) [Esc]"
-                    : "Focus mode (hide topbar and bottom bar for more workspace)"
-                }
-                aria-label={
-                  isFocusMode ? "Exit focus mode" : "Enter focus mode"
-                }
-                aria-pressed={isFocusMode}
-              >
-                {isFocusMode ? (
-                  <CornersIn
-                    size={15}
-                    weight="bold"
-                    className="shrink-0 text-(--accent)"
-                  />
-                ) : (
-                  <CornersOut
-                    size={15}
-                    weight="bold"
-                    className="shrink-0 text-(--muted)"
-                  />
-                )}
-              </button>
-            )}
           </div>
         </div>
       </div>

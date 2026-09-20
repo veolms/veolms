@@ -16,6 +16,7 @@ import {
 } from "@phosphor-icons/react";
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -37,6 +38,7 @@ import {
   LessonMediaWorkspace,
   type AttachedMediaInfo,
 } from "./LessonMediaWorkspace";
+import { LessonResourceIcon } from "../lesson-resources/LessonResourceIcon";
 
 export interface StudioLessonResourceItem {
   id: string;
@@ -44,6 +46,13 @@ export interface StudioLessonResourceItem {
   type?: string;
   size?: string;
   mediaAssetId?: string;
+}
+
+export interface LessonEditorDraft {
+  title: string;
+  contentType: StudioLessonContentType;
+  isPublished: boolean;
+  isPreview: boolean;
 }
 
 export interface LessonStudioEditorHandle {
@@ -65,6 +74,7 @@ export interface LessonStudioEditorProps {
   resources?: StudioLessonResourceItem[];
   isSaving?: boolean;
   onBack: () => void;
+  onCancel?: (draft: LessonEditorDraft) => void;
   onSave: (payload: {
     title: string;
     contentType: StudioLessonContentType;
@@ -107,6 +117,7 @@ export const LessonStudioEditor = forwardRef<
   resources = [],
   isSaving = false,
   onBack,
+  onCancel,
   onSave,
   onContentTypeChange,
   onDeleteLesson,
@@ -175,22 +186,27 @@ export const LessonStudioEditor = forwardRef<
     onContentTypeChange?.(type);
   };
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     void onSave({
       title: title.trim() || initialTitle,
       contentType,
       isPublished,
       isPreview,
     });
-  };
+  }, [contentType, initialTitle, isPreview, isPublished, onSave, title]);
+
+  const handleCancel = useCallback(() => {
+    onCancel?.({ title, contentType, isPublished, isPreview });
+    onBack();
+  }, [contentType, isPreview, isPublished, onBack, onCancel, title]);
 
   useImperativeHandle(
     ref,
     () => ({
       save: handleSave,
-      cancel: onBack,
+      cancel: handleCancel,
     }),
-    [onBack, title, contentType, isPublished, isPreview, initialTitle, onSave],
+    [handleCancel, handleSave],
   );
 
   const handleResourceDrop = (e: DragEvent<HTMLDivElement>) => {
@@ -263,7 +279,11 @@ export const LessonStudioEditor = forwardRef<
             >
               <div className="flex min-w-0 items-center gap-2.5">
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--accent)">
-                  <FileText size={15} weight="fill" />
+                  <LessonResourceIcon
+                    name={res.name}
+                    type={res.type}
+                    className="size-[15px]"
+                  />
                 </div>
                 <div className="min-w-0">
                   <p className="m-0 truncate text-[0.76rem] sm:text-[0.78rem] font-semibold text-(--text)">
@@ -309,7 +329,7 @@ export const LessonStudioEditor = forwardRef<
             {/* Back Button */}
             <button
               type="button"
-              onClick={onBack}
+              onClick={handleCancel}
               title="Back to Course Content"
               aria-label="Back to Course Content"
               className="flex h-7 w-7 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] transition-colors cursor-pointer"
@@ -441,7 +461,7 @@ export const LessonStudioEditor = forwardRef<
           <div className="flex items-center gap-2.5 shrink-0 max-[768px]:w-full max-[768px]:justify-end">
             <button
               type="button"
-              onClick={onBack}
+              onClick={handleCancel}
               disabled={isSaving}
               className="inline-flex h-9.5 items-center justify-center rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_7%,var(--surface))] px-4 sm:px-5 text-[0.82rem] font-semibold text-(--text) shadow-sm transition-all hover:bg-[color-mix(in_srgb,var(--text)_12%,var(--surface))] active:scale-95 cursor-pointer disabled:opacity-50"
             >
