@@ -1464,6 +1464,173 @@ export function DiscussionsWorkspace({
     setNotice?.(`Opened “${thread.title ?? "discussion"}”.`);
   };
 
+  const discussionFilters = (
+    <section
+      className={`discussion-hub__filters ${
+        isFollowingTab
+          ? "discussion-hub__filters--following"
+          : isBookmarksTab
+            ? "discussion-hub__filters--bookmarks"
+            : isMentionsTab
+              ? "discussion-hub__filters--mentions"
+              : isCommentsTab || isNotesTab
+                ? "discussion-hub__filters--comments"
+                : ""
+      }`}
+      aria-label="Filter discussions"
+    >
+      <label className="discussion-hub__search">
+        <MagnifyingGlass size={19} aria-hidden="true" />
+        <span className="sr-only">Search discussions</span>
+        <input
+          id="workspace-discussions-search-input"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={
+            isQnaTab
+              ? "Search your questions..."
+              : isCommentsTab
+                ? "Search your comments..."
+                : isNotesTab
+                  ? "Search your notes..."
+                  : isMentionsTab
+                    ? "Search mentions..."
+                    : isFollowingTab
+                      ? "Search followed discussions..."
+                      : isBookmarksTab
+                        ? "Search bookmarks"
+                        : "Search discussions by title or keyword..."
+          }
+          data-search-shortcut-target
+          aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
+        />
+        <SearchShortcutHint />
+      </label>
+      <div className="discussion-hub__select">
+        <ThemedSelect
+          onValueChange={setCourse}
+          ariaLabel="Filter discussions by course"
+          triggerClassName="discussion-hub__select-trigger"
+          contentClassName="discussion-hub__select-content"
+          matchMenuToContainer={
+            isQnaTab ||
+            isCommentsTab ||
+            isNotesTab ||
+            isMentionsTab ||
+            isFollowingTab ||
+            isBookmarksTab
+          }
+          value={selectedCourseId}
+          options={courseOptions}
+        />
+      </div>
+      {(isQnaTab || isCommentsTab || isNotesTab) && (
+        <div className="discussion-hub__select">
+          <ThemedSelect<DiscussionOwnership>
+            value={workspaceOwnership}
+            onValueChange={setOwnership}
+            ariaLabel="Filter discussions by ownership"
+            triggerClassName="discussion-hub__select-trigger"
+            contentClassName="discussion-hub__select-content"
+            matchMenuToContainer={isQnaTab || isCommentsTab || isNotesTab}
+            options={ownershipOptions}
+          />
+        </div>
+      )}
+      {!isCommentsTab &&
+        !isNotesTab &&
+        !isMentionsTab &&
+        !isFollowingTab &&
+        !isBookmarksTab && (
+          <div className="discussion-hub__select">
+            <ThemedSelect
+              value={isQnaTab ? qnaStatus : status}
+              onValueChange={isQnaTab ? setQnaStatus : setStatus}
+              ariaLabel="Filter discussions by status"
+              triggerClassName="discussion-hub__select-trigger"
+              contentClassName="discussion-hub__select-content"
+              matchMenuToContainer={isQnaTab}
+              options={
+                isQnaTab
+                  ? ([
+                      ["all", "All"],
+                      ["open", "Open"],
+                      ["answered", "Answered"],
+                      ["solved", "Solved"],
+                    ] as const)
+                  : ([
+                      ["all", "Status"],
+                      ["answered", "Answered"],
+                      ["mentioned", "Mentioned"],
+                      ["solved", "Solved"],
+                      ["open", "Open"],
+                    ] as const)
+              }
+            />
+          </div>
+        )}
+      {isMentionsTab || isFollowingTab || isBookmarksTab ? null : isNotesTab ? (
+        <div className="discussion-hub__select discussion-hub__select--sort">
+          <Funnel size={17} aria-hidden="true" />
+          <ThemedSelect<"activity" | "latest">
+            value={notesSort}
+            onValueChange={setNotesSort}
+            ariaLabel={`Sort notes: ${
+              notesSort === "activity" ? "Latest activity" : "Newest"
+            }`}
+            triggerClassName="discussion-hub__select-trigger"
+            contentClassName="discussion-hub__select-content"
+            matchMenuToContainer
+            options={[
+              ["activity", "Latest activity"],
+              ["latest", "Newest"],
+            ]}
+          />
+        </div>
+      ) : (
+        <div className="discussion-hub__select discussion-hub__select--sort">
+          <Funnel size={17} aria-hidden="true" />
+          <ThemedSelect
+            value={isQnaTab ? qnaSort : sort}
+            onValueChange={isQnaTab ? setQnaSort : setSort}
+            ariaLabel={
+              isQnaTab
+                ? `Sort questions: ${
+                    qnaSort === "activity"
+                      ? "Latest activity"
+                      : qnaSort === "latest"
+                        ? "Newest"
+                        : "Most replies"
+                  }`
+                : `${isCommentsTab ? "Sort comments" : "Sort discussions"}: ${
+                    sort === "activity"
+                      ? "Latest activity"
+                      : sort === "replies"
+                        ? "Most replies"
+                        : "Newest"
+                  }`
+            }
+            triggerClassName="discussion-hub__select-trigger"
+            contentClassName="discussion-hub__select-content"
+            matchMenuToContainer={isQnaTab || isCommentsTab}
+            options={
+              isQnaTab
+                ? ([
+                    ["activity", "Latest activity"],
+                    ["latest", "Newest"],
+                    ["replies", "Most replies"],
+                  ] as const)
+                : ([
+                    ["activity", "Latest activity"],
+                    ["replies", "Most replies"],
+                  ] as const)
+            }
+          />
+        </div>
+      )}
+    </section>
+  );
+
   return (
     <div className="discussion-hub" aria-labelledby="discussions-title">
       <header className="discussion-hub__header">
@@ -1476,35 +1643,41 @@ export function DiscussionsWorkspace({
         </span>
       </header>
 
-      <nav
-        ref={tablistRef}
-        className="discussion-hub__tabs page-tabs"
-        aria-label="Discussion views"
-        role="tablist"
-      >
-        {tabs.map(({ id, label, Icon, tone }) => (
-          <button
-            type="button"
-            key={id}
-            id={`discussion-tab-${id}`}
-            role="tab"
-            aria-selected={activeTab === id}
-            aria-controls="discussion-panel"
-            data-page-tab-tone={tone}
-            data-swipe-tab-id={id}
-            data-fixed-radius
-            tabIndex={activeTab === id ? 0 : -1}
-            className={`rounded-none! ${activeTab === id ? "is-active" : ""}`}
-            onClick={() => navigateTab(id)}
-            onKeyDown={handleRovingTabKeyDown}
-            onFocus={scrollKeyboardFocusedTabIntoView}
-          >
-            <Icon size={19} weight={activeTab === id ? "fill" : "regular"} />
-            <span>{label}</span>
-          </button>
-        ))}
-        <span className="page-tabs__indicator" aria-hidden="true" />
-      </nav>
+      <div className="discussion-hub__sticky-region">
+        <nav
+          ref={tablistRef}
+          className="discussion-hub__tabs page-tabs"
+          aria-label="Discussion views"
+          role="tablist"
+        >
+          {tabs.map(({ id, label, Icon, tone }) => (
+            <button
+              type="button"
+              key={id}
+              id={`discussion-tab-${id}`}
+              role="tab"
+              aria-selected={activeTab === id}
+              aria-controls="discussion-panel"
+              data-page-tab-tone={tone}
+              data-swipe-tab-id={id}
+              data-fixed-radius
+              tabIndex={activeTab === id ? 0 : -1}
+              className={`rounded-none! ${activeTab === id ? "is-active" : ""}`}
+              onClick={() => navigateTab(id)}
+              onKeyDown={handleRovingTabKeyDown}
+              onFocus={scrollKeyboardFocusedTabIntoView}
+            >
+              <Icon
+                size={19}
+                weight={activeTab === id ? "fill" : "regular"}
+              />
+              <span>{label}</span>
+            </button>
+          ))}
+          <span className="page-tabs__indicator" aria-hidden="true" />
+        </nav>
+        {discussionFilters}
+      </div>
 
       <SwipeableTabPanel
         tabs={discussionTabIds}
@@ -1515,6 +1688,7 @@ export function DiscussionsWorkspace({
         labelledBy={`discussion-tab-${activeTab}`}
         slideClassName="pb-8"
         stateAttribute="data-discussion-tab"
+        spaceBetweenOffset={14}
       >
         {(_panelTab, preview) => (
           <>
@@ -1528,177 +1702,6 @@ export function DiscussionsWorkspace({
 
             <div className="discussion-hub__layout">
               <main className="discussion-hub__feed">
-                <section
-                  className={`discussion-hub__filters ${
-                    isFollowingTab
-                      ? "discussion-hub__filters--following"
-                      : isBookmarksTab
-                        ? "discussion-hub__filters--bookmarks"
-                        : isMentionsTab
-                          ? "discussion-hub__filters--mentions"
-                          : isCommentsTab || isNotesTab
-                            ? "discussion-hub__filters--comments"
-                            : ""
-                  }`}
-                  aria-label="Filter discussions"
-                >
-                  <label className="discussion-hub__search">
-                    <MagnifyingGlass size={19} aria-hidden="true" />
-                    <span className="sr-only">Search discussions</span>
-                    <input
-                      id="workspace-discussions-search-input"
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      placeholder={
-                        isQnaTab
-                          ? "Search your questions..."
-                          : isCommentsTab
-                            ? "Search your comments..."
-                            : isNotesTab
-                              ? "Search your notes..."
-                              : isMentionsTab
-                                ? "Search mentions..."
-                                : isFollowingTab
-                                  ? "Search followed discussions..."
-                                  : isBookmarksTab
-                                    ? "Search bookmarks"
-                                    : "Search discussions by title or keyword..."
-                      }
-                      data-search-shortcut-target
-                      aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
-                    />
-                    <SearchShortcutHint />
-                  </label>
-                  <div className="discussion-hub__select">
-                    <ThemedSelect
-                      onValueChange={setCourse}
-                      ariaLabel="Filter discussions by course"
-                      triggerClassName="discussion-hub__select-trigger"
-                      contentClassName="discussion-hub__select-content"
-                      matchMenuToContainer={
-                        isQnaTab ||
-                        isCommentsTab ||
-                        isNotesTab ||
-                        isMentionsTab ||
-                        isFollowingTab ||
-                        isBookmarksTab
-                      }
-                      value={selectedCourseId}
-                      options={courseOptions}
-                    />
-                  </div>
-                  {(isQnaTab || isCommentsTab || isNotesTab) && (
-                    <div className="discussion-hub__select">
-                      <ThemedSelect<DiscussionOwnership>
-                        value={workspaceOwnership}
-                        onValueChange={setOwnership}
-                        ariaLabel="Filter discussions by ownership"
-                        triggerClassName="discussion-hub__select-trigger"
-                        contentClassName="discussion-hub__select-content"
-                        matchMenuToContainer={
-                          isQnaTab || isCommentsTab || isNotesTab
-                        }
-                        options={ownershipOptions}
-                      />
-                    </div>
-                  )}
-                  {!isCommentsTab &&
-                    !isNotesTab &&
-                    !isMentionsTab &&
-                    !isFollowingTab &&
-                    !isBookmarksTab && (
-                      <div className="discussion-hub__select">
-                        <ThemedSelect
-                          value={isQnaTab ? qnaStatus : status}
-                          onValueChange={isQnaTab ? setQnaStatus : setStatus}
-                          ariaLabel="Filter discussions by status"
-                          triggerClassName="discussion-hub__select-trigger"
-                          contentClassName="discussion-hub__select-content"
-                          matchMenuToContainer={isQnaTab}
-                          options={
-                            isQnaTab
-                              ? ([
-                                  ["all", "All"],
-                                  ["open", "Open"],
-                                  ["answered", "Answered"],
-                                  ["solved", "Solved"],
-                                ] as const)
-                              : ([
-                                  ["all", "Status"],
-                                  ["answered", "Answered"],
-                                  ["mentioned", "Mentioned"],
-                                  ["solved", "Solved"],
-                                  ["open", "Open"],
-                                ] as const)
-                          }
-                        />
-                      </div>
-                    )}
-                  {isMentionsTab ||
-                  isFollowingTab ||
-                  isBookmarksTab ? null : isNotesTab ? (
-                    <div className="discussion-hub__select discussion-hub__select--sort">
-                      <Funnel size={17} aria-hidden="true" />
-                      <ThemedSelect<"activity" | "latest">
-                        value={notesSort}
-                        onValueChange={setNotesSort}
-                        ariaLabel={`Sort notes: ${
-                          notesSort === "activity"
-                            ? "Latest activity"
-                            : "Newest"
-                        }`}
-                        triggerClassName="discussion-hub__select-trigger"
-                        contentClassName="discussion-hub__select-content"
-                        matchMenuToContainer
-                        options={[
-                          ["activity", "Latest activity"],
-                          ["latest", "Newest"],
-                        ]}
-                      />
-                    </div>
-                  ) : (
-                    <div className="discussion-hub__select discussion-hub__select--sort">
-                      <Funnel size={17} aria-hidden="true" />
-                      <ThemedSelect
-                        value={isQnaTab ? qnaSort : sort}
-                        onValueChange={isQnaTab ? setQnaSort : setSort}
-                        ariaLabel={
-                          isQnaTab
-                            ? `Sort questions: ${
-                                qnaSort === "activity"
-                                  ? "Latest activity"
-                                  : qnaSort === "latest"
-                                    ? "Newest"
-                                    : "Most replies"
-                              }`
-                            : `${isCommentsTab ? "Sort comments" : "Sort discussions"}: ${
-                                sort === "activity"
-                                  ? "Latest activity"
-                                  : sort === "replies"
-                                    ? "Most replies"
-                                    : "Newest"
-                              }`
-                        }
-                        triggerClassName="discussion-hub__select-trigger"
-                        contentClassName="discussion-hub__select-content"
-                        matchMenuToContainer={isQnaTab || isCommentsTab}
-                        options={
-                          isQnaTab
-                            ? ([
-                                ["activity", "Latest activity"],
-                                ["latest", "Newest"],
-                                ["replies", "Most replies"],
-                              ] as const)
-                            : ([
-                                ["activity", "Latest activity"],
-                                ["replies", "Most replies"],
-                              ] as const)
-                        }
-                      />
-                    </div>
-                  )}
-                </section>
-
                 <div className="discussion-hub__thread-list" aria-live="polite">
                   {isWorkspacePending ? (
                     <div className="discussion-hub__empty" aria-busy="true">

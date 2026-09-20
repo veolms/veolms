@@ -445,6 +445,33 @@
   margin-top: -4px;
 }
 
+.discussion-hub__sticky-region {
+  position: sticky;
+  top: var(--page-tabs-sticky-top, 0px);
+  z-index: 26;
+  margin-top: 23px;
+  padding-bottom: 8px;
+  background: var(--main-surface);
+}
+
+.discussion-hub__sticky-region .discussion-hub__tabs {
+  position: static;
+  top: auto;
+  z-index: auto;
+  margin-top: 0;
+}
+
+.discussion-hub__sticky-region .discussion-hub__filters {
+  margin-top: 12px;
+  box-shadow: none;
+}
+
+.discussion-hub__sticky-region
+  + .swipeable-tab-panel
+  .discussion-hub__layout {
+  margin-top: 0;
+}
+
 .discussion-hub__tabs {
   position: sticky;
   top: var(--page-tabs-sticky-top, 0px);
@@ -1028,6 +1055,13 @@
     .discussion-thread--workspace-card
     .discussion-hub__card-content-toggle {
     color: var(--muted);
+  }
+
+  .discussion-hub__sticky-region {
+    margin-right: calc(-1 * var(--application-page-inline-gutter, 0px));
+    margin-left: calc(-1 * var(--application-page-inline-gutter, 0px));
+    padding-right: var(--application-page-inline-gutter, 0px);
+    padding-left: var(--application-page-inline-gutter, 0px);
   }
 
   .discussion-hub
