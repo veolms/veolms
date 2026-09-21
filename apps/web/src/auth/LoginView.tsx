@@ -306,6 +306,15 @@ export function LoginView() {
         <MfaStepUp
           allowAuthenticator={mfaCapabilities.allowAuthenticator}
           allowPasskey={mfaCapabilities.allowPasskey}
+          onBack={() => {
+            setIdentifierError(null);
+            setOtpError(null);
+            setAccountError(null);
+            registrationOtpCodesRef.current = {};
+            setPrimaryVerifiedIdentifier(null);
+            setPendingSecondaryMethod(null);
+            dispatch({ type: "CHANGE_IDENTIFIER" });
+          }}
           onDone={() => {
             dispatch({ type: "TWO_FACTOR_VERIFIED" });
           }}

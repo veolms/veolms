@@ -131,6 +131,14 @@ export function buildLoginPath(returnTo?: string | null): string {
   return `${LOGIN_PATH}?returnTo=${encodeURIComponent(target)}`;
 }
 
+export function buildMfaChallengePath(returnTo?: string | null): string {
+  const target = sanitizeReturnTo(returnTo);
+  if (!target) {
+    return MFA_CHALLENGE_PATH;
+  }
+  return `${MFA_CHALLENGE_PATH}&returnTo=${encodeURIComponent(target)}`;
+}
+
 export interface SessionAccess {
   isAuthenticated: boolean;
   needsMfaChallenge: boolean;
@@ -202,6 +210,12 @@ export function resolveAuthenticatedDestination(
   returnTo: string | null | undefined,
 ): string {
   return sanitizeReturnTo(returnTo) ?? APP_HOME_PATH;
+}
+
+export function resolveMfaBackPath(
+  returnTo: string | null | undefined,
+): string {
+  return buildLoginPath(returnTo);
 }
 
 export function shouldRedirectToMfaChallenge(

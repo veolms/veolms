@@ -38,7 +38,7 @@ export interface UserTable {
   updated_at: Generated<Date>;
 }
 
-export type UserAvatarSource = "upload" | "google" | "github";
+export type UserAvatarSource = "upload" | "google";
 
 export interface UserAvatarTable {
   id: string;

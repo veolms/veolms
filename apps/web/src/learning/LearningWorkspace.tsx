@@ -2386,6 +2386,8 @@ export function LearningWorkspace({
                   <QuizAttemptPanel
                     key={`${currentQuizAssignment.id}-${currentLessonUuid ?? selectedLesson}`}
                     assignmentId={currentQuizAssignment.id}
+                    courseId={courseId ?? currentQuizAssignment.courseId}
+                    quizTitle={currentQuizAssignment.quizTitle}
                     activeAttemptId={currentQuizAssignment.activeAttemptId}
                     maxAttempts={currentQuizAssignment.maxAttempts}
                     onBackToVideo={resumeLessonVideoPlayback}

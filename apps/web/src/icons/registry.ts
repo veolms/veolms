@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ArrowRight,
   CheckIcon,
   ClockIcon,
@@ -14,6 +15,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import {
+  ArrowLeft as ArrowLeftGlyph,
   ArrowRight as ArrowRightGlyph,
   Check,
   CircleAlert,
@@ -50,6 +52,7 @@ export const iconRegistry = {
   email: { lucide: Mail, phosphor: EnvelopeSimple },
   mobile: { lucide: Smartphone, phosphor: DeviceMobile },
   validationError: { lucide: CircleAlert, phosphor: WarningCircle },
+  arrowLeft: { lucide: ArrowLeftGlyph, phosphor: ArrowLeft },
   arrowRight: { lucide: ArrowRightGlyph, phosphor: ArrowRight },
   verified: { lucide: Check, phosphor: CheckIcon },
   person: { lucide: CircleUserRound, phosphor: UserCircleIcon },

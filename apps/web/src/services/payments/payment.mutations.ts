@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ApiError } from "../../lib/api-error";
 import { courseKeys } from "../courses/courses.keys";
+import { quizKeys } from "../quizzes/quizzes.keys";
 import { paymentService } from "./payment.service";
 
 export const useCheckoutPreview = () => useMutation({ mutationFn: paymentService.preview });
@@ -14,7 +15,9 @@ export function useVerifyPayment() {
         queryClient.invalidateQueries({ queryKey: courseKeys.all }),
         queryClient.invalidateQueries({ queryKey: ["enrollments"] }),
         queryClient.invalidateQueries({ queryKey: ["orders"] }),
+        queryClient.invalidateQueries({ queryKey: quizKeys.all }),
       ]);
     },
   });
 }
+

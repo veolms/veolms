@@ -211,6 +211,7 @@ export function listUserAvatars(database: Executor, userId: string) {
     .selectFrom("user_avatars")
     .selectAll()
     .where("user_id", "=", userId)
+    .orderBy("last_used_at", "desc")
     .orderBy("created_at", "desc")
     .orderBy("id", "desc")
     .execute();

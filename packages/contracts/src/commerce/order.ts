@@ -58,7 +58,7 @@ export const updateBundleRequestSchema = z.strictObject({
 });
 export type UpdateBundleRequest = z.infer<typeof updateBundleRequestSchema>;
 
-export const orderItemTypeSchema = z.enum(["course", "bundle"]);
+export const orderItemTypeSchema = z.enum(["course", "bundle", "quiz"]);
 export type OrderItemType = z.infer<typeof orderItemTypeSchema>;
 
 /** Lowest voluntary contribution, in major currency units (e.g. ₹1). */
@@ -71,6 +71,7 @@ export const cartItemInputSchema = z
     itemType: orderItemTypeSchema,
     courseId: z.uuid().optional(),
     bundleId: z.uuid().optional(),
+    quizPricingId: z.uuid().optional(),
     customAmount: z
       .number()
       .int()
@@ -82,10 +83,12 @@ export const cartItemInputSchema = z
   })
   .refine(
     (data) =>
-      (data.itemType === "course" && !!data.courseId && !data.bundleId) ||
-      (data.itemType === "bundle" && !!data.bundleId && !data.courseId),
+      (data.itemType === "course" && !!data.courseId && !data.bundleId && !data.quizPricingId) ||
+      (data.itemType === "bundle" && !!data.bundleId && !data.courseId && !data.quizPricingId) ||
+      (data.itemType === "quiz" && !!data.quizPricingId && !data.courseId && !data.bundleId),
     {
-      message: "Either courseId or bundleId must be provided matching itemType",
+      message:
+        "Either courseId, bundleId, or quizPricingId must be provided matching itemType",
     },
   )
   .refine(
@@ -424,6 +427,7 @@ export const purchaseItemSnapshotSchema = z.strictObject({
   offeringId: z.uuid().nullable().optional(),
   courseId: z.uuid().nullable().optional(),
   bundleId: z.uuid().nullable().optional(),
+  quizPricingId: z.uuid().nullable().optional(),
   titleSnapshot: z.string(),
   unitPrice: z.number().int().nonnegative(),
   discountAmount: z.number().int().nonnegative().default(0),

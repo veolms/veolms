@@ -13,6 +13,7 @@ import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMark
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
 import { LessonVideoUpload } from "./lesson-video-upload/LessonVideoUpload";
 import { QuizAuthoringPanel } from "../quizzes/QuizAuthoringPanel";
+import { CourseQuizPricingCard } from "./CourseQuizPricingCard";
 import {
   LessonResourceManager,
   toLessonResourceItem,
@@ -12559,6 +12560,16 @@ export function CourseCreatePage({
                   </div>
                 </div>
               </div>
+
+              {/* Card 3: Quiz Pricing */}
+              <CourseQuizPricingCard
+                courseId={currentCourseId}
+                courseCurrency={pricing.currency || "INR"}
+                onNavigateTab={(tab) => {
+                  const stepId = parseWizardTab(tab);
+                  if (stepId) void navigateToStep(stepId);
+                }}
+              />
 
               {/* Bottom Card: Coupons Banner */}
               <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[14px] px-5.5 py-4 bg-(--surface) shadow-(--card-shadow) max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3.5">

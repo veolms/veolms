@@ -890,6 +890,37 @@
   gap: 9px;
 }
 
+.auth-two-factor__back {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 7px;
+  margin: 0 0 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.auth-two-factor__back:hover {
+  color: var(--text);
+}
+
+.auth-two-factor__back:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.auth-two-factor__back > svg {
+  flex: 0 0 auto;
+}
+
 .auth-two-factor__alternate {
   justify-self: center;
   padding: 0;
