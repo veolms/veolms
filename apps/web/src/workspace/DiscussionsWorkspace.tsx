@@ -1460,9 +1460,8 @@ export function DiscussionsWorkspace({
   const workspaceQueryResult = useDiscussionsWorkspace(workspaceQuery);
   const {
     data: workspaceData,
-    error: workspaceError,
     isPending: isWorkspacePending,
-    isError: isWorkspaceError,
+    isLoadingError,
     isFetchingNextPage,
     isFetchNextPageError,
     hasNextPage,
@@ -2355,7 +2354,7 @@ export function DiscussionsWorkspace({
                         label={activeLoadingLabel}
                         withinFeed
                       />
-                    ) : isWorkspaceError ? (
+                    ) : isLoadingError ? (
                       <div className="discussion-hub__empty" role="alert">
                         <h2>
                           {isNotesTab
@@ -2371,19 +2370,17 @@ export function DiscussionsWorkspace({
                                     : "Unable to load discussions"}
                         </h2>
                         <p>
-                          {workspaceError instanceof Error
-                            ? workspaceError.message
-                            : isNotesTab
-                              ? "There was a problem loading notes."
-                              : isCommentsTab
-                                ? "There was a problem loading comments."
-                                : isMentionsTab
-                                  ? "There was a problem loading mentions."
-                                  : isFollowingTab
-                                    ? "There was a problem loading followed discussions."
-                                    : isBookmarksTab
-                                      ? "There was a problem loading bookmarks."
-                                      : "There was a problem loading discussions."}
+                          {isNotesTab
+                            ? "There was a problem loading notes."
+                            : isCommentsTab
+                              ? "There was a problem loading comments."
+                              : isMentionsTab
+                                ? "There was a problem loading mentions."
+                                : isFollowingTab
+                                  ? "There was a problem loading followed discussions."
+                                  : isBookmarksTab
+                                    ? "There was a problem loading bookmarks."
+                                    : "There was a problem loading discussions."}
                         </p>
                         <button type="button" onClick={() => void refetch()}>
                           Retry
