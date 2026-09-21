@@ -8,7 +8,11 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import type { CSSProperties, FormEvent } from "react";
+import type {
+  CSSProperties,
+  FormEvent,
+  MouseEvent as ReactMouseEvent,
+} from "react";
 import type { ReactElement, ReactNode } from "react";
 import { useLocation, useSearchParams } from "react-router";
 import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "../hooks/useDebounce";
@@ -104,6 +108,33 @@ const canRestoreDiscussionScroll = ({ top }: ApplicationScrollPosition) => {
 
   return contentTop + feedRect.height >= top;
 };
+
+function hasTextSelectionWithin(node: Node): boolean {
+  if (typeof window === "undefined") return false;
+
+  const selection = window.getSelection();
+  if (
+    !selection ||
+    selection.isCollapsed ||
+    selection.toString().length === 0 ||
+    selection.rangeCount === 0
+  ) {
+    return false;
+  }
+
+  return selection.getRangeAt(0).intersectsNode(node);
+}
+
+function isDiscussionCardInteractiveTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    Boolean(
+      target.closest(
+        'a, button, input, textarea, select, summary, [role="button"], [role="link"]',
+      ),
+    )
+  );
+}
 
 interface DiscussionRestorationKeyInput {
   tab: DiscussionTab;
@@ -618,7 +649,7 @@ function DiscussionWorkspaceCardContent({
     );
 
   return (
-    <div className="discussion-hub__card-content">
+    <div className="discussion-hub__card-content discussion-thread__selectable-text">
       {expanded ? (
         <div className="discussion-hub__card-content-expanded">
           {normalizedTitle && (
@@ -653,7 +684,7 @@ function DiscussionWorkspaceIdentity({
   activity?: string;
 }) {
   return (
-    <div className="discussion-thread__author">
+    <div className="discussion-thread__author discussion-thread__selectable-text">
       <span className="discussion-thread__author-name">
         {thread.isOwn ? "You" : thread.author}
       </span>
@@ -710,6 +741,8 @@ function DiscussionWorkspaceNavigationLink({
         ) {
           return;
         }
+        const card = event.currentTarget.parentElement;
+        if (card && hasTextSelectionWithin(card)) return;
         event.preventDefault();
         onNavigatePage(destination, { exact: true });
       }}
@@ -756,6 +789,7 @@ function DiscussionWorkspaceCardShell({
   className,
   expanded,
   navigation,
+  onNavigate,
   children,
   rail,
 }: {
@@ -763,6 +797,7 @@ function DiscussionWorkspaceCardShell({
   className: string;
   expanded: boolean;
   navigation?: ReactNode;
+  onNavigate?: () => void;
   children: ReactNode;
   rail: {
     top: DiscussionWorkspaceRailElement;
@@ -770,6 +805,19 @@ function DiscussionWorkspaceCardShell({
     bottom: DiscussionWorkspaceRailElement;
   };
 }) {
+  const handleBodyClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (
+      !onNavigate ||
+      event.defaultPrevented ||
+      isDiscussionCardInteractiveTarget(event.target) ||
+      hasTextSelectionWithin(event.currentTarget)
+    ) {
+      return;
+    }
+
+    onNavigate();
+  };
+
   return (
     <article
       className={[
@@ -788,7 +836,9 @@ function DiscussionWorkspaceCardShell({
             className="discussion-thread__avatar-image"
           />
         </div>
-        <div className="discussion-thread__body">{children}</div>
+        <div className="discussion-thread__body" onClick={handleBodyClick}>
+          {children}
+        </div>
         <div className="discussion-thread__meta">
           <DiscussionWorkspaceCardRail {...rail} />
         </div>
@@ -832,6 +882,7 @@ function DiscussionWorkspaceQuestionCard({
           onNavigatePage={onNavigatePage}
         />
       }
+      onNavigate={() => onNavigatePage(destination, { exact: true })}
       rail={{
         top: (
           <span
@@ -911,6 +962,7 @@ function DiscussionWorkspaceCommentCard({
           onNavigatePage={onNavigatePage}
         />
       }
+      onNavigate={() => onNavigatePage(destination, { exact: true })}
       rail={{
         top: (
           <span className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge">
@@ -973,6 +1025,7 @@ function DiscussionWorkspaceFollowingCard({
           onNavigatePage={onNavigatePage}
         />
       }
+      onNavigate={() => onNavigatePage(destination, { exact: true })}
       rail={{
         top: (
           <span
@@ -1061,6 +1114,7 @@ function DiscussionWorkspaceMentionCard({
           onNavigatePage={onNavigatePage}
         />
       }
+      onNavigate={() => onNavigatePage(destination, { exact: true })}
       rail={{
         top: (
           <span
@@ -1153,6 +1207,11 @@ function DiscussionWorkspaceNoteCard({
           />
         ) : undefined
       }
+      onNavigate={
+        destination
+          ? () => onNavigatePage(destination, { exact: true })
+          : undefined
+      }
       rail={{
         top: (
           <span className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge">
@@ -1222,6 +1281,11 @@ function DiscussionWorkspaceBookmarkCard({
             onNavigatePage={onNavigatePage}
           />
         ) : undefined
+      }
+      onNavigate={
+        destination
+          ? () => onNavigatePage(destination, { exact: true })
+          : undefined
       }
       rail={{
         top: (

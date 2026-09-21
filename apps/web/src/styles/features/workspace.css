@@ -4135,6 +4135,15 @@
   pointer-events: auto;
 }
 
+.discussion-thread--workspace-card.is-navigable
+  .discussion-thread__selectable-text {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+  user-select: text;
+  cursor: text;
+}
+
 @media (min-width: 781px) {
   .discussion-hub {
     --discussion-workspace-card-height: 112px;
