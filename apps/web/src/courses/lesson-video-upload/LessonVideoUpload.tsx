@@ -13,6 +13,7 @@ import {
   forwardRef,
   useCallback,
   useEffect,
+  useId,
   useImperativeHandle,
   useRef,
   useState,
@@ -993,6 +994,7 @@ export const LessonVideoUpload = forwardRef<
     <TranscodingProgressStage
       file={selectedFile}
       mediaAttached={!selectedFile && Boolean(activeMediaId)}
+      progress={hasReceivedProgress ? transcodeProgress : null}
       status={transcodeStatus}
       errorMessage={isStreamError ? null : errorMessage}
       isReplacement={isPendingReplacement}
@@ -1499,7 +1501,7 @@ function UploadProgressStage({
 }: UploadProgressStageProps) {
   return (
     <div className="min-w-0 space-y-3.5 sm:space-y-4">
-      <VideoFileSummary file={file} embedded={embedded} />
+      <VideoFileSummary file={file} embedded={embedded} isUploading />
 
       <section
         className={`min-w-0 ${
@@ -1536,6 +1538,7 @@ function UploadProgressStage({
 interface TranscodingProgressStageProps {
   file: File | null;
   mediaAttached: boolean;
+  progress?: number | null;
   status?: string;
   errorMessage?: string | null;
   isReplacement: boolean;
@@ -1546,6 +1549,7 @@ interface TranscodingProgressStageProps {
 function TranscodingProgressStage({
   file,
   mediaAttached,
+  progress = null,
   status,
   errorMessage,
   isReplacement,
@@ -1566,6 +1570,7 @@ function TranscodingProgressStage({
         file={file}
         mediaAttached={mediaAttached}
         badge={badge}
+        processingProgress={badge === "Processing" ? progress : undefined}
         embedded={embedded}
         onReplace={onReplace}
       />
@@ -1578,10 +1583,12 @@ interface VideoFileSummaryProps {
   badge?: string;
   embedded?: boolean;
   file: File | null;
+  isUploading?: boolean;
   onUpload?: () => void;
   mediaAttached?: boolean;
   onRemove?: () => void;
   onReplace?: () => void;
+  processingProgress?: number | null;
   uploadTextOnly?: boolean;
 }
 
@@ -1589,12 +1596,15 @@ function VideoFileSummary({
   badge,
   embedded = false,
   file,
+  isUploading = false,
   onUpload,
   mediaAttached = false,
   onRemove,
   onReplace,
+  processingProgress = null,
   uploadTextOnly = false,
 }: VideoFileSummaryProps) {
+  const processingTooltipId = useId();
   const [videoDimensions, setVideoDimensions] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1635,7 +1645,7 @@ function VideoFileSummary({
     <div
       className={`flex min-w-0 items-center gap-3 sm:gap-3.5 ${
         embedded
-          ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) px-2.5 pb-2.5 pt-2 sm:px-3 sm:pb-3 sm:pt-2.5"
+          ? `border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) px-2.5 ${isUploading ? "pb-3.5 sm:pb-4" : "pb-2.5 sm:pb-3"} pt-2 sm:px-3 sm:pt-2.5`
           : `${RAISED_CARD_CLASS} p-2.5 sm:p-3`
       }`}
     >
@@ -1683,12 +1693,35 @@ function VideoFileSummary({
           <span>Upload</span>
         </button>
       )}
-      {badge && (
+      {badge === "Processing" ? (
         <span
-          className={`shrink-0 rounded-[8px] border-none px-2 py-0.5 sm:px-2.5 sm:py-1 text-[0.68rem] sm:text-[0.7rem] font-semibold ${badgeClasses}`}
+          className="group/processing-badge relative shrink-0 rounded-[8px] outline-none focus-visible:outline-2 focus-visible:outline-(--accent) focus-visible:outline-offset-2"
+          tabIndex={0}
+          aria-describedby={processingTooltipId}
         >
-          {badge}
+          <span
+            className={`block rounded-[8px] border-none px-2 py-0.5 sm:px-2.5 sm:py-1 text-[0.68rem] sm:text-[0.7rem] font-semibold ${badgeClasses}`}
+          >
+            {badge}
+          </span>
+          <span
+            id={processingTooltipId}
+            role="tooltip"
+            className="pointer-events-none absolute right-0 top-full z-20 mt-1.5 hidden w-max max-w-56 items-center gap-1.5 rounded bg-black/90 px-2 py-1 text-xs font-medium text-white shadow-lg group-hover/processing-badge:flex group-focus-visible/processing-badge:flex"
+          >
+            {processingProgress === null
+              ? "Waiting for progress update"
+              : `Processing ${processingProgress}% complete`}
+          </span>
         </span>
+      ) : (
+        badge && (
+          <span
+            className={`shrink-0 rounded-[8px] border-none px-2 py-0.5 sm:px-2.5 sm:py-1 text-[0.68rem] sm:text-[0.7rem] font-semibold ${badgeClasses}`}
+          >
+            {badge}
+          </span>
+        )
       )}
       {onRemove && (
         <button
