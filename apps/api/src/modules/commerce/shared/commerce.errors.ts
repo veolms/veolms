@@ -13,6 +13,16 @@ export const CommerceErrors = {
     new AppError(400, "BUNDLE_NOT_AVAILABLE", `Course bundle "${title}" is not available for purchase.`),
   BUNDLE_ALL_COURSES_OWNED: (title: string) =>
     new AppError(409, "BUNDLE_ALL_COURSES_OWNED", `You already own all courses in bundle "${title}".`),
+  QUIZ_NOT_FOUND: (id: string) =>
+    new AppError(404, "QUIZ_NOT_FOUND", `Quiz offering "${id}" was not found.`),
+  QUIZ_NOT_PURCHASABLE: (title: string) =>
+    new AppError(400, "QUIZ_NOT_PURCHASABLE", `Quiz "${title}" is free and does not need to be purchased.`),
+  QUIZ_COURSE_ACCESS_REQUIRED: (title: string) =>
+    new AppError(403, "QUIZ_COURSE_ACCESS_REQUIRED", `Get access to the course before buying "${title}".`),
+  QUIZ_NOT_AVAILABLE: (title: string) =>
+    new AppError(400, "QUIZ_NOT_AVAILABLE", `Quiz "${title}" is not available for purchase.`),
+  QUIZ_ALREADY_OWNED: (title: string) =>
+    new AppError(409, "QUIZ_ALREADY_OWNED", `You already have active access to "${title}".`),
   EMPTY_CHECKOUT_ITEMS: () =>
     new AppError(400, "EMPTY_CHECKOUT_ITEMS", "No items provided for pricing calculation."),
   INVALID_COUPON: (code: string) =>
