@@ -4,6 +4,7 @@ export type DiscussionWorkspaceStatus =
   "answered" | "mentioned" | "solved" | "open";
 
 export interface DiscussionWorkspaceCard {
+  workspaceItem: WorkspaceDiscussionItem;
   id: string;
   title?: string;
   excerpt: string;
@@ -105,6 +106,7 @@ export function adaptDiscussionWorkspaceItem(
           : "open";
 
   return {
+    workspaceItem: item,
     id: item.id,
     title: item.title?.trim() || undefined,
     excerpt,

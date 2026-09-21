@@ -71,6 +71,7 @@ import {
   adaptDiscussionWorkspaceItem,
   type DiscussionWorkspaceCard,
 } from "./discussions-workspace.adapter";
+import { DiscussionWorkspaceActionMenu } from "./DiscussionWorkspaceActionMenu";
 import { DiscussionWorkspaceSkeletonList } from "./DiscussionWorkspaceSkeleton";
 import { DiscussionWorkspaceVirtualFeed } from "./DiscussionWorkspaceVirtualFeed";
 import {
@@ -806,6 +807,7 @@ function DiscussionWorkspaceCardShell({
   expanded,
   navigation,
   onNavigate,
+  actions,
   children,
   rail,
 }: {
@@ -814,6 +816,7 @@ function DiscussionWorkspaceCardShell({
   expanded: boolean;
   navigation?: ReactNode;
   onNavigate?: () => void;
+  actions?: ReactNode;
   children: ReactNode;
   rail: {
     top: DiscussionWorkspaceRailElement;
@@ -859,6 +862,7 @@ function DiscussionWorkspaceCardShell({
       ].join(" ")}
     >
       {navigation}
+      {actions}
       <div className="discussion-thread__open discussion-thread__open--overview">
         <div className="discussion-thread__avatar">
           <DiscussionAvatar
@@ -880,9 +884,13 @@ function DiscussionWorkspaceCardShell({
 function DiscussionWorkspaceQuestionCard({
   thread,
   onNavigatePage,
+  showActions,
+  setNotice,
 }: {
   thread: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
+  showActions: boolean;
+  setNotice?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const metadataItems = getDiscussionWorkspaceMetadataItems(thread);
@@ -913,6 +921,17 @@ function DiscussionWorkspaceQuestionCard({
         />
       }
       onNavigate={() => onNavigatePage(destination, { exact: true })}
+      actions={
+        showActions ? (
+          <div className="absolute top-3 right-4 z-20 pointer-events-auto">
+            <DiscussionWorkspaceActionMenu
+              card={thread}
+              destination={destination}
+              setNotice={setNotice}
+            />
+          </div>
+        ) : undefined
+      }
       rail={{
         top: (
           <span
@@ -964,9 +983,13 @@ function DiscussionWorkspaceQuestionCard({
 function DiscussionWorkspaceCommentCard({
   thread,
   onNavigatePage,
+  showActions,
+  setNotice,
 }: {
   thread: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
+  showActions: boolean;
+  setNotice?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const metadataItems = getDiscussionWorkspaceMetadataItems(thread);
@@ -993,6 +1016,17 @@ function DiscussionWorkspaceCommentCard({
         />
       }
       onNavigate={() => onNavigatePage(destination, { exact: true })}
+      actions={
+        showActions ? (
+          <div className="absolute top-3 right-4 z-20 pointer-events-auto">
+            <DiscussionWorkspaceActionMenu
+              card={thread}
+              destination={destination}
+              setNotice={setNotice}
+            />
+          </div>
+        ) : undefined
+      }
       rail={{
         top: (
           <span className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge">
@@ -1026,9 +1060,13 @@ function DiscussionWorkspaceCommentCard({
 function DiscussionWorkspaceFollowingCard({
   thread,
   onNavigatePage,
+  showActions,
+  setNotice,
 }: {
   thread: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
+  showActions: boolean;
+  setNotice?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isQuestion = thread.kind === "question" || thread.kind === "qna";
@@ -1056,6 +1094,17 @@ function DiscussionWorkspaceFollowingCard({
         />
       }
       onNavigate={() => onNavigatePage(destination, { exact: true })}
+      actions={
+        showActions ? (
+          <div className="absolute top-3 right-4 z-20 pointer-events-auto">
+            <DiscussionWorkspaceActionMenu
+              card={thread}
+              destination={destination}
+              setNotice={setNotice}
+            />
+          </div>
+        ) : undefined
+      }
       rail={{
         top: (
           <span
@@ -1098,9 +1147,13 @@ function DiscussionWorkspaceFollowingCard({
 function DiscussionWorkspaceMentionCard({
   mention,
   onNavigatePage,
+  showActions,
+  setNotice,
 }: {
   mention: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
+  showActions: boolean;
+  setNotice?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isReply = mention.itemType === "reply";
@@ -1166,6 +1219,17 @@ function DiscussionWorkspaceMentionCard({
           ? () => onNavigatePage(destination, { exact: true })
           : undefined
       }
+      actions={
+        showActions ? (
+          <div className="absolute top-3 right-4 z-20 pointer-events-auto">
+            <DiscussionWorkspaceActionMenu
+              card={mention}
+              destination={destination}
+              setNotice={setNotice}
+            />
+          </div>
+        ) : undefined
+      }
       rail={{
         top: (
           <span
@@ -1228,9 +1292,13 @@ function formatNoteTimestamp(seconds: number | null): string | null {
 function DiscussionWorkspaceNoteCard({
   note,
   onNavigatePage,
+  showActions,
+  setNotice,
 }: {
   note: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
+  showActions: boolean;
+  setNotice?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const timestampLabel = formatNoteTimestamp(note.timestampSeconds);
@@ -1262,6 +1330,17 @@ function DiscussionWorkspaceNoteCard({
         destination
           ? () => onNavigatePage(destination, { exact: true })
           : undefined
+      }
+      actions={
+        showActions ? (
+          <div className="absolute top-3 right-4 z-20 pointer-events-auto">
+            <DiscussionWorkspaceActionMenu
+              card={note}
+              destination={destination}
+              setNotice={setNotice}
+            />
+          </div>
+        ) : undefined
       }
       rail={{
         top: (
@@ -1295,9 +1374,13 @@ function DiscussionWorkspaceNoteCard({
 function DiscussionWorkspaceBookmarkCard({
   bookmark,
   onNavigatePage,
+  showActions,
+  setNotice,
 }: {
   bookmark: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
+  showActions: boolean;
+  setNotice?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isNote = bookmark.itemType === "note" || bookmark.kind === "note";
@@ -1337,6 +1420,17 @@ function DiscussionWorkspaceBookmarkCard({
         destination
           ? () => onNavigatePage(destination, { exact: true })
           : undefined
+      }
+      actions={
+        showActions ? (
+          <div className="absolute top-3 right-4 z-20 pointer-events-auto">
+            <DiscussionWorkspaceActionMenu
+              card={bookmark}
+              destination={destination}
+              setNotice={setNotice}
+            />
+          </div>
+        ) : undefined
       }
       rail={{
         top: (
@@ -1958,6 +2052,8 @@ export function DiscussionsWorkspace({
           <DiscussionWorkspaceBookmarkCard
             bookmark={thread}
             onNavigatePage={onNavigatePage}
+            showActions={!showDiscussionSwipePreviews}
+            setNotice={setNotice}
           />
         );
       }
@@ -1967,6 +2063,8 @@ export function DiscussionsWorkspace({
           <DiscussionWorkspaceNoteCard
             note={thread}
             onNavigatePage={onNavigatePage}
+            showActions={!showDiscussionSwipePreviews}
+            setNotice={setNotice}
           />
         );
       }
@@ -1976,6 +2074,8 @@ export function DiscussionsWorkspace({
           <DiscussionWorkspaceMentionCard
             mention={thread}
             onNavigatePage={onNavigatePage}
+            showActions={!showDiscussionSwipePreviews}
+            setNotice={setNotice}
           />
         );
       }
@@ -1985,6 +2085,8 @@ export function DiscussionsWorkspace({
           <DiscussionWorkspaceFollowingCard
             thread={thread}
             onNavigatePage={onNavigatePage}
+            showActions={!showDiscussionSwipePreviews}
+            setNotice={setNotice}
           />
         );
       }
@@ -1995,11 +2097,15 @@ export function DiscussionsWorkspace({
         <DiscussionWorkspaceQuestionCard
           thread={thread}
           onNavigatePage={onNavigatePage}
+          showActions={!showDiscussionSwipePreviews}
+          setNotice={setNotice}
         />
       ) : isCommentsTab ? (
         <DiscussionWorkspaceCommentCard
           thread={thread}
           onNavigatePage={onNavigatePage}
+          showActions={!showDiscussionSwipePreviews}
+          setNotice={setNotice}
         />
       ) : (
         <article className="discussion-thread">
@@ -2070,6 +2176,7 @@ export function DiscussionsWorkspace({
       onNavigatePage,
       openThread,
       setNotice,
+      showDiscussionSwipePreviews,
     ],
   );
 
