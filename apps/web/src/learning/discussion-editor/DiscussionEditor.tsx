@@ -15,6 +15,7 @@ import {
 } from "react";
 import {
   createMentionCompletionSource,
+  mentionCompletionLoadingExtension,
   mentionCompletionOptionClass,
   renderMentionCompletionAddon,
 } from "./mentions";
@@ -69,7 +70,10 @@ export function DiscussionEditor({
   maxHeight,
   className = "",
   courseId,
-  mentionsEnabled = true,
+  // This editor is also shared by course/quiz authoring. Mentions are an
+  // explicit Learning Space opt-in so those surfaces never trigger lookup UI
+  // or autocomplete requests.
+  mentionsEnabled = false,
   onChange,
   onControllerChange,
   onFormattingStateChange,
@@ -131,6 +135,7 @@ export function DiscussionEditor({
           },
         ],
       }),
+      mentionCompletionLoadingExtension,
     ];
   }, [courseId, mentionsEnabled]);
 

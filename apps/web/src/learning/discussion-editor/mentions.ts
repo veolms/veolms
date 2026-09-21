@@ -4,11 +4,26 @@ import type {
   CompletionResult,
   CompletionSource,
 } from "@codemirror/autocomplete";
+import { StateEffect, StateField } from "@codemirror/state";
+import { EditorView, showTooltip, type Tooltip } from "@codemirror/view";
 import type { UserAutocompleteItem } from "@veolms/contracts";
 import { learningInteractionsService } from "../../services/learning-interactions/learning-interactions.service";
 
 const MAX_CACHE_SIZE = 100;
 const DEBOUNCE_MS = 150;
+
+const setMentionLoadingTooltip = StateEffect.define<Tooltip | null>();
+const mentionLoadingTooltip = StateField.define<Tooltip | null>({
+  create: () => null,
+  update(value, transaction) {
+    for (const effect of transaction.effects) {
+      if (effect.is(setMentionLoadingTooltip)) return effect.value;
+    }
+    return value;
+  },
+  provide: (field) =>
+    showTooltip.compute([field], (state) => state.field(field)),
+});
 
 interface MentionCompletion extends Completion {
   avatarInitials: string;
@@ -38,10 +53,15 @@ export function createMentionCompletionSource(
 
     const query = match.text.slice(1);
     if (!query || query.trim().length === 0) return null;
+    const view = context.view;
+    if (!view) return null;
 
     const normalizedQuery = query.trim().toLowerCase();
     const cacheKey = `${courseId}:${normalizedQuery}`;
     if (cache.has(cacheKey)) {
+      currentRequestId += 1;
+      setNativeAutocompleteLoading(view, false);
+      view.dispatch({ effects: setMentionLoadingTooltip.of(null) });
       const cachedUsers = cache.get(cacheKey)!;
       return cachedUsers.length > 0
         ? buildCompletionResult(match.from, cachedUsers)
@@ -49,6 +69,8 @@ export function createMentionCompletionSource(
     }
 
     const requestId = ++currentRequestId;
+    setNativeAutocompleteLoading(view, false);
+    view.dispatch({ effects: setMentionLoadingTooltip.of(null) });
     if (debounceResolve) {
       debounceResolve();
       debounceResolve = null;
@@ -68,6 +90,13 @@ export function createMentionCompletionSource(
     });
 
     if (context.aborted || requestId !== currentRequestId) return null;
+
+    setNativeAutocompleteLoading(view, true);
+    view.dispatch({
+      effects: setMentionLoadingTooltip.of(
+        createMentionLoadingTooltip(match.to),
+      ),
+    });
 
     try {
       const users = fetchFn
@@ -90,7 +119,53 @@ export function createMentionCompletionSource(
       return users.length > 0 ? buildCompletionResult(match.from, users) : null;
     } catch {
       return null;
+    } finally {
+      if (requestId === currentRequestId) {
+        setNativeAutocompleteLoading(view, false);
+        view.dispatch({ effects: setMentionLoadingTooltip.of(null) });
+      }
     }
+  };
+}
+
+export const mentionCompletionLoadingExtension = mentionLoadingTooltip;
+
+function setNativeAutocompleteLoading(
+  view: EditorView,
+  loading: boolean,
+): void {
+  view.dom
+    .querySelector<HTMLElement>(
+      ".cm-tooltip-autocomplete:not(.cm-mention-loading-panel)",
+    )
+    ?.classList.toggle("cm-mention-loading-source", loading);
+}
+
+function createMentionLoadingTooltip(to: number): Tooltip {
+  return {
+    pos: to,
+    above: false,
+    create: () => {
+      const dom = document.createElement("div");
+      dom.className =
+        "cm-tooltip-autocomplete cm-mention-loading-panel";
+      dom.setAttribute("role", "status");
+      dom.setAttribute("aria-live", "polite");
+
+      const row = document.createElement("div");
+      row.className = "cm-mention-loading-row";
+
+      const spinner = document.createElement("span");
+      spinner.className = "cm-mention-loading-spinner";
+      spinner.setAttribute("aria-hidden", "true");
+
+      const label = document.createElement("span");
+      label.textContent = "Searching…";
+
+      row.append(spinner, label);
+      dom.append(row);
+      return { dom };
+    },
   };
 }
 
