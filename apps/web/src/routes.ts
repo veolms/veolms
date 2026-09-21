@@ -14,6 +14,14 @@ export default [
       id: "course-create",
       caseSensitive: true,
     }),
+    route("courses/create/:editTab", marker, {
+      id: "course-create-tab",
+      caseSensitive: true,
+    }),
+    route("courses/:courseId/edit/:editTab", marker, {
+      id: "course-edit",
+      caseSensitive: true,
+    }),
     route("wishlist", marker, { id: "wishlist", caseSensitive: true }),
     route("students", marker, { id: "students", caseSensitive: true }),
     route("students/:username", marker, {

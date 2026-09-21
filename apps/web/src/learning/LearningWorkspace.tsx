@@ -92,10 +92,10 @@ import {
   clampLearningCurriculumWidth,
   CURRICULUM_COLLAPSED_STORAGE_KEY,
   CURRICULUM_COLLAPSED_WIDTH,
-  CURRICULUM_DEFAULT_WIDTH,
   CURRICULUM_MAX_WIDTH,
   CURRICULUM_MIN_WIDTH,
   CURRICULUM_WIDTH_STORAGE_KEY,
+  applyLearningShellToDocument,
   getInitialLearningShellState,
 } from "./learningShellPreferences";
 import { useCurriculumTestPreferences } from "./useCurriculumTestPreferences";
@@ -462,9 +462,11 @@ export function LearningWorkspace({
     "current" | "top"
   >("current");
   const [curriculumWidth, setCurriculumWidth] = useState(
-    CURRICULUM_DEFAULT_WIDTH,
+    () => getInitialLearningShellState().curriculumWidth,
   );
-  const [curriculumCollapsed, setCurriculumCollapsed] = useState(false);
+  const [curriculumCollapsed, setCurriculumCollapsed] = useState(
+    () => getInitialLearningShellState().curriculumCollapsed,
+  );
   const learningShellHydratedRef = useRef(false);
   const [curriculumResizing, setCurriculumResizing] = useState(false);
   const [curriculumResizePreviewWidth, setCurriculumResizePreviewWidth] =
@@ -487,25 +489,22 @@ export function LearningWorkspace({
       }
     }
 
-    const root = document.documentElement;
     const rootWidth = isInitialShellSync
       ? shellState.curriculumCollapsed
         ? CURRICULUM_COLLAPSED_WIDTH
         : shellState.curriculumWidth
       : (curriculumResizePreviewWidth ??
         (curriculumCollapsed ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth));
-    root.dataset.learningCurriculumState = shellState.curriculumCollapsed
-      ? "collapsed"
-      : "expanded";
-    root.style.setProperty("--learning-curriculum-width", `${rootWidth}px`);
-    root.style.setProperty(
-      "--learning-curriculum-expanded-width",
-      `${shellState.curriculumWidth}px`,
-    );
-    window.__VEO_BOOTSTRAP__ = {
-      ...window.__VEO_BOOTSTRAP__,
-      learning: shellState,
-    };
+    applyLearningShellToDocument({
+      curriculumCollapsed: shellState.curriculumCollapsed,
+      curriculumWidth: shellState.curriculumWidth,
+    });
+    if (rootWidth !== shellState.curriculumWidth) {
+      document.documentElement.style.setProperty(
+        "--learning-curriculum-width",
+        `${rootWidth}px`,
+      );
+    }
   }, [curriculumCollapsed, curriculumResizePreviewWidth, curriculumWidth]);
 
   useLayoutEffect(() => {
@@ -515,7 +514,9 @@ export function LearningWorkspace({
   }, []);
 
   useEffect(() => {
-    if (courseContentDrawerViewport) return;
+    if (courseContentDrawerViewport || !learningShellHydratedRef.current) {
+      return;
+    }
     try {
       window.localStorage.setItem(
         CURRICULUM_COLLAPSED_STORAGE_KEY,

@@ -3,7 +3,7 @@ import type {
   PresignMediaRequest,
   PresignMediaResponse,
 } from "@veolms/contracts";
-import { api } from "../../lib/api-client";
+import { api, getApiBaseUrl } from "../../lib/api-client";
 
 export interface UploadProgress {
   loadedBytes: number;
@@ -12,8 +12,6 @@ export interface UploadProgress {
 }
 
 export type UploadProgressHandler = (progress: UploadProgress) => void;
-
-const MEDIA_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
 function requestPresignedMediaUpload(
   payload: PresignMediaRequest,
@@ -146,7 +144,7 @@ export const mediaService = {
     }
 
     return new window.EventSource(
-      `${MEDIA_API_BASE_URL.replace(/\/$/, "")}/media/${mediaAssetId}/progress/stream`,
+      `${getApiBaseUrl().replace(/\/$/, "")}/media/${mediaAssetId}/progress/stream`,
       { withCredentials: true },
     );
   },

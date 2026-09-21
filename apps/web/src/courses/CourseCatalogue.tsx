@@ -153,17 +153,17 @@ export function CourseCatalogue({
       }
       onEdit={(selected) =>
         onNavigatePage(
-          `/courses/create?edit=${encodeURIComponent(selected.id)}`,
+          `/courses/${encodeURIComponent(selected.id)}/edit/basics`,
         )
       }
       onManage={(selected) =>
         onNavigatePage(
-          `/courses/create?edit=${encodeURIComponent(selected.id)}&tab=curriculum`,
+          `/courses/${encodeURIComponent(selected.id)}/edit/curriculum`,
         )
       }
       onPublish={(selected) =>
         onNavigatePage(
-          `/courses/create?edit=${encodeURIComponent(selected.id)}&tab=publish`,
+          `/courses/${encodeURIComponent(selected.id)}/edit/publish`,
         )
       }
       onDeleteRequested={setPendingDelete}

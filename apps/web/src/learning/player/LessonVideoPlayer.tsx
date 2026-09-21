@@ -93,6 +93,11 @@ export interface LessonVideoPlayerProps {
   onTheaterToggle: () => void;
   autoPlayOnMediaChange?: boolean;
   autoplayEnabled?: boolean;
+  showAutoplayControl?: boolean;
+  /** Shows the learner-facing completion overlay when playback ends. */
+  showCompletionOverlay?: boolean;
+  circularSettingsControl?: boolean;
+  showLessonNavigation?: boolean;
   playbackSuspended?: boolean;
   canGoNext?: boolean;
   canGoPrevious?: boolean;
@@ -133,6 +138,10 @@ export interface LessonVideoPlayerProps {
 export function LessonVideoPlayer({
   autoPlayOnMediaChange = false,
   autoplayEnabled = true,
+  showAutoplayControl = true,
+  showCompletionOverlay = true,
+  circularSettingsControl = false,
+  showLessonNavigation = true,
   playbackSuspended = false,
   canGoNext = false,
   canGoPrevious = false,
@@ -246,6 +255,10 @@ export function LessonVideoPlayer({
     setShowEndScreen(false);
     setAutoplayCancelled(false);
   }, [mediaKey]);
+
+  useEffect(() => {
+    if (!showCompletionOverlay) setShowEndScreen(false);
+  }, [showCompletionOverlay]);
 
   useEffect(() => {
     if (playbackSuspended) {
@@ -456,7 +469,7 @@ export function LessonVideoPlayer({
         if (activeMediaKeyRef.current === requestedMediaKeyRef.current) {
           onProgressChange?.(100);
           onLessonEnded?.();
-          setShowEndScreen(true);
+          if (showCompletionOverlay) setShowEndScreen(true);
           setAutoplayCancelled(false);
         }
       } else if (event.type === "volumechange") {
@@ -499,6 +512,7 @@ export function LessonVideoPlayer({
       onProgressChange,
       persistResumePosition,
       playbackSuspended,
+      showCompletionOverlay,
       showEndScreen,
       tryFinishPlayingMiniPlayerRestore,
     ],
@@ -787,7 +801,7 @@ export function LessonVideoPlayer({
           ? "!rounded-none !shadow-none"
           : fullscreenCoursePanelActive
             ? "border-0 !h-auto !max-h-full !w-(--learning-fullscreen-video-width) !max-w-none !translate-x-(--learning-fullscreen-video-offset-x) !shrink-0 !rounded-none !shadow-none"
-            : "border-0 !rounded-none"
+            : "border-0 !rounded-xl"
       }
       centralControl={
         presentation === "mini" ? (
@@ -820,6 +834,9 @@ export function LessonVideoPlayer({
           <LessonPlayerControls
             ambientEnabled={ambientEnabled}
             autoplayEnabled={autoplayEnabled}
+            showAutoplayControl={showAutoplayControl}
+            circularSettingsControl={circularSettingsControl}
+            showLessonNavigation={showLessonNavigation}
             canGoNext={canGoNext}
             canGoPrevious={canGoPrevious}
             controlsSuppressed={minimizeGesture.controlsSuppressed}
@@ -845,7 +862,7 @@ export function LessonVideoPlayer({
         presentation === "full" && !minimizeGesture.controlsSuppressed ? (
           <>
             <LessonAmbientProjection enabled={ambientEnabled} />
-            {showEndScreen ? (
+            {showCompletionOverlay && showEndScreen ? (
               <LessonEndScreenOverlay
                 nextLesson={
                   canGoNext

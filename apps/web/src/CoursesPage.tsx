@@ -37,7 +37,6 @@ import { StudentHome } from "./StudentHome";
 import type { LearningCourse } from "./StudentPages";
 import { SettingsPage } from "./SettingsPage";
 import { CourseCatalogue } from "./courses/CourseCatalogue";
-import { CourseCreatePage } from "./courses/CourseCreatePage";
 import { PlaceholderPage } from "./courses/PlaceholderPage";
 import {
   getLearningPlayerSwipeSplitX,
@@ -113,8 +112,8 @@ import {
   getRoleDisplayName,
 } from "./shell/workspaceRole";
 import {
-  SIDEBAR_DEFAULT_WIDTH,
   SIDEBAR_MIN_WIDTH,
+  applySidebarShellToDocument,
   clampSidebarMaxWidth,
   clampSidebarWidth,
   getDefaultSidebarPreferences,
@@ -207,6 +206,11 @@ const ReadingModeQuickMenu = lazy(() =>
 const CourseOverviewPage = lazy(() =>
   import("./courses/CourseOverviewPage").then((module) => ({
     default: module.CourseOverviewPage,
+  })),
+);
+const CourseCreatePage = lazy(() =>
+  import("./courses/CourseCreatePage").then((module) => ({
+    default: module.CourseCreatePage,
   })),
 );
 
@@ -567,8 +571,12 @@ export function CoursesPage({
   const [savedShellProfiles, setSavedShellProfiles] = useState<
     Record<CourseRole, ProfilePreferences | null>
   >({ student: null, creator: null });
-  const [sidebarMode, setSidebarMode] = useState<SidebarMode>("expanded");
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>(
+    () => getInitialSidebarShellState().mode,
+  );
+  const [sidebarWidth, setSidebarWidth] = useState(
+    () => getInitialSidebarShellState().width,
+  );
   const sidebarShellHydratedRef = useRef(false);
 
   const [sidebarResizing, setSidebarResizing] = useState(false);
@@ -597,7 +605,11 @@ export function CoursesPage({
     useState<NavigationDropTarget | null>(null);
   // Browser-only input capabilities are applied after startup so the loading
   // boundary remains deterministic across the build and the first client pass.
-  const [compactNavigation, setCompactNavigation] = useState(false);
+  const [compactNavigation, setCompactNavigation] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      Boolean(window.__VEO_BOOTSTRAP__?.navigation?.compact),
+  );
   const [coarseNavigationInput, setCoarseNavigationInput] = useState(false);
   const [edgeSidebarOpen, setEdgeSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<ThemePreference>("dark");
@@ -974,14 +986,7 @@ export function CoursesPage({
       if (shellState.width !== sidebarWidth) setSidebarWidth(shellState.width);
     }
 
-    const root = document.documentElement;
-    root.dataset.sidebarState = shellState.mode;
-    root.style.setProperty("--sidebar-width", `${shellState.width}px`);
-    root.style.setProperty("--sidebar-expanded-width", `${shellState.width}px`);
-    window.__VEO_BOOTSTRAP__ = {
-      ...window.__VEO_BOOTSTRAP__,
-      sidebar: shellState,
-    };
+    applySidebarShellToDocument(shellState);
   }, [sidebarMode, sidebarWidth]);
 
   const navigationHydrationKey = [
@@ -1305,18 +1310,15 @@ export function CoursesPage({
   ]);
 
   useEffect(() => {
+    if (page === "course-create") return;
+    if (!authUserFetched) return;
     // The initial role is deterministic for SSR/hydration and may still be
     // "student" while the account-specific workspace role is being restored.
     // Do not redirect a valid creator route during that one render window.
     if (!isWorkspaceRoleHydrated || !isAuthenticated) return;
 
     if (effectiveRole !== "creator") {
-      const forbiddenPages = [
-        "students",
-        "student-details",
-        "course-create",
-        "quiz-builder",
-      ];
+      const forbiddenPages = ["students", "student-details", "quiz-builder"];
       if (
         (page && forbiddenPages.includes(page)) ||
         requestedSection === "Students" ||
@@ -1326,6 +1328,7 @@ export function CoursesPage({
       }
     }
   }, [
+    authUserFetched,
     effectiveRole,
     isAuthenticated,
     isWorkspaceRoleHydrated,
@@ -1335,7 +1338,7 @@ export function CoursesPage({
   ]);
 
   useEffect(() => {
-    if (!storedPreferencesReady) return;
+    if (!storedPreferencesReady || !sidebarShellHydratedRef.current) return;
     localStorage.setItem("veolms-sidebar-mode", sidebarMode);
     localStorage.setItem(
       "veolms-sidebar-collapsed",
@@ -2105,10 +2108,9 @@ export function CoursesPage({
 
   const navigationUsesCompactInteraction =
     compactNavigation || coarseNavigationInput;
-  // The first render is deterministic on both server and client. The layout
-  // effect above adopts the head bootstrap snapshot before the browser paints,
-  // so React owns the persisted shell mode and width without a hydration
-  // mismatch.
+  // The first client render of a prerendered document stays deterministic so
+  // hydration can match. SPA fallback and auth-gated remounts run this
+  // initializer in the browser and adopt the head bootstrap before paint.
   const renderedSidebarMode = sidebarMode;
   const renderedSidebarWidth = sidebarWidth;
   const { collapsed: sidebarCollapsed, hidden: sidebarHidden } =
@@ -3337,14 +3339,13 @@ export function CoursesPage({
       );
     }
     if (surfacePage === "course-create") {
-      if (effectiveRole !== "creator") {
-        return null;
-      }
       return (
-        <CourseCreatePage
-          onNavigatePage={onNavigatePage}
-          bottomNavHidden={mobileBottomNavHidden}
-        />
+        <Suspense fallback={null}>
+          <CourseCreatePage
+            onNavigatePage={onNavigatePage}
+            bottomNavHidden={mobileBottomNavHidden}
+          />
+        </Suspense>
       );
     }
     if (surfacePage === "course-overview") {
@@ -3367,8 +3368,14 @@ export function CoursesPage({
     if (surfacePage === "coupon-builder") {
       if (!isAuthReady) {
         return (
-          <main data-coupon-surface="" className="mx-auto grid w-full max-w-[1320px] place-items-center py-24">
-            <CircleNotch size={28} className="mb-3 animate-spin text-(--accent)" />
+          <main
+            data-coupon-surface=""
+            className="mx-auto grid w-full max-w-[1320px] place-items-center py-24"
+          >
+            <CircleNotch
+              size={28}
+              className="mb-3 animate-spin text-(--accent)"
+            />
             <p className="text-sm text-(--muted)">Loading coupon builder...</p>
           </main>
         );

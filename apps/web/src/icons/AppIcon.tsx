@@ -41,6 +41,19 @@ const icons = {
       },
     ],
   },
+  cloudUpload: {
+    viewBox: "0 0 512 512",
+    marks: [
+      {
+        d: "M200 407H128C66.1 407 16 356.9 16 295C16 235.8 61.9 187.5 120.1 183.2C129.8 115.5 199.1 64 288 64C364.1 64 418 118.2 417.6 193.2C463.2 208.1 496 250.9 496 301C496 359.5 448.5 407 390 407H312",
+        strokeWidth: 40,
+      },
+      {
+        d: "M256 448V252M208 309L256 252L304 309",
+        strokeWidth: 40,
+      },
+    ],
+  },
 } as const satisfies Record<
   string,
   { viewBox: string; marks: readonly AppIconMark[] }

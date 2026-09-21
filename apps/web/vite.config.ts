@@ -70,23 +70,6 @@ function joinPublicPath(base: string, fileName: string) {
   return `${prefix}${fileName}`.replace(/\/{2,}/g, "/");
 }
 
-function createCdnDevProxy(configuredUrl: string) {
-  try {
-    const url = new URL(configuredUrl);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-    const targetPath = url.pathname.replace(/\/+$/u, "");
-    return {
-      target: url.origin,
-      changeOrigin: true,
-      secure: url.protocol === "https:",
-      rewrite: (requestPath: string) =>
-        `${targetPath}${requestPath.slice("/cdn".length)}` || "/",
-    };
-  } catch {
-    return null;
-  }
-}
-
 function earlyHlsPreloadPlugin(): Plugin {
   let publicBase = "/";
   let command: "build" | "serve" = "build";
@@ -176,17 +159,21 @@ function earlyHlsPreloadPlugin(): Plugin {
   };
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   const environment = {
     ...process.env,
     ...loadEnv(mode, workspaceRoot, ""),
   };
   const config = loadWebConfig(environment);
-  const cdnDevProxy = createCdnDevProxy(config.VITE_CDN_URL);
 
   return {
     envDir: workspaceRoot,
     optimizeDeps: {
+      // React Router creates a separate SSR environment for the dev server.
+      // Do not hold the first request while Vite crawls the entire client
+      // graph; this app's editor, Shiki, and icon trees make that crawl long
+      // enough for the SSR module runner's 60s transport request to time out.
+      holdUntilCrawlEnd: false,
       include: ["react", "react-dom/client"],
     },
     define: {
@@ -215,8 +202,9 @@ export default defineConfig(({ mode }) => {
       // lets Vite resolve those imports for the build-time SSG renderer.
       noExternal: [
         "@atomic-editor/editor",
-        "@phosphor-icons/react",
-        /^@phosphor-icons\/react\//,
+        ...(command === "build"
+          ? ["@phosphor-icons/react", /^@phosphor-icons\/react\//]
+          : []),
       ],
     },
     build: {
@@ -261,7 +249,6 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
-        ...(cdnDevProxy ? { "/cdn": cdnDevProxy } : {}),
       },
     },
   };

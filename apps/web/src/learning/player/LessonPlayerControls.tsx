@@ -71,10 +71,20 @@ function CircularFullscreenButton() {
   );
 }
 
-function getPlayerIconPillClass(mobileInteraction: boolean): string {
-  return `${PLAYER_ICON_PILL_CLASS} ${
+function getPlayerIconPillClass(
+  mobileInteraction: boolean,
+  circular = false,
+): string {
+  const controlClass = circular
+    ? PLAYER_ICON_PILL_CLASS.replace("!h-8", "!h-9")
+        .replace("!w-auto", "!w-9")
+        .replace("!px-2", "!px-0")
+        .replace("sm:!px-3", "sm:!px-0")
+    : PLAYER_ICON_PILL_CLASS;
+
+  return `${controlClass} ${
     mobileInteraction
-      ? `${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} sm:!h-8 sm:!bg-transparent sm:!px-2 sm:hover:!bg-transparent sm:focus-visible:!bg-transparent`
+      ? `${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} sm:!h-8 sm:!bg-transparent ${circular ? "sm:!px-0" : "sm:!px-2"} sm:hover:!bg-transparent sm:focus-visible:!bg-transparent`
       : ""
   }`;
 }
@@ -115,6 +125,9 @@ export interface CourseLessonsSecondPressHoldProps {
 export interface LessonPlayerControlsProps {
   ambientEnabled: boolean;
   autoplayEnabled: boolean;
+  showAutoplayControl?: boolean;
+  circularSettingsControl?: boolean;
+  showLessonNavigation?: boolean;
   canGoNext: boolean;
   canGoPrevious: boolean;
   controlsSuppressed?: boolean;
@@ -385,6 +398,9 @@ function MenuToggle({ checked }: { checked: boolean }) {
 export function LessonPlayerControls({
   ambientEnabled,
   autoplayEnabled,
+  showAutoplayControl = true,
+  circularSettingsControl = false,
+  showLessonNavigation = true,
   canGoNext,
   canGoPrevious,
   controlsSuppressed = false,
@@ -533,22 +549,24 @@ export function LessonPlayerControls({
         >
           <PlayButton className={PLAYER_INNER_CONTROL_CLASS} iconSize={23} />
         </PlayerControlSurface>
-        <PlayerControlSurface
-          blurred
-          cluster="lesson-navigation"
-          className="inline-flex h-10.5 items-center rounded-full p-[3px]"
-        >
-          <LessonNavigationButton
-            direction="previous"
-            disabled={!canGoPrevious}
-            onClick={onGoPrevious}
-          />
-          <LessonNavigationButton
-            direction="next"
-            disabled={!canGoNext}
-            onClick={onGoNext}
-          />
-        </PlayerControlSurface>
+        {showLessonNavigation ? (
+          <PlayerControlSurface
+            blurred
+            cluster="lesson-navigation"
+            className="inline-flex h-10.5 items-center rounded-full p-[3px]"
+          >
+            <LessonNavigationButton
+              direction="previous"
+              disabled={!canGoPrevious}
+              onClick={onGoPrevious}
+            />
+            <LessonNavigationButton
+              direction="next"
+              disabled={!canGoNext}
+              onClick={onGoNext}
+            />
+          </PlayerControlSurface>
+        ) : null}
         <VolumeControl
           collapsible
           className={`${PLAYER_SURFACE_CLASS} relative isolate h-10.5 !w-10.5 shrink-0 rounded-full p-1 backdrop-blur-sm before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-transparent before:transition-colors before:duration-150 before:ease-out before:content-[''] hover:!w-31.5 hover:before:bg-(--video-player-control-surface-hover) focus-within:!w-31.5 focus-within:before:bg-(--video-player-control-surface-hover) [&>*]:relative [&>*]:z-10 [&_.player-volume-slider]:!h-8.5`}
@@ -741,14 +759,16 @@ export function LessonPlayerControls({
           >
             <PlayerControlSurface
               cluster="player-actions"
-              className={`relative isolate flex h-8 items-center gap-1 rounded-full !bg-transparent p-0 !shadow-none before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:backdrop-blur-sm before:content-[''] [&>*]:relative [&>*]:z-10 max-sm:before:hidden sm:h-10.5 sm:p-[3px] ${mobileInteraction ? "sm:!h-8 sm:!p-0 sm:before:hidden" : ""}`}
+              className={`relative isolate flex h-8 items-center gap-1 rounded-full !bg-transparent p-0 !shadow-none before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:backdrop-blur-sm before:content-[''] [&>*]:relative [&>*]:z-10 max-sm:before:hidden sm:h-10.5 sm:p-[3px] ${mobileInteraction ? "sm:!h-8 sm:!p-0 sm:before:hidden" : ""} ${circularSettingsControl ? "!size-9 !rounded-full !p-0 !justify-center sm:!size-9 sm:!p-0 [&>div]:!size-9 [&>div>button]:!size-9" : ""}`}
             >
             <ZoomLevelIndicator className="mr-0.5" />
-            <AutoplayToggle
-              enabled={autoplayEnabled}
-              mobileInteraction={mobileInteraction}
-              onEnabledChange={onAutoplayEnabledChange}
-            />
+            {showAutoplayControl ? (
+              <AutoplayToggle
+                enabled={autoplayEnabled}
+                mobileInteraction={mobileInteraction}
+                onEnabledChange={onAutoplayEnabledChange}
+              />
+            ) : null}
             <span
               className={`inline-flex sm:hidden ${mobileInteraction ? "sm:!inline-flex" : ""}`}
               data-mobile-volume-control=""
@@ -771,7 +791,11 @@ export function LessonPlayerControls({
               mobileSheetPortalTarget={
                 mobileLandscapeFullscreen ? mobileSettingsSheetHost : undefined
               }
-              triggerClassName={getPlayerIconPillClass(mobileInteraction)}
+              triggerClassName={cn(
+                getPlayerIconPillClass(mobileInteraction, circularSettingsControl),
+                circularSettingsControl &&
+                  "!inline-flex !size-9 !w-9 !items-center !justify-center !p-0 !rounded-full !leading-none [&>svg]:!block [&>svg]:!shrink-0",
+              )}
               extraMainItems={
                 <AmbientSettingsItem
                   enabled={ambientEnabled}
@@ -832,6 +856,7 @@ export function LessonPlayerControls({
 export interface LessonCentralControlsProps {
   canGoNext: boolean;
   canGoPrevious: boolean;
+  showLessonNavigation?: boolean;
   controlsSuppressed?: boolean;
   onGoNext: () => void;
   onGoPrevious: () => void;
@@ -840,6 +865,7 @@ export interface LessonCentralControlsProps {
 export function LessonCentralControls({
   canGoNext,
   canGoPrevious,
+  showLessonNavigation = true,
   controlsSuppressed = false,
   onGoNext,
   onGoPrevious,
@@ -875,18 +901,20 @@ export function LessonCentralControls({
       data-player-loading={loading ? "true" : undefined}
     >
       <div className="pointer-events-auto flex items-center gap-6">
-        <PlayerControlSurface
-          cluster="mobile-previous"
-          className="grid size-11.5 place-items-center rounded-full !border-0 p-0 backdrop-blur-none"
-        >
-          <LessonNavigationButton
-            direction="previous"
-            disabled={!canGoPrevious}
-            className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} ${PLAYER_INNER_CONTROL_CLASS} !size-11.5`}
-            iconSize={22}
-            onClick={onGoPrevious}
-          />
-        </PlayerControlSurface>
+        {showLessonNavigation ? (
+          <PlayerControlSurface
+            cluster="mobile-previous"
+            className="grid size-11.5 place-items-center rounded-full !border-0 p-0 backdrop-blur-none"
+          >
+            <LessonNavigationButton
+              direction="previous"
+              disabled={!canGoPrevious}
+              className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} ${PLAYER_INNER_CONTROL_CLASS} !size-11.5`}
+              iconSize={22}
+              onClick={onGoPrevious}
+            />
+          </PlayerControlSurface>
+        ) : null}
         <PlayerControlSurface
           cluster="mobile-play"
           className="grid size-15.5 place-items-center rounded-full !border-0 p-0 backdrop-blur-none"
@@ -897,18 +925,20 @@ export function LessonCentralControls({
             iconSize={29}
           />
         </PlayerControlSurface>
-        <PlayerControlSurface
-          cluster="mobile-next"
-          className="grid size-11.5 place-items-center rounded-full !border-0 p-0 backdrop-blur-none"
-        >
-          <LessonNavigationButton
-            direction="next"
-            disabled={!canGoNext}
-            className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} ${PLAYER_INNER_CONTROL_CLASS} !size-11.5`}
-            iconSize={22}
-            onClick={onGoNext}
-          />
-        </PlayerControlSurface>
+        {showLessonNavigation ? (
+          <PlayerControlSurface
+            cluster="mobile-next"
+            className="grid size-11.5 place-items-center rounded-full !border-0 p-0 backdrop-blur-none"
+          >
+            <LessonNavigationButton
+              direction="next"
+              disabled={!canGoNext}
+              className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} ${PLAYER_INNER_CONTROL_CLASS} !size-11.5`}
+              iconSize={22}
+              onClick={onGoNext}
+            />
+          </PlayerControlSurface>
+        ) : null}
       </div>
     </div>
   );
