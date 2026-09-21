@@ -68,6 +68,7 @@ import {
   type DiscussionWorkspaceCard,
 } from "./discussions-workspace.adapter";
 import { DiscussionWorkspaceSkeletonList } from "./DiscussionWorkspaceSkeleton";
+import { DiscussionWorkspaceVirtualFeed } from "./DiscussionWorkspaceVirtualFeed";
 
 type DiscussionStatus = NonNullable<DiscussionWorkspaceCard["status"]>;
 type DiscussionOwnership = "all" | "mine";
@@ -1299,6 +1300,7 @@ export function DiscussionsWorkspace({
       sort: workspaceSort as "activity" | "latest" | "replies",
     };
   })();
+  const workspaceDatasetKey = JSON.stringify(workspaceQuery);
   const workspaceQueryResult = useDiscussionsWorkspace(workspaceQuery);
   const {
     data: workspaceData,
@@ -1598,9 +1600,134 @@ export function DiscussionsWorkspace({
     setNotice?.("Publishing is not connected in this phase.");
   };
 
-  const openThread = (thread: DiscussionWorkspaceCard) => {
-    setNotice?.(`Opened “${thread.title ?? "discussion"}”.`);
-  };
+  const openThread = useCallback(
+    (thread: DiscussionWorkspaceCard) => {
+      setNotice?.(`Opened “${thread.title ?? "discussion"}”.`);
+    },
+    [setNotice],
+  );
+
+  const renderDiscussionCard = useCallback(
+    (thread: DiscussionWorkspaceCard) => {
+      if (isBookmarksTab) {
+        return (
+          <DiscussionWorkspaceBookmarkCard
+            bookmark={thread}
+            onNavigatePage={onNavigatePage}
+          />
+        );
+      }
+
+      if (isNotesTab) {
+        return (
+          <DiscussionWorkspaceNoteCard
+            note={thread}
+            onNavigatePage={onNavigatePage}
+          />
+        );
+      }
+
+      if (isMentionsTab) {
+        return (
+          <DiscussionWorkspaceMentionCard
+            mention={thread}
+            onNavigatePage={onNavigatePage}
+          />
+        );
+      }
+
+      if (isFollowingTab) {
+        return (
+          <DiscussionWorkspaceFollowingCard
+            thread={thread}
+            onNavigatePage={onNavigatePage}
+          />
+        );
+      }
+
+      const discussionStatus = thread.status ?? "open";
+      const StatusIcon = statusIcons[discussionStatus];
+      return activeTab === "q-and-a" ? (
+        <DiscussionWorkspaceQuestionCard
+          thread={thread}
+          onNavigatePage={onNavigatePage}
+        />
+      ) : isCommentsTab ? (
+        <DiscussionWorkspaceCommentCard
+          thread={thread}
+          onNavigatePage={onNavigatePage}
+        />
+      ) : (
+        <article className="discussion-thread">
+          <button
+            type="button"
+            className="discussion-thread__open"
+            onClick={() => openThread(thread)}
+          >
+            <div className="discussion-thread__avatar">
+              <DiscussionAvatar
+                src={thread.avatar || null}
+                className="discussion-thread__avatar-image"
+              />
+              {discussionStatus !== "open" && <i aria-hidden="true" />}
+            </div>
+            <div className="discussion-thread__body">
+              <span className="discussion-thread__title">
+                {thread.title ?? "Untitled discussion"}
+              </span>
+              <p>{thread.excerpt}</p>
+              {(thread.course || thread.lesson) && (
+                <div className="discussion-thread__context">
+                  {thread.course && <span>{thread.course}</span>}
+                  {thread.course && thread.lesson && (
+                    <span aria-hidden="true" />
+                  )}
+                  {thread.lesson && <small>{thread.lesson}</small>}
+                </div>
+              )}
+            </div>
+            <div className="discussion-thread__meta">
+              <span
+                className={"discussion-thread__status is-" + discussionStatus}
+              >
+                <StatusIcon size={15} weight="fill" />{" "}
+                {statusLabels[discussionStatus]}
+              </span>
+              <span>
+                <ChatTeardropText size={17} />{" "}
+                {thread.replies} {thread.replies === 1 ? "reply" : "replies"}
+              </span>
+              <time>{thread.activity}</time>
+            </div>
+          </button>
+          <button
+            type="button"
+            className="discussion-thread__more"
+            aria-label={"More options for " + thread.title}
+            onClick={(event) => {
+              event.stopPropagation();
+              setNotice?.(
+                "Thread actions will be available with connected discussions.",
+              );
+            }}
+          >
+            <DotsThreeVertical size={21} weight="bold" />
+          </button>
+        </article>
+      );
+    },
+    [
+      activeTab,
+      isBookmarksTab,
+      isCommentsTab,
+      isFollowingTab,
+      isMentionsTab,
+      isNotesTab,
+      onNavigatePage,
+      openThread,
+      setNotice,
+    ],
+  );
 
   const renderDiscussionFilterControls = (inSheet = false) => {
     const field = (label: string, control: ReactNode) =>
@@ -2032,130 +2159,11 @@ export function DiscussionsWorkspace({
                         </button>
                       </div>
                     ) : cards.length > 0 ? (
-                      cards.map((thread) => {
-                        if (isBookmarksTab) {
-                          return (
-                            <DiscussionWorkspaceBookmarkCard
-                              key={thread.id}
-                              bookmark={thread}
-                              onNavigatePage={onNavigatePage}
-                            />
-                          );
-                        }
-
-                        if (isNotesTab) {
-                          return (
-                            <DiscussionWorkspaceNoteCard
-                              key={thread.id}
-                              note={thread}
-                              onNavigatePage={onNavigatePage}
-                            />
-                          );
-                        }
-
-                        if (isMentionsTab) {
-                          return (
-                            <DiscussionWorkspaceMentionCard
-                              key={thread.id}
-                              mention={thread}
-                              onNavigatePage={onNavigatePage}
-                            />
-                          );
-                        }
-
-                        if (isFollowingTab) {
-                          return (
-                            <DiscussionWorkspaceFollowingCard
-                              key={thread.id}
-                              thread={thread}
-                              onNavigatePage={onNavigatePage}
-                            />
-                          );
-                        }
-
-                        const discussionStatus = thread.status ?? "open";
-                        const StatusIcon = statusIcons[discussionStatus];
-                        return activeTab === "q-and-a" ? (
-                          <DiscussionWorkspaceQuestionCard
-                            key={thread.id}
-                            thread={thread}
-                            onNavigatePage={onNavigatePage}
-                          />
-                        ) : isCommentsTab ? (
-                          <DiscussionWorkspaceCommentCard
-                            key={thread.id}
-                            thread={thread}
-                            onNavigatePage={onNavigatePage}
-                          />
-                        ) : (
-                          <article
-                            className="discussion-thread"
-                            key={thread.id}
-                          >
-                            <button
-                              type="button"
-                              className="discussion-thread__open"
-                              onClick={() => openThread(thread)}
-                            >
-                              <div className="discussion-thread__avatar">
-                                <DiscussionAvatar
-                                  src={thread.avatar || null}
-                                  className="discussion-thread__avatar-image"
-                                />
-                                {discussionStatus !== "open" && (
-                                  <i aria-hidden="true" />
-                                )}
-                              </div>
-                              <div className="discussion-thread__body">
-                                <span className="discussion-thread__title">
-                                  {thread.title ?? "Untitled discussion"}
-                                </span>
-                                <p>{thread.excerpt}</p>
-                                {(thread.course || thread.lesson) && (
-                                  <div className="discussion-thread__context">
-                                    {thread.course && (
-                                      <span>{thread.course}</span>
-                                    )}
-                                    {thread.course && thread.lesson && (
-                                      <span aria-hidden="true" />
-                                    )}
-                                    {thread.lesson && (
-                                      <small>{thread.lesson}</small>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="discussion-thread__meta">
-                                <span
-                                  className={`discussion-thread__status is-${discussionStatus}`}
-                                >
-                                  <StatusIcon size={15} weight="fill" />{" "}
-                                  {statusLabels[discussionStatus]}
-                                </span>
-                                <span>
-                                  <ChatTeardropText size={17} />{" "}
-                                  {thread.replies}{" "}
-                                  {thread.replies === 1 ? "reply" : "replies"}
-                                </span>
-                                <time>{thread.activity}</time>
-                              </div>
-                            </button>
-                            <button
-                              type="button"
-                              className="discussion-thread__more"
-                              aria-label={`More options for ${thread.title}`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setNotice?.(
-                                  "Thread actions will be available with connected discussions.",
-                                );
-                              }}
-                            >
-                              <DotsThreeVertical size={21} weight="bold" />
-                            </button>
-                          </article>
-                        );
-                      })
+                      <DiscussionWorkspaceVirtualFeed
+                        cards={cards}
+                        datasetKey={workspaceDatasetKey}
+                        renderCard={renderDiscussionCard}
+                      />
                     ) : (
                       <div className="discussion-hub__empty">
                         <UsersThree size={30} weight="duotone" />
