@@ -268,6 +268,7 @@ export function CommentComposer({
               entryKind={entryKind}
               visibility={visibility}
               capabilities={capabilities}
+              editing={editing}
               onEntryKindChange={onEntryKindChange}
               onVisibilityChange={onVisibilityChange}
             />

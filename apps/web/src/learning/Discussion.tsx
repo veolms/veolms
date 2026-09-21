@@ -1292,7 +1292,9 @@ function DiscussionInner({
 
     if (!draftHasContent) return false;
 
-    if (activeEntryKind === "note") {
+    const submittedEntryKind = editingEntry?.entryKind ?? activeEntryKind;
+
+    if (submittedEntryKind === "note") {
       if (!courseId || !lessonId) {
         setNotice("Course or lesson context is missing.");
         return false;
@@ -1388,7 +1390,7 @@ function DiscussionInner({
       }
 
       const submittedVisibility = getAllowedVisibility(
-        activeEntryKind,
+        submittedEntryKind,
         activeVisibility,
       );
       const threadVisibility =
@@ -1505,8 +1507,8 @@ function DiscussionInner({
         text,
         content: activeDraft,
         visibility: submittedVisibility,
-        entryKind: activeEntryKind,
-        isQuestion: activeEntryKind === "question",
+        entryKind: submittedEntryKind,
+        isQuestion: submittedEntryKind === "question",
         time: "Just now (edited)",
       };
       const update = (current: Comment[]) =>
@@ -2116,20 +2118,9 @@ function DiscussionInner({
           );
         }}
         onEntryKindChange={(value) => {
-          if (editingEntry) {
-            setEditingEntry((current) =>
-              current
-                ? {
-                    ...current,
-                    entryKind: value,
-                    visibility: getAllowedVisibility(value, current.visibility),
-                  }
-                : current,
-            );
-          } else {
-            setEntryKind(value);
-            setVisibility((current) => getAllowedVisibility(value, current));
-          }
+          if (editingEntry) return;
+          setEntryKind(value);
+          setVisibility((current) => getAllowedVisibility(value, current));
         }}
         onVisibilityChange={(value) => {
           const allowedVisibility = getAllowedVisibility(
