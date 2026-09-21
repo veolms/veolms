@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import type { ReactElement, ReactNode } from "react";
@@ -66,6 +67,7 @@ import {
   adaptDiscussionWorkspaceItem,
   type DiscussionWorkspaceCard,
 } from "./discussions-workspace.adapter";
+import { DiscussionWorkspaceSkeletonList } from "./DiscussionWorkspaceSkeleton";
 
 type DiscussionStatus = NonNullable<DiscussionWorkspaceCard["status"]>;
 type DiscussionOwnership = "all" | "mine";
@@ -126,6 +128,20 @@ const tabs: readonly {
 ];
 
 const discussionTabIds = tabs.map(({ id }) => id);
+
+const DISCUSSION_SWIPE_PREVIEW_QUERY =
+  "(max-width: 780px), (hover: none), (pointer: coarse)";
+
+const subscribeToDiscussionSwipePreview = (listener: () => void) => {
+  const media = window.matchMedia(DISCUSSION_SWIPE_PREVIEW_QUERY);
+  media.addEventListener("change", listener);
+  return () => media.removeEventListener("change", listener);
+};
+
+const getDiscussionSwipePreviewSnapshot = () =>
+  window.matchMedia(DISCUSSION_SWIPE_PREVIEW_QUERY).matches;
+
+const getDiscussionSwipePreviewServerSnapshot = () => false;
 
 const statusLabels: Readonly<Record<DiscussionStatus, string>> = {
   answered: "Instructor answered",
@@ -1168,6 +1184,12 @@ export function DiscussionsWorkspace({
   setNotice,
 }: DiscussionsWorkspaceProps) {
   const activeTab = normalizeDiscussionTab(tab);
+  const showDiscussionSwipePreviews = useSyncExternalStore(
+    subscribeToDiscussionSwipePreview,
+    getDiscussionSwipePreviewSnapshot,
+    getDiscussionSwipePreviewServerSnapshot,
+  );
+  const activeTabIndex = discussionTabIds.indexOf(activeTab);
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedCourseId = searchParams.get("course") ?? "all";
   const navigateTab = (id: DiscussionTab) => {
@@ -1215,6 +1237,17 @@ export function DiscussionsWorkspace({
   const isMentionsTab = activeTab === "mentions";
   const isFollowingTab = activeTab === "following";
   const isBookmarksTab = activeTab === "saved";
+  const activeLoadingLabel = isNotesTab
+    ? "Loading notes"
+    : isCommentsTab
+      ? "Loading comments"
+      : isMentionsTab
+        ? "Loading mentions"
+        : isFollowingTab
+          ? "Loading followed discussions"
+          : isBookmarksTab
+            ? "Loading bookmarks"
+            : "Loading discussions";
   const workspaceStatus = isQnaTab ? qnaStatus : status;
   const workspaceSort = isQnaTab ? qnaSort : sort;
   const workspaceOwnership = isQnaTab
@@ -1925,8 +1958,23 @@ export function DiscussionsWorkspace({
       >
         {(panelTab, preview) => {
           const isActivePanel = panelTab === activeTab;
+          const isAdjacentPanel =
+            preview &&
+            showDiscussionSwipePreviews &&
+            Math.abs(discussionTabIds.indexOf(panelTab) - activeTabIndex) === 1;
 
-          return isActivePanel ? (
+          if (!isActivePanel) {
+            return isAdjacentPanel ? (
+              <DiscussionWorkspaceSkeletonList
+                mode="preview"
+                variant={panelTab}
+              />
+            ) : (
+              <div className="discussion-hub__layout" aria-hidden="true" />
+            );
+          }
+
+          return (
             <>
               {composer && !preview && isQnaTab && (
                 <DiscussionComposer
@@ -1943,22 +1991,12 @@ export function DiscussionsWorkspace({
                     aria-live="polite"
                   >
                     {isWorkspacePending ? (
-                      <div className="discussion-hub__empty" aria-busy="true">
-                        <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-                        <h2>
-                          {isNotesTab
-                            ? "Loading notes…"
-                            : isCommentsTab
-                              ? "Loading comments…"
-                              : isMentionsTab
-                                ? "Loading mentions…"
-                                : isFollowingTab
-                                  ? "Loading followed discussions…"
-                                  : isBookmarksTab
-                                    ? "Loading bookmarks…"
-                                    : "Loading discussions…"}
-                        </h2>
-                      </div>
+                      <DiscussionWorkspaceSkeletonList
+                        mode="loading"
+                        variant={activeTab}
+                        label={activeLoadingLabel}
+                        withinFeed
+                      />
                     ) : isWorkspaceError ? (
                       <div className="discussion-hub__empty" role="alert">
                         <h2>
@@ -2201,8 +2239,6 @@ export function DiscussionsWorkspace({
                 </main>
               </div>
             </>
-          ) : (
-            <div className="discussion-hub__layout" aria-hidden="true" />
           );
         }}
       </SwipeableTabPanel>

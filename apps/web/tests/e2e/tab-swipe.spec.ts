@@ -563,7 +563,9 @@ test("discussion content and lesson tools use the same adjacent swipe behavior",
     "Help with MySQL joins",
   );
   await expect(
-    discussionPanel.locator(".swiper-slide-next .discussion-thread"),
+    discussionPanel.locator(
+      ".swiper-slide-next .discussion-thread--workspace-card",
+    ),
   ).toHaveCount(0);
   await expectAlignedAdjacentPanels(discussionPanel);
   await discussionPanel.locator(".swiper").evaluate((element) => {
