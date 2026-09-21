@@ -118,6 +118,10 @@ export interface LessonVideoPlayerProps {
   onMiniRestore?: () => void;
   onMobileLandscapeFullscreenChange?: (active: boolean) => void;
   onProgressChange?: (progress: number) => void;
+  /** Registers a lifecycle-scoped bridge for inline Learning Space timestamps. */
+  onSeekToTimestampReady?: (
+    seekToTimestamp: (seconds: number) => void,
+  ) => void | (() => void);
   presentation?: "full" | "mini";
   resumePersistenceKey?: string;
   /** Runtime playback data returned by the authorized bootstrap endpoint. */
@@ -165,6 +169,7 @@ export function LessonVideoPlayer({
   onMiniRestore,
   onMobileLandscapeFullscreenChange,
   onTheaterToggle,
+  onSeekToTimestampReady,
   resumePersistenceKey,
   theaterMode,
   presentation = "full",
@@ -202,6 +207,33 @@ export function LessonVideoPlayer({
   const restoreFramePendingRef = useRef(false);
   const restoreResyncAttemptedRef = useRef(false);
   requestedMediaKeyRef.current = mediaKey;
+
+  useEffect(() => {
+    if (!onSeekToTimestampReady) return undefined;
+
+    const registeredMediaKey = mediaKey;
+    const seekToTimestamp = (seconds: number) => {
+      if (
+        !Number.isFinite(seconds) ||
+        seconds < 0 ||
+        activeMediaKeyRef.current !== registeredMediaKey ||
+        requestedMediaKeyRef.current !== registeredMediaKey
+      ) {
+        return;
+      }
+
+      const player = playerRef.current;
+      if (!player) return;
+
+      try {
+        player.seekTo(seconds);
+      } catch {
+        // The player may be between media lifecycles; a later click can retry.
+      }
+    };
+
+    return onSeekToTimestampReady(seekToTimestamp);
+  }, [mediaKey, onSeekToTimestampReady]);
 
   const playbackMedia = useMemo(
     () =>

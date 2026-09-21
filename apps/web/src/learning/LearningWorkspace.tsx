@@ -2273,6 +2273,25 @@ export function LearningWorkspace({
       handleOpenLessonQuiz,
     ],
   );
+  const lessonPlayerSeekRef = useRef<((seconds: number) => void) | null>(
+    null,
+  );
+  const registerLessonPlayerSeek = useCallback(
+    (seekToTimestamp: (seconds: number) => void) => {
+      lessonPlayerSeekRef.current = seekToTimestamp;
+      return () => {
+        if (lessonPlayerSeekRef.current === seekToTimestamp) {
+          lessonPlayerSeekRef.current = null;
+        }
+      };
+    },
+    [],
+  );
+  const seekCurrentLessonToTimestamp = useCallback((seconds: number) => {
+    if (!Number.isFinite(seconds) || seconds < 0) return;
+    lessonPlayerSeekRef.current?.(seconds);
+  }, []);
+
   const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
     () => ({
       media: getCourseVideoForLesson(currentLesson[0]),
@@ -2316,6 +2335,7 @@ export function LearningWorkspace({
       onMiniPlayerRestoreReady,
       onMobileLandscapeFullscreenChange: handleMobileLandscapeFullscreenChange,
       onProgressChange: updateSelectedLessonProgress,
+      onSeekToTimestampReady: registerLessonPlayerSeek,
       resumePersistenceKey: `${coursePersistenceKey}-lesson-${selectedLesson}`,
     }),
     [
@@ -2341,6 +2361,7 @@ export function LearningWorkspace({
       onMinimizePlayer,
       playbackBootstrap,
       protectedPlayback,
+      registerLessonPlayerSeek,
       refreshPlaybackToken,
       playerCourseLessonsOpen,
       playerCourseLessonsSecondPressHold,
@@ -2615,6 +2636,7 @@ export function LearningWorkspace({
                   isInteractionCapabilitiesLoading={
                     isInteractionCapabilitiesLoading
                   }
+                  onSeekToTimestamp={seekCurrentLessonToTimestamp}
                 />
               ) : (
                 <div

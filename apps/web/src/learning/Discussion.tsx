@@ -297,6 +297,7 @@ export interface DiscussionProps {
   isInteractionCapabilitiesLoading?: boolean;
   isThreadDeepLinkReady?: boolean;
   noteDeepLinkId?: string | null;
+  onSeekToTimestamp?: (seconds: number) => void;
 }
 
 const DEFAULT_CAPABILITIES: InteractionCapabilities = {
@@ -395,6 +396,7 @@ function DiscussionInner({
   isInteractionCapabilitiesLoading = false,
   isThreadDeepLinkReady = true,
   noteDeepLinkId = null,
+  onSeekToTimestamp,
   searchParams,
   setSearchParams,
 }: DiscussionInnerProps) {
@@ -2169,6 +2171,7 @@ function DiscussionInner({
         onToggleLockThread={handleToggleLockThread}
         onToggleBookmark={handleToggleBookmark}
         onToggleFollow={handleToggleFollow}
+        onSeekToTimestamp={onSeekToTimestamp}
         onReplyEditFailure={() =>
           setNotice("Failed to update reply. Please try again.")
         }
@@ -2234,6 +2237,7 @@ function DiscussionInner({
         onToggleLockThread={handleToggleLockThread}
         onToggleBookmark={handleToggleBookmark}
         onToggleFollow={handleToggleFollow}
+        onSeekToTimestamp={onSeekToTimestamp}
         onReplyCreateError={() =>
           setCreationToast({
             message: "Couldn't post your reply. Please try again.",
@@ -2375,6 +2379,7 @@ interface ThreadSurfaceProps {
     threadId: string | number,
     following: boolean,
   ) => Promise<boolean> | void;
+  onSeekToTimestamp?: (seconds: number) => void;
   onReplyEditFailure?: () => void;
   onDeleteFailure?: (message: string) => void;
   courseId?: string;
@@ -2665,6 +2670,7 @@ function ThreadSurface({
   onToggleLockThread,
   onToggleBookmark,
   onToggleFollow,
+  onSeekToTimestamp,
   onReplyEditFailure,
   onDeleteFailure,
   courseId,
@@ -2939,6 +2945,7 @@ function ThreadSurface({
         onToggleLockThread={onToggleLockThread}
         onToggleBookmark={onToggleBookmark}
         onToggleFollow={onToggleFollow}
+        onSeekToTimestamp={onSeekToTimestamp}
         courseId={courseId}
         canEdit={entry.entryKind !== "note" || capabilities.allowNotes}
         canDelete={entry.entryKind !== "note" || capabilities.allowNotes}
@@ -2965,6 +2972,7 @@ function ThreadSurface({
       onToggleAcceptReply,
       onToggleBookmark,
       onToggleFollow,
+      onSeekToTimestamp,
       onToggleLockThread,
       capabilities.allowNotes,
       noteDeepLinkTargetId,

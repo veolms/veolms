@@ -147,6 +147,7 @@ interface CommentCardProps {
     id: string | number,
     following: boolean,
   ) => Promise<boolean> | void;
+  onSeekToTimestamp?: (seconds: number) => void;
   isBackendMode?: boolean;
   currentUserId?: string;
   userRole?: string;
@@ -169,6 +170,7 @@ export const CommentCard = React.memo(function CommentCard({
   onToggleLockThread,
   onToggleBookmark,
   onToggleFollow,
+  onSeekToTimestamp,
   isBackendMode = false,
   currentUserId,
   userRole,
@@ -631,6 +633,8 @@ export const CommentCard = React.memo(function CommentCard({
                 content={comment.content ?? createDiscussionDraft(comment.text)}
                 label={`${entryLabel} by ${comment.name}`}
                 linkedAttachments={comment.attachments}
+                enableInlineTimestamps={Boolean(onSeekToTimestamp)}
+                onSeekToTimestamp={onSeekToTimestamp}
                 className="mt-0.5 pr-9 sm:pr-10"
               />
 
@@ -834,6 +838,7 @@ export const CommentCard = React.memo(function CommentCard({
                         serverId: getServerEntityId(reply),
                       })
                     }
+                    onSeekToTimestamp={onSeekToTimestamp}
                     parentThreadId={comment.id}
                     courseId={courseId}
                   />
@@ -904,6 +909,7 @@ interface ReplyCardProps {
   onDelete: (replyId: string | number) => Promise<boolean> | void;
   onLike: (replyId: string | number) => void;
   onReport: () => void;
+  onSeekToTimestamp?: (seconds: number) => void;
   courseId?: string;
 }
 
@@ -919,6 +925,7 @@ function ReplyCard({
   onDelete,
   onLike,
   onReport,
+  onSeekToTimestamp,
   courseId,
 }: ReplyCardProps) {
   const [editing, setEditing] = useState(false);
@@ -1079,6 +1086,8 @@ function ReplyCard({
                   content={reply.content ?? createDiscussionDraft(reply.text)}
                   label={`Reply by ${reply.name}`}
                   linkedAttachments={reply.attachments}
+                  enableInlineTimestamps={Boolean(onSeekToTimestamp)}
+                  onSeekToTimestamp={onSeekToTimestamp}
                   className="mt-0.5 pr-9 sm:pr-10"
                 />
               )}

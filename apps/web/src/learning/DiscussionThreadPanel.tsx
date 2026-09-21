@@ -154,6 +154,7 @@ interface DiscussionThreadPanelProps {
     threadId: string | number,
     following: boolean,
   ) => Promise<boolean> | void;
+  onSeekToTimestamp?: (seconds: number) => void;
   onReplyCreateError?: () => void;
   onReplyEditError?: () => void;
   onReplyDeleteError?: () => void;
@@ -182,6 +183,7 @@ export function DiscussionThreadPanel({
   onToggleLockThread,
   onToggleBookmark,
   onToggleFollow,
+  onSeekToTimestamp,
   onReplyCreateError,
   onReplyEditError,
   onReplyDeleteError,
@@ -714,6 +716,7 @@ export function DiscussionThreadPanel({
                   onToggleLockThread={onToggleLockThread}
                   onToggleBookmark={onToggleBookmark}
                   onToggleFollow={onToggleFollow}
+                  onSeekToTimestamp={onSeekToTimestamp}
                   onReplyCreateError={onReplyCreateError}
                   onReplyEditError={onReplyEditError}
                   onReplyDeleteError={onReplyDeleteError}
@@ -776,6 +779,7 @@ interface ThreadSlideProps {
     threadId: string | number,
     following: boolean,
   ) => Promise<boolean> | void;
+  onSeekToTimestamp?: (seconds: number) => void;
   onReplyCreateError?: () => void;
   onReplyEditError?: () => void;
   onReplyDeleteError?: () => void;
@@ -803,6 +807,7 @@ function ThreadSlide({
   onToggleLockThread,
   onToggleBookmark,
   onToggleFollow,
+  onSeekToTimestamp,
   onReplyCreateError,
   onReplyEditError,
   onReplyDeleteError,
@@ -1056,6 +1061,7 @@ function ThreadSlide({
           onToggleLock={() => onToggleLockThread?.(entry.id, !entry.isLocked)}
           onToggleBookmark={onToggleBookmark}
           onToggleFollow={onToggleFollow}
+          onSeekToTimestamp={onSeekToTimestamp}
           onLike={onLike}
           onReply={entry.isLocked ? () => {} : focusComposer}
           onEdit={() => onEditEntry(entry)}
@@ -1121,6 +1127,7 @@ function ThreadSlide({
                 onDelete={handleDeleteReply}
                 onLikeReply={handleLikeReply}
                 onReport={onReport}
+                onSeekToTimestamp={onSeekToTimestamp}
                 courseId={courseId}
               />
             ))
@@ -1190,6 +1197,7 @@ function ThreadRootEntry({
   onToggleLock,
   onToggleBookmark,
   onToggleFollow,
+  onSeekToTimestamp,
   onLike,
   onReply,
   onEdit,
@@ -1213,6 +1221,7 @@ function ThreadRootEntry({
   onEdit: () => void;
   onDelete: () => void;
   onReport: () => void;
+  onSeekToTimestamp?: (seconds: number) => void;
 }) {
   const isEntryLiked = Boolean(entry.liked);
   const isNote = entry.entryKind === "note" || (entry as any).kind === "note";
@@ -1328,6 +1337,8 @@ function ThreadRootEntry({
             content={entry.content ?? createDiscussionDraft(entry.text)}
             label={`Discussion entry by ${entry.name}`}
             linkedAttachments={entry.attachments}
+            enableInlineTimestamps={Boolean(onSeekToTimestamp)}
+            onSeekToTimestamp={onSeekToTimestamp}
             className="mt-0.5 max-w-3xl pr-9 sm:pr-10"
           />
           {entry.attachments && entry.attachments.length > 0 ? (
@@ -1398,6 +1409,7 @@ function ThreadReplyEntry({
   onDelete,
   onLikeReply,
   onReport,
+  onSeekToTimestamp,
   courseId,
 }: {
   parentId: string | number;
@@ -1427,6 +1439,7 @@ function ThreadReplyEntry({
         }
       | (string | number),
   ) => void;
+  onSeekToTimestamp?: (seconds: number) => void;
   courseId?: string;
 }) {
   const canAcceptReply =
@@ -1590,6 +1603,8 @@ function ThreadReplyEntry({
                   content={reply.content ?? createDiscussionDraft(reply.text)}
                   label={`Reply by ${reply.name}`}
                   linkedAttachments={reply.attachments}
+                  enableInlineTimestamps={Boolean(onSeekToTimestamp)}
+                  onSeekToTimestamp={onSeekToTimestamp}
                   className="mt-0.5 max-w-3xl pr-9 sm:pr-10"
                 />
               )}
