@@ -42,7 +42,6 @@ import {
 import type { CountryOption } from "../auth/identifier";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { AvatarStylePicker } from "./AvatarStylePicker";
-import { AvatarManager } from "./AvatarManager";
 import { DicebearAvatar } from "./DicebearAvatar";
 import type {
   ProfileIdentity,
@@ -52,7 +51,6 @@ import type {
 import { getDefaultProfileIdentity } from "./profileTypes";
 import {
   useCurrentUser,
-  useDeleteUploadedAvatars,
   useSendEmailVerificationOtp,
   useSendPhoneVerificationOtp,
   useSelectAvatar,
@@ -405,7 +403,6 @@ export function ProfileSettings({
     isError: storedAvatarsError,
   } = useUserAvatars({ enabled: canEdit });
   const selectAvatarMutation = useSelectAvatar();
-  const deleteUploadedAvatarsMutation = useDeleteUploadedAvatars();
   const sendPhoneVerificationMutation = useSendPhoneVerificationOtp();
   const verifyPhoneNumberMutation = useVerifyPhoneNumber();
   const sendEmailVerificationMutation = useSendEmailVerificationOtp();
@@ -524,15 +521,6 @@ export function ProfileSettings({
 
   const selectStoredAvatar = async (avatarId: string) => {
     const updated = await selectAvatarMutation.mutateAsync(avatarId);
-    setAvatarFailed(false);
-    mergeFromServer({
-      avatarDataUrl: updated.avatarDataUrl,
-      avatarSrcSet: updated.avatarSrcSet,
-    });
-  };
-
-  const deleteUploadedAvatars = async () => {
-    const updated = await deleteUploadedAvatarsMutation.mutateAsync();
     setAvatarFailed(false);
     mergeFromServer({
       avatarDataUrl: updated.avatarDataUrl,
@@ -1187,14 +1175,6 @@ export function ProfileSettings({
                   {photoError}
                 </p>
               )}
-              <AvatarManager
-                avatars={storedAvatars}
-                canEdit={canEdit}
-                isLoading={canEdit && storedAvatarsLoading}
-                hasLoadError={canEdit && storedAvatarsError}
-                onSelect={selectStoredAvatar}
-                onDeleteAll={deleteUploadedAvatars}
-              />
             </section>
           </div>
 
@@ -1910,28 +1890,49 @@ export function ProfileSettings({
         <AvatarStylePicker
           open={avatarPickerOpen && canEdit}
           seed={activeUser?.id ?? ""}
+          avatars={storedAvatars}
+          currentAvatarUrl={draftProfile.avatarDataUrl}
+          isSaving={photoUploading}
           onClose={() => setAvatarPickerOpen(false)}
-          onSelect={(avatarUrl) => {
+          onSelectSaved={async (avatarId) => {
             if (photoUploading) return;
             setPhotoError("");
             setPhotoUploading(true);
-            void authService
-              .uploadGeneratedAvatar(avatarUrl)
-              .then((updated) => {
-                handleProfileSynced(updated);
-                mergeFromServer({
-                  avatarDataUrl: updated.avatarDataUrl,
-                  avatarSrcSet: updated.avatarSrcSet,
-                });
-              })
-              .catch((error: unknown) => {
-                setPhotoError(
-                  error && typeof error === "object" && "message" in error
-                    ? String((error as { message?: unknown }).message)
-                    : "We couldn't save this avatar. Please try again.",
-                );
-              })
-              .finally(() => setPhotoUploading(false));
+            try {
+              await selectStoredAvatar(avatarId);
+              setAvatarPickerOpen(false);
+            } catch (error: unknown) {
+              setPhotoError(
+                error && typeof error === "object" && "message" in error
+                  ? String((error as { message?: unknown }).message)
+                  : "We couldn't select that avatar. Please try again.",
+              );
+            } finally {
+              setPhotoUploading(false);
+            }
+          }}
+          onSelectGenerated={async (avatarUrl) => {
+            if (photoUploading) return;
+            setPhotoError("");
+            setPhotoUploading(true);
+            try {
+              const updated =
+                await authService.uploadGeneratedAvatar(avatarUrl);
+              handleProfileSynced(updated);
+              mergeFromServer({
+                avatarDataUrl: updated.avatarDataUrl,
+                avatarSrcSet: updated.avatarSrcSet,
+              });
+              setAvatarPickerOpen(false);
+            } catch (error: unknown) {
+              setPhotoError(
+                error && typeof error === "object" && "message" in error
+                  ? String((error as { message?: unknown }).message)
+                  : "We couldn't save this avatar. Please try again.",
+              );
+            } finally {
+              setPhotoUploading(false);
+            }
           }}
         />
       </section>

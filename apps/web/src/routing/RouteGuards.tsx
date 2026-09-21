@@ -12,7 +12,7 @@ import { useCurrentUser } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
 import {
   APP_HOME_PATH,
-  MFA_CHALLENGE_PATH,
+  buildMfaChallengePath,
   buildLoginPath,
   shouldRedirectFromCourseAuthorPath,
   isGuestLandingPath,
@@ -88,7 +88,10 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     }
 
     if (access.needsMfaChallenge && path !== "/logout") {
-      navigate(MFA_CHALLENGE_PATH, { replace: true });
+      navigate(
+        buildMfaChallengePath(`${location.pathname}${location.search}`),
+        { replace: true },
+      );
       return;
     }
 
@@ -152,7 +155,10 @@ export function AuthRouteGuard() {
 
     if (access.needsMfaChallenge) {
       if (path !== "/login") {
-        navigate(MFA_CHALLENGE_PATH, { replace: true });
+        navigate(
+          buildMfaChallengePath(`${location.pathname}${location.search}`),
+          { replace: true },
+        );
       }
       return;
     }

@@ -33,7 +33,7 @@ export const avatarUploadPresignResponseSchema = z.strictObject({
   uploadUrl: z.url().max(20_000),
 });
 
-export const userAvatarSourceSchema = z.enum(["upload", "google", "github"]);
+export const userAvatarSourceSchema = z.enum(["upload", "google"]);
 
 export const userAvatarSchema = z.strictObject({
   id: z.uuid(),
