@@ -1,7 +1,6 @@
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { CircleIcon as Circle } from "@phosphor-icons/react/Circle";
-import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "../hooks/useDebounce";
@@ -51,9 +50,6 @@ interface CurriculumProps {
   expandAllSections?: boolean;
   expandedSectionIds?: readonly number[];
   onExpandedSectionIdsChange?: (sectionIds: readonly number[]) => void;
-  hasLessonQuiz?: (lessonNumber: number) => boolean;
-  isLessonQuizActive?: (lessonNumber: number) => boolean;
-  onOpenLessonQuiz?: (lessonNumber: number) => void;
 }
 
 export function Curriculum({
@@ -81,9 +77,6 @@ export function Curriculum({
   expandAllSections = false,
   expandedSectionIds: controlledExpandedSectionIds,
   onExpandedSectionIdsChange,
-  hasLessonQuiz,
-  isLessonQuizActive,
-  onOpenLessonQuiz,
 }: CurriculumProps) {
   const sectionIds = sections.map(({ id }) => id);
   const isExpandedControlled = controlledExpandedSectionIds !== undefined;

@@ -20,12 +20,14 @@ import type {
   ProfileUpdateRequest,
   RegisterRequest,
   SessionResponse,
+  UserAvatarListResponse,
   TotpEnableRequest,
   TotpVerifyRequest,
   UserProfileResponse,
 } from "@veolms/contracts";
 import {
   avatarUploadContentTypeSchema,
+  DICEBEAR_BASE_URL,
   passkeyAuthenticationOptionsResponseSchema,
   passkeyRegistrationOptionsResponseSchema,
   sessionResponseSchema,
@@ -66,18 +68,58 @@ async function uploadToPresignedAvatarUrl(
   file: File,
   contentType: AvatarUploadContentType,
 ): Promise<void> {
-  const response = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: file,
-    credentials: "omit",
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Storage upload failed with status ${response.status || "unknown"}.`,
-    );
+  if (typeof XMLHttpRequest === "undefined") {
+    throw new Error("Avatar uploads are only available in a browser.");
   }
+
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", uploadUrl, true);
+    xhr.withCredentials = false;
+    xhr.setRequestHeader("Content-Type", contentType);
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(
+          new Error(
+            `Storage upload failed with status ${xhr.status || "unknown"}.`,
+          ),
+        );
+      }
+    });
+    xhr.addEventListener("error", () =>
+      reject(
+        new Error("Storage upload failed before a response was received."),
+      ),
+    );
+    xhr.addEventListener("abort", () =>
+      reject(new Error("Storage upload was cancelled.")),
+    );
+    xhr.send(file);
+  });
+}
+
+async function generatedAvatarFile(previewUrl: string): Promise<File> {
+  const url = new URL(previewUrl);
+  const baseUrl = new URL(DICEBEAR_BASE_URL);
+  if (
+    url.origin !== baseUrl.origin ||
+    !url.pathname.startsWith(`${baseUrl.pathname}/`) ||
+    !url.pathname.endsWith("/svg") ||
+    !url.searchParams.has("seed")
+  ) {
+    throw new Error("Generated avatar URL is invalid.");
+  }
+
+  url.pathname = `${url.pathname.slice(0, -4)}/png`;
+  const response = await fetch(url.href, { credentials: "omit" });
+  if (!response.ok) {
+    throw new Error("Generated avatar could not be downloaded.");
+  }
+
+  const blob = await response.blob();
+  return new File([blob], "generated-avatar.png", { type: "image/png" });
 }
 
 export const authService = {
@@ -215,12 +257,39 @@ export const authService = {
 
     return api
       .post<AvatarUploadPresignResponse>("/auth/me/avatar/presign", payload)
-      .then(({ uploadUrl }) =>
-        uploadToPresignedAvatarUrl(uploadUrl, file, contentType),
+      .then(({ uploadId, uploadUrl }) =>
+        uploadToPresignedAvatarUrl(uploadUrl, file, contentType).then(
+          () => uploadId,
+        ),
       )
-      .then(() =>
-        api.post<UserProfileResponse>("/auth/me/avatar/complete", payload),
+      .then((uploadId) =>
+        api.post<UserProfileResponse>("/auth/me/avatar/complete", {
+          ...payload,
+          uploadId,
+        }),
       );
+  },
+
+  /** Uses the same presigned browser-to-R2 flow as course media uploads. */
+  uploadGeneratedAvatar: async (
+    previewUrl: string,
+  ): Promise<UserProfileResponse> => {
+    const file = await generatedAvatarFile(previewUrl);
+    return authService.uploadAvatarPhoto(file);
+  },
+
+  getAvatars: (): Promise<UserAvatarListResponse> => {
+    return api.get<UserAvatarListResponse>("/auth/me/avatars");
+  },
+
+  selectAvatar: (avatarId: string): Promise<UserProfileResponse> => {
+    return api.post<UserProfileResponse>("/auth/me/avatar/select", {
+      avatarId,
+    });
+  },
+
+  deleteUploadedAvatars: (): Promise<UserProfileResponse> => {
+    return api.delete<UserProfileResponse>("/auth/me/avatars");
   },
 
   logout: (): Promise<AuthMessageResponse> => {

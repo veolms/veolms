@@ -3,7 +3,7 @@ import type { Json } from "./json.schema.ts";
 
 export type BundleStatus = "draft" | "published" | "archived";
 export type CartItemType = "course" | "bundle";
-export type OrderItemType = "course" | "bundle";
+export type OrderItemType = "course" | "bundle" | "quiz";
 export type CouponDiscountType = "percentage" | "fixed";
 export type OrderStatus =
   | "pending"
@@ -126,6 +126,7 @@ export interface OrderItemTable {
   item_type: OrderItemType;
   course_id: string | null;
   bundle_id: string | null;
+  quiz_pricing_id: string | null;
   title_snapshot: string;
   unit_price: number;
   discount_amount: Generated<number>;
@@ -179,6 +180,7 @@ export interface RefundTable {
   reason: string | null;
   status: RefundStatus;
   created_by: string | null;
+  idempotency_key: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

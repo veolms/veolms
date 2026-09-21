@@ -51,6 +51,7 @@ export function StudentCard({ student, onNavigatePage }: StudentCardProps) {
               <img
                 src={student.avatarUrl}
                 alt={student.displayName}
+                referrerPolicy="no-referrer"
                 className="h-12 w-12 shrink-0 rounded-2xl object-cover border border-(--border) shadow-xs"
               />
             ) : (
@@ -127,7 +128,9 @@ export function StudentCard({ student, onNavigatePage }: StudentCardProps) {
               <CheckCircle size={15} weight="duotone" />
             </span>
             <div className="min-w-0">
-              <p className="text-[11px] text-(--muted) leading-none">Completed</p>
+              <p className="text-[11px] text-(--muted) leading-none">
+                Completed
+              </p>
               <p className="text-xs font-bold text-(--text) mt-0.5">
                 {student.completedCoursesCount} courses
               </p>
@@ -179,7 +182,10 @@ export function StudentCard({ student, onNavigatePage }: StudentCardProps) {
               {student.enrolledCoursesCount >
                 student.enrolledCoursesPreview.length && (
                 <span className="text-[10px] text-(--muted) font-medium">
-                  +{student.enrolledCoursesCount - student.enrolledCoursesPreview.length} more
+                  +
+                  {student.enrolledCoursesCount -
+                    student.enrolledCoursesPreview.length}{" "}
+                  more
                 </span>
               )}
             </div>

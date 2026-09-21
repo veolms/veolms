@@ -38,6 +38,18 @@ export interface UserTable {
   updated_at: Generated<Date>;
 }
 
+export type UserAvatarSource = "upload" | "google";
+
+export interface UserAvatarTable {
+  id: string;
+  user_id: string;
+  source: UserAvatarSource;
+  storage_prefix: string;
+  avatar_data_url: string;
+  created_at: Generated<Date>;
+  last_used_at: Generated<Date>;
+}
+
 export interface UserRoleTable {
   user_id: string;
   role_id: string;

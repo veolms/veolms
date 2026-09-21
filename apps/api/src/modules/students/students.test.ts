@@ -82,6 +82,15 @@ describe("Students Service", () => {
           };
           return builder;
         }
+        if (table === "user_avatars") {
+          const builder: any = {
+            select: () => builder,
+            where: () => builder,
+            orderBy: () => builder,
+            execute: async () => [],
+          };
+          return builder;
+        }
         throw new Error(`Unexpected table: ${table}`);
       },
     };

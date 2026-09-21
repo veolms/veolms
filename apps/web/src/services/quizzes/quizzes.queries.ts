@@ -50,13 +50,24 @@ export function useQuizResult(id: string | null | undefined) {
     staleTime: 60_000,
   });
 }
-export function useCourseQuizAssignments(courseId: string | null | undefined) {
+export function useCourseQuizPricing(courseId: string | null | undefined) {
+  return useQuery({
+    queryKey: quizKeys.coursePricing(courseId ?? ""),
+    queryFn: () => quizzesService.getCoursePricing(courseId!),
+    enabled: Boolean(courseId),
+    staleTime: 15_000,
+  });
+}
+export function useCourseQuizAssignments(
+  courseId: string | null | undefined,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: courseId
       ? quizKeys.courseAssignments(courseId)
       : [...quizKeys.assignments(), "course", null],
     queryFn: () => quizzesService.listCourseAssignments(courseId!),
-    enabled: Boolean(courseId),
+    enabled: Boolean(courseId) && (options?.enabled ?? true),
     staleTime: 15_000,
   });
 }
@@ -95,6 +106,22 @@ export function useStudentQuizReport(studentId: string | null | undefined) {
       : [...quizKeys.all, "student-report", null],
     queryFn: () => quizzesService.studentReport(studentId!),
     enabled: Boolean(studentId),
+    staleTime: 15_000,
+  });
+}
+
+export function useQuizPricingPreview(
+  courseId: string | null | undefined,
+  assignmentId: string | null | undefined,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey:
+      courseId && assignmentId
+        ? quizKeys.pricingPreview(courseId, assignmentId)
+        : [...quizKeys.assignments(), "pricing-preview", null, null],
+    queryFn: () => quizzesService.getPricingPreview(courseId!, assignmentId!),
+    enabled: Boolean(courseId && assignmentId) && (options?.enabled ?? true),
     staleTime: 15_000,
   });
 }

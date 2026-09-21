@@ -8,8 +8,13 @@ import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import type { LearnerQuizAttempt, QuizResult } from "@veolms/contracts";
 import { Button } from "../components/Button";
+import { getApiError } from "../lib/api-error";
 import { AutosaveStatus, useAutosync } from "../lib/autosync";
-import { useQuizAttempt } from "../services/quizzes/quizzes.queries";
+import {
+  useMyQuizAssignments,
+  useQuizAttempt,
+  useQuizPricingPreview,
+} from "../services/quizzes/quizzes.queries";
 import { quizzesService } from "../services/quizzes/quizzes.service";
 import {
   useStartQuizAttempt,
@@ -22,9 +27,12 @@ import {
   toBulkQuizAnswers,
   type QuizAttemptDraft,
 } from "./quizDraft";
+import { QuizEnrollmentCard } from "./QuizEnrollmentCard";
 
 interface QuizAttemptPanelProps {
   assignmentId: string;
+  courseId?: string;
+  quizTitle?: string;
   activeAttemptId?: string | null;
   maxAttempts?: number;
   onContinueCourse?: () => void;
@@ -35,6 +43,8 @@ interface QuizAttemptPanelProps {
 
 export function QuizAttemptPanel({
   assignmentId,
+  courseId,
+  quizTitle,
   activeAttemptId = null,
   maxAttempts = 1,
   onContinueCourse,
@@ -45,10 +55,12 @@ export function QuizAttemptPanel({
   const [attemptId, setAttemptId] = useState(activeAttemptId);
   const [result, setResult] = useState<QuizResult | null>(null);
   const prevAssignmentIdRef = useRef(assignmentId);
+  const startRequestedForAssignmentRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (prevAssignmentIdRef.current !== assignmentId) {
       prevAssignmentIdRef.current = assignmentId;
+      startRequestedForAssignmentRef.current = null;
       setAttemptId(activeAttemptId);
       setResult(null);
       return;
@@ -62,9 +74,38 @@ export function QuizAttemptPanel({
   const [now, setNow] = useState(() => Date.now());
   const expiryRefreshRef = useRef<string | null>(null);
   const start = useStartQuizAttempt();
+  const {
+    error: startError,
+    isPending: isStarting,
+    mutate: startAttempt,
+    reset: resetStart,
+  } = start;
   const submit = useSubmitQuizAttempt();
   const attemptQuery = useQuizAttempt(attemptId);
   const attempt = attemptQuery.data;
+  const myQuizAssignmentsQuery = useMyQuizAssignments({
+    enabled: !courseId,
+  });
+  const resolvedCourseId =
+    courseId ||
+    myQuizAssignmentsQuery.data?.assignments.find((a) => a.id === assignmentId)
+      ?.courseId ||
+    "";
+  const resolvedQuizTitle =
+    quizTitle ||
+    myQuizAssignmentsQuery.data?.assignments.find((a) => a.id === assignmentId)
+      ?.quizTitle ||
+    "Lesson Quiz";
+
+  const pricingPreviewQuery = useQuizPricingPreview(
+    resolvedCourseId || null,
+    assignmentId,
+    {
+      enabled: Boolean(resolvedCourseId && !attemptId && !result),
+    },
+  );
+  const preview = pricingPreviewQuery.data;
+
   const initialValue = useMemo<QuizAttemptDraft>(
     () => ({
       answers: attempt?.answers ?? {},
@@ -97,9 +138,22 @@ export function QuizAttemptPanel({
   const flushAutosync = autosync.flush;
 
   useEffect(() => {
-    if (attemptId || start.isPending || result) return;
-    start.mutate(assignmentId, { onSuccess: (next) => setAttemptId(next.id) });
-  }, [assignmentId, attemptId, start, result]);
+    if (
+      attemptId ||
+      isStarting ||
+      result ||
+      startRequestedForAssignmentRef.current === assignmentId
+    )
+      return;
+
+    // A paid quiz the student has not bought: show the purchase card instead.
+    if (preview && !preview.isEnrolled) {
+      return;
+    }
+
+    startRequestedForAssignmentRef.current = assignmentId;
+    startAttempt(assignmentId, { onSuccess: (next) => setAttemptId(next.id) });
+  }, [assignmentId, attemptId, isStarting, preview, result, startAttempt]);
 
   useEffect(() => {
     if (
@@ -142,6 +196,8 @@ export function QuizAttemptPanel({
     if (!result || result.attemptNumber >= maxAttempts) return;
     autosync.discard();
     expiryRefreshRef.current = null;
+    startRequestedForAssignmentRef.current = null;
+    resetStart();
     setResult(null);
     setAttemptId(null);
   };
@@ -157,8 +213,47 @@ export function QuizAttemptPanel({
       />
     );
   }
-  if (start.error || attemptQuery.error) {
-    const error = start.error ?? attemptQuery.error;
+
+  const apiError = startError ? getApiError(startError) : null;
+  // A paid quiz the student has not bought yet. The server also reports this as
+  // QUIZ_ENROLLMENT_REQUIRED if the attempt is started anyway.
+  const isEnrollmentRequired = Boolean(
+    !attemptId &&
+      !isStarting &&
+      ((preview && !preview.isEnrolled) ||
+        apiError?.code === "QUIZ_ENROLLMENT_REQUIRED"),
+  );
+
+  if (isEnrollmentRequired && resolvedCourseId && !attemptId && !isStarting) {
+    return (
+      <QuizEnrollmentCard
+        courseId={resolvedCourseId}
+        assignmentId={assignmentId}
+        quizTitle={resolvedQuizTitle}
+        lessonBadge={lessonBadge}
+        onBackToVideo={onBackToVideo}
+        onEnrolled={() => {
+          resetStart();
+          startRequestedForAssignmentRef.current = null;
+          void pricingPreviewQuery.refetch();
+          startAttempt(assignmentId, {
+            onSuccess: (next) => setAttemptId(next.id),
+          });
+        }}
+      />
+    );
+  }
+
+  if (startError || attemptQuery.error) {
+    const error = startError ?? attemptQuery.error;
+    const retryOpening = () => {
+      if (startError) {
+        resetStart();
+        startRequestedForAssignmentRef.current = null;
+      } else {
+        void attemptQuery.refetch();
+      }
+    };
     return (
       <section
         className="mx-auto max-w-3xl rounded-[14px] sm:rounded-[20px] border border-red-500/20 bg-(--card-surface,var(--surface)) p-3.5 sm:p-6 text-(--text)"
@@ -186,11 +281,22 @@ export function QuizAttemptPanel({
             ) : null}
           </div>
         ) : null}
-        <p role="alert" className="text-red-400">Unable to open this Quiz. {error?.message}</p>
+        <p role="alert" className="text-red-400">
+          Unable to open this Quiz. {error?.message}
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-2.5">
+          <Button
+            motion="static"
+            onClick={retryOpening}
+            className="h-9 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) px-3 text-xs text-(--text) shadow-none hover:bg-(--hover)"
+          >
+            Try again
+          </Button>
+        </div>
       </section>
     );
   }
-  if (attemptQuery.isLoading || start.isPending || !attempt) {
+  if (attemptQuery.isLoading || isStarting || !attempt) {
     return (
       <section
         className="mx-auto max-w-3xl rounded-[14px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-6 text-(--muted)"

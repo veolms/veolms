@@ -9,6 +9,8 @@ import {
   loginResponseSchema,
   profileUpdateRequestSchema,
   registerRequestSchema,
+  selectAvatarRequestSchema,
+  userAvatarListResponseSchema,
   userProfileResponseSchema,
 } from "@veolms/contracts";
 
@@ -189,6 +191,70 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
       preHandler: [middleware.authenticate, middleware.requireAuthenticated],
     },
     controller.completeAvatarUpload,
+  );
+
+  app.get(
+    "/auth/me/avatars",
+    {
+      schema: {
+        operationId: "listCurrentUserAvatars",
+        tags: ["Auth"],
+        summary: "List the current user's stored avatars",
+        description:
+          "Returns up to five uploaded avatars and protected provider avatars.",
+        response: {
+          200: jsonResponse("Stored avatars.", userAvatarListResponseSchema),
+          401: errorResponse("Authentication required."),
+          404: errorResponse("User account was not found."),
+        },
+      },
+      preHandler: [middleware.authenticate, middleware.requireAuthenticated],
+    },
+    controller.listAvatars,
+  );
+
+  app.post(
+    "/auth/me/avatar/select",
+    {
+      schema: {
+        operationId: "selectCurrentUserAvatar",
+        tags: ["Auth"],
+        summary: "Select a stored avatar",
+        description:
+          "Makes one of the current user's uploaded or provider avatars active.",
+        body: selectAvatarRequestSchema,
+        response: {
+          200: jsonResponse("Avatar selected.", userProfileResponseSchema),
+          401: errorResponse("Authentication required."),
+          404: errorResponse("Avatar or user account was not found."),
+        },
+      },
+      preHandler: [middleware.authenticate, middleware.requireAuthenticated],
+    },
+    controller.selectAvatar,
+  );
+
+  app.delete(
+    "/auth/me/avatars",
+    {
+      schema: {
+        operationId: "deleteCurrentUserUploadedAvatars",
+        tags: ["Auth"],
+        summary: "Delete all uploaded avatars",
+        description:
+          "Deletes the user's uploaded avatar history while preserving provider avatars.",
+        response: {
+          200: jsonResponse(
+            "Uploaded avatars deleted.",
+            userProfileResponseSchema,
+          ),
+          401: errorResponse("Authentication required."),
+          404: errorResponse("User account was not found."),
+        },
+      },
+      preHandler: [middleware.authenticate, middleware.requireAuthenticated],
+    },
+    controller.deleteUploadedAvatars,
   );
 
   app.delete(

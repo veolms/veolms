@@ -9,6 +9,7 @@ import type {
 } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import * as repo from "../shared/quiz.repository.ts";
+import * as pricingRepo from "../shared/quiz-pricing.repository.ts";
 import type { QuizActor, QuizServiceOptions } from "../shared/quiz.types.ts";
 import { isAdmin } from "../shared/quiz.types.ts";
 
@@ -182,7 +183,9 @@ export function createAuthoringService(options: QuizServiceOptions) {
   }
 
   async function listMine(actor: QuizActor) {
-    const rows = await repo.listQuizzesByCreator(database, actor.id);
+    const rows = isAdmin(actor)
+      ? await repo.listQuizzesByAcademy(database, await academyId())
+      : await repo.listQuizzesByCreator(database, actor.id);
     return Promise.all(rows.map((quiz) => getQuiz(actor, quiz.id)));
   }
 
@@ -222,7 +225,16 @@ export function createAuthoringService(options: QuizServiceOptions) {
       });
     }
     const assignmentRows = await repo.listAssignmentsForQuizzes(database, [quizId]);
-    const assignments = assignmentRows.map((row) => ({
+    const pricingByCourseId = new Map(
+      (
+        await pricingRepo.listPricingForCourses(database, [
+          ...new Set(assignmentRows.map((row) => row.course_id)),
+        ])
+      ).map((pricing) => [pricing.course_id, pricing] as const),
+    );
+    const assignments = assignmentRows.map((row) => {
+      const pricing = pricingByCourseId.get(row.course_id);
+      return {
       id: row.id,
       quizId: row.quiz_id,
       quizVersionId: row.quiz_version_id,
@@ -237,7 +249,16 @@ export function createAuthoringService(options: QuizServiceOptions) {
       feedbackMode: row.feedback_mode,
       availableFrom: row.available_from?.toISOString() ?? null,
       availableUntil: row.available_until?.toISOString() ?? null,
-    }));
+      quizPricingId: pricing?.id ?? null,
+      pricingType: pricing?.pricing_type ?? ("free" as const),
+      price: Number(pricing?.price ?? 0),
+      currency: pricing?.currency ?? "INR",
+      salePrice:
+        pricing?.sale_price !== null && pricing?.sale_price !== undefined
+          ? Number(pricing.sale_price)
+          : null,
+      };
+    });
     return {
       id: quiz.id,
       title: quiz.title,

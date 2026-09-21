@@ -1,4 +1,5 @@
 import type { Executor } from "../shared/repository.types.ts";
+import type { UserAvatarSource } from "@veolms/database";
 
 export function findUserById(database: Executor, userId: string) {
   return database
@@ -152,6 +153,122 @@ export interface UpdateUserProfileInput {
   githubPublic?: boolean;
   websiteUrl?: string | null;
   websitePublic?: boolean;
+}
+
+export interface InsertUserAvatarInput {
+  id: string;
+  userId: string;
+  source: UserAvatarSource;
+  storagePrefix: string;
+  avatarDataUrl: string;
+}
+
+export function insertUserAvatar(
+  database: Executor,
+  input: InsertUserAvatarInput,
+) {
+  return database
+    .insertInto("user_avatars")
+    .values({
+      id: input.id,
+      user_id: input.userId,
+      source: input.source,
+      storage_prefix: input.storagePrefix,
+      avatar_data_url: input.avatarDataUrl,
+    })
+    .returningAll()
+    .executeTakeFirstOrThrow();
+}
+
+export function findUserAvatarById(
+  database: Executor,
+  userId: string,
+  avatarId: string,
+) {
+  return database
+    .selectFrom("user_avatars")
+    .selectAll()
+    .where("id", "=", avatarId)
+    .where("user_id", "=", userId)
+    .executeTakeFirst();
+}
+
+export function findUserAvatarBySource(
+  database: Executor,
+  userId: string,
+  source: Exclude<UserAvatarSource, "upload">,
+) {
+  return database
+    .selectFrom("user_avatars")
+    .selectAll()
+    .where("user_id", "=", userId)
+    .where("source", "=", source)
+    .executeTakeFirst();
+}
+
+export function listUserAvatars(database: Executor, userId: string) {
+  return database
+    .selectFrom("user_avatars")
+    .selectAll()
+    .where("user_id", "=", userId)
+    .orderBy("last_used_at", "desc")
+    .orderBy("created_at", "desc")
+    .orderBy("id", "desc")
+    .execute();
+}
+
+export function touchUserAvatar(
+  database: Executor,
+  userId: string,
+  avatarId: string,
+) {
+  return database
+    .updateTable("user_avatars")
+    .set({ last_used_at: new Date() })
+    .where("id", "=", avatarId)
+    .where("user_id", "=", userId)
+    .returningAll()
+    .executeTakeFirst();
+}
+
+export function updateUserAvatar(
+  database: Executor,
+  userId: string,
+  avatarId: string,
+  avatarDataUrl: string,
+) {
+  return database
+    .updateTable("user_avatars")
+    .set({ avatar_data_url: avatarDataUrl, last_used_at: new Date() })
+    .where("id", "=", avatarId)
+    .where("user_id", "=", userId)
+    .returningAll()
+    .executeTakeFirst();
+}
+
+export function deleteUserUploadedAvatars(database: Executor, userId: string) {
+  return database
+    .deleteFrom("user_avatars")
+    .where("user_id", "=", userId)
+    .where("source", "=", "upload")
+    .returningAll()
+    .execute();
+}
+
+export function deleteUserAvatarsById(
+  database: Executor,
+  userId: string,
+  avatarIds: readonly string[],
+) {
+  if (avatarIds.length === 0) return Promise.resolve([]);
+
+  return database
+    .deleteFrom("user_avatars")
+    .where("user_id", "=", userId)
+    .where("source", "=", "upload")
+    .where("id", "in", avatarIds)
+    .returningAll()
+    .execute();
 }
 
 export async function updateUserProfile(

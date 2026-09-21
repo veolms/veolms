@@ -92,7 +92,11 @@
   .courses-main:has([data-quiz-surface]),
   .student-surface-main:has([data-quiz-surface]),
   :root:has([data-quiz-surface]) .courses-main,
-  :root:has([data-quiz-surface]) .student-surface-main {
+  :root:has([data-quiz-surface]) .student-surface-main,
+  .courses-main:has([data-coupon-surface]),
+  .student-surface-main:has([data-coupon-surface]),
+  :root:has([data-coupon-surface]) .courses-main,
+  :root:has([data-coupon-surface]) .student-surface-main {
     --application-page-block-start: 16px;
     --application-page-inline-gutter: 14px;
     padding-left: 14px !important;
@@ -102,6 +106,17 @@
 
   .courses-main.courses-main--learning {
     overflow: visible;
+  }
+}
+
+@media (min-width: 641px) {
+  .courses-main:has([data-coupon-surface]),
+  .student-surface-main:has([data-coupon-surface]),
+  :root:has([data-coupon-surface]) .courses-main,
+  :root:has([data-coupon-surface]) .student-surface-main {
+    --application-page-inline-gutter: 18px;
+    padding-left: 18px;
+    padding-right: 18px;
   }
 }
 

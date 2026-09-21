@@ -68,6 +68,15 @@ export default [
       id: "settings",
       caseSensitive: true,
     }),
+    route("coupons", marker, { id: "coupons", caseSensitive: true }),
+    route("coupons/create", marker, {
+      id: "coupon-create",
+      caseSensitive: true,
+    }),
+    route("coupons/:couponId", marker, {
+      id: "coupon-edit",
+      caseSensitive: true,
+    }),
     route("logout", marker, { id: "logout", caseSensitive: true }),
     route("courses/:courseSlug/overview", marker, {
       id: "course-overview",

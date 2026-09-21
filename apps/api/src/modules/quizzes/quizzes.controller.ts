@@ -1,8 +1,11 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import type { SetQuizCoursePricingRequest } from "@veolms/contracts";
 import type { AuthoringService } from "./authoring/authoring.service.ts";
 import type { AssignmentService } from "./assignments/assignment.service.ts";
 import type { AttemptService } from "./attempts/attempt.service.ts";
 import type { AnalyticsService } from "./analytics/analytics.service.ts";
+import type { PricingService } from "../commerce/pricing/pricing.service.ts";
+import { isAdmin } from "./shared/quiz.types.ts";
 
 type RequestContext = FastifyRequest & {
   user: NonNullable<FastifyRequest["user"]>;
@@ -18,11 +21,13 @@ export function createQuizController({
   assignments,
   attempts,
   analytics,
+  pricingService,
 }: {
   authoring: AuthoringService;
   assignments: AssignmentService;
   attempts: AttemptService;
   analytics: AnalyticsService;
+  pricingService: PricingService;
 }) {
   return {
     create: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -117,6 +122,7 @@ export function createQuizController({
       const result = await attempts.start(
         context(request).user.id,
         (request.params as { assignmentId: string }).assignmentId,
+        context(request).user.roles,
       );
       reply.code(201);
       return result;
@@ -125,17 +131,20 @@ export function createQuizController({
       attempts.getAttempt(
         context(request).user.id,
         (request.params as { attemptId: string }).attemptId,
+        context(request).user.roles,
       ),
     saveAnswers: async (request: FastifyRequest) =>
       attempts.bulkSaveAnswers(
         context(request).user.id,
         (request.params as { attemptId: string }).attemptId,
         request.body as never,
+        context(request).user.roles,
       ),
     submit: async (request: FastifyRequest) =>
       attempts.submit(
         context(request).user.id,
         (request.params as { attemptId: string }).attemptId,
+        context(request).user.roles,
       ),
     result: async (request: FastifyRequest) =>
       attempts.result(
@@ -159,6 +168,33 @@ export function createQuizController({
         actor(request),
         (request.params as { studentId: string }).studentId,
       ),
+    getCoursePricing: async (request: FastifyRequest) =>
+      assignments.getPricing(
+        actor(request),
+        (request.params as { courseId: string }).courseId,
+      ),
+    setPricing: async (request: FastifyRequest) => {
+      const params = request.params as { courseId: string };
+      return assignments.setPricing(
+        actor(request),
+        params.courseId,
+        request.body as SetQuizCoursePricingRequest,
+      );
+    },
+    getPricingPreview: async (request: FastifyRequest) => {
+      const params = request.params as {
+        courseId: string;
+        assignmentId: string;
+      };
+      return pricingService.calculateQuizPricing({
+        userId: request.user?.id ?? null,
+        quizAssignmentId: params.assignmentId,
+        courseId: params.courseId,
+        isAdmin: request.user
+          ? isAdmin({ id: request.user.id, roles: request.user.roles })
+          : false,
+      });
+    },
   };
 }
 export type QuizController = ReturnType<typeof createQuizController>;

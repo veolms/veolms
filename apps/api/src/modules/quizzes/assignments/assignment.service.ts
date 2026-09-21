@@ -1,15 +1,26 @@
 import crypto from "node:crypto";
 import type {
   AssignQuizRequest,
+  SetQuizCoursePricingRequest,
   UpdateQuizAssignmentRequest,
 } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 import * as repo from "../shared/quiz.repository.ts";
+import * as pricingRepo from "../shared/quiz-pricing.repository.ts";
 import type { QuizActor, QuizServiceOptions } from "../shared/quiz.types.ts";
 import { isAdmin } from "../shared/quiz.types.ts";
 
-function present(row: Awaited<ReturnType<typeof repo.findAssignment>>) {
+type PricingRow = Awaited<ReturnType<typeof pricingRepo.findPricing>>;
+
+/**
+ * Pricing belongs to the course (one quiz pass covers every quiz in it), so it
+ * is joined in read-only here rather than stored on the assignment.
+ */
+function present(
+  row: Awaited<ReturnType<typeof repo.findAssignment>>,
+  pricing: PricingRow,
+) {
   if (!row)
     throw new AppError(
       404,
@@ -31,6 +42,14 @@ function present(row: Awaited<ReturnType<typeof repo.findAssignment>>) {
     feedbackMode: row.feedback_mode,
     availableFrom: row.available_from?.toISOString() ?? null,
     availableUntil: row.available_until?.toISOString() ?? null,
+    quizPricingId: pricing?.id ?? null,
+    pricingType: pricing?.pricing_type ?? ("free" as const),
+    price: Number(pricing?.price ?? 0),
+    currency: pricing?.currency ?? "INR",
+    salePrice:
+      pricing?.sale_price !== null && pricing?.sale_price !== undefined
+        ? Number(pricing.sale_price)
+        : null,
   };
 }
 
@@ -170,7 +189,7 @@ export function createAssignmentService(options: QuizServiceOptions) {
 
       return inserted;
     });
-    return present(row);
+    return present(row, await pricingRepo.findPricing(database, courseId));
   }
 
   async function update(
@@ -240,27 +259,132 @@ export function createAssignmentService(options: QuizServiceOptions) {
         ? { available_until: payload.availableUntil }
         : {}),
     });
-    return present(row ?? current);
+    const finalRow = row ?? current;
+    return present(
+      finalRow,
+      await pricingRepo.findPricing(database, finalRow.course_id),
+    );
   }
 
   async function listForCourse(actor: QuizActor, courseId: string) {
     const course = await courseService.findCourseById(courseId);
     if (!course)
       throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    if (!isAdmin(actor))
-      await courseService.getCourseAndVerifyOwner(courseId, actor.id);
+    const canManageCourse =
+      isAdmin(actor) ||
+      course.creator_id === actor.id ||
+      actor.roles.some((role) => role.toLowerCase() === "instructor");
+    if (
+      !canManageCourse &&
+      !(await repo.isPublishedFreeCourse(database, courseId)) &&
+      !(await options.accessService.hasActiveAccess(
+        database,
+        actor.id,
+        courseId,
+      ))
+    )
+      throw new AppError(
+        403,
+        "COURSE_ACCESS_REQUIRED",
+        "You need active course access to view this Quiz assignment.",
+      );
     const rows = await repo.listAssignmentsForCourse(database, courseId);
-    return Promise.all(
-      rows.map(async (row) => ({
-        ...present(row),
-        quizTitle:
-          (await repo.findQuiz(database, row.quiz_id))?.title ?? "Quiz",
-      })),
+    const pricing = await pricingRepo.findPricing(database, courseId);
+    const quizTitles = new Map(
+      (
+        await repo.listQuizzesByIds(database, [
+          ...new Set(rows.map((row) => row.quiz_id)),
+        ])
+      ).map((quiz) => [quiz.id, quiz.title] as const),
     );
+    return rows.map((row) => ({
+      ...present(row, pricing),
+      quizTitle: quizTitles.get(row.quiz_id) ?? "Quiz",
+    }));
   }
 
   async function get(assignmentId: string) {
-    return present(await repo.findAssignment(database, assignmentId));
+    const row = await repo.findAssignment(database, assignmentId);
+    return present(
+      row,
+      row ? await pricingRepo.findPricing(database, row.course_id) : undefined,
+    );
+  }
+
+  function presentCoursePricing(
+    courseId: string,
+    row: PricingRow,
+  ) {
+    return {
+      id: row?.id ?? null,
+      courseId,
+      pricingType: row?.pricing_type ?? ("free" as const),
+      price: Number(row?.price ?? 0),
+      currency: row?.currency ?? "INR",
+      salePrice:
+        row?.sale_price !== null && row?.sale_price !== undefined
+          ? Number(row.sale_price)
+          : null,
+    };
+  }
+
+  async function assertCanManageCoursePricing(
+    actor: QuizActor,
+    courseId: string,
+  ) {
+    const course = await courseService.findCourseById(courseId);
+    if (!course)
+      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    if (!isAdmin(actor))
+      await courseService.getCourseAndVerifyOwner(courseId, actor.id);
+  }
+
+  async function getPricing(actor: QuizActor, courseId: string) {
+    await assertCanManageCoursePricing(actor, courseId);
+    return presentCoursePricing(
+      courseId,
+      await pricingRepo.findPricing(database, courseId),
+    );
+  }
+
+  /**
+   * Sets the quiz price for a whole course. It applies to every quiz attached
+   * to the course (including ones attached later), and one purchase unlocks
+   * all of them.
+   */
+  async function setPricing(
+    actor: QuizActor,
+    courseId: string,
+    payload: SetQuizCoursePricingRequest,
+  ) {
+    await assertCanManageCoursePricing(actor, courseId);
+    // Prices are always in the course's currency, so a quiz pass can be
+    // bought alongside the course and never trips the gateway with a currency
+    // it does not support.
+    const courseCurrency = await pricingRepo.findCourseCurrency(
+      database,
+      courseId,
+    );
+    if (
+      payload.currency !== undefined &&
+      payload.currency.toUpperCase() !== courseCurrency
+    ) {
+      throw new AppError(
+        400,
+        "QUIZ_CURRENCY_MISMATCH",
+        `Quiz pricing must use the course currency (${courseCurrency}).`,
+      );
+    }
+    const isPaid = payload.pricingType === "paid";
+    const row = await pricingRepo.upsertPricing(database, {
+      id: crypto.randomUUID(),
+      course_id: courseId,
+      pricing_type: payload.pricingType,
+      price: isPaid ? payload.price : 0,
+      currency: courseCurrency,
+      sale_price: isPaid ? (payload.salePrice ?? null) : null,
+    });
+    return presentCoursePricing(courseId, row);
   }
 
   async function deleteAssignment(actor: QuizActor, assignmentId: string) {
@@ -282,6 +406,8 @@ export function createAssignmentService(options: QuizServiceOptions) {
   return {
     assign,
     update,
+    getPricing,
+    setPricing,
     deleteAssignment,
     listForCourse,
     get,

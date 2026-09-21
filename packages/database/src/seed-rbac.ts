@@ -302,6 +302,18 @@ export const MENUS = {
     checkList: null,
     isBoth: false,
   },
+  coupons: {
+    id: "00000000-0000-4000-9000-000000000018",
+    parentId: null,
+    label: "Coupons",
+    routeLink: "/coupons",
+    icon: "Tag",
+    expanded: false,
+    checkList: null,
+    isBoth: false,
+  },
+
+  // Student Menus
   myCourses: {
     id: "00000000-0000-4000-9000-000000000012",
     parentId: null,
@@ -332,7 +344,88 @@ export const MENUS = {
     checkList: null,
     isBoth: false,
   },
+  quizzes: {
+    id: "00000000-0000-4000-8000-000000000701",
+    parentId: null,
+    label: "Quizzes",
+    routeLink: "/quizzes",
+    icon: "CheckCircle",
+    expanded: false,
+    checkList: null,
+    isBoth: true,
+  },
 } as const;
+
+export const ROLE_MENU_PERMISSIONS: Record<
+  keyof typeof SYSTEM_ROLES,
+  Array<{
+    menuId: string;
+    canCreate: boolean;
+    canRead: boolean;
+    canUpdate: boolean;
+    canDelete: boolean;
+  }>
+> = {
+  admin: Object.values(MENUS).map((m) => ({
+    menuId: m.id,
+    canCreate: true,
+    canRead: true,
+    canUpdate: true,
+    canDelete: true,
+  })),
+  instructor: [
+    { menuId: MENUS.dashboard.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    { menuId: MENUS.creatorCourses.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
+    { menuId: MENUS.students.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
+    { menuId: MENUS.discussions.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
+    { menuId: MENUS.quizzes.id, canCreate: true, canRead: true, canUpdate: true, canDelete: false },
+    { menuId: MENUS.analytics.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    { menuId: MENUS.orders.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
+    { menuId: MENUS.settings.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
+  ],
+  student: [
+    { menuId: MENUS.home.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    { menuId: MENUS.studentCourses.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    { menuId: MENUS.myCourses.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
+    { menuId: MENUS.quizzes.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    { menuId: MENUS.wishlist.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
+    { menuId: MENUS.discussions.id, canCreate: true, canRead: true, canUpdate: true, canDelete: false },
+    { menuId: MENUS.notification.id, canCreate: false, canRead: true, canUpdate: true, canDelete: true },
+    { menuId: MENUS.orderHistory.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    { menuId: MENUS.settings.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
+  ],
+  course_manager: [
+    { menuId: MENUS.dashboard.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    { menuId: MENUS.creatorCourses.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
+    { menuId: MENUS.students.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
+    { menuId: MENUS.discussions.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
+    { menuId: MENUS.quizzes.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
+    { menuId: MENUS.analytics.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    { menuId: MENUS.settings.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
+  ],
+  content_editor: [
+    { menuId: MENUS.creatorCourses.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
+    { menuId: MENUS.quizzes.id, canCreate: true, canRead: true, canUpdate: true, canDelete: false },
+    { menuId: MENUS.discussions.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+  ],
+  thumbnail_editor: [
+    { menuId: MENUS.creatorCourses.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
+  ],
+  teaching_assistant: [
+    { menuId: MENUS.creatorCourses.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    { menuId: MENUS.students.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    { menuId: MENUS.discussions.id, canCreate: true, canRead: true, canUpdate: true, canDelete: false },
+    { menuId: MENUS.quizzes.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+  ],
+  reviewer: [
+    { menuId: MENUS.creatorCourses.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    { menuId: MENUS.quizzes.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+  ],
+  analytics_viewer: [
+    { menuId: MENUS.analytics.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    { menuId: MENUS.creatorCourses.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+  ],
+};
 
 export async function seedRolesAndPermissions(database: Kysely<Database>): Promise<void> {
   // 1. Seed Features
@@ -456,7 +549,35 @@ export async function seedRolesAndPermissions(database: Kysely<Database>): Promi
       .execute();
   }
 
+  // 6. Seed Menu Permissions (for UI sidebar RBAC)
+  for (const [roleKey, menuPerms] of Object.entries(ROLE_MENU_PERMISSIONS)) {
+    const role = SYSTEM_ROLES[roleKey as keyof typeof SYSTEM_ROLES];
+    for (const perm of menuPerms) {
+      await database
+        .insertInto("menu_permissions")
+        .values({
+          id: crypto.randomUUID(),
+          role_id: role.id,
+          menu_id: perm.menuId,
+          can_create: perm.canCreate,
+          can_read: perm.canRead,
+          can_update: perm.canUpdate,
+          can_delete: perm.canDelete,
+        })
+        .onConflict((conflict) =>
+          conflict.columns(["role_id", "menu_id"]).doUpdateSet({
+            can_create: perm.canCreate,
+            can_read: perm.canRead,
+            can_update: perm.canUpdate,
+            can_delete: perm.canDelete,
+            updated_at: new Date(),
+          }),
+        )
+        .execute();
+    }
+  }
+
   console.info(
-    `Seeded ${STANDARD_FEATURES.length} features, ${permissions.length} capability permissions, and ${Object.keys(SYSTEM_ROLES).length} system roles.`,
+    `Seeded ${STANDARD_FEATURES.length} features, ${permissions.length} capability permissions, ${Object.keys(SYSTEM_ROLES).length} system roles, and ${Object.keys(MENUS).length} sidenav menus.`,
   );
 }
