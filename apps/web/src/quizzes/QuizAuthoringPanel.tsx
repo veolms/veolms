@@ -257,7 +257,7 @@ export function QuizAuthoringPanel({
       if (found) return found;
     }
     return null;
-  }, [courseEditor.data?.sections, effectiveLessonId]);
+  }, [courseEditor.data, effectiveLessonId]);
   const assignments = useCourseQuizAssignments(effectiveCourseId);
   const [quizId, setQuizId] = useState<string | null>(initialQuizId);
   const lastLoadedQuizIdRef = useRef<string | null>(null);

@@ -174,13 +174,19 @@ export function createPricingService({
           .map((it) => it.bundleId!),
       ),
     ];
-    const quizPricingIds = [
-      ...new Set(
-        items
-          .filter((it) => it.itemType === "quiz")
-          .map((it) => it.quizPricingId!),
-      ),
-    ];
+    const quizPricingIds: string[] = [];
+    const seenQuizPricingIds = new Set<string>();
+    for (const it of items) {
+      if (it.itemType === "quiz" && it.quizPricingId) {
+        if (seenQuizPricingIds.has(it.quizPricingId)) {
+          throw CommerceErrors.PRICE_CALCULATION_FAILED(
+            `Duplicate quiz pricing ID: "${it.quizPricingId}".`,
+          );
+        }
+        seenQuizPricingIds.add(it.quizPricingId);
+        quizPricingIds.push(it.quizPricingId);
+      }
+    }
 
     const [courseRows, pricingRows, bundleRows, bundleCourseRows, quizRows] =
       await Promise.all([

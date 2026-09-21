@@ -338,12 +338,25 @@ export function createAttemptService(options: QuizServiceOptions) {
     if (!attempt || attempt.user_id !== userId)
       throw new AppError(404, "ATTEMPT_NOT_FOUND", "Quiz attempt not found.");
     const assignment = await getAssignment(attempt.assignment_id);
-    if (!(await hasCourseAccess(userId, assignment.course_id, roles)))
-      throw new AppError(
-        403,
-        "COURSE_ACCESS_REQUIRED",
-        "You need active course access to continue this Quiz.",
+    let isPreviewLesson = false;
+    if (assignment.lesson_id) {
+      const lesson = await courseService.findLessonById(
+        assignment.course_id,
+        assignment.lesson_id,
       );
+      if (lesson?.is_preview) {
+        isPreviewLesson = true;
+      }
+    }
+    if (!isPreviewLesson) {
+      if (!(await hasCourseAccess(userId, assignment.course_id, roles)))
+        throw new AppError(
+          403,
+          "COURSE_ACCESS_REQUIRED",
+          "You need active course access to continue this Quiz.",
+        );
+      await assertQuizPurchased(assignment, userId, roles);
+    }
     if (attempt.status !== "in_progress")
       throw new AppError(
         409,
@@ -815,20 +828,12 @@ export function createAttemptService(options: QuizServiceOptions) {
     return gradedResult ?? result(userId, attemptId);
   }
 
-  async function getAttempt(userId: string, attemptId: string) {
-    const attempt = await repo.findAttempt(database, attemptId);
-    if (!attempt || attempt.user_id !== userId)
-      throw new AppError(404, "ATTEMPT_NOT_FOUND", "Quiz attempt not found.");
-    if (
-      attempt.status === "in_progress" &&
-      attempt.expires_at &&
-      attempt.expires_at <= new Date()
-    ) {
-      const updated = await repo.updateAttempt(database, attemptId, {
-        status: "expired",
-      });
-      return buildAttempt(updated);
-    }
+  async function getAttempt(
+    userId: string,
+    attemptId: string,
+    roles: readonly string[] = [],
+  ) {
+    const attempt = await requireOwnedActiveAttempt(userId, attemptId, roles);
     return buildAttempt(attempt);
   }
 

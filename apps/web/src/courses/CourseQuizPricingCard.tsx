@@ -15,6 +15,7 @@ import {
   useCourseQuizPricing,
   useSetQuizCoursePricing,
 } from "../services/quizzes";
+import { Button } from "../components/Button";
 
 function getCurrencySymbol(code: string): string {
   try {
@@ -171,6 +172,35 @@ export function CourseQuizPricingCard({
   const discountPercent = hasDiscount
     ? Math.round(((numPrice - numSale) / numPrice) * 100)
     : 0;
+
+  if (pricingQuery.isError) {
+    return (
+      <div className="flex flex-col border border-red-500/20 rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200">
+        <div className="flex items-center justify-between mb-4.5">
+          <div>
+            <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+              3. Course quiz pricing
+            </h3>
+            <p className="m-0 text-(--muted) text-[0.83rem]">
+              Set the overall price for quizzes in this course. Paying once gives learners access to all quizzes attached to this course.
+            </p>
+          </div>
+        </div>
+        <p className="text-sm text-red-400 mb-3">
+          Unable to load quiz pricing. {pricingQuery.error?.message ?? "Please try again."}
+        </p>
+        <div className="flex items-center gap-3">
+          <Button
+            type="button"
+            onClick={() => void pricingQuery.refetch()}
+            className="w-fit"
+          >
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200">

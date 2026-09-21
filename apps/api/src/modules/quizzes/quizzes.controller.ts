@@ -131,6 +131,7 @@ export function createQuizController({
       attempts.getAttempt(
         context(request).user.id,
         (request.params as { attemptId: string }).attemptId,
+        context(request).user.roles,
       ),
     saveAnswers: async (request: FastifyRequest) =>
       attempts.bulkSaveAnswers(

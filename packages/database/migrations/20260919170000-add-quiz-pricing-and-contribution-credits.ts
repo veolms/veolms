@@ -118,6 +118,7 @@ export async function down(database: Kysely<unknown>): Promise<void> {
       drop constraint if exists order_items_type_valid,
       drop constraint if exists order_items_reference_valid
   `.execute(database);
+  await sql`delete from order_items where item_type = 'quiz'`.execute(database);
   await sql`
     alter table order_items
       add constraint order_items_type_valid

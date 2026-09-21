@@ -32,6 +32,7 @@ export function SelectCourseForQuizModal({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
 
   const dismissThen = useBackDismiss({
     enabled: true,
@@ -50,6 +51,11 @@ export function SelectCourseForQuizModal({
       return undefined;
     }
 
+    const previousActiveElement =
+      typeof document !== "undefined"
+        ? (document.activeElement as HTMLElement | null)
+        : null;
+
     const timer = window.setTimeout(() => {
       searchInputRef.current?.focus();
     }, 60);
@@ -57,6 +63,27 @@ export function SelectCourseForQuizModal({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         dismissModal();
+        return;
+      }
+
+      if (event.key !== "Tab" || !modalRef.current) return;
+
+      const focusableElements = Array.from(
+        modalRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => el.offsetParent !== null || el === searchInputRef.current);
+
+      if (!focusableElements.length) return;
+      const first = focusableElements[0]!;
+      const last = focusableElements[focusableElements.length - 1]!;
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
 
@@ -64,6 +91,7 @@ export function SelectCourseForQuizModal({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.clearTimeout(timer);
+      previousActiveElement?.focus();
     };
   }, [isOpen, dismissModal]);
 
@@ -79,10 +107,12 @@ export function SelectCourseForQuizModal({
 
   const handleProceed = useCallback(
     (courseId: string) => {
-      onClose();
-      onNavigatePage?.(`/courses/create?edit=${encodeURIComponent(courseId)}&tab=curriculum`);
+      dismissThen(() => {
+        onClose();
+        onNavigatePage?.(`/courses/create?edit=${encodeURIComponent(courseId)}&tab=curriculum`);
+      });
     },
-    [onClose, onNavigatePage],
+    [dismissThen, onClose, onNavigatePage],
   );
 
   if (!isOpen || typeof document === "undefined") return null;
@@ -96,6 +126,7 @@ export function SelectCourseForQuizModal({
       aria-labelledby="select-course-quiz-title"
     >
       <div
+        ref={modalRef}
         className="relative flex flex-col w-full max-w-lg max-h-[85vh] rounded-[20px] border border-(--border) bg-(--card-surface,var(--surface)) p-5 sm:p-6 text-(--text) shadow-2xl animate-in zoom-in-95 duration-150"
         style={{ boxShadow: "var(--card-floating-shadow,var(--card-shadow))" }}
         onClick={(e) => e.stopPropagation()}
@@ -173,8 +204,10 @@ export function SelectCourseForQuizModal({
               <button
                 type="button"
                 onClick={() => {
-                  onClose();
-                  onNavigatePage?.("/courses/create");
+                  dismissThen(() => {
+                    onClose();
+                    onNavigatePage?.("/courses/create");
+                  });
                 }}
                 className="inline-flex items-center gap-1.5 rounded-[10px] bg-(--accent) px-3.5 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-xs transition-colors hover:bg-(--accent-hover,var(--accent))"
               >
