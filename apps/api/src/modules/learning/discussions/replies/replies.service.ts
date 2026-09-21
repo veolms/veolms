@@ -1,4 +1,7 @@
-import type { DatabaseExecutor, LearningAttachmentTable } from "@veolms/database";
+import type {
+  DatabaseExecutor,
+  LearningAttachmentTable,
+} from "@veolms/database";
 import type { Selectable } from "kysely";
 import type {
   AcceptReplyResponse,
@@ -30,7 +33,10 @@ import {
 } from "../shared/discussion.access.ts";
 import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import type { ThreadsRepository } from "../threads/threads.repository.ts";
-import type { RepliesRepository, ReplyRowWithAuthor } from "./replies.repository.ts";
+import type {
+  RepliesRepository,
+  ReplyRowWithAuthor,
+} from "./replies.repository.ts";
 
 type LearningAttachmentRow = Selectable<LearningAttachmentTable>;
 
@@ -467,6 +473,12 @@ export function createRepliesService({
         if (!deleted) {
           throw httpError(404, "REPLY_NOT_FOUND", "Reply not found");
         }
+
+        await trx
+          .deleteFrom("learning_mentions")
+          .where("source_type", "=", "reply")
+          .where("source_id", "=", replyId)
+          .execute();
 
         await trx
           .updateTable("learning_attachments")

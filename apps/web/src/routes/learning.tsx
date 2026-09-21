@@ -21,6 +21,7 @@ import { resolveLessonIdentifier } from "../learning/courseContent";
 import { getApiCourseSlugForLegacyKey } from "../courses/catalogue";
 import {
   getCoursePlayerOrigin,
+  getCoursePlayerNote,
   getCoursePlayerPath,
   getCoursePlayerReturnPath,
   getCoursePlayerSession,
@@ -81,6 +82,15 @@ export function links(args?: Pick<Route.MetaArgs, "params">) {
     : [];
 }
 
+const isDiscussionsReturnPath = (returnPath: string): boolean => {
+  const pathname =
+    new URL(returnPath, "https://procodrr.local").pathname.replace(
+      /\/+$/,
+      "",
+    ) || "/";
+  return pathname === "/discussions" || pathname.startsWith("/discussions/");
+};
+
 export default function LearningRoute() {
   const { courseSlug, lectureSlug } = useParams();
   const location = useLocation();
@@ -102,9 +112,10 @@ export default function LearningRoute() {
   const activeUser = authUser || storeUser;
   const origin = getCoursePlayerOrigin(location.search);
   const routeReturnPath = getCoursePlayerReturnPath(location.search);
-  const { data: courseOverview } = useCourseOverview(courseSlug, {
-    enabled: Boolean(courseSlug),
-  });
+  const { data: courseOverview, isLoading: isCourseOverviewLoading } =
+    useCourseOverview(courseSlug, {
+      enabled: Boolean(courseSlug),
+    });
   const { data: publishedCoursesData } = useCourses({
     enabled: Boolean(activeUser),
   });
@@ -124,7 +135,25 @@ export default function LearningRoute() {
     [location.search],
   );
   const targetLessonUuid = searchParams.get("lessonId");
+  const threadDeepLinkId = getCoursePlayerThread(location.search);
+  const noteDeepLinkId = getCoursePlayerNote(location.search);
+  const hasDiscussionDeepLink = Boolean(threadDeepLinkId || noteDeepLinkId);
+  const deepLinkLessonUuid =
+    (threadDeepLinkId || noteDeepLinkId) && targetLessonUuid
+      ? targetLessonUuid
+      : null;
   const isQuizViewRequested = searchParams.get("view") === "quiz";
+  const storedSessionReturnPath = courseSlug
+    ? getCoursePlayerSession(courseSlug)?.returnPath
+    : null;
+  const playerReturnPath =
+    searchParams.has("returnTo") ||
+    !storedSessionReturnPath ||
+    isDiscussionsReturnPath(storedSessionReturnPath)
+      ? routeReturnPath
+      : storedSessionReturnPath;
+  const hasDiscussionReturnPath =
+    searchParams.has("returnTo") && isDiscussionsReturnPath(routeReturnPath);
 
   const canonicalCourseSlug = courseOverview?.course.slug;
   const hasExplicitLectureSlug = lectureSlug !== undefined;
@@ -154,6 +183,21 @@ export default function LearningRoute() {
   }, [targetLessonUuid, allApiLessons]);
 
   const lessonId = resolvedFromUuid ?? routeLessonId;
+  const isLessonUuidResolutionPending = Boolean(
+    deepLinkLessonUuid && isCourseOverviewLoading && !courseOverview,
+  );
+  const isDeepLinkRouteSettled =
+    !hasDiscussionDeepLink ||
+    Boolean(
+      courseOverview &&
+      canonicalCourseSlug &&
+      canonicalCourseSlug === courseSlug &&
+      hasExplicitLectureSlug &&
+      resolvedExplicitLessonId !== null &&
+      resolvedExplicitLessonId === lessonId &&
+      !targetLessonUuid &&
+      !isLessonUuidResolutionPending,
+    );
   const apiLesson = allApiLessons[lessonId - 1];
   const quizAssignment = myQuizAssignments?.assignments.find(
     (assignment) =>
@@ -178,6 +222,14 @@ export default function LearningRoute() {
   }, [courseSlug, lectureSlug]);
 
   useEffect(() => {
+    if (isLessonUuidResolutionPending) return;
+    if (
+      hasDiscussionDeepLink &&
+      (!courseOverview ||
+        (canonicalCourseSlug && canonicalCourseSlug !== courseSlug))
+    )
+      return;
+
     const currentPath = `${location.pathname}${location.search}`;
     const nextPath = courseSlug
       ? upsertCoursePlayerSessionFromRoute(
@@ -191,6 +243,10 @@ export default function LearningRoute() {
     }
   }, [
     courseSlug,
+    canonicalCourseSlug,
+    courseOverview,
+    hasDiscussionDeepLink,
+    isLessonUuidResolutionPending,
     lessonId,
     location.pathname,
     location.search,
@@ -207,64 +263,83 @@ export default function LearningRoute() {
       canonicalCourseSlug === courseSlug
     )
       return;
+    if (hasDiscussionDeepLink && isLessonUuidResolutionPending) return;
 
     migrateCoursePlayerSessionKey(courseSlug, canonicalCourseSlug);
-    const threadId = getCoursePlayerThread(location.search);
+    const threadId = noteDeepLinkId ? null : threadDeepLinkId;
     const nextPath = getCoursePlayerPath(
       canonicalCourseSlug,
       origin,
       lessonId,
       routeReturnPath,
-      { threadId, view: isQuizViewRequested ? "quiz" : undefined },
+      {
+        threadId,
+        noteId: noteDeepLinkId,
+        view: isQuizViewRequested ? "quiz" : undefined,
+      },
     );
     void navigate(nextPath, { replace: true });
   }, [
     canonicalCourseSlug,
     courseSlug,
+    hasDiscussionDeepLink,
     isQuizViewRequested,
+    isLessonUuidResolutionPending,
     lessonId,
     location.search,
     navigate,
+    noteDeepLinkId,
     origin,
     routeReturnPath,
+    threadDeepLinkId,
   ]);
 
   const selectLesson = useCallback(
     (nextLessonId: number, view?: "video" | "quiz") => {
       if (!courseSlug) return;
-      const threadId = getCoursePlayerThread(location.search);
+      const isSameLesson = nextLessonId === lessonId;
+      const noteId = isSameLesson ? getCoursePlayerNote(location.search) : null;
+      const threadId =
+        isSameLesson && !noteId ? getCoursePlayerThread(location.search) : null;
       const path = getCoursePlayerPath(
         courseSlug,
         origin,
         nextLessonId,
-        getCoursePlayerSession(courseSlug)?.returnPath || routeReturnPath,
-        { threadId, view },
+        playerReturnPath,
+        { threadId, noteId, view },
       );
       navigateTo(path, { exact: true });
     },
-    [courseSlug, location.search, navigateTo, origin, routeReturnPath],
+    [
+      courseSlug,
+      lessonId,
+      location.search,
+      navigateTo,
+      origin,
+      playerReturnPath,
+    ],
   );
   const openCourseOverview = useCallback(() => {
     if (!courseSlug) return;
+    if (hasDiscussionReturnPath) {
+      navigateTo(routeReturnPath, { exact: true, replace: true });
+      return;
+    }
     navigateTo(`/courses/${encodeURIComponent(courseSlug)}/overview`);
-  }, [courseSlug, navigateTo]);
+  }, [courseSlug, hasDiscussionReturnPath, navigateTo, routeReturnPath]);
   const minimizePlayer = useCallback(
     (request: LearningMiniPlayerRequest) => {
-      const returnPath =
-        (courseSlug && getCoursePlayerSession(courseSlug)?.returnPath) ||
-        routeReturnPath;
       openLearningMiniPlayer({
         ...request,
         lessonPath: `${location.pathname}${location.search}`,
-        returnPath,
+        returnPath: playerReturnPath,
       });
     },
     [
-      courseSlug,
       location.pathname,
       location.search,
       openLearningMiniPlayer,
-      routeReturnPath,
+      playerReturnPath,
     ],
   );
 
@@ -283,13 +358,17 @@ export default function LearningRoute() {
       onMiniPlayerRestoreReady={onMiniPlayerRestoreReady}
       persistentPlayerCourseRouteKey={courseSlug}
       persistentPlayerLessonPath={`${location.pathname}${location.search}`}
-      persistentPlayerReturnPath={
-        (courseSlug && getCoursePlayerSession(courseSlug)?.returnPath) ||
-        routeReturnPath
+      persistentPlayerReturnPath={playerReturnPath}
+      courseNavigationActionLabel={
+        hasDiscussionReturnPath ? "Back to Discussions" : undefined
       }
       persistentPlayerMounted={persistentPlayerMounted}
       registerPersistentPlayer={registerPersistentPlayer}
       onMinimizePlayer={minimizePlayer}
+      deepLinkLessonUuid={deepLinkLessonUuid}
+      isDiscussionDeepLink={hasDiscussionDeepLink}
+      deepLinkRouteSettled={isDeepLinkRouteSettled}
+      noteDeepLinkId={noteDeepLinkId}
       quizAssignment={quizAssignment ?? null}
       quizAssignments={myQuizAssignments?.assignments ?? null}
       quizAssignmentLoading={myQuizAssignmentsLoading}

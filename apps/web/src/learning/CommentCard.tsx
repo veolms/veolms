@@ -147,10 +147,14 @@ interface CommentCardProps {
     id: string | number,
     following: boolean,
   ) => Promise<boolean> | void;
+  onSeekToTimestamp?: (seconds: number) => void;
   isBackendMode?: boolean;
   currentUserId?: string;
   userRole?: string;
   courseId?: string;
+  canEdit?: boolean;
+  canDelete?: boolean;
+  isDeepLinkTarget?: boolean;
 }
 
 export const CommentCard = React.memo(function CommentCard({
@@ -166,10 +170,14 @@ export const CommentCard = React.memo(function CommentCard({
   onToggleLockThread,
   onToggleBookmark,
   onToggleFollow,
+  onSeekToTimestamp,
   isBackendMode = false,
   currentUserId,
   userRole,
   courseId,
+  canEdit = true,
+  canDelete = true,
+  isDeepLinkTarget = false,
 }: CommentCardProps) {
   const queryClient = useContext(QueryClientContext);
   const [localLiked, setLocalLiked] = useState(comment.liked ?? false);
@@ -427,8 +435,11 @@ export const CommentCard = React.memo(function CommentCard({
     <article
       id={`discussion-entry-${clientId}`}
       data-discussion-entry={entryKind}
+      data-note-id={isNote ? (serverId ?? clientId) : undefined}
+      aria-current={isDeepLinkTarget ? "location" : undefined}
+      tabIndex={isDeepLinkTarget ? -1 : undefined}
       data-deletion-pending={deletion.hidden || undefined}
-      className={`relative -mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4 ${hasReplies ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${deletion.hidden ? "min-h-19" : ""}`}
+      className={`relative -mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4 ${hasReplies ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${isDeepLinkTarget ? "focus:outline-2 focus:outline-offset-2 focus:outline-(--accent)" : ""} ${deletion.hidden ? "min-h-19" : ""}`}
       onClick={(event) => {
         if (!hasReplies) return;
         const target = event.target;
@@ -558,9 +569,13 @@ export const CommentCard = React.memo(function CommentCard({
                   name={comment.name}
                   kind={entryKind}
                   isOwn={Boolean(comment.isOwn)}
-                  canEdit={!isBackendMode || (Boolean(serverId) && !isEditing)}
+                  canEdit={
+                    canEdit &&
+                    (!isBackendMode || (Boolean(serverId) && !isEditing))
+                  }
                   canDelete={
-                    !isBackendMode || (Boolean(serverId) && !isEditing)
+                    canDelete &&
+                    (!isBackendMode || (Boolean(serverId) && !isEditing))
                   }
                   onEdit={() => onEdit(comment)}
                   onShare={() =>
@@ -618,6 +633,8 @@ export const CommentCard = React.memo(function CommentCard({
                 content={comment.content ?? createDiscussionDraft(comment.text)}
                 label={`${entryLabel} by ${comment.name}`}
                 linkedAttachments={comment.attachments}
+                enableInlineTimestamps={Boolean(onSeekToTimestamp)}
+                onSeekToTimestamp={onSeekToTimestamp}
                 className="mt-0.5 pr-9 sm:pr-10"
               />
 
@@ -821,6 +838,7 @@ export const CommentCard = React.memo(function CommentCard({
                         serverId: getServerEntityId(reply),
                       })
                     }
+                    onSeekToTimestamp={onSeekToTimestamp}
                     parentThreadId={comment.id}
                     courseId={courseId}
                   />
@@ -891,6 +909,7 @@ interface ReplyCardProps {
   onDelete: (replyId: string | number) => Promise<boolean> | void;
   onLike: (replyId: string | number) => void;
   onReport: () => void;
+  onSeekToTimestamp?: (seconds: number) => void;
   courseId?: string;
 }
 
@@ -906,6 +925,7 @@ function ReplyCard({
   onDelete,
   onLike,
   onReport,
+  onSeekToTimestamp,
   courseId,
 }: ReplyCardProps) {
   const [editing, setEditing] = useState(false);
@@ -1066,6 +1086,8 @@ function ReplyCard({
                   content={reply.content ?? createDiscussionDraft(reply.text)}
                   label={`Reply by ${reply.name}`}
                   linkedAttachments={reply.attachments}
+                  enableInlineTimestamps={Boolean(onSeekToTimestamp)}
+                  onSeekToTimestamp={onSeekToTimestamp}
                   className="mt-0.5 pr-9 sm:pr-10"
                 />
               )}

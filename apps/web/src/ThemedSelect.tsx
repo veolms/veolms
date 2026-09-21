@@ -53,9 +53,12 @@ export interface ThemedSelectProps<Value extends string = string> {
   searchPlaceholder?: string;
   searchDebounceMs?: number;
   menuMinWidth?: number;
+  menuMaxWidth?: number;
   defaultLimit?: number;
   action?: ThemedSelectAction;
   compactOnMobile?: boolean;
+  /** Match the menu to the visible control wrapper around the trigger. */
+  matchMenuToContainer?: boolean;
 }
 
 const joinClasses = (
@@ -90,9 +93,11 @@ export function ThemedSelect<Value extends string>({
   searchPlaceholder = "Search...",
   searchDebounceMs = DEFAULT_DEBOUNCE_DELAY_MS,
   menuMinWidth,
+  menuMaxWidth = THEMED_SELECT_MENU_MAX_WIDTH,
   defaultLimit,
   action,
   compactOnMobile = false,
+  matchMenuToContainer = false,
 }: ThemedSelectProps<Value>) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -191,7 +196,8 @@ export function ThemedSelect<Value extends string>({
   const calculatePosition = useCallback((): MenuPosition | null => {
     const trigger = triggerRef.current;
     if (!trigger) return null;
-    const rect = trigger.getBoundingClientRect();
+    const anchor = matchMenuToContainer ? trigger.parentElement : trigger;
+    const rect = (anchor ?? trigger).getBoundingClientRect();
     const viewportPadding = 12;
     const gap = 6;
     const desiredHeight = Math.min(
@@ -219,7 +225,7 @@ export function ThemedSelect<Value extends string>({
     );
     const width = Math.min(
       desiredWidth,
-      THEMED_SELECT_MENU_MAX_WIDTH,
+      menuMaxWidth,
       window.innerWidth - viewportPadding * 2,
     );
     let left = rect.left;
@@ -238,6 +244,8 @@ export function ThemedSelect<Value extends string>({
     action,
     filteredOptions.length,
     measureNaturalMenuWidth,
+    matchMenuToContainer,
+    menuMaxWidth,
     menuMinWidth,
     searchable,
   ]);

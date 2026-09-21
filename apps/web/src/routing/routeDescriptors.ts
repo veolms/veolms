@@ -97,7 +97,8 @@ export const routeDescriptors = {
     kind: "shell",
     page: "home",
     title: "Dashboard",
-    description: "Review academy performance and instructor activity in ProCodrr.",
+    description:
+      "Review academy performance and instructor activity in ProCodrr.",
   },
   courses: {
     kind: "shell",
@@ -196,6 +197,10 @@ export const routeDescriptors = {
   "discussions-comments": {
     ...discussionsRouteBase,
     discussionTab: "comments",
+  },
+  "discussions-notes": {
+    ...discussionsRouteBase,
+    discussionTab: "notes",
   },
   "discussions-mentions": {
     ...discussionsRouteBase,
@@ -428,6 +433,7 @@ const canonicalPathsByRouteId = {
   discussions: "/discussions",
   "discussions-q-and-a": "/discussions/q-and-a",
   "discussions-comments": "/discussions/comments",
+  "discussions-notes": "/discussions/notes",
   "discussions-mentions": "/discussions/mentions",
   "discussions-following": "/discussions/following",
   "discussions-saved": "/discussions/saved",

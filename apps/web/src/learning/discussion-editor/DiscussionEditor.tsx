@@ -13,7 +13,12 @@ import {
   type CSSProperties,
   type MutableRefObject,
 } from "react";
-import { createMentionCompletionSource } from "./mentions";
+import {
+  createMentionCompletionSource,
+  mentionCompletionLoadingExtension,
+  mentionCompletionOptionClass,
+  renderMentionCompletionAddon,
+} from "./mentions";
 import { createDiscussionClipboardExtension } from "./clipboard";
 import { DISCUSSION_CODE_LANGUAGES } from "./code-languages";
 import {
@@ -24,9 +29,7 @@ import {
 import { selectDiscussionAttachment } from "./attachments";
 import { createDiscussionDraft, type DiscussionDraft } from "./types";
 import "./atomic-editor.css";
-import {
-  DISCUSSION_ATTACHMENTS_ENABLED,
-} from "./image-storage";
+import { DISCUSSION_ATTACHMENTS_ENABLED } from "./image-storage";
 import type { LocalComposerAttachment } from "../../services/learning-interactions";
 
 export interface DiscussionEditorController extends DiscussionEditorCommands {
@@ -67,7 +70,10 @@ export function DiscussionEditor({
   maxHeight,
   className = "",
   courseId,
-  mentionsEnabled = true,
+  // This editor is also shared by course/quiz authoring. Mentions are an
+  // explicit Learning Space opt-in so those surfaces never trigger lookup UI
+  // or autocomplete requests.
+  mentionsEnabled = false,
   onChange,
   onControllerChange,
   onFormattingStateChange,
@@ -120,7 +126,16 @@ export function DiscussionEditor({
         override: [createMentionCompletionSource(courseId)],
         activateOnTyping: true,
         defaultKeymap: true,
+        icons: false,
+        optionClass: mentionCompletionOptionClass,
+        addToOptions: [
+          {
+            position: 0,
+            render: renderMentionCompletionAddon,
+          },
+        ],
       }),
+      mentionCompletionLoadingExtension,
     ];
   }, [courseId, mentionsEnabled]);
 
