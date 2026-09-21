@@ -1923,275 +1923,288 @@ export function DiscussionsWorkspace({
         stateAttribute="data-discussion-tab"
         spaceBetweenOffset={14}
       >
-        {(_panelTab, preview) => (
-          <>
-            {composer && !preview && isQnaTab && (
-              <DiscussionComposer
-                kind={composer}
-                onCancel={() => setComposer(null)}
-                onPublish={publish}
-              />
-            )}
+        {(panelTab, preview) => {
+          const isActivePanel = panelTab === activeTab;
 
-            <div className="discussion-hub__layout">
-              <main className="discussion-hub__feed">
-                <div className="discussion-hub__thread-list" aria-live="polite">
-                  {isWorkspacePending ? (
-                    <div className="discussion-hub__empty" aria-busy="true">
-                      <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-                      <h2>
-                        {isNotesTab
-                          ? "Loading notes…"
-                          : isCommentsTab
-                            ? "Loading comments…"
-                            : isMentionsTab
-                              ? "Loading mentions…"
-                              : isFollowingTab
-                                ? "Loading followed discussions…"
-                                : isBookmarksTab
-                                  ? "Loading bookmarks…"
-                                  : "Loading discussions…"}
-                      </h2>
-                    </div>
-                  ) : isWorkspaceError ? (
-                    <div className="discussion-hub__empty" role="alert">
-                      <h2>
-                        {isNotesTab
-                          ? "Unable to load notes"
-                          : isCommentsTab
-                            ? "Unable to load comments"
-                            : isMentionsTab
-                              ? "Unable to load mentions"
-                              : isFollowingTab
-                                ? "Failed to load followed discussions"
-                                : isBookmarksTab
-                                  ? "Unable to load bookmarks"
-                                  : "Unable to load discussions"}
-                      </h2>
-                      <p>
-                        {workspaceError instanceof Error
-                          ? workspaceError.message
-                          : isNotesTab
-                            ? "There was a problem loading notes."
+          return isActivePanel ? (
+            <>
+              {composer && !preview && isQnaTab && (
+                <DiscussionComposer
+                  kind={composer}
+                  onCancel={() => setComposer(null)}
+                  onPublish={publish}
+                />
+              )}
+
+              <div className="discussion-hub__layout">
+                <main className="discussion-hub__feed">
+                  <div
+                    className="discussion-hub__thread-list"
+                    aria-live="polite"
+                  >
+                    {isWorkspacePending ? (
+                      <div className="discussion-hub__empty" aria-busy="true">
+                        <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
+                        <h2>
+                          {isNotesTab
+                            ? "Loading notes…"
                             : isCommentsTab
-                              ? "There was a problem loading comments."
+                              ? "Loading comments…"
                               : isMentionsTab
-                                ? "There was a problem loading mentions."
+                                ? "Loading mentions…"
                                 : isFollowingTab
-                                  ? "There was a problem loading followed discussions."
+                                  ? "Loading followed discussions…"
                                   : isBookmarksTab
-                                    ? "There was a problem loading bookmarks."
-                                    : "There was a problem loading discussions."}
-                      </p>
-                      <button type="button" onClick={() => void refetch()}>
-                        Retry
-                      </button>
-                    </div>
-                  ) : cards.length > 0 ? (
-                    cards.map((thread) => {
-                      if (isBookmarksTab) {
-                        return (
-                          <DiscussionWorkspaceBookmarkCard
-                            key={thread.id}
-                            bookmark={thread}
-                            onNavigatePage={onNavigatePage}
-                          />
-                        );
-                      }
+                                    ? "Loading bookmarks…"
+                                    : "Loading discussions…"}
+                        </h2>
+                      </div>
+                    ) : isWorkspaceError ? (
+                      <div className="discussion-hub__empty" role="alert">
+                        <h2>
+                          {isNotesTab
+                            ? "Unable to load notes"
+                            : isCommentsTab
+                              ? "Unable to load comments"
+                              : isMentionsTab
+                                ? "Unable to load mentions"
+                                : isFollowingTab
+                                  ? "Failed to load followed discussions"
+                                  : isBookmarksTab
+                                    ? "Unable to load bookmarks"
+                                    : "Unable to load discussions"}
+                        </h2>
+                        <p>
+                          {workspaceError instanceof Error
+                            ? workspaceError.message
+                            : isNotesTab
+                              ? "There was a problem loading notes."
+                              : isCommentsTab
+                                ? "There was a problem loading comments."
+                                : isMentionsTab
+                                  ? "There was a problem loading mentions."
+                                  : isFollowingTab
+                                    ? "There was a problem loading followed discussions."
+                                    : isBookmarksTab
+                                      ? "There was a problem loading bookmarks."
+                                      : "There was a problem loading discussions."}
+                        </p>
+                        <button type="button" onClick={() => void refetch()}>
+                          Retry
+                        </button>
+                      </div>
+                    ) : cards.length > 0 ? (
+                      cards.map((thread) => {
+                        if (isBookmarksTab) {
+                          return (
+                            <DiscussionWorkspaceBookmarkCard
+                              key={thread.id}
+                              bookmark={thread}
+                              onNavigatePage={onNavigatePage}
+                            />
+                          );
+                        }
 
-                      if (isNotesTab) {
-                        return (
-                          <DiscussionWorkspaceNoteCard
-                            key={thread.id}
-                            note={thread}
-                            onNavigatePage={onNavigatePage}
-                          />
-                        );
-                      }
+                        if (isNotesTab) {
+                          return (
+                            <DiscussionWorkspaceNoteCard
+                              key={thread.id}
+                              note={thread}
+                              onNavigatePage={onNavigatePage}
+                            />
+                          );
+                        }
 
-                      if (isMentionsTab) {
-                        return (
-                          <DiscussionWorkspaceMentionCard
-                            key={thread.id}
-                            mention={thread}
-                            onNavigatePage={onNavigatePage}
-                          />
-                        );
-                      }
+                        if (isMentionsTab) {
+                          return (
+                            <DiscussionWorkspaceMentionCard
+                              key={thread.id}
+                              mention={thread}
+                              onNavigatePage={onNavigatePage}
+                            />
+                          );
+                        }
 
-                      if (isFollowingTab) {
-                        return (
-                          <DiscussionWorkspaceFollowingCard
+                        if (isFollowingTab) {
+                          return (
+                            <DiscussionWorkspaceFollowingCard
+                              key={thread.id}
+                              thread={thread}
+                              onNavigatePage={onNavigatePage}
+                            />
+                          );
+                        }
+
+                        const discussionStatus = thread.status ?? "open";
+                        const StatusIcon = statusIcons[discussionStatus];
+                        return activeTab === "q-and-a" ? (
+                          <DiscussionWorkspaceQuestionCard
                             key={thread.id}
                             thread={thread}
                             onNavigatePage={onNavigatePage}
                           />
+                        ) : isCommentsTab ? (
+                          <DiscussionWorkspaceCommentCard
+                            key={thread.id}
+                            thread={thread}
+                            onNavigatePage={onNavigatePage}
+                          />
+                        ) : (
+                          <article
+                            className="discussion-thread"
+                            key={thread.id}
+                          >
+                            <button
+                              type="button"
+                              className="discussion-thread__open"
+                              onClick={() => openThread(thread)}
+                            >
+                              <div className="discussion-thread__avatar">
+                                <DiscussionAvatar
+                                  src={thread.avatar || null}
+                                  className="discussion-thread__avatar-image"
+                                />
+                                {discussionStatus !== "open" && (
+                                  <i aria-hidden="true" />
+                                )}
+                              </div>
+                              <div className="discussion-thread__body">
+                                <span className="discussion-thread__title">
+                                  {thread.title ?? "Untitled discussion"}
+                                </span>
+                                <p>{thread.excerpt}</p>
+                                {(thread.course || thread.lesson) && (
+                                  <div className="discussion-thread__context">
+                                    {thread.course && (
+                                      <span>{thread.course}</span>
+                                    )}
+                                    {thread.course && thread.lesson && (
+                                      <span aria-hidden="true" />
+                                    )}
+                                    {thread.lesson && (
+                                      <small>{thread.lesson}</small>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="discussion-thread__meta">
+                                <span
+                                  className={`discussion-thread__status is-${discussionStatus}`}
+                                >
+                                  <StatusIcon size={15} weight="fill" />{" "}
+                                  {statusLabels[discussionStatus]}
+                                </span>
+                                <span>
+                                  <ChatTeardropText size={17} />{" "}
+                                  {thread.replies}{" "}
+                                  {thread.replies === 1 ? "reply" : "replies"}
+                                </span>
+                                <time>{thread.activity}</time>
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              className="discussion-thread__more"
+                              aria-label={`More options for ${thread.title}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setNotice?.(
+                                  "Thread actions will be available with connected discussions.",
+                                );
+                              }}
+                            >
+                              <DotsThreeVertical size={21} weight="bold" />
+                            </button>
+                          </article>
                         );
-                      }
-
-                      const discussionStatus = thread.status ?? "open";
-                      const StatusIcon = statusIcons[discussionStatus];
-                      return activeTab === "q-and-a" ? (
-                        <DiscussionWorkspaceQuestionCard
-                          key={thread.id}
-                          thread={thread}
-                          onNavigatePage={onNavigatePage}
-                        />
-                      ) : isCommentsTab ? (
-                        <DiscussionWorkspaceCommentCard
-                          key={thread.id}
-                          thread={thread}
-                          onNavigatePage={onNavigatePage}
-                        />
-                      ) : (
-                        <article className="discussion-thread" key={thread.id}>
-                          <button
-                            type="button"
-                            className="discussion-thread__open"
-                            onClick={() => openThread(thread)}
-                          >
-                            <div className="discussion-thread__avatar">
-                              <DiscussionAvatar
-                                src={thread.avatar || null}
-                                className="discussion-thread__avatar-image"
-                              />
-                              {discussionStatus !== "open" && (
-                                <i aria-hidden="true" />
-                              )}
-                            </div>
-                            <div className="discussion-thread__body">
-                              <span className="discussion-thread__title">
-                                {thread.title ?? "Untitled discussion"}
-                              </span>
-                              <p>{thread.excerpt}</p>
-                              {(thread.course || thread.lesson) && (
-                                <div className="discussion-thread__context">
-                                  {thread.course && (
-                                    <span>{thread.course}</span>
-                                  )}
-                                  {thread.course && thread.lesson && (
-                                    <span aria-hidden="true" />
-                                  )}
-                                  {thread.lesson && (
-                                    <small>{thread.lesson}</small>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            <div className="discussion-thread__meta">
-                              <span
-                                className={`discussion-thread__status is-${discussionStatus}`}
-                              >
-                                <StatusIcon size={15} weight="fill" />{" "}
-                                {statusLabels[discussionStatus]}
-                              </span>
-                              <span>
-                                <ChatTeardropText size={17} /> {thread.replies}{" "}
-                                {thread.replies === 1 ? "reply" : "replies"}
-                              </span>
-                              <time>{thread.activity}</time>
-                            </div>
-                          </button>
-                          <button
-                            type="button"
-                            className="discussion-thread__more"
-                            aria-label={`More options for ${thread.title}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setNotice?.(
-                                "Thread actions will be available with connected discussions.",
-                              );
-                            }}
-                          >
-                            <DotsThreeVertical size={21} weight="bold" />
-                          </button>
-                        </article>
-                      );
-                    })
-                  ) : (
-                    <div className="discussion-hub__empty">
-                      <UsersThree size={30} weight="duotone" />
-                      <h2>
-                        {isNotesTab
-                          ? query.trim() || selectedCourseId !== "all"
-                            ? "No notes found"
-                            : "No notes yet"
-                          : isCommentsTab
-                            ? "No comments match these filters"
-                            : isMentionsTab
-                              ? "No mentions match these filters"
-                              : isFollowingTab
-                                ? query.trim() || selectedCourseId !== "all"
-                                  ? "No followed discussions found"
-                                  : "No followed discussions yet"
-                                : isBookmarksTab
+                      })
+                    ) : (
+                      <div className="discussion-hub__empty">
+                        <UsersThree size={30} weight="duotone" />
+                        <h2>
+                          {isNotesTab
+                            ? query.trim() || selectedCourseId !== "all"
+                              ? "No notes found"
+                              : "No notes yet"
+                            : isCommentsTab
+                              ? "No comments match these filters"
+                              : isMentionsTab
+                                ? "No mentions match these filters"
+                                : isFollowingTab
                                   ? query.trim() || selectedCourseId !== "all"
-                                    ? "No bookmarks found"
-                                    : "No bookmarks yet"
-                                  : "No discussions match these filters"}
-                      </h2>
-                      <p>
-                        {isNotesTab
-                          ? "Try clearing a filter or choosing another course."
-                          : isCommentsTab
+                                    ? "No followed discussions found"
+                                    : "No followed discussions yet"
+                                  : isBookmarksTab
+                                    ? query.trim() || selectedCourseId !== "all"
+                                      ? "No bookmarks found"
+                                      : "No bookmarks yet"
+                                    : "No discussions match these filters"}
+                        </h2>
+                        <p>
+                          {isNotesTab
                             ? "Try clearing a filter or choosing another course."
-                            : isMentionsTab
+                            : isCommentsTab
                               ? "Try clearing a filter or choosing another course."
-                              : isFollowingTab
+                              : isMentionsTab
                                 ? "Try clearing a filter or choosing another course."
-                                : isBookmarksTab
-                                  ? "Bookmarked discussions and notes will appear here."
-                                  : "Try clearing a filter or start a new question for the course."}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setQuery("");
-                          setCourse("all");
-                          setStatus("all");
-                          setSort("activity");
-                          setQnaStatus("all");
-                          setQnaSort("activity");
-                          setNotesSort("activity");
-                        }}
-                      >
-                        Clear filters
-                      </button>
-                    </div>
-                  )}
-                  <div
-                    ref={loadMoreRef}
-                    className="min-h-px"
-                    aria-live="polite"
-                  >
-                    {isFetchingNextPage && (
-                      <p className="py-3 text-center text-xs font-medium text-(--muted)">
-                        {isCommentsTab
-                          ? "Loading more comments…"
-                          : isNotesTab
-                            ? "Loading more notes…"
-                            : isMentionsTab
-                              ? "Loading more mentions…"
-                              : isFollowingTab
-                                ? "Loading more followed discussions…"
-                                : isBookmarksTab
-                                  ? "Loading more bookmarks…"
-                                  : "Loading more discussions…"}
-                      </p>
-                    )}
-                    {isFetchNextPageError && (
-                      <div className="flex justify-center py-3">
-                        <button type="button" onClick={loadMore}>
-                          Retry loading more
+                                : isFollowingTab
+                                  ? "Try clearing a filter or choosing another course."
+                                  : isBookmarksTab
+                                    ? "Bookmarked discussions and notes will appear here."
+                                    : "Try clearing a filter or start a new question for the course."}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuery("");
+                            setCourse("all");
+                            setStatus("all");
+                            setSort("activity");
+                            setQnaStatus("all");
+                            setQnaSort("activity");
+                            setNotesSort("activity");
+                          }}
+                        >
+                          Clear filters
                         </button>
                       </div>
                     )}
+                    <div
+                      ref={loadMoreRef}
+                      className="min-h-px"
+                      aria-live="polite"
+                    >
+                      {isFetchingNextPage && (
+                        <p className="py-3 text-center text-xs font-medium text-(--muted)">
+                          {isCommentsTab
+                            ? "Loading more comments…"
+                            : isNotesTab
+                              ? "Loading more notes…"
+                              : isMentionsTab
+                                ? "Loading more mentions…"
+                                : isFollowingTab
+                                  ? "Loading more followed discussions…"
+                                  : isBookmarksTab
+                                    ? "Loading more bookmarks…"
+                                    : "Loading more discussions…"}
+                        </p>
+                      )}
+                      {isFetchNextPageError && (
+                        <div className="flex justify-center py-3">
+                          <button type="button" onClick={loadMore}>
+                            Retry loading more
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </main>
-            </div>
-          </>
-        )}
+                </main>
+              </div>
+            </>
+          ) : (
+            <div className="discussion-hub__layout" aria-hidden="true" />
+          );
+        }}
       </SwipeableTabPanel>
     </div>
   );
