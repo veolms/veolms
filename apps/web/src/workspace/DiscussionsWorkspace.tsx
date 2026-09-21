@@ -1074,27 +1074,38 @@ function DiscussionWorkspaceMentionCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const isReply = mention.itemType === "reply";
+  const isNote = mention.itemType === "note" || mention.kind === "note";
   const isRootQuestion =
-    !isReply && (mention.kind === "question" || mention.kind === "qna");
+    !isReply &&
+    !isNote &&
+    (mention.kind === "question" || mention.kind === "qna");
   const metadataItems = getDiscussionWorkspaceMetadataItems(mention);
   const isQuestionMention =
     mention.kind === "question" || mention.kind === "qna";
   const parentKindLabel = isQuestionMention ? "Q&A" : "Comment";
-  const MentionSourceIcon = isQuestionMention ? Question : ChatTeardropText;
-  const mentionTypeLabel = isReply
-    ? parentKindLabel + " Reply"
-    : parentKindLabel;
+  const MentionSourceIcon = isNote
+    ? Note
+    : isQuestionMention
+      ? Question
+      : ChatTeardropText;
+  const mentionTypeLabel = isNote
+    ? "Note"
+    : isReply
+      ? parentKindLabel + " Reply"
+      : parentKindLabel;
   const parentContext = isReply
     ? mention.parentThreadTitle?.trim()
       ? `Reply in ${mention.parentThreadTitle.trim()} · ${parentKindLabel}`
       : `Reply in ${parentKindLabel}`
     : null;
-  const destination = getDiscussionThreadDestination(
-    isReply && mention.parentThreadId
-      ? { ...mention, id: mention.parentThreadId }
-      : mention,
-    "/discussions/mentions",
-  );
+  const destination = isNote
+    ? getDiscussionNoteDestination(mention, "/discussions/mentions")
+    : getDiscussionThreadDestination(
+        isReply && mention.parentThreadId
+          ? { ...mention, id: mention.parentThreadId }
+          : mention,
+        "/discussions/mentions",
+      );
   const destinationLabel = [mention.course, mention.lesson]
     .filter(Boolean)
     .join(", ");
@@ -1106,29 +1117,39 @@ function DiscussionWorkspaceMentionCard({
       className="discussion-thread--mention"
       expanded={expanded}
       navigation={
-        <DiscussionWorkspaceNavigationLink
-          destination={destination}
-          label={`${
-            isReply ? "Open parent discussion" : "Open mentioned discussion"
-          }${destinationLabel ? ` in ${destinationLabel}` : ""}`}
-          onNavigatePage={onNavigatePage}
-        />
+        destination ? (
+          <DiscussionWorkspaceNavigationLink
+            destination={destination}
+            label={`${
+              isNote
+                ? "Open note"
+                : isReply
+                  ? "Open parent discussion"
+                  : "Open mentioned discussion"
+            }${destinationLabel ? ` in ${destinationLabel}` : ""}`}
+            onNavigatePage={onNavigatePage}
+          />
+        ) : undefined
       }
-      onNavigate={() => onNavigatePage(destination, { exact: true })}
+      onNavigate={
+        destination
+          ? () => onNavigatePage(destination, { exact: true })
+          : undefined
+      }
       rail={{
         top: (
           <span
             className={[
               "discussion-thread__mention-indicator",
               "discussion-thread__rail-badge",
-              isQuestionMention ? "is-qna" : "is-comment",
+              isNote ? "is-note" : isQuestionMention ? "is-qna" : "is-comment",
             ].join(" ")}
           >
             <MentionSourceIcon size={15} weight="fill" aria-hidden="true" />
             <span>{mentionTypeLabel}</span>
           </span>
         ),
-        middle: (
+        middle: isNote ? undefined : (
           <span>
             <ChatTeardropText size={17} /> {mention.replies}{" "}
             {mention.replies === 1 ? "reply" : "replies"}
@@ -1143,10 +1164,10 @@ function DiscussionWorkspaceMentionCard({
       />
       <DiscussionWorkspaceCardContent
         thread={mention}
-        label="Mention"
+        label={isNote ? "Note" : "Mention"}
         expanded={expanded}
         onExpandedChange={setExpanded}
-        expandedTitle={isRootQuestion ? mention.title : undefined}
+        expandedTitle={isNote || isRootQuestion ? mention.title : undefined}
         previewText={mention.plainText}
         parentContext={parentContext}
       />

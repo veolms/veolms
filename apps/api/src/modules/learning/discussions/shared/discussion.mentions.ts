@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import type {
   Database,
   DatabaseExecutor,
-  MentionSourceType,
 } from "@veolms/database";
 import type { EngagementTargetType } from "@veolms/contracts";
 import { sql, type Kysely, type Transaction } from "kysely";
@@ -80,7 +79,13 @@ function mentionContext(plainText: string): string {
 export async function resolveDeepLink(
   db: DatabaseExecutor,
   courseId: string,
-  threadId: string,
+  target:
+    | string
+    | {
+        type: "note";
+        noteId: string;
+        lessonId: string;
+      },
 ): Promise<string> {
   const course = await db
     .selectFrom("courses")
@@ -88,7 +93,10 @@ export async function resolveDeepLink(
     .where("id", "=", courseId)
     .executeTakeFirst();
   if (course?.slug) {
-    return `/learn/${encodeURIComponent(course.slug)}?thread=${threadId}`;
+    if (typeof target === "string") {
+      return `/learn/${encodeURIComponent(course.slug)}?thread=${target}`;
+    }
+    return `/learn/${encodeURIComponent(course.slug)}?lessonId=${encodeURIComponent(target.lessonId)}&noteId=${encodeURIComponent(target.noteId)}`;
   }
   return "/discussions";
 }
@@ -110,16 +118,27 @@ export async function resolveActorName(
 export async function syncMentionsAndNotify(
   db: Transaction<Database>,
   outbox: OutboxService,
-  input: {
-    sourceType: MentionSourceType;
-    sourceId: string;
-    actorUserId: string;
-    content: string;
-    extraUserIds?: readonly string[];
-    courseId: string;
-    threadId: string;
-    plainText?: string;
-  },
+  input:
+    | {
+        sourceType: "thread" | "reply";
+        sourceId: string;
+        actorUserId: string;
+        content: string;
+        extraUserIds?: readonly string[];
+        courseId: string;
+        threadId: string;
+        plainText?: string;
+      }
+    | {
+        sourceType: "note";
+        sourceId: string;
+        actorUserId: string;
+        content: string;
+        extraUserIds?: readonly string[];
+        courseId: string;
+        lessonId: string;
+        plainText?: string;
+      },
 ): Promise<void> {
   const usernames = extractMentionUsernames(input.content).slice(
     0,
@@ -174,7 +193,13 @@ export async function syncMentionsAndNotify(
   const context = mentionContext(
     input.plainText ?? extractPlainText(input.content),
   );
-  const deepLink = await resolveDeepLink(db, input.courseId, input.threadId);
+  const deepLink = await resolveDeepLink(
+    db,
+    input.courseId,
+    input.sourceType === "note"
+      ? { type: "note", noteId: input.sourceId, lessonId: input.lessonId }
+      : input.threadId,
+  );
   const occurredAt = new Date();
 
   // 1. Notify newly @mentioned users

@@ -6,6 +6,7 @@ import type {
   LearningThreadTable,
   LearningMentionTable,
   LearningReplyTable,
+  LearningNoteTable,
   UserTable,
 } from "@veolms/database";
 import type {
@@ -41,13 +42,30 @@ type MentionsAliasedDB = Database & {
   pt: Nullable<LearningThreadTable>;
   tu: Nullable<UserTable>;
   ru: Nullable<UserTable>;
+  n: Nullable<LearningNoteTable>;
+  nu: Nullable<UserTable>;
   tc: Nullable<CourseTable>;
   pc: Nullable<CourseTable>;
+  nc: Nullable<CourseTable>;
   tl: Nullable<CourseLessonTable>;
   pl: Nullable<CourseLessonTable>;
+  nl: Nullable<CourseLessonTable>;
 };
 type MentionAliases =
-  "m" | "t" | "r" | "pt" | "tu" | "ru" | "tc" | "pc" | "tl" | "pl";
+  | "m"
+  | "t"
+  | "r"
+  | "pt"
+  | "tu"
+  | "ru"
+  | "n"
+  | "nu"
+  | "tc"
+  | "pc"
+  | "nc"
+  | "tl"
+  | "pl"
+  | "nl";
 
 export interface ThreadRowWithAuthor {
   id: string;
@@ -78,7 +96,7 @@ export interface ThreadRowWithAuthor {
 
 export interface MentionWorkspaceRow {
   mentionId: string;
-  itemType: "thread" | "reply";
+  itemType: "thread" | "reply" | "note";
   sourceId: string;
   mentionedAt: Date;
   createdAt: Date;
@@ -129,13 +147,19 @@ function createMentionSourceQuery(db: DatabaseExecutor) {
     .leftJoin("learning_replies as r", (join) =>
       join.onRef("r.id", "=", "m.source_id").on("m.source_type", "=", "reply"),
     )
+    .leftJoin("learning_notes as n", (join) =>
+      join.onRef("n.id", "=", "m.source_id").on("m.source_type", "=", "note"),
+    )
     .leftJoin("learning_threads as pt", "pt.id", "r.thread_id")
     .leftJoin("users as tu", "tu.id", "t.user_id")
     .leftJoin("users as ru", "ru.id", "r.user_id")
+    .leftJoin("users as nu", "nu.id", "n.user_id")
     .leftJoin("courses as tc", "tc.id", "t.course_id")
     .leftJoin("courses as pc", "pc.id", "pt.course_id")
+    .leftJoin("courses as nc", "nc.id", "n.course_id")
     .leftJoin("course_lessons as tl", "tl.id", "t.lesson_id")
-    .leftJoin("course_lessons as pl", "pl.id", "pt.lesson_id");
+    .leftJoin("course_lessons as pl", "pl.id", "pt.lesson_id")
+    .leftJoin("course_lessons as nl", "nl.id", "n.lesson_id");
 }
 
 function applyMentionFilters<O>(
@@ -160,37 +184,54 @@ function applyMentionFilters<O>(
           and pt.status = 'active'
           and pt.kind in ('comment', 'question')
         )
-      )`,
-    )
-    .where(
-      sql<boolean>`(
-        coalesce(tc.id, pc.id) is not null
-        and coalesce(tc.deleted_at, pc.deleted_at) is null
-      )`,
-    )
-    .where(
-      sql<boolean>`(
-        coalesce(t.visibility, pt.visibility) = 'public'
         or (
-          coalesce(t.visibility, pt.visibility) in ('private', 'unlisted')
-          and coalesce(t.user_id, pt.user_id) = ${options.currentUserId}
+          m.source_type = 'note'
+          and n.id is not null
         )
       )`,
     )
     .where(
-      sql<boolean>`coalesce(t.academy_id, pt.academy_id) = ${options.academyId}`,
+      sql<boolean>`(
+        coalesce(tc.id, pc.id, nc.id) is not null
+        and coalesce(tc.deleted_at, pc.deleted_at, nc.deleted_at) is null
+        and (m.source_type <> 'note' or (nl.id is not null and nl.deleted_at is null and nl.course_id = n.course_id))
+      )`,
+    )
+    .where(
+      sql<boolean>`(
+        (
+          m.source_type in ('thread', 'reply')
+          and (
+            coalesce(t.visibility, pt.visibility) = 'public'
+            or (
+              coalesce(t.visibility, pt.visibility) in ('private', 'unlisted')
+              and coalesce(t.user_id, pt.user_id) = ${options.currentUserId}
+            )
+          )
+        )
+        or (
+          m.source_type = 'note'
+          and (
+            n.user_id = ${options.currentUserId}
+            or n.visibility in ('public', 'unlisted')
+          )
+        )
+      )`,
+    )
+    .where(
+      sql<boolean>`coalesce(t.academy_id, pt.academy_id, n.academy_id) = ${options.academyId}`,
     );
 
   if (options.courseId) {
     q = q.where(
-      sql<boolean>`coalesce(t.course_id, pt.course_id) = ${options.courseId}`,
+      sql<boolean>`coalesce(t.course_id, pt.course_id, n.course_id) = ${options.courseId}`,
     );
   } else if (options.accessibleCourseIds) {
     if (options.accessibleCourseIds.length === 0) {
       return q.where(sql<boolean>`1 = 0`);
     }
     q = q.where(
-      sql<boolean>`coalesce(t.course_id, pt.course_id) in (${sql.join(
+      sql<boolean>`coalesce(t.course_id, pt.course_id, n.course_id) in (${sql.join(
         options.accessibleCourseIds.map((courseId) => sql`${courseId}`),
         sql`, `,
       )})`,
@@ -199,18 +240,20 @@ function applyMentionFilters<O>(
 
   if (options.lessonId) {
     q = q.where(
-      sql<boolean>`coalesce(t.lesson_id, pt.lesson_id) = ${options.lessonId}`,
+      sql<boolean>`coalesce(t.lesson_id, pt.lesson_id, n.lesson_id) = ${options.lessonId}`,
     );
   }
 
   if (options.kind && options.kind !== "all") {
     const normalizedKind = options.kind === "qna" ? "question" : options.kind;
-    q = q.where(sql<boolean>`coalesce(t.kind, pt.kind) = ${normalizedKind}`);
+    q = q.where(
+      sql<boolean>`coalesce(t.kind, pt.kind, case when m.source_type = 'note' then 'note' else null end) = ${normalizedKind}`,
+    );
   }
 
   if (options.visibility) {
     q = q.where(
-      sql<boolean>`coalesce(t.visibility, pt.visibility) = ${options.visibility}`,
+      sql<boolean>`coalesce(t.visibility, pt.visibility, n.visibility) = ${options.visibility}`,
     );
   }
 
@@ -228,6 +271,13 @@ function applyMentionFilters<O>(
         or (
           m.source_type = 'reply'
           and lower(r.plain_text) like ${pattern}
+        )
+        or (
+          m.source_type = 'note'
+          and (
+            lower(coalesce(n.title, '')) like ${pattern}
+            or lower(n.plain_text) like ${pattern}
+          )
         )
       )`,
     );
@@ -255,11 +305,13 @@ const mentionWorkspaceSelect = [
   "m.created_at as mentionedAt",
   sql<Date>`case
     when m.source_type = 'thread' then t.created_at
-    else r.created_at
+    when m.source_type = 'reply' then r.created_at
+    else n.created_at
   end`.as("createdAt"),
   sql<Date>`case
     when m.source_type = 'thread' then t.updated_at
-    else r.updated_at
+    when m.source_type = 'reply' then r.updated_at
+    else n.updated_at
   end`.as("updatedAt"),
   sql<string | null>`case
     when m.source_type = 'reply' then pt.id
@@ -269,26 +321,38 @@ const mentionWorkspaceSelect = [
     when m.source_type = 'reply' then pt.title
     else null
   end`.as("parentThreadTitle"),
-  sql<DiscussionEntryKind>`coalesce(t.kind, pt.kind)`.as("kind"),
-  sql<string | null>`coalesce(t.title, pt.title)`.as("title"),
+  sql<DiscussionEntryKind>`coalesce(t.kind, pt.kind, case when m.source_type = 'note' then 'note' else null end)`.as(
+    "kind",
+  ),
+  sql<string | null>`case
+    when m.source_type = 'note' then n.title
+    else coalesce(t.title, pt.title)
+  end`.as("title"),
   sql<string>`case
     when m.source_type = 'thread' then t.content
-    else r.content
+    when m.source_type = 'reply' then r.content
+    else n.content
   end`.as("content"),
   sql<string>`case
     when m.source_type = 'thread' then t.plain_text
-    else r.plain_text
+    when m.source_type = 'reply' then r.plain_text
+    else n.plain_text
   end`.as("plainText"),
   sql<number | null>`case
     when m.source_type = 'thread' then t.timestamp_seconds
-    else r.timestamp_seconds
+    when m.source_type = 'reply' then r.timestamp_seconds
+    else n.timestamp_seconds
   end`.as("timestampSeconds"),
-  sql<string>`coalesce(t.course_id, pt.course_id)`.as("courseId"),
-  sql<string | null>`coalesce(tc.title, pc.title)`.as("courseTitle"),
-  sql<string | null>`coalesce(t.lesson_id, pt.lesson_id)`.as("lessonId"),
-  sql<string | null>`coalesce(tl.title, pl.title)`.as("lessonTitle"),
-  sql<string>`coalesce(t.user_id, r.user_id)`.as("userId"),
-  sql<string | null>`coalesce(t.visibility, pt.visibility)`.as("visibility"),
+  sql<string>`coalesce(t.course_id, pt.course_id, n.course_id)`.as("courseId"),
+  sql<string | null>`coalesce(tc.title, pc.title, nc.title)`.as("courseTitle"),
+  sql<string | null>`coalesce(t.lesson_id, pt.lesson_id, n.lesson_id)`.as(
+    "lessonId",
+  ),
+  sql<string | null>`coalesce(tl.title, pl.title, nl.title)`.as("lessonTitle"),
+  sql<string>`coalesce(t.user_id, r.user_id, n.user_id)`.as("userId"),
+  sql<string | null>`coalesce(t.visibility, pt.visibility, n.visibility)`.as(
+    "visibility",
+  ),
   sql<InteractionStatus | null>`case
     when m.source_type = 'thread' then t.status
     else null
@@ -301,19 +365,27 @@ const mentionWorkspaceSelect = [
     when m.source_type = 'thread' then t.accepted_answer_id
     else null
   end`.as("acceptedAnswerId"),
-  sql<number>`coalesce(t.likes_count, r.likes_count, 0)`.as("likesCount"),
+  sql<number>`coalesce(t.likes_count, r.likes_count, n.likes_count, 0)`.as(
+    "likesCount",
+  ),
   sql<number | null>`case
     when m.source_type = 'thread' then t.replies_count
     else null
   end`.as("repliesCount"),
-  sql<string | null>`coalesce(tu.display_name, ru.display_name)`.as(
+  sql<
+    string | null
+  >`coalesce(tu.display_name, ru.display_name, nu.display_name)`.as(
     "authorName",
   ),
-  sql<string | null>`coalesce(tu.username, ru.username)`.as("authorUsername"),
-  sql<string | null>`coalesce(tu.avatar_data_url, ru.avatar_data_url)`.as(
+  sql<string | null>`coalesce(tu.username, ru.username, nu.username)`.as(
+    "authorUsername",
+  ),
+  sql<
+    string | null
+  >`coalesce(tu.avatar_data_url, ru.avatar_data_url, nu.avatar_data_url)`.as(
     "authorAvatarUrl",
   ),
-  authorRoleSql("coalesce(t.user_id, r.user_id)"),
+  authorRoleSql("coalesce(t.user_id, r.user_id, n.user_id)"),
 ] as const;
 
 export type ThreadFilterOptions = ListLearningThreadsQuery & {

@@ -1315,22 +1315,27 @@ export function createThreadsService(
         const replyIds = page
           .filter((row) => row.itemType === "reply")
           .map((row) => row.sourceId);
-        const sourceIds = [...threadIds, ...replyIds];
+        const noteIds = page
+          .filter((row) => row.itemType === "note")
+          .map((row) => row.sourceId);
+        const sourceIds = [...threadIds, ...replyIds, ...noteIds];
 
         const [
           likes,
           bookmarks,
+          noteBookmarks,
           follows,
           replyCounts,
           threadAttachmentRows,
           replyAttachmentRows,
+          noteAttachmentRows,
         ] = await Promise.all([
           sourceIds.length > 0
             ? db
                 .selectFrom("learning_likes")
                 .select(["target_type", "target_id"])
                 .where("user_id", "=", actor.userId)
-                .where("target_type", "in", ["thread", "reply"])
+                .where("target_type", "in", ["thread", "reply", "note"])
                 .where("target_id", "in", sourceIds)
                 .execute()
             : Promise.resolve([]),
@@ -1340,6 +1345,14 @@ export function createThreadsService(
                 .select("thread_id")
                 .where("user_id", "=", actor.userId)
                 .where("thread_id", "in", threadIds)
+                .execute()
+            : Promise.resolve([]),
+          noteIds.length > 0
+            ? db
+                .selectFrom("learning_bookmarks")
+                .select("note_id")
+                .where("user_id", "=", actor.userId)
+                .where("note_id", "in", noteIds)
                 .execute()
             : Promise.resolve([]),
           threadIds.length > 0
@@ -1362,6 +1375,7 @@ export function createThreadsService(
             : Promise.resolve([]),
           attachmentsRepo.listThreadAttachmentSummaries(db, threadIds),
           attachmentsRepo.listReplyAttachmentSummaries(db, replyIds),
+          attachmentsRepo.listNoteAttachmentSummaries(db, noteIds),
         ]);
 
         const likedThreadIds = new Set(
@@ -1374,6 +1388,11 @@ export function createThreadsService(
             .filter((like) => like.target_type === "reply")
             .map((like) => like.target_id),
         );
+        const likedNoteIds = new Set(
+          likes
+            .filter((like) => like.target_type === "note")
+            .map((like) => like.target_id),
+        );
         const bookmarkedThreadIds = new Set(
           bookmarks.flatMap((bookmark) =>
             bookmark.thread_id ? [bookmark.thread_id] : [],
@@ -1381,6 +1400,11 @@ export function createThreadsService(
         );
         const followedThreadIds = new Set(
           follows.map((follow) => follow.thread_id),
+        );
+        const bookmarkedNoteIds = new Set(
+          noteBookmarks.flatMap((bookmark) =>
+            bookmark.note_id ? [bookmark.note_id] : [],
+          ),
         );
         const replyReplyCounts = new Map(
           replyCounts.flatMap((row) =>
@@ -1393,9 +1417,12 @@ export function createThreadsService(
           indexAttachmentSummaries(threadAttachmentRows);
         const replyAttachmentSummaries =
           indexAttachmentSummaries(replyAttachmentRows);
+        const noteAttachmentSummaries =
+          indexAttachmentSummaries(noteAttachmentRows);
 
         const items: WorkspaceDiscussionItem[] = page.map((row) => {
           const isThread = row.itemType === "thread";
+          const isNote = row.itemType === "note";
           const isQna = row.kind === "question" || row.kind === "qna";
           const statusVal: QuestionFilterStatus | undefined =
             isThread && isQna
@@ -1414,7 +1441,7 @@ export function createThreadsService(
             itemType: row.itemType,
             kind: row.kind,
             title: row.title,
-            ...(isThread
+            ...(isThread || isNote
               ? {}
               : {
                   parentThreadId: row.parentThreadId,
@@ -1448,15 +1475,26 @@ export function createThreadsService(
                     threadAttachmentSummaries.get(row.sourceId) ??
                     emptyAttachmentSummary(),
                 }
-              : {
-                  visibility: row.visibility ?? undefined,
-                  repliesCount: replyReplyCounts.get(row.sourceId) ?? 0,
-                  likesCount: Number(row.likesCount || 0),
-                  isLiked: likedReplyIds.has(row.sourceId),
-                  attachmentSummary:
-                    replyAttachmentSummaries.get(row.sourceId) ??
-                    emptyAttachmentSummary(),
-                }),
+              : isNote
+                ? {
+                    visibility: row.visibility ?? undefined,
+                    repliesCount: 0,
+                    likesCount: Number(row.likesCount || 0),
+                    isLiked: likedNoteIds.has(row.sourceId),
+                    isBookmarked: bookmarkedNoteIds.has(row.sourceId),
+                    attachmentSummary:
+                      noteAttachmentSummaries.get(row.sourceId) ??
+                      emptyAttachmentSummary(),
+                  }
+                : {
+                    visibility: row.visibility ?? undefined,
+                    repliesCount: replyReplyCounts.get(row.sourceId) ?? 0,
+                    likesCount: Number(row.likesCount || 0),
+                    isLiked: likedReplyIds.has(row.sourceId),
+                    attachmentSummary:
+                      replyAttachmentSummaries.get(row.sourceId) ??
+                      emptyAttachmentSummary(),
+                  }),
             isMentioned: true,
             isOwn: row.userId === actor.userId,
             mentionedAt: toDate(row.mentionedAt).toISOString(),
