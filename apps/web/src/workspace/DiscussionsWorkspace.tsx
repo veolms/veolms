@@ -72,8 +72,10 @@ import {
   type DiscussionWorkspaceCard,
 } from "./discussions-workspace.adapter";
 import { DiscussionWorkspaceActionMenu } from "./DiscussionWorkspaceActionMenu";
+import { DiscussionWorkspaceMobileActionSheet } from "./DiscussionWorkspaceMobileActionSheet";
 import { DiscussionWorkspaceSkeletonList } from "./DiscussionWorkspaceSkeleton";
 import { DiscussionWorkspaceVirtualFeed } from "./DiscussionWorkspaceVirtualFeed";
+import { useDiscussionWorkspaceCardLongPress } from "./useDiscussionWorkspaceCardLongPress";
 import {
   getApplicationScrollElement,
   type ApplicationScrollPosition,
@@ -808,6 +810,7 @@ function DiscussionWorkspaceCardShell({
   navigation,
   onNavigate,
   actions,
+  onMobileActions,
   children,
   rail,
 }: {
@@ -817,6 +820,7 @@ function DiscussionWorkspaceCardShell({
   navigation?: ReactNode;
   onNavigate?: () => void;
   actions?: ReactNode;
+  onMobileActions?: () => void;
   children: ReactNode;
   rail: {
     top: DiscussionWorkspaceRailElement;
@@ -829,6 +833,11 @@ function DiscussionWorkspaceCardShell({
     getDiscussionSwipePreviewSnapshot,
     getDiscussionSwipePreviewServerSnapshot,
   );
+  const { isPressed: isLongPressPressed, ...longPressHandlers } =
+    useDiscussionWorkspaceCardLongPress({
+      enabled: Boolean(onMobileActions),
+      onLongPress: () => onMobileActions?.(),
+    });
 
   const handleBodyClick = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (
@@ -853,15 +862,34 @@ function DiscussionWorkspaceCardShell({
 
   return (
     <article
+      {...longPressHandlers}
       className={[
         "discussion-thread",
         "discussion-thread--workspace-card",
         className,
         navigation ? "is-navigable" : "is-static",
         expanded ? "is-expanded" : "is-collapsed",
+        onMobileActions
+          ? "transition-transform duration-100 ease-out motion-reduce:transition-none"
+          : "",
+        isLongPressPressed
+          ? "scale-[0.985]"
+          : onMobileActions
+            ? "scale-100"
+            : "",
       ].join(" ")}
     >
       {navigation}
+      {onMobileActions && (
+        <button
+          type="button"
+          className="sr-only"
+          aria-haspopup="dialog"
+          onClick={onMobileActions}
+        >
+          Actions for {thread.title?.trim() || "discussion"}
+        </button>
+      )}
       {actions}
       <div className="discussion-thread__open discussion-thread__open--overview">
         <div className="discussion-thread__avatar">
@@ -885,11 +913,16 @@ function DiscussionWorkspaceQuestionCard({
   thread,
   onNavigatePage,
   showActions,
+  onRequestMobileActions,
   setNotice,
 }: {
   thread: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
   showActions: boolean;
+  onRequestMobileActions?: (
+    card: DiscussionWorkspaceCard,
+    destination: string | null,
+  ) => void;
   setNotice?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -921,6 +954,11 @@ function DiscussionWorkspaceQuestionCard({
         />
       }
       onNavigate={() => onNavigatePage(destination, { exact: true })}
+      onMobileActions={
+        onRequestMobileActions
+          ? () => onRequestMobileActions(thread, destination)
+          : undefined
+      }
       actions={
         showActions ? (
           <div className="absolute top-3 right-4 z-20 pointer-events-auto">
@@ -984,11 +1022,16 @@ function DiscussionWorkspaceCommentCard({
   thread,
   onNavigatePage,
   showActions,
+  onRequestMobileActions,
   setNotice,
 }: {
   thread: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
   showActions: boolean;
+  onRequestMobileActions?: (
+    card: DiscussionWorkspaceCard,
+    destination: string | null,
+  ) => void;
   setNotice?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -1016,6 +1059,11 @@ function DiscussionWorkspaceCommentCard({
         />
       }
       onNavigate={() => onNavigatePage(destination, { exact: true })}
+      onMobileActions={
+        onRequestMobileActions
+          ? () => onRequestMobileActions(thread, destination)
+          : undefined
+      }
       actions={
         showActions ? (
           <div className="absolute top-3 right-4 z-20 pointer-events-auto">
@@ -1061,11 +1109,16 @@ function DiscussionWorkspaceFollowingCard({
   thread,
   onNavigatePage,
   showActions,
+  onRequestMobileActions,
   setNotice,
 }: {
   thread: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
   showActions: boolean;
+  onRequestMobileActions?: (
+    card: DiscussionWorkspaceCard,
+    destination: string | null,
+  ) => void;
   setNotice?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -1094,6 +1147,11 @@ function DiscussionWorkspaceFollowingCard({
         />
       }
       onNavigate={() => onNavigatePage(destination, { exact: true })}
+      onMobileActions={
+        onRequestMobileActions
+          ? () => onRequestMobileActions(thread, destination)
+          : undefined
+      }
       actions={
         showActions ? (
           <div className="absolute top-3 right-4 z-20 pointer-events-auto">
@@ -1148,11 +1206,16 @@ function DiscussionWorkspaceMentionCard({
   mention,
   onNavigatePage,
   showActions,
+  onRequestMobileActions,
   setNotice,
 }: {
   mention: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
   showActions: boolean;
+  onRequestMobileActions?: (
+    card: DiscussionWorkspaceCard,
+    destination: string | null,
+  ) => void;
   setNotice?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -1217,6 +1280,11 @@ function DiscussionWorkspaceMentionCard({
       onNavigate={
         destination
           ? () => onNavigatePage(destination, { exact: true })
+          : undefined
+      }
+      onMobileActions={
+        onRequestMobileActions
+          ? () => onRequestMobileActions(mention, destination)
           : undefined
       }
       actions={
@@ -1293,11 +1361,16 @@ function DiscussionWorkspaceNoteCard({
   note,
   onNavigatePage,
   showActions,
+  onRequestMobileActions,
   setNotice,
 }: {
   note: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
   showActions: boolean;
+  onRequestMobileActions?: (
+    card: DiscussionWorkspaceCard,
+    destination: string | null,
+  ) => void;
   setNotice?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -1329,6 +1402,11 @@ function DiscussionWorkspaceNoteCard({
       onNavigate={
         destination
           ? () => onNavigatePage(destination, { exact: true })
+          : undefined
+      }
+      onMobileActions={
+        onRequestMobileActions
+          ? () => onRequestMobileActions(note, destination)
           : undefined
       }
       actions={
@@ -1375,11 +1453,16 @@ function DiscussionWorkspaceBookmarkCard({
   bookmark,
   onNavigatePage,
   showActions,
+  onRequestMobileActions,
   setNotice,
 }: {
   bookmark: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
   showActions: boolean;
+  onRequestMobileActions?: (
+    card: DiscussionWorkspaceCard,
+    destination: string | null,
+  ) => void;
   setNotice?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -1419,6 +1502,11 @@ function DiscussionWorkspaceBookmarkCard({
       onNavigate={
         destination
           ? () => onNavigatePage(destination, { exact: true })
+          : undefined
+      }
+      onMobileActions={
+        onRequestMobileActions
+          ? () => onRequestMobileActions(bookmark, destination)
           : undefined
       }
       actions={
@@ -1471,6 +1559,11 @@ function DiscussionWorkspaceBookmarkCard({
   );
 }
 
+interface MobileDiscussionActionTarget {
+  card: DiscussionWorkspaceCard;
+  destination: string | null;
+}
+
 export function DiscussionsWorkspace({
   tab = "q-and-a",
   onNavigatePage,
@@ -1505,6 +1598,8 @@ export function DiscussionsWorkspace({
     null,
   );
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [mobileActionTarget, setMobileActionTarget] =
+    useState<MobileDiscussionActionTarget | null>(null);
   const mobileFiltersTriggerRef = useRef<HTMLButtonElement>(null);
   const mobileFiltersScrollPositionRef = useRef<{
     element: HTMLElement;
@@ -1515,6 +1610,10 @@ export function DiscussionsWorkspace({
     top: string;
     width: string;
   } | null>(null);
+
+  useEffect(() => {
+    setMobileActionTarget(null);
+  }, [activeTab]);
 
   const isQnaTab = activeTab === "q-and-a";
   const isCommentsTab = activeTab === "comments";
@@ -2044,6 +2143,15 @@ export function DiscussionsWorkspace({
     },
     [setNotice],
   );
+  const openMobileActions = useCallback(
+    (card: DiscussionWorkspaceCard, destination: string | null) => {
+      setMobileActionTarget({ card, destination });
+    },
+    [],
+  );
+  const closeMobileActions = useCallback(() => {
+    setMobileActionTarget(null);
+  }, []);
 
   const renderDiscussionCard = useCallback(
     (thread: DiscussionWorkspaceCard) => {
@@ -2053,6 +2161,9 @@ export function DiscussionsWorkspace({
             bookmark={thread}
             onNavigatePage={onNavigatePage}
             showActions={!showDiscussionSwipePreviews}
+            onRequestMobileActions={
+              showDiscussionSwipePreviews ? openMobileActions : undefined
+            }
             setNotice={setNotice}
           />
         );
@@ -2064,6 +2175,9 @@ export function DiscussionsWorkspace({
             note={thread}
             onNavigatePage={onNavigatePage}
             showActions={!showDiscussionSwipePreviews}
+            onRequestMobileActions={
+              showDiscussionSwipePreviews ? openMobileActions : undefined
+            }
             setNotice={setNotice}
           />
         );
@@ -2075,6 +2189,9 @@ export function DiscussionsWorkspace({
             mention={thread}
             onNavigatePage={onNavigatePage}
             showActions={!showDiscussionSwipePreviews}
+            onRequestMobileActions={
+              showDiscussionSwipePreviews ? openMobileActions : undefined
+            }
             setNotice={setNotice}
           />
         );
@@ -2086,6 +2203,9 @@ export function DiscussionsWorkspace({
             thread={thread}
             onNavigatePage={onNavigatePage}
             showActions={!showDiscussionSwipePreviews}
+            onRequestMobileActions={
+              showDiscussionSwipePreviews ? openMobileActions : undefined
+            }
             setNotice={setNotice}
           />
         );
@@ -2098,6 +2218,9 @@ export function DiscussionsWorkspace({
           thread={thread}
           onNavigatePage={onNavigatePage}
           showActions={!showDiscussionSwipePreviews}
+          onRequestMobileActions={
+            showDiscussionSwipePreviews ? openMobileActions : undefined
+          }
           setNotice={setNotice}
         />
       ) : isCommentsTab ? (
@@ -2105,6 +2228,9 @@ export function DiscussionsWorkspace({
           thread={thread}
           onNavigatePage={onNavigatePage}
           showActions={!showDiscussionSwipePreviews}
+          onRequestMobileActions={
+            showDiscussionSwipePreviews ? openMobileActions : undefined
+          }
           setNotice={setNotice}
         />
       ) : (
@@ -2175,6 +2301,7 @@ export function DiscussionsWorkspace({
       isNotesTab,
       onNavigatePage,
       openThread,
+      openMobileActions,
       setNotice,
       showDiscussionSwipePreviews,
     ],
@@ -2522,6 +2649,15 @@ export function DiscussionsWorkspace({
           </div>
         </DrawerContent>
       </Drawer>
+
+      {mobileActionTarget && (
+        <DiscussionWorkspaceMobileActionSheet
+          card={mobileActionTarget.card}
+          destination={mobileActionTarget.destination}
+          onClose={closeMobileActions}
+          setNotice={setNotice}
+        />
+      )}
 
       <SwipeableTabPanel
         tabs={discussionTabIds}
