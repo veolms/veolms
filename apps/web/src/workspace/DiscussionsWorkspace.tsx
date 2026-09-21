@@ -136,6 +136,16 @@ function isDiscussionCardInteractiveTarget(target: EventTarget | null): boolean 
   );
 }
 
+function getVisibleCollapsedCardToggle(
+  card: HTMLElement,
+): HTMLButtonElement | null {
+  const toggle = card.querySelector<HTMLButtonElement>(
+    '.discussion-hub__card-content-toggle[aria-expanded="false"]',
+  );
+  if (!toggle || toggle.textContent?.trim() !== "Read more") return null;
+  return toggle.getClientRects().length > 0 ? toggle : null;
+}
+
 interface DiscussionRestorationKeyInput {
   tab: DiscussionTab;
   courseId: string;
@@ -572,6 +582,11 @@ function DiscussionWorkspaceCardContent({
   previewText?: string | null;
   parentContext?: string | null;
 }) {
+  const isMobileOrCoarsePointer = useSyncExternalStore(
+    subscribeToDiscussionSwipePreview,
+    getDiscussionSwipePreviewSnapshot,
+    getDiscussionSwipePreviewServerSnapshot,
+  );
   const [isPreviewTruncated, setIsPreviewTruncated] = useState(false);
   const previewRef = useRef<HTMLSpanElement>(null);
   const normalizedTitle = normalizeWorkspacePreviewText(expandedTitle);
@@ -660,6 +675,7 @@ function DiscussionWorkspaceCardContent({
           <DiscussionMarkdown
             content={content}
             label={`${label} by ${thread.author}`}
+            enableLinkPreview={!isMobileOrCoarsePointer}
             className="max-w-none"
           />
           {utility(true)}
@@ -805,9 +821,15 @@ function DiscussionWorkspaceCardShell({
     bottom: DiscussionWorkspaceRailElement;
   };
 }) {
+  const isMobileOrCoarsePointer = useSyncExternalStore(
+    subscribeToDiscussionSwipePreview,
+    getDiscussionSwipePreviewSnapshot,
+    getDiscussionSwipePreviewServerSnapshot,
+  );
+
   const handleBodyClick = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (
-      !onNavigate ||
+      (!onNavigate && !isMobileOrCoarsePointer) ||
       event.defaultPrevented ||
       isDiscussionCardInteractiveTarget(event.target) ||
       hasTextSelectionWithin(event.currentTarget)
@@ -815,7 +837,15 @@ function DiscussionWorkspaceCardShell({
       return;
     }
 
-    onNavigate();
+    if (isMobileOrCoarsePointer && !expanded) {
+      const readMore = getVisibleCollapsedCardToggle(event.currentTarget);
+      if (readMore) {
+        readMore.click();
+        return;
+      }
+    }
+
+    onNavigate?.();
   };
 
   return (

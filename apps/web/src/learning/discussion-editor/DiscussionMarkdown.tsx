@@ -101,6 +101,8 @@ interface DiscussionMarkdownProps {
   label: string;
   /** Linked attachments allow safe suppression of legacy generated Markdown. */
   linkedAttachments?: readonly DiscussionAttachmentItem[];
+  /** Controls metadata lookups while keeping Markdown links visible. */
+  enableLinkPreview?: boolean;
   className?: string;
 }
 
@@ -108,6 +110,7 @@ export function DiscussionMarkdown({
   content,
   label,
   linkedAttachments,
+  enableLinkPreview = true,
   className = "",
 }: DiscussionMarkdownProps) {
   const isGeneratedAttachmentMarkdown = (
@@ -128,7 +131,9 @@ export function DiscussionMarkdown({
       ? content
       : content.plainText || content.markdown || "";
   const detectedUrl = extractFirstUrl(rawText);
-  const { data: linkPreview } = useLinkPreview(detectedUrl);
+  const { data: linkPreview } = useLinkPreview(detectedUrl, {
+    enabled: enableLinkPreview,
+  });
 
   return (
     <div
