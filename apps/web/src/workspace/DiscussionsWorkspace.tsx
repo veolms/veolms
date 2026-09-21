@@ -2095,6 +2095,7 @@ export function DiscussionsWorkspace({
               <DiscussionWorkspaceSkeletonList
                 mode="preview"
                 variant={panelTab}
+                previewCount={cards.length}
               />
             ) : (
               <div className="discussion-hub__layout" aria-hidden="true" />
@@ -2221,7 +2222,7 @@ export function DiscussionsWorkspace({
                       aria-live="polite"
                     >
                       {isFetchingNextPage && (
-                        <p className="py-3 text-center text-xs font-medium text-(--muted)">
+                        <p className="py-1.5 text-center text-xs font-medium text-(--muted)">
                           {isCommentsTab
                             ? "Loading more comments…"
                             : isNotesTab

@@ -2,7 +2,7 @@ import type { DiscussionTab } from "../routing/tabSessionState";
 
 export type DiscussionWorkspaceSkeletonMode = "loading" | "preview";
 
-export const DISCUSSION_LOADING_SKELETON_COUNT = 5;
+export const DISCUSSION_LOADING_SKELETON_COUNT = 4;
 export const DISCUSSION_PREVIEW_SKELETON_COUNT = 5;
 
 const skeletonVariantClassNames: Readonly<Record<DiscussionTab, string>> = {
@@ -21,6 +21,7 @@ export interface DiscussionWorkspaceSkeletonProps {
 
 export interface DiscussionWorkspaceSkeletonListProps extends DiscussionWorkspaceSkeletonProps {
   label?: string;
+  previewCount?: number;
   withinFeed?: boolean;
 }
 
@@ -100,12 +101,16 @@ export function DiscussionWorkspaceSkeletonList({
   mode,
   variant,
   label = "Loading discussions",
+  previewCount,
   withinFeed = false,
 }: DiscussionWorkspaceSkeletonListProps) {
   const isLoading = mode === "loading";
   const count = isLoading
     ? DISCUSSION_LOADING_SKELETON_COUNT
-    : DISCUSSION_PREVIEW_SKELETON_COUNT;
+    : Math.min(
+        DISCUSSION_PREVIEW_SKELETON_COUNT,
+        Math.max(0, previewCount ?? DISCUSSION_PREVIEW_SKELETON_COUNT),
+      );
 
   return (
     <div
