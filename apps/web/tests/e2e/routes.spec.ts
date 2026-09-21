@@ -82,7 +82,7 @@ test("legacy student course URLs redirect to their renamed destinations", async 
   );
 });
 
-test("discussion tabs use canonical routes and browser history", async ({
+test("discussion tabs use canonical routes and per-tab browser history", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -123,7 +123,25 @@ test("discussion tabs use canonical routes and browser history", async ({
   ).not.toBe(questionStyle.color);
   await expect
     .poll(() => getApplicationScrollTop(page))
-    .toBe(discussionScrollPosition);
+    .toBeLessThan(50);
+
+  await setApplicationScrollTop(page, 180);
+  const commentsScrollPosition = await getApplicationScrollTop(page);
+  expect(commentsScrollPosition).toBeGreaterThan(100);
+
+  await questions.click();
+  await expect(page).toHaveURL(/\/discussions\/q-and-a$/);
+  await expect(questions).toHaveAttribute("aria-selected", "true");
+  await expect
+    .poll(() => getApplicationScrollTop(page))
+    .toBeCloseTo(discussionScrollPosition, -1);
+
+  await comments.click();
+  await expect(page).toHaveURL(/\/discussions\/comments$/);
+  await expect(comments).toHaveAttribute("aria-selected", "true");
+  await expect
+    .poll(() => getApplicationScrollTop(page))
+    .toBeCloseTo(commentsScrollPosition, -1);
 
   await comments.press("ArrowRight");
   await expect(page).toHaveURL(/\/discussions\/mentions$/);

@@ -10,7 +10,7 @@ import {
 } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import type { ReactElement, ReactNode } from "react";
-import { useSearchParams } from "react-router";
+import { useLocation, useSearchParams } from "react-router";
 import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "../hooks/useDebounce";
 import { AtIcon as At } from "@phosphor-icons/react/At";
 import { BookmarkSimpleIcon as BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
@@ -69,9 +69,92 @@ import {
 } from "./discussions-workspace.adapter";
 import { DiscussionWorkspaceSkeletonList } from "./DiscussionWorkspaceSkeleton";
 import { DiscussionWorkspaceVirtualFeed } from "./DiscussionWorkspaceVirtualFeed";
+import {
+  getApplicationScrollElement,
+  type ApplicationScrollPosition,
+} from "../shell/applicationScroll";
 
 type DiscussionStatus = NonNullable<DiscussionWorkspaceCard["status"]>;
 type DiscussionOwnership = "all" | "mine";
+
+const normalizeDiscussionRestorationValue = (
+  value: string | undefined,
+  fallback = "all",
+) => {
+  const normalized = value?.trim();
+  return normalized || fallback;
+};
+
+const encodeDiscussionRestorationValue = (value: string) =>
+  encodeURIComponent(normalizeDiscussionRestorationValue(value));
+
+const canRestoreDiscussionScroll = ({ top }: ApplicationScrollPosition) => {
+  if (top <= 0) return true;
+
+  const feed = document.querySelector<HTMLElement>(
+    "[data-discussion-workspace-virtual-feed]",
+  );
+  if (!feed) return false;
+
+  const feedRect = feed.getBoundingClientRect();
+  const scrollport = getApplicationScrollElement();
+  const contentTop = scrollport
+    ? feedRect.top - scrollport.getBoundingClientRect().top + scrollport.scrollTop
+    : feedRect.top + window.scrollY;
+
+  return contentTop + feedRect.height >= top;
+};
+
+interface DiscussionRestorationKeyInput {
+  tab: DiscussionTab;
+  courseId: string;
+  qnaOwnership: DiscussionOwnership;
+  commentsOwnership: DiscussionOwnership;
+  notesOwnership: DiscussionOwnership;
+  qnaStatus: string;
+  qnaSort: string;
+  notesSort: string;
+  sort: string;
+}
+
+const getDiscussionRestorationKey = ({
+  tab,
+  courseId,
+  qnaOwnership,
+  commentsOwnership,
+  notesOwnership,
+  qnaStatus,
+  qnaSort,
+  notesSort,
+  sort,
+}: DiscussionRestorationKeyInput) => {
+  const ownership =
+    tab === "q-and-a"
+      ? qnaOwnership
+      : tab === "comments"
+        ? commentsOwnership
+        : tab === "notes"
+          ? notesOwnership
+          : "all";
+  const status = tab === "q-and-a" ? qnaStatus : "all";
+  const tabSort =
+    tab === "q-and-a"
+      ? qnaSort
+      : tab === "comments"
+        ? sort
+        : tab === "notes"
+          ? notesSort
+          : "default";
+
+  return [
+    "discussions",
+    `tab=${encodeDiscussionRestorationValue(tab)}`,
+    `course=${encodeDiscussionRestorationValue(courseId)}`,
+    `ownership=${encodeDiscussionRestorationValue(ownership)}`,
+    `status=${encodeDiscussionRestorationValue(status)}`,
+    `sort=${encodeDiscussionRestorationValue(tabSort)}`,
+  ].join("|");
+};
 
 const ownershipOptions: readonly (readonly [DiscussionOwnership, string])[] = [
   ["all", "All authors"],
@@ -1185,23 +1268,15 @@ export function DiscussionsWorkspace({
   setNotice,
 }: DiscussionsWorkspaceProps) {
   const activeTab = normalizeDiscussionTab(tab);
+  const location = useLocation();
   const showDiscussionSwipePreviews = useSyncExternalStore(
     subscribeToDiscussionSwipePreview,
     getDiscussionSwipePreviewSnapshot,
     getDiscussionSwipePreviewServerSnapshot,
   );
   const activeTabIndex = discussionTabIds.indexOf(activeTab);
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const selectedCourseId = searchParams.get("course") ?? "all";
-  const navigateTab = (id: DiscussionTab) => {
-    rememberDiscussionTab(id);
-    const nextSearch = new URLSearchParams();
-    if (selectedCourseId !== "all") nextSearch.set("course", selectedCourseId);
-    const suffix = nextSearch.toString();
-    onNavigatePage(`/discussions/${id}${suffix ? `?${suffix}` : ""}`, {
-      preserveScroll: true,
-    });
-  };
   const tablistRef = useRef<HTMLElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const fetchingNextPageRef = useRef(false);
@@ -1300,6 +1375,87 @@ export function DiscussionsWorkspace({
       sort: workspaceSort as "activity" | "latest" | "replies",
     };
   })();
+
+  const currentDiscussionPath = `${location.pathname}${location.search}${location.hash}`;
+  const effectiveSearch = debouncedQuery.trim();
+  const getRestorationKeyForTab = (
+    tabId: DiscussionTab,
+    overrides: {
+      courseId?: string;
+      ownership?: DiscussionOwnership;
+      sort?: string;
+      status?: string;
+    } = {},
+  ) =>
+    getDiscussionRestorationKey({
+      tab: tabId,
+      courseId: overrides.courseId ?? selectedCourseId,
+      qnaOwnership:
+        tabId === "q-and-a" && overrides.ownership
+          ? overrides.ownership
+          : qnaOwnership,
+      commentsOwnership:
+        tabId === "comments" && overrides.ownership
+          ? overrides.ownership
+          : commentsOwnership,
+      notesOwnership:
+        tabId === "notes" && overrides.ownership
+          ? overrides.ownership
+          : notesOwnership,
+      qnaStatus:
+        tabId === "q-and-a" && overrides.status
+          ? overrides.status
+          : qnaStatus,
+      qnaSort:
+        tabId === "q-and-a" && overrides.sort ? overrides.sort : qnaSort,
+      notesSort:
+        tabId === "notes" && overrides.sort ? overrides.sort : notesSort,
+      sort:
+        tabId === "comments" && overrides.sort ? overrides.sort : sort,
+    });
+  const discussionRestorationKey = getRestorationKeyForTab(activeTab);
+  const transitionDiscussionScroll = ({
+    destinationKey,
+    reset = false,
+  }: {
+    destinationKey: string;
+    reset?: boolean;
+  }) => {
+    onNavigatePage(currentDiscussionPath, {
+      captureScroll: !reset,
+      canRestoreScroll: canRestoreDiscussionScroll,
+      exact: true,
+      resetScroll: reset,
+      replace: true,
+      scrollRestorationKey: destinationKey,
+      sourceScrollRestorationKey: discussionRestorationKey,
+    });
+  };
+  const previousEffectiveSearchRef = useRef(effectiveSearch);
+  useEffect(() => {
+    if (previousEffectiveSearchRef.current === effectiveSearch) return;
+    previousEffectiveSearchRef.current = effectiveSearch;
+    onNavigatePage(currentDiscussionPath, {
+      captureScroll: false,
+      exact: true,
+      replace: true,
+      resetScroll: true,
+    });
+  }, [currentDiscussionPath, effectiveSearch, onNavigatePage]);
+
+  const navigateTab = (id: DiscussionTab) => {
+    rememberDiscussionTab(id);
+    const nextSearch = new URLSearchParams();
+    if (selectedCourseId !== "all") nextSearch.set("course", selectedCourseId);
+    const suffix = nextSearch.toString();
+    onNavigatePage(`/discussions/${id}${suffix ? `?${suffix}` : ""}`, {
+      captureScroll: effectiveSearch.length === 0,
+      canRestoreScroll: canRestoreDiscussionScroll,
+      resetScroll: effectiveSearch.length > 0,
+      scrollRestorationKey: getRestorationKeyForTab(id),
+      sourceScrollRestorationKey: discussionRestorationKey,
+    });
+  };
   const workspaceDatasetKey = JSON.stringify(workspaceQuery);
   const workspaceQueryResult = useDiscussionsWorkspace(workspaceQuery);
   const {
@@ -1374,18 +1530,31 @@ export function DiscussionsWorkspace({
   ];
 
   const setCourse = (courseId: string) => {
-    setSearchParams(
-      (current) => {
-        const next = new URLSearchParams(current);
-        if (courseId === "all") next.delete("course");
-        else next.set("course", courseId);
-        return next;
-      },
-      { replace: true },
-    );
+    const normalizedCourseId = normalizeDiscussionRestorationValue(courseId);
+    if (normalizedCourseId === selectedCourseId) return;
+
+    const nextSearch = new URLSearchParams(searchParams);
+    if (normalizedCourseId === "all") nextSearch.delete("course");
+    else nextSearch.set("course", normalizedCourseId);
+    const suffix = nextSearch.toString();
+    const nextPath = `${location.pathname}${suffix ? `?${suffix}` : ""}${location.hash}`;
+
+    onNavigatePage(nextPath, {
+      captureScroll: effectiveSearch.length === 0,
+      canRestoreScroll: canRestoreDiscussionScroll,
+      exact: true,
+      resetScroll: effectiveSearch.length > 0,
+      replace: true,
+      scrollRestorationKey: getRestorationKeyForTab(activeTab, {
+        courseId: normalizedCourseId,
+      }),
+      sourceScrollRestorationKey: discussionRestorationKey,
+    });
   };
 
   const setOwnership = (ownership: DiscussionOwnership) => {
+    if (ownership === workspaceOwnership) return;
+
     if (isQnaTab) {
       setQnaOwnership(ownership);
     } else if (isCommentsTab) {
@@ -1393,10 +1562,62 @@ export function DiscussionsWorkspace({
     } else if (isNotesTab) {
       setNotesOwnership(ownership);
     }
+    transitionDiscussionScroll({
+      destinationKey: getRestorationKeyForTab(activeTab, { ownership }),
+      reset: effectiveSearch.length > 0,
+    });
+  };
+
+  const setDiscussionStatus = (nextStatus: string) => {
+    if (isQnaTab) {
+      if (nextStatus === qnaStatus) return;
+      setQnaStatus(nextStatus);
+    } else {
+      if (nextStatus === status) return;
+      setStatus(nextStatus);
+    }
+    transitionDiscussionScroll({
+      destinationKey: getRestorationKeyForTab(activeTab, {
+        status: nextStatus,
+      }),
+      reset: effectiveSearch.length > 0,
+    });
+  };
+
+  const setDiscussionSort = (nextSort: string) => {
+    const currentSort = isQnaTab
+      ? qnaSort
+      : isNotesTab
+        ? notesSort
+        : sort;
+    if (nextSort === currentSort) return;
+
+    if (isQnaTab) setQnaSort(nextSort);
+    else if (isNotesTab) setNotesSort(nextSort as "activity" | "latest");
+    else setSort(nextSort);
+    transitionDiscussionScroll({
+      destinationKey: getRestorationKeyForTab(activeTab, { sort: nextSort }),
+      reset: effectiveSearch.length > 0,
+    });
   };
 
   const resetDiscussionFilters = () => {
-    setCourse("all");
+    const nextPathSearch = new URLSearchParams(searchParams);
+    nextPathSearch.delete("course");
+    const nextPathSearchString = nextPathSearch.toString();
+    const nextPath = `${location.pathname}${nextPathSearchString ? `?${nextPathSearchString}` : ""}${location.hash}`;
+    const destinationKey = getDiscussionRestorationKey({
+      tab: activeTab,
+      courseId: "all",
+      qnaOwnership: "mine",
+      commentsOwnership: "mine",
+      notesOwnership: "mine",
+      qnaStatus: "all",
+      qnaSort: "activity",
+      notesSort: "activity",
+      sort: "activity",
+    });
+
     if (isQnaTab) {
       setQnaOwnership("mine");
       setQnaStatus("all");
@@ -1408,6 +1629,15 @@ export function DiscussionsWorkspace({
       setNotesOwnership("mine");
       setNotesSort("activity");
     }
+    onNavigatePage(nextPath, {
+      captureScroll: effectiveSearch.length === 0,
+      canRestoreScroll: canRestoreDiscussionScroll,
+      exact: true,
+      resetScroll: effectiveSearch.length > 0,
+      replace: true,
+      scrollRestorationKey: destinationKey,
+      sourceScrollRestorationKey: discussionRestorationKey,
+    });
   };
 
   const captureMobileFiltersScrollPosition = () => {
@@ -1795,7 +2025,7 @@ export function DiscussionsWorkspace({
             <div className="discussion-hub__select">
               <ThemedSelect
                 value={isQnaTab ? qnaStatus : status}
-                onValueChange={isQnaTab ? setQnaStatus : setStatus}
+                onValueChange={setDiscussionStatus}
                 ariaLabel="Filter discussions by status"
                 triggerClassName="discussion-hub__select-trigger"
                 contentClassName={selectContentClassName}
@@ -1829,7 +2059,7 @@ export function DiscussionsWorkspace({
                   <Funnel size={17} aria-hidden="true" />
                   <ThemedSelect<"activity" | "latest">
                     value={notesSort}
-                    onValueChange={setNotesSort}
+                    onValueChange={setDiscussionSort}
                     ariaLabel={`Sort notes: ${
                       notesSort === "activity" ? "Latest activity" : "Newest"
                     }`}
@@ -1850,7 +2080,7 @@ export function DiscussionsWorkspace({
                   <Funnel size={17} aria-hidden="true" />
                   <ThemedSelect
                     value={isQnaTab ? qnaSort : sort}
-                    onValueChange={isQnaTab ? setQnaSort : setSort}
+                    onValueChange={setDiscussionSort}
                     ariaLabel={
                       isQnaTab
                         ? `Sort questions: ${
@@ -2204,12 +2434,7 @@ export function DiscussionsWorkspace({
                           type="button"
                           onClick={() => {
                             setQuery("");
-                            setCourse("all");
-                            setStatus("all");
-                            setSort("activity");
-                            setQnaStatus("all");
-                            setQnaSort("activity");
-                            setNotesSort("activity");
+                            resetDiscussionFilters();
                           }}
                         >
                           Clear filters

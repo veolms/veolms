@@ -1273,6 +1273,49 @@ test("tablet video halves keep both side menus swipeable behind the course drawe
   await expect(courseDrawer).toBeHidden();
 });
 
+test("discussion tab swipes restore per-tab positions and cancel vertically cleanly", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openApp(page, "/discussions/q-and-a");
+
+  const panel = page.locator("#discussion-panel");
+  await panel.locator(".discussion-thread").last().scrollIntoViewIfNeeded();
+  const questionPosition = await page.evaluate(() => window.scrollY);
+  expect(questionPosition).toBeGreaterThan(100);
+
+  const finishQuestionSwipe = await startTouchSwipe(page, panel, -190);
+  await finishQuestionSwipe();
+  await expect(page).toHaveURL(/\/discussions\/comments$/);
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeLessThan(50);
+
+  await panel.locator(".discussion-thread").last().scrollIntoViewIfNeeded();
+  const commentsPosition = await page.evaluate(() => window.scrollY);
+  expect(commentsPosition).toBeGreaterThan(100);
+
+  await page.getByRole("tab", { name: "Q&A" }).click();
+  await expect(page).toHaveURL(/\/discussions\/q-and-a$/);
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeCloseTo(questionPosition, -1);
+
+  await page.getByRole("tab", { name: "Comments" }).click();
+  await expect(page).toHaveURL(/\/discussions\/comments$/);
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeCloseTo(commentsPosition, -1);
+
+  const beforeCancelledSwipe = await page.evaluate(() => window.scrollY);
+  const finishCancelledSwipe = await startTouchSwipe(page, panel, -42);
+  await finishCancelledSwipe();
+  await expect(page).toHaveURL(/\/discussions\/comments$/);
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeCloseTo(beforeCancelledSwipe, -1);
+});
+
 test("discussion surfaces keep swipe clipping outside mobile content gutters", async ({
   page,
 }) => {

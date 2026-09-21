@@ -68,7 +68,10 @@ import {
   openLearningMiniPlayerSession,
   subscribeToLearningMiniPlayer,
 } from "../learning/player/learningMiniPlayerStore";
-import type { NavigateTo } from "../routing/navigation";
+import type {
+  NavigateTo,
+  NavigationOptions,
+} from "../routing/navigation";
 import { AcademyRouteGuard } from "../routing/RouteGuards";
 import { buildLoginPath } from "../routing/routeAccess";
 import {
@@ -120,6 +123,16 @@ interface LearningBackgroundSurface {
   section?: string;
   settingsTab?: string;
 }
+
+interface ApplicationScrollRestorationEntry {
+  position: ApplicationScrollPosition;
+  canRestoreScroll?: NavigationOptions["canRestoreScroll"];
+}
+
+const getApplicationScrollStorageKey = (
+  path: string,
+  restorationKey?: string,
+) => (restorationKey ? `${path}\u0000${restorationKey}` : path);
 
 const clearLearningPlayerMotionProperties = (element: HTMLElement) => {
   element.style.removeProperty("--learning-background-reveal");
@@ -232,12 +245,13 @@ export default function AcademyLayout() {
   const navigate = useNavigate();
   const { courseSlug, quizId, assignmentId, username } = useParams();
   const applicationScrollPositionsRef = useRef(
-    new Map<string, ApplicationScrollPosition>(),
+    new Map<string, ApplicationScrollRestorationEntry>(),
   );
   const pendingScrollPositionRef = useRef<{
     destinationPath: string;
     sourcePath: string;
     position: ApplicationScrollPosition;
+    canRestoreScroll?: NavigationOptions["canRestoreScroll"];
   } | null>(null);
   const locationPathRef = useRef(
     `${location.pathname}${location.search}${location.hash}`,
@@ -346,22 +360,31 @@ export default function AcademyLayout() {
       if (pending?.sourcePath !== previousPath) {
         applicationScrollPositionsRef.current.set(
           previousPath,
-          readApplicationScrollPosition(),
+          { position: readApplicationScrollPosition() },
         );
       }
       renderedLocationPathRef.current = currentLocationPath;
     }
 
+    const storedEntry = applicationScrollPositionsRef.current.get(
+      currentLocationPath,
+    );
     const position =
       pending?.destinationPath === currentLocationPath
         ? pending.position
-        : (applicationScrollPositionsRef.current.get(currentLocationPath) ?? {
-            left: 0,
-            top: 0,
-          });
+        : (storedEntry?.position ?? { left: 0, top: 0 });
+    const canRestoreScroll =
+      pending?.destinationPath === currentLocationPath
+        ? pending.canRestoreScroll
+        : storedEntry?.canRestoreScroll;
     pendingScrollPositionRef.current = null;
-    const restorePosition = () =>
-      scrollApplicationTo({ ...position, behavior: "auto" });
+    const restorePosition = () => {
+      const shouldRestore = canRestoreScroll?.(position) ?? true;
+      scrollApplicationTo({
+        ...(shouldRestore ? position : { left: 0, top: 0 }),
+        behavior: "auto",
+      });
+    };
     restorePosition();
     const frame = window.requestAnimationFrame(restorePosition);
     return () => window.cancelAnimationFrame(frame);
@@ -404,31 +427,81 @@ export default function AcademyLayout() {
             ...currentScrollPosition,
           };
         }
-        if (
+        const sourcePath = locationPathRef.current;
+        const sourcePosition = readApplicationScrollPosition();
+        const routeChanged =
           normalizeNavigationPath(path) !==
-          normalizeNavigationPath(locationPathRef.current)
-        ) {
-          const sourcePath = locationPathRef.current;
-          const sourcePosition = readApplicationScrollPosition();
-          applicationScrollPositionsRef.current.set(sourcePath, sourcePosition);
-          pendingScrollPositionRef.current = {
-            destinationPath: path,
-            sourcePath,
-            position: options?.preserveScroll
-              ? sourcePosition
-              : (applicationScrollPositionsRef.current.get(path) ?? {
-                  left: 0,
-                  top: 0,
-                }),
-          };
-          // Update synchronously so a second shortcut pressed before React's
-          // route render still compares against the destination just requested.
-          locationPathRef.current = path;
-          void navigate(path, {
-            preventScrollReset: true,
-            replace: options?.replace,
-          });
+          normalizeNavigationPath(locationPathRef.current);
+        const sourceStorageKey = getApplicationScrollStorageKey(
+          sourcePath,
+          options?.sourceScrollRestorationKey,
+        );
+        const destinationStorageKey = getApplicationScrollStorageKey(
+          path,
+          options?.scrollRestorationKey,
+        );
+        const sourceEntry: ApplicationScrollRestorationEntry = {
+          position: sourcePosition,
+          canRestoreScroll: options?.canRestoreScroll,
+        };
+        if (options?.captureScroll !== false) {
+        applicationScrollPositionsRef.current.set(
+          sourceStorageKey,
+          sourceEntry,
+        );
+          if (sourceStorageKey !== sourcePath) {
+            applicationScrollPositionsRef.current.set(sourcePath, sourceEntry);
+          }
         }
+
+        const hasScrollTransition =
+          options?.resetScroll ||
+          options?.scrollRestorationKey !== undefined ||
+          options?.sourceScrollRestorationKey !== undefined;
+
+        if (!routeChanged) {
+          if (!hasScrollTransition) return;
+
+          const storedDestination = options?.resetScroll
+            ? undefined
+            : applicationScrollPositionsRef.current.get(destinationStorageKey);
+          const position = storedDestination?.position ?? { left: 0, top: 0 };
+          const restorePosition = () => {
+            const shouldRestore =
+              options?.resetScroll ||
+              options?.canRestoreScroll?.(position) !== false;
+            scrollApplicationTo({
+              ...(shouldRestore ? position : { left: 0, top: 0 }),
+              behavior: "auto",
+            });
+          };
+          restorePosition();
+          window.requestAnimationFrame(restorePosition);
+          return;
+        }
+
+        const storedDestination = options?.scrollRestorationKey
+          ? applicationScrollPositionsRef.current.get(destinationStorageKey)
+          : applicationScrollPositionsRef.current.get(path);
+        const position = options?.resetScroll
+          ? { left: 0, top: 0 }
+          : options?.preserveScroll
+            ? sourcePosition
+            : (storedDestination?.position ?? { left: 0, top: 0 });
+        pendingScrollPositionRef.current = {
+          destinationPath: path,
+          sourcePath,
+          position,
+          canRestoreScroll:
+            options?.canRestoreScroll ?? storedDestination?.canRestoreScroll,
+        };
+        // Update synchronously so a second shortcut pressed before React's
+        // route render still compares against the destination just requested.
+        locationPathRef.current = path;
+        void navigate(path, {
+          preventScrollReset: true,
+          replace: options?.replace,
+        });
       };
 
       void autosyncManager.flushAll().then(performNavigation);
@@ -444,7 +517,7 @@ export default function AcademyLayout() {
     const sourcePath = locationPathRef.current;
     applicationScrollPositionsRef.current.set(
       sourcePath,
-      readApplicationScrollPosition(),
+      { position: readApplicationScrollPosition() },
     );
     pendingScrollPositionRef.current = {
       destinationPath: destination.path,
