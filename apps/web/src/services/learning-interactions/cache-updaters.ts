@@ -85,12 +85,13 @@ function matchesWorkspaceFilters(
   filters: DiscussionsWorkspaceQueryFilters,
 ): boolean {
   if (filters.courseId && item.courseId !== filters.courseId) return false;
-  if (
-    filters.kind &&
-    filters.kind !== "all" &&
-    item.kind !== (filters.kind === "qna" ? "question" : filters.kind)
-  ) {
-    return false;
+  if (filters.kind && filters.kind !== "all") {
+    const isQuestionFilter =
+      filters.kind === "qna" || filters.kind === "question";
+    const matchesKind = isQuestionFilter
+      ? item.kind === "question" || item.kind === "qna"
+      : item.kind === filters.kind;
+    if (!matchesKind) return false;
   }
   if (filters.visibility && item.visibility !== filters.visibility) return false;
   if (filters.search) {

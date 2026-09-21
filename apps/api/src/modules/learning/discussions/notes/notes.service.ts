@@ -234,6 +234,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
 
       const id = crypto.randomUUID();
       const plainText = extractPlainText(input.content);
+      const visibility = input.visibility ?? "private";
 
       return withWriteTransaction(db, async (trx) => {
         await notesRepo.createNote(trx, {
@@ -247,18 +248,20 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
           content: input.content,
           plainText,
           tags: input.tags || [],
-          visibility: input.visibility ?? "private",
+          visibility,
         });
 
-        await syncMentionsAndNotify(trx, outbox, {
-          sourceType: "note",
-          sourceId: id,
-          actorUserId: input.userId,
-          content: input.content,
-          courseId: input.courseId,
-          lessonId: input.lessonId,
-          plainText,
-        });
+        if (visibility !== "private") {
+          await syncMentionsAndNotify(trx, outbox, {
+            sourceType: "note",
+            sourceId: id,
+            actorUserId: input.userId,
+            content: input.content,
+            courseId: input.courseId,
+            lessonId: input.lessonId,
+            plainText,
+          });
+        }
 
         // Link verified attachments owned by the caller
         if (input.attachmentIds && input.attachmentIds.length > 0) {
@@ -608,6 +611,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
         updates.content !== undefined
           ? extractPlainText(updates.content)
           : undefined;
+      const finalVisibility = updates.visibility ?? note.visibility;
 
       return withWriteTransaction(db, async (trx) => {
         await notesRepo.updateNote(trx, noteId, {
@@ -615,15 +619,24 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
           ...(plainText !== undefined ? { plainText } : {}),
         });
 
-        if (updates.content !== undefined) {
+        if (finalVisibility === "private") {
+          await trx
+            .deleteFrom("learning_mentions")
+            .where("source_type", "=", "note")
+            .where("source_id", "=", noteId)
+            .execute();
+        } else if (
+          updates.content !== undefined ||
+          note.visibility === "private"
+        ) {
           await syncMentionsAndNotify(trx, outbox, {
             sourceType: "note",
             sourceId: noteId,
             actorUserId: actor.userId,
-            content: updates.content,
+            content: updates.content ?? note.content,
             courseId: note.courseId,
             lessonId: note.lessonId,
-            plainText,
+            plainText: plainText ?? note.plainText,
           });
         }
 

@@ -705,6 +705,13 @@ export function createThreadsService(
           );
         }
 
+        await courseAccess.assertNotSuspended(
+          trx,
+          actor.userId,
+          row.courseId,
+          row.kind,
+        );
+
         if (updates.visibility) {
           assertVisibilityAllowed(row.kind, updates.visibility);
         }
@@ -1659,6 +1666,21 @@ export function createThreadsService(
           nextCursor,
           totalCount,
         };
+      }
+
+      if (
+        (tab === "all" ||
+          tab === "q-and-a" ||
+          tab === "comments" ||
+          tab === "following") &&
+        pageCursor?.sort &&
+        pageCursor.sort !== sort
+      ) {
+        throw httpError(
+          400,
+          "INVALID_CURSOR",
+          "The pagination cursor does not match the current sort.",
+        );
       }
 
       // Other tabs: "comments", "q-and-a", "following", "all"
