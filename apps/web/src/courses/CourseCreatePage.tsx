@@ -3,14 +3,17 @@ import {
   useEffect,
   useRef,
   useMemo,
+  useCallback,
   memo,
+  Fragment,
 } from "react";
-import { useLocation } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 import { createPortal } from "react-dom";
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
 import { LessonVideoUpload } from "./lesson-video-upload/LessonVideoUpload";
 import { QuizAuthoringPanel } from "../quizzes/QuizAuthoringPanel";
+import { CourseQuizPricingCard } from "./CourseQuizPricingCard";
 import {
   LessonResourceManager,
   toLessonResourceItem,
@@ -20,6 +23,14 @@ import {
   CourseDescriptionEditor,
   LessonDescriptionEditor,
 } from "./CourseDescriptionEditor";
+import {
+  LessonContentTypeIcon,
+  LessonStudioEditor,
+  lessonContentTypeIconSvg,
+  type LessonStudioEditorHandle,
+  type LessonEditorDraft,
+  type StudioLessonContentType,
+} from "./curriculum";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { ToastNotification } from "../ToastNotification";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
@@ -33,15 +44,14 @@ import { ChatCircleTextIcon as ChatCircleText } from "@phosphor-icons/react/Chat
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
-import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
-import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
 import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
 import { DotsSixVerticalIcon as DotsSixVertical } from "@phosphor-icons/react/DotsSixVertical";
 import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { EyeSlashIcon as EyeSlash } from "@phosphor-icons/react/EyeSlash";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
-import { ImageIcon } from "@phosphor-icons/react/Image";
+import { HeadphonesIcon as Headphones } from "@phosphor-icons/react/Headphones";
+import { ImageIcon, ImageIcon as Image } from "@phosphor-icons/react/Image";
 import { InfoIcon as Info } from "@phosphor-icons/react/Info";
 import { LightningIcon as Lightning } from "@phosphor-icons/react/Lightning";
 import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullets";
@@ -66,6 +76,7 @@ import ISO6391 from "iso-639-1";
 import { ThemedSelect } from "../ThemedSelect";
 import { SettingsToggle } from "../settings/SettingsControls";
 import type { NavigateTo } from "../routing/navigation";
+import { getCourseEditorPath } from "./courseEditorRouting";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
 import {
   getNumberShortcutIndex,
@@ -132,6 +143,107 @@ import { mediaService } from "../services/media";
 
 const EMPTY_CATEGORIES: Category[] = [];
 
+const LESSON_EDITOR_DRAFT_STORAGE_PREFIX = "veolms:lesson-editor-draft:";
+const LESSON_EDITOR_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+interface StoredLessonEditorDraft extends LessonEditorDraft {
+  description: string;
+  contentMediaId: string | null;
+  savedAt: number;
+}
+
+function getLessonEditorDraftStorageKey(
+  courseId: string | null,
+  lessonId: string,
+): string {
+  return `${LESSON_EDITOR_DRAFT_STORAGE_PREFIX}${courseId || "new-course"}:${lessonId}`;
+}
+
+function isStudioLessonContentType(
+  value: unknown,
+): value is StudioLessonContentType {
+  return (
+    value === "video" ||
+    value === "audio" ||
+    value === "image" ||
+    value === "document" ||
+    value === "quiz"
+  );
+}
+
+function readLessonEditorDraft(
+  courseId: string | null,
+  lessonId: string,
+): StoredLessonEditorDraft | null {
+  if (typeof window === "undefined") return null;
+
+  const storageKey = getLessonEditorDraftStorageKey(courseId, lessonId);
+  try {
+    const rawDraft = window.localStorage.getItem(storageKey);
+    if (!rawDraft) return null;
+
+    const parsed = JSON.parse(rawDraft) as Partial<StoredLessonEditorDraft>;
+    if (
+      typeof parsed.savedAt !== "number" ||
+      Date.now() - parsed.savedAt > LESSON_EDITOR_DRAFT_TTL_MS ||
+      typeof parsed.title !== "string" ||
+      !isStudioLessonContentType(parsed.contentType)
+    ) {
+      window.localStorage.removeItem(storageKey);
+      return null;
+    }
+
+    return {
+      title: parsed.title,
+      description:
+        typeof parsed.description === "string" ? parsed.description : "",
+      contentType: parsed.contentType,
+      contentMediaId:
+        typeof parsed.contentMediaId === "string"
+          ? parsed.contentMediaId
+          : null,
+      isPublished: parsed.isPublished !== false,
+      isPreview: parsed.isPreview === true,
+      savedAt: parsed.savedAt,
+    };
+  } catch {
+    window.localStorage.removeItem(storageKey);
+    return null;
+  }
+}
+
+function writeLessonEditorDraft(
+  courseId: string | null,
+  lessonId: string,
+  draft: Omit<StoredLessonEditorDraft, "savedAt">,
+): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(
+      getLessonEditorDraftStorageKey(courseId, lessonId),
+      JSON.stringify({ ...draft, savedAt: Date.now() }),
+    );
+  } catch {
+    // Local draft persistence is best-effort and must not block editing.
+  }
+}
+
+function clearLessonEditorDraft(
+  courseId: string | null,
+  lessonId: string,
+): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.removeItem(
+      getLessonEditorDraftStorageKey(courseId, lessonId),
+    );
+  } catch {
+    // Ignore storage cleanup failures; the saved lesson is already persisted.
+  }
+}
+
 function getLessonDescriptionPreview(description: string) {
   return description
     .replace(/^[#\s>*-]+/gm, "")
@@ -180,7 +292,7 @@ function LessonDescriptionPreview({
 interface LessonSnapshot {
   title: string;
   description: string;
-  contentType: "video" | "document" | "quiz";
+  contentType: "video" | "document" | "quiz" | "audio" | "image";
   contentMediaId?: string | null;
   isPublished?: boolean;
   isPreview?: boolean;
@@ -191,9 +303,9 @@ interface CurriculumLessonItem {
   title: string;
   isEditingTitle?: boolean;
   contentTypeSelected?: boolean;
-  pendingContentType?: "video" | "document" | "quiz";
+  pendingContentType?: "video" | "document" | "quiz" | "audio" | "image";
   description: string;
-  contentType: "video" | "document" | "quiz";
+  contentType: "video" | "document" | "quiz" | "audio" | "image";
   contentMediaId?: string | null;
   durationSeconds?: number;
   isExpanded: boolean;
@@ -213,6 +325,26 @@ interface CurriculumSectionItem {
   lessons: CurriculumLessonItem[];
 }
 
+interface DraggedLessonState {
+  sectionId: string;
+  lessonId: string;
+}
+
+interface LessonDropTarget {
+  sectionId: string;
+  lessonId: string;
+  position: "before" | "after";
+}
+
+function LessonDropIndicator() {
+  return (
+    <div
+      aria-hidden="true"
+      className="relative z-10 -my-1 h-0.75 w-full rounded-full bg-(--accent) shadow-[0_0_8px_var(--accent-shadow)]"
+    />
+  );
+}
+
 interface MemoizedLessonCardProps {
   lesson: CurriculumLessonItem;
   sectionId: string;
@@ -223,8 +355,10 @@ interface MemoizedLessonCardProps {
   isDeleting: boolean;
   isSectionReordering: boolean;
   isReorderPending: boolean;
-  isFocusMode: boolean;
   isResourceBusy: boolean;
+  isLessonEditorMounted: boolean;
+  isUrlFocused: boolean;
+  onLessonEditorOpen: (lessonId: string) => void;
   render: (state: {
     isExpanded: boolean;
     setExpanded: React.Dispatch<React.SetStateAction<boolean>>;
@@ -232,18 +366,42 @@ interface MemoizedLessonCardProps {
     setEditorOpen: React.Dispatch<React.SetStateAction<boolean>>;
     isQuizOpen: boolean;
     setQuizOpen: React.Dispatch<React.SetStateAction<boolean>>;
+    lessonEditorRef: React.RefObject<LessonStudioEditorHandle | null>;
+    isLessonEditorMounted: boolean;
+    onLessonEditorOpen: (lessonId: string) => void;
   }) => React.ReactElement;
 }
 
 const MemoizedLessonCard = memo(
-  function MemoizedLessonCard({ lesson, render }: MemoizedLessonCardProps) {
+  function MemoizedLessonCard({
+    lesson,
+    isLessonEditorMounted,
+    isUrlFocused,
+    onLessonEditorOpen,
+    render,
+  }: MemoizedLessonCardProps) {
     const [isExpanded, setExpanded] = useState(lesson.isExpanded);
-    const [isEditorOpen, setEditorOpen] = useState(false);
+    const [isEditorOpen, setEditorOpen] = useState(Boolean(lesson.isExpanded));
     const [isQuizOpen, setQuizOpen] = useState(false);
+    const lessonEditorRef = useRef<LessonStudioEditorHandle>(null);
+    const wasUrlFocusedRef = useRef(isUrlFocused);
 
     useEffect(() => {
       setExpanded(lesson.isExpanded);
     }, [lesson.isExpanded]);
+
+    useEffect(() => {
+      if (isUrlFocused) {
+        setExpanded(true);
+        setEditorOpen(true);
+        onLessonEditorOpen(lesson.id);
+      } else if (wasUrlFocusedRef.current) {
+        setExpanded(false);
+        setEditorOpen(false);
+        setQuizOpen(false);
+      }
+      wasUrlFocusedRef.current = isUrlFocused;
+    }, [isUrlFocused, lesson.id, onLessonEditorOpen]);
 
     return render({
       isExpanded,
@@ -252,6 +410,9 @@ const MemoizedLessonCard = memo(
       setEditorOpen,
       isQuizOpen,
       setQuizOpen,
+      lessonEditorRef,
+      isLessonEditorMounted,
+      onLessonEditorOpen,
     });
   },
   (previous, next) =>
@@ -264,8 +425,10 @@ const MemoizedLessonCard = memo(
     previous.isDeleting === next.isDeleting &&
     previous.isSectionReordering === next.isSectionReordering &&
     previous.isReorderPending === next.isReorderPending &&
-    previous.isFocusMode === next.isFocusMode &&
-    previous.isResourceBusy === next.isResourceBusy,
+    previous.isResourceBusy === next.isResourceBusy &&
+    previous.isLessonEditorMounted === next.isLessonEditorMounted &&
+    previous.isUrlFocused === next.isUrlFocused &&
+    previous.onLessonEditorOpen === next.onLessonEditorOpen,
 );
 
 export type CourseWizardStepId =
@@ -295,6 +458,18 @@ export const WIZARD_STEPS: readonly WizardStepDefinition[] = [
 export const WIZARD_STEP_IDS: readonly CourseWizardStepId[] = WIZARD_STEPS.map(
   ({ id }) => id,
 );
+
+const COURSE_WIZARD_ARROW_KEY_OWNER_SELECTOR = [
+  '[role="dialog"]',
+  '[role="grid"]',
+  '[role="listbox"]',
+  '[role="menu"]',
+  '[role="radio"]',
+  '[role="slider"]',
+  '[role="spinbutton"]',
+  '[role="tab"]',
+  '[role="tree"]',
+].join(",");
 
 function getAdjacentWizardSteps(
   activeStep: CourseWizardStepId,
@@ -1093,7 +1268,7 @@ export const checkIsCurriculumDirty = (
       id: string;
       title: string;
       description?: string;
-      contentType: "video" | "document" | "quiz";
+      contentType: "video" | "document" | "quiz" | "audio" | "image";
       contentMediaId?: string | null;
       durationSeconds?: number;
       isPublished?: boolean;
@@ -1102,7 +1277,7 @@ export const checkIsCurriculumDirty = (
       initialState?: {
         title: string;
         description: string;
-        contentType: "video" | "document" | "quiz";
+        contentType: "video" | "document" | "quiz" | "audio" | "image";
         contentMediaId?: string | null;
         isPublished?: boolean;
         isPreview?: boolean;
@@ -1355,9 +1530,8 @@ const sectionGhostHtml = (
 const lessonGhostHtml = (
   title: string,
   index: number,
-  contentType: "video" | "document" | "quiz",
+  contentType: "video" | "document" | "quiz" | "audio" | "image",
 ) => {
-  const isVideo = contentType === "video";
   return `
   <div style="
     display: flex;
@@ -1378,28 +1552,20 @@ const lessonGhostHtml = (
           <path d="M100,60a16,16,0,1,1-16-16A16,16,0,0,1,100,60Zm72-16a16,16,0,1,0,16,16A16,16,0,0,0,172,44ZM84,112a16,16,0,1,0,16,16A16,16,0,0,0,84,112Zm88,0a16,16,0,1,0,16,16A16,16,0,0,0,172,112ZM84,180a16,16,0,1,0,16,16A16,16,0,0,0,84,180Zm88,0a16,16,0,1,0,16,16A16,16,0,0,0,172,180Z"/>
         </svg>
       </span>
-      <span style="display: inline-flex; min-width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 4px; background: rgba(128,128,128,0.18); color: var(--muted, #888); font-size: 0.72rem; font-weight: 600;">
-        ${index + 1}
+      <span style="display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; color: var(--accent, #6366f1);">
+        ${lessonContentTypeIconSvg(contentType)}
       </span>
       <span style="font-weight: 600; font-size: 0.88rem; color: var(--text, #fff);">
-        ${escapeHtml(title)}
+        ${index + 1}. ${escapeHtml(title)}
       </span>
     </div>
-    <div style="display: flex; align-items: center; gap: 8px;">
-      <span style="
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        font-size: 0.74rem;
-        font-weight: 700;
-        padding: 2px 8px;
-        border-radius: 6px;
-        color: var(--accent-ink, var(--accent, #6366f1));
-        background: color-mix(in srgb, var(--accent, #6366f1) 12%, transparent);
-        border: 1px solid color-mix(in srgb, var(--accent, #6366f1) 28%, transparent);
-      ">
-        ${isVideo ? "Video" : "Document"}
-      </span>
+    <div style="display: flex; align-items: center; gap: 8px; color: var(--muted, #888); opacity: 0.8;">
+      <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor">
+        <path d="M216,48H176V40a24.1,24.1,0,0,0-24-24H104A24.1,24.1,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM104,104v48a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm64,0v48a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z"/>
+      </svg>
+      <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor">
+        <path d="M128,184a8,8,0,0,1-5.66-2.34l-80-80a8,8,0,0,1,11.32-11.32L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32l-80,80A8,8,0,0,1,128,184Z"/>
+      </svg>
     </div>
   </div>
 `;
@@ -1477,7 +1643,7 @@ export interface BuildLocalPreviewParams {
       id: string;
       title: string;
       description?: string | null;
-      contentType: "video" | "document" | "quiz";
+      contentType: "video" | "document" | "quiz" | "audio" | "image";
       contentMediaId?: string | null;
       durationSeconds?: number;
       isPreview?: boolean;
@@ -1601,7 +1767,11 @@ export function buildLocalPreviewData({
         sectionId: sec.id,
         title: les.title,
         description: les.description || null,
-        contentType: les.contentType,
+        contentType: (les.contentType === "audio"
+          ? "video"
+          : les.contentType === "image"
+            ? "document"
+            : les.contentType) as "video" | "document" | "quiz",
         contentMediaId: les.contentMediaId ?? null,
         durationSeconds: les.durationSeconds,
         position: lesIdx,
@@ -1691,85 +1861,19 @@ export function parseWizardTab(
 
 export function CourseWizardSkeleton({
   activeStep = "basics",
-  isEditing = true,
-  onBack,
 }: {
   activeStep?: CourseWizardStepId;
-  isEditing?: boolean;
-  onBack?: () => void;
 }) {
   return (
     <div
-      className="relative flex w-full flex-col p-0 text-[--text] box-border animate-pulse"
+      id="course-wizard-tab-panel"
+      className="swipeable-tab-panel course-wizard-tab-content relative min-h-0 flex-1 flex flex-col pt-4 pb-6 max-[640px]:pt-3 animate-pulse"
+      role="tabpanel"
+      aria-labelledby={`course-wizard-tab-${activeStep}`}
       data-testid="course-wizard-skeleton"
+      data-wizard-step={activeStep}
     >
-      {/* Wizard Header Skeleton */}
-      <header className="relative shrink-0 mb-2 max-[768px]:mb-1.5 max-[768px]:w-full">
-        <div className="flex items-start justify-between gap-4 mb-1 max-[768px]:flex-col max-[768px]:gap-2 max-[768px]:mb-1.5">
-          <div className="flex items-start gap-3 min-w-0">
-            <button
-              type="button"
-              className="flex w-9 h-9 shrink-0 items-center justify-center border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg text-(--text-secondary) bg-[color-mix(in_srgb,var(--text)_4%,transparent)] cursor-pointer"
-              onClick={onBack}
-              aria-label="Go back to courses"
-            >
-              <ArrowLeft size={17} weight="bold" />
-            </button>
-            <div className="pt-0.5 min-w-0">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="m-0 text-(--text) text-[clamp(1.2rem,1.8vw,1.55rem)] font-bold tracking-[-0.015em] leading-[1.2]">
-                  {isEditing ? "Edit Course" : "Create New Course"}
-                </h1>
-                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[0.72rem] font-medium border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]">
-                  Draft
-                </span>
-              </div>
-              <p className="m-0 mt-0.5 text-(--muted) text-[0.82rem] max-w-155 leading-[1.35]">
-                {activeStep === "curriculum"
-                  ? "Manage and organize your course sections, lessons, and resources."
-                  : activeStep === "access-rules"
-                    ? "Control who can access this course and how long their access lasts."
-                    : activeStep === "pricing"
-                      ? "Set how learners will purchase this course."
-                      : activeStep === "extras"
-                        ? "Add extra information and settings to enhance your course."
-                        : activeStep === "publish"
-                          ? "Review your course checklist and publish when ready."
-                          : "Update the essential details of your course."}
-              </p>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Wizard Steps Navigation Bar */}
-      <nav
-        className="course-wizard-steps-nav settings-tabs page-tabs border-b border-[color-mix(in_srgb,var(--text)_12%,transparent)]"
-        aria-label={
-          isEditing ? "Course editing steps" : "Course creation steps"
-        }
-      >
-        {WIZARD_STEPS.map((step) => {
-          const Icon = step.Icon;
-          const isActive = activeStep === step.id;
-          return (
-            <button
-              key={step.id}
-              type="button"
-              className={`!border-b-transparent shrink-0 whitespace-nowrap ${
-                isActive ? "is-active font-bold text-(--text)" : "opacity-60"
-              }`}
-              disabled
-            >
-              <Icon size={18} />
-              <span>{step.label}</span>
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* Main step content skeleton matching activeStep */}
-      <div className="flex-1 w-full min-w-0">
+      <div className="swipeable-tab-panel__native-slide w-full min-w-0">
         {activeStep === "basics" ? (
           <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
             {/* Left Column: Basic Information Form */}
@@ -2636,6 +2740,11 @@ export function CourseCreatePage({
   bottomNavHidden = false,
 }: CourseCreatePageProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { courseId: routeCourseId, editTab: routeEditTab } = useParams<{
+    courseId?: string;
+    editTab?: string;
+  }>();
   const searchParams = useMemo(
     () => new URLSearchParams(location?.search ?? ""),
     [location?.search],
@@ -2643,16 +2752,21 @@ export function CourseCreatePage({
   const activeEditId =
     propCourseId ||
     propEditCourseId ||
+    routeCourseId ||
     searchParams.get("edit") ||
     searchParams.get("courseId") ||
     null;
 
-  const initialStep = activeEditId
-    ? parseWizardTab(searchParams.get("tab")) ||
-      parseWizardTab(searchParams.get("step")) ||
-      "basics"
-    : "basics";
+  const requestedSectionId = searchParams.get("sectionId");
+  const requestedLessonId = searchParams.get("lessonId");
+  const routeRequestedStep =
+    parseWizardTab(routeEditTab) ||
+    parseWizardTab(searchParams.get("tab")) ||
+    parseWizardTab(searchParams.get("step"));
+  const initialStep = routeRequestedStep || "basics";
+  const editorRouteIdentity = `${activeEditId || "create"}:${routeRequestedStep || "basics"}`;
   const [activeStep, setActiveStep] = useState<CourseWizardStepId>(initialStep);
+  const pendingWizardNavigationRef = useRef<CourseWizardStepId | null>(null);
   const [slideDirection, setSlideDirection] = useState<"right" | "left">(
     "right",
   );
@@ -2664,26 +2778,36 @@ export function CourseCreatePage({
 
   const tabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
   const stepsNavRef = useRef<HTMLElement | null>(null);
-  const [isCurriculumFocusMode, setIsCurriculumFocusMode] = useState(false);
+  const [mountedLessonEditorIds, setMountedLessonEditorIds] = useState<string[]>(
+    [],
+  );
+  const [editingLessonTarget, setEditingLessonTarget] = useState<{
+    sectionId: string;
+    lessonId: string;
+  } | null>(null);
+  const previousEditorRouteIdentityRef = useRef(editorRouteIdentity);
 
-  // Automatically reset focus mode if navigating away from curriculum step
+  // Automatically reset lesson editor if navigating away from curriculum step
   useEffect(() => {
     if (activeStep !== "curriculum") {
-      setIsCurriculumFocusMode(false);
+      setEditingLessonTarget(null);
     }
   }, [activeStep]);
 
-  // Allow pressing Escape key to exit focus mode
   useEffect(() => {
-    if (!isCurriculumFocusMode) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setIsCurriculumFocusMode(false);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isCurriculumFocusMode]);
+    setMountedLessonEditorIds([]);
+  }, [activeEditId]);
+
+  const rememberLessonEditor = useCallback((lessonId: string) => {
+    setMountedLessonEditorIds((previous) => {
+      const next = [
+        ...previous.filter((mountedLessonId) => mountedLessonId !== lessonId),
+        lessonId,
+      ];
+      return next.slice(-3);
+    });
+  }, []);
+
   const navigateToStepRef = useRef<
     (destination: CourseWizardStepId) => Promise<void>
   >((async () => {}) as any);
@@ -2806,15 +2930,30 @@ export function CourseCreatePage({
 
   useEffect(() => {
     const navigateWizardTab = (event: KeyboardEvent) => {
-      if (
-        event.defaultPrevented ||
-        !event.altKey ||
-        isEditingShortcutTarget(event.target)
-      )
+      if (event.defaultPrevented || isEditingShortcutTarget(event.target))
         return;
-      const index = getNumberShortcutIndex(event);
-      if (index === null) return;
-      const destination = WIZARD_STEPS[index];
+
+      let destination: WizardStepDefinition | undefined;
+      if (event.altKey) {
+        const index = getNumberShortcutIndex(event);
+        destination = index === null ? undefined : WIZARD_STEPS[index];
+      } else if (
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        (event.key === "ArrowLeft" || event.key === "ArrowRight") &&
+        !(
+          event.target instanceof Element &&
+          event.target.closest(COURSE_WIZARD_ARROW_KEY_OWNER_SELECTOR)
+        )
+      ) {
+        const offset = event.key === "ArrowRight" ? 1 : -1;
+        const currentIndex = WIZARD_STEP_IDS.indexOf(activeStep);
+        const nextIndex =
+          (currentIndex + offset + WIZARD_STEPS.length) % WIZARD_STEPS.length;
+        destination = WIZARD_STEPS[nextIndex];
+      }
+
       if (!destination) return;
       event.preventDefault();
       void navigateToStepRef.current(destination.id);
@@ -2822,26 +2961,56 @@ export function CourseCreatePage({
 
     document.addEventListener("keydown", navigateWizardTab);
     return () => document.removeEventListener("keydown", navigateWizardTab);
-  }, []);
-
-  // Synchronize URL search params with active wizard tab
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const currentUrl = new URL(window.location.href);
-    const currentTabInUrl = currentUrl.searchParams.get("tab");
-    if (currentTabInUrl !== activeStep) {
-      if (
-        activeStep === "basics" &&
-        !currentTabInUrl &&
-        !currentUrl.searchParams.has("step")
-      ) {
-        return;
-      }
-      currentUrl.searchParams.set("tab", activeStep);
-      currentUrl.searchParams.delete("step");
-      window.history.replaceState(null, "", currentUrl.toString());
-    }
   }, [activeStep]);
+
+  // Keep the URL as the canonical source for the active editor step. Legacy
+  // query-string URLs are replaced with the same route structure used by new
+  // create and edit links.
+  useEffect(() => {
+    const canonicalPath = getCourseEditorPath({
+      mode: activeEditId ? "edit" : "create",
+      courseId: activeEditId,
+      step: activeStep,
+      sectionId: activeStep === "curriculum" ? requestedSectionId : null,
+      lessonId: activeStep === "curriculum" ? requestedLessonId : null,
+    });
+    const currentPath = `${location.pathname}${location.search}`;
+    if (currentPath === canonicalPath) return;
+
+    // Let the route-to-state effect below settle when the user navigates to a
+    // different course or enters the editor through a different tab URL.
+    if (previousEditorRouteIdentityRef.current !== editorRouteIdentity) {
+      return;
+    }
+
+    const hasLegacyQueryParams =
+      searchParams.has("edit") ||
+      searchParams.has("courseId") ||
+      searchParams.has("tab") ||
+      searchParams.has("step");
+    const shouldReplace =
+      location.pathname === "/courses/create" || hasLegacyQueryParams;
+    void navigate(canonicalPath, { replace: shouldReplace });
+  }, [
+    activeEditId,
+    activeStep,
+    editorRouteIdentity,
+    location.pathname,
+    location.search,
+    navigate,
+    requestedLessonId,
+    requestedSectionId,
+    searchParams,
+  ]);
+
+  useEffect(() => {
+    if (previousEditorRouteIdentityRef.current === editorRouteIdentity) {
+      return;
+    }
+    previousEditorRouteIdentityRef.current = editorRouteIdentity;
+    setActiveStep(initialStep);
+    setEditingLessonTarget(null);
+  }, [editorRouteIdentity, initialStep]);
 
   // Basics server-confirmed baseline and local draft states
   const [serverBasics, setServerBasics] =
@@ -2903,6 +3072,13 @@ export function CourseCreatePage({
   const courseVersionRef = useRef<number>(courseVersion);
   courseVersionRef.current = courseVersion;
   const currentCourseIdRef = useRef<string | null>(currentCourseId);
+
+  useEffect(() => {
+    setCurrentCourseId(activeEditId);
+    currentCourseIdRef.current = activeEditId;
+    setCourseVersion(1);
+    courseVersionRef.current = 1;
+  }, [activeEditId]);
 
   const [thumbnail, setThumbnail] = useState<string | null>(null);
   const [thumbnailMediaId, setThumbnailMediaId] = useState<
@@ -3062,7 +3238,7 @@ export function CourseCreatePage({
       courseVersionRef.current = updated.version;
       thumbnailMediaIdRef.current = presigned.mediaAssetId;
       setThumbnailMediaId(presigned.mediaAssetId);
-      setThumbnail(processedThumbnailUrl);
+      setThumbnail(updated.thumbnailUrl ?? processedThumbnailUrl);
       thumbnailDirtyRef.current = false;
       setThumbnailUploadStatus("idle");
       setThumbnailUploadError(null);
@@ -3417,8 +3593,17 @@ export function CourseCreatePage({
   // Keep state synced if URL params change (e.g. popstate / back-forward navigation)
   useEffect(() => {
     const tabFromUrl =
+      parseWizardTab(routeEditTab) ||
       parseWizardTab(searchParams.get("tab")) ||
       parseWizardTab(searchParams.get("step"));
+    const pendingWizardNavigation = pendingWizardNavigationRef.current;
+    if (pendingWizardNavigation) {
+      if (tabFromUrl === pendingWizardNavigation) {
+        pendingWizardNavigationRef.current = null;
+      } else {
+        return;
+      }
+    }
     if (
       tabFromUrl &&
       tabFromUrl !== activeStep &&
@@ -3426,7 +3611,13 @@ export function CourseCreatePage({
     ) {
       setActiveStep(tabFromUrl);
     }
-  }, [searchParams, isDownstreamUnlocked, activeEditId]);
+  }, [
+    searchParams,
+    routeEditTab,
+    isDownstreamUnlocked,
+    activeEditId,
+    activeStep,
+  ]);
 
   const {
     data: serverCategories = EMPTY_CATEGORIES,
@@ -3706,6 +3897,21 @@ export function CourseCreatePage({
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
   const lessonTitleDraftsRef = useRef<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    if (activeStep !== "curriculum" || !requestedSectionId) return;
+    setSections((previous) => {
+      let changed = false;
+      const next = previous.map((section) => {
+        if (section.id !== requestedSectionId || section.isExpanded) {
+          return section;
+        }
+        changed = true;
+        return { ...section, isExpanded: true };
+      });
+      return changed ? next : previous;
+    });
+  }, [activeStep, requestedSectionId, sections.length]);
 
   const isCollapsingSectionRef = useRef(false);
   const inFlightLessonSavesRef = useRef<Map<string, Promise<boolean>>>(
@@ -4667,7 +4873,11 @@ export function CourseCreatePage({
         }
         thumbnailMediaIdRef.current = confirmedThumbnailMediaId;
         setThumbnailMediaId(confirmedThumbnailMediaId);
-        setThumbnail(getCourseThumbnailCdnUrl(confirmedThumbnailMediaId) ?? null);
+        setThumbnail(
+          c.thumbnailUrl ??
+            getCourseThumbnailCdnUrl(confirmedThumbnailMediaId) ??
+            null,
+        );
       }
 
       const isBasicsSavingActive =
@@ -4876,23 +5086,31 @@ export function CourseCreatePage({
                 const existingLesson = existing?.lessons.find(
                   (l) => l.id === les.id,
                 );
+                const storedLessonDraft = readLessonEditorDraft(
+                  currentCourseIdRef.current,
+                  les.id,
+                );
                 const isDirty = existingLesson
                   ? isLessonDirty(existingLesson)
                   : false;
                 const title =
-                  isDirty && existingLesson ? existingLesson.title : les.title;
+                  isDirty && existingLesson
+                    ? existingLesson.title
+                    : (storedLessonDraft?.title ?? les.title);
                 const description =
                   isDirty && existingLesson
                     ? existingLesson.description || ""
-                    : les.description || "";
+                    : (storedLessonDraft?.description ?? (les.description || ""));
                 const contentType =
                   isDirty && existingLesson
                     ? existingLesson.contentType
-                    : les.contentType;
+                    : (storedLessonDraft?.contentType ?? les.contentType);
                 const contentMediaId =
                   isDirty && existingLesson
                     ? (existingLesson.contentMediaId ?? null)
-                    : (les.contentMediaId ?? null);
+                    : (storedLessonDraft?.contentMediaId ??
+                      les.contentMediaId ??
+                      null);
                 const durationSeconds =
                   isDirty && existingLesson
                     ? existingLesson.durationSeconds
@@ -4902,17 +5120,17 @@ export function CourseCreatePage({
                     ? existingLesson.isPublished !== undefined
                       ? existingLesson.isPublished
                       : true
-                    : les.isPublished !== undefined
-                      ? les.isPublished
-                      : true;
+                    : (storedLessonDraft?.isPublished ??
+                      (les.isPublished !== undefined
+                        ? les.isPublished
+                        : true));
                 const isPrev =
                   isDirty && existingLesson
                     ? existingLesson.isPreview !== undefined
                       ? existingLesson.isPreview
                       : false
-                    : les.isPreview !== undefined
-                      ? les.isPreview
-                      : false;
+                    : (storedLessonDraft?.isPreview ??
+                      (les.isPreview !== undefined ? les.isPreview : false));
                 const desc = les.description || "";
                 return {
                   id: les.id,
@@ -4934,8 +5152,9 @@ export function CourseCreatePage({
                     description: desc,
                     contentType: les.contentType,
                     contentMediaId: les.contentMediaId ?? null,
-                    isPublished: isPub,
-                    isPreview: isPrev,
+                    isPublished:
+                      les.isPublished !== undefined ? les.isPublished : true,
+                    isPreview: les.isPreview !== undefined ? les.isPreview : false,
                   },
                   resources: (les.resources || []).map((res) =>
                     toLessonResourceItem(res),
@@ -6044,10 +6263,12 @@ export function CourseCreatePage({
     string | null
   >(null);
 
-  const [draggedLessonState, setDraggedLessonState] = useState<{
-    sectionId: string;
-    lessonIndex: number;
-  } | null>(null);
+  const [draggedLessonState, setDraggedLessonState] =
+    useState<DraggedLessonState | null>(null);
+  const draggedLessonStateRef = useRef<DraggedLessonState | null>(null);
+  const [lessonDropTarget, setLessonDropTarget] =
+    useState<LessonDropTarget | null>(null);
+  const lessonDropTargetRef = useRef<LessonDropTarget | null>(null);
   const [dragEnabledLessonId, setDragEnabledLessonId] = useState<string | null>(
     null,
   );
@@ -6266,6 +6487,7 @@ export function CourseCreatePage({
   };
 
   const handleSectionDragOver = (e: React.DragEvent, index: number) => {
+    if (draggedLessonStateRef.current) return;
     e.preventDefault();
     if (draggedSectionIndex === null || draggedSectionIndex === index) return;
     setSections((prev) => {
@@ -6352,7 +6574,7 @@ export function CourseCreatePage({
       title: newLessonTitle,
       description: "",
       contentType: "video" as const,
-      contentTypeSelected: false,
+      contentTypeSelected: true,
       isExpanded: true,
       isPublished: true,
       isPreview: false,
@@ -6588,6 +6810,35 @@ export function CourseCreatePage({
     setSections(nextSections);
   };
 
+  const handleCancelLessonDraft = (
+    sectionId: string,
+    lessonId: string,
+    draft: LessonEditorDraft,
+  ) => {
+    const currentSections = sectionsRef.current || sections;
+    const currentLesson = currentSections
+      .find((section) => section.id === sectionId)
+      ?.lessons.find((lesson) => lesson.id === lessonId);
+    if (!currentLesson) return;
+
+    writeLessonEditorDraft(currentCourseId, lessonId, {
+      title: draft.title,
+      description: currentLesson.description || "",
+      contentType: draft.contentType,
+      contentMediaId: currentLesson.contentMediaId ?? null,
+      isPublished: draft.isPublished,
+      isPreview: draft.isPreview,
+    });
+
+    handleUpdateLesson(sectionId, lessonId, {
+      title: draft.title,
+      contentType: draft.contentType,
+      contentMediaId: currentLesson.contentMediaId ?? null,
+      isPublished: draft.isPublished,
+      isPreview: draft.isPreview,
+    });
+  };
+
   interface PersistLessonOptions {
     collapseOnSuccess?: boolean;
     showCleanToast?: boolean;
@@ -6615,6 +6866,7 @@ export function CourseCreatePage({
 
       // 2. Check whether it is dirty
       if (!isLessonDirty(les)) {
+        clearLessonEditorDraft(currentCourseId, lessonId);
         return true;
       }
 
@@ -6633,7 +6885,11 @@ export function CourseCreatePage({
       const persistedSnapshot = {
         title: trimmedTitle,
         description: les.description || "",
-        contentType: les.contentType,
+        contentType: (les.contentType === "audio"
+          ? "video"
+          : les.contentType === "image"
+            ? "document"
+            : les.contentType) as "video" | "document" | "quiz",
         contentMediaId: les.contentMediaId ?? null,
         durationSeconds: les.durationSeconds,
         isPublished: isPublishedVal,
@@ -6680,6 +6936,7 @@ export function CourseCreatePage({
           });
 
           markCurriculumItemSaved(lessonId);
+          clearLessonEditorDraft(targetCourseId, lessonId);
           return true;
         } catch (err: unknown) {
           const errorMsg =
@@ -6711,7 +6968,8 @@ export function CourseCreatePage({
           });
           sectionsRef.current = next;
           return next;
-        });
+          });
+        clearLessonEditorDraft(targetCourseId, lessonId);
         return true;
       }
     })();
@@ -6868,38 +7126,13 @@ export function CourseCreatePage({
     return persisted;
   };
 
-  const handleLessonMediaAttached = async (
+  const handleLessonMediaAttached = (
     sectionId: string,
     lessonId: string,
     mediaAssetId: string,
-  ): Promise<boolean> => {
-    const currentSections = sectionsRef.current || sections;
-    const currentLesson = currentSections
-      .find((section) => section.id === sectionId)
-      ?.lessons.find((lesson) => lesson.id === lessonId);
-    const previousMediaAssetId = currentLesson?.contentMediaId ?? null;
-
+  ): boolean => {
     handleUpdateLesson(sectionId, lessonId, { contentMediaId: mediaAssetId });
-    if (!currentLesson) return false;
-    // Pending lessons are persisted together with their lesson-create request.
-    // The local binding is valid for now and must not show a false attachment
-    // error while the optimistic lesson is waiting for that request.
-    if (currentLesson.isPendingCreation) return true;
-
-    const persisted = await persistLesson(sectionId, lessonId, {
-      collapseOnSuccess: false,
-    });
-
-    if (!persisted) {
-      // The replacement is already transcoded, but the lesson binding did not
-      // persist. Restore the last known lesson asset so a save failure can
-      // never leave the editor pointing at an uncommitted replacement.
-      handleUpdateLesson(sectionId, lessonId, {
-        contentMediaId: previousMediaAssetId,
-      });
-    }
-
-    return persisted;
+    return true;
   };
 
   const handleLessonProcessingComplete = async (): Promise<void> => {
@@ -6963,6 +7196,21 @@ export function CourseCreatePage({
     return true;
   };
 
+  const navigateToCurriculumFocus = (
+    sectionId?: string | null,
+    lessonId?: string | null,
+  ) => {
+    void navigate(
+      getCourseEditorPath({
+        mode: isEditing ? "edit" : "create",
+        courseId: activeEditId,
+        step: "curriculum",
+        sectionId,
+        lessonId,
+      }),
+    );
+  };
+
   const handleToggleSectionExpand = async (sectionId: string) => {
     const currentSections = sectionsRef.current || sections;
     const sec = currentSections.find((s) => s.id === sectionId);
@@ -6977,6 +7225,7 @@ export function CourseCreatePage({
         sectionsRef.current = next;
         return next;
       });
+      navigateToCurriculumFocus(sectionId);
       return;
     }
 
@@ -6995,6 +7244,7 @@ export function CourseCreatePage({
         sectionsRef.current = next;
         return next;
       });
+      navigateToCurriculumFocus();
       return;
     }
 
@@ -7031,6 +7281,7 @@ export function CourseCreatePage({
         sectionsRef.current = next;
         return next;
       });
+      navigateToCurriculumFocus();
     }
   };
 
@@ -7128,69 +7379,106 @@ export function CourseCreatePage({
       return;
     }
     const currentSec = sectionsRef.current.find((s) => s.id === sectionId);
+    const nextDraggedLessonState = { sectionId, lessonId: lesson.id };
     dragInitialLessonStateRef.current = {
       sectionId,
       lessonIds: currentSec ? currentSec.lessons.map((l) => l.id) : [],
       previousLessons: currentSec ? structuredClone(currentSec.lessons) : [],
     };
-    setDraggedLessonState({ sectionId, lessonIndex });
+    draggedLessonStateRef.current = nextDraggedLessonState;
+    setDraggedLessonState(nextDraggedLessonState);
+    lessonDropTargetRef.current = null;
+    setLessonDropTarget(null);
     setCustomDragImage(
       e,
       e.currentTarget as HTMLElement,
-      lessonGhostHtml(lesson.title, lessonIndex, lesson.contentType),
+      lessonGhostHtml(
+        lesson.title,
+        lessonIndex,
+        lesson.pendingContentType || lesson.contentType,
+      ),
     );
+    e.stopPropagation();
   };
 
   const handleLessonDragOver = (
     e: React.DragEvent,
     targetSectionId: string,
-    targetLessonIndex: number,
+    targetLessonId: string,
   ) => {
+    const draggedLesson = draggedLessonStateRef.current;
+    if (!draggedLesson || targetSectionId !== draggedLesson.sectionId) return;
     e.preventDefault();
-    if (!draggedLessonState) return;
-    if (
-      draggedLessonState.sectionId === targetSectionId &&
-      draggedLessonState.lessonIndex === targetLessonIndex
-    ) {
+    e.stopPropagation();
+    if (targetLessonId === draggedLesson.lessonId) {
+      lessonDropTargetRef.current = null;
+      setLessonDropTarget(null);
       return;
     }
 
-    setSections((prev) => {
-      const copy = structuredClone(prev);
-      const sourceSec = copy.find((s) => s.id === draggedLessonState.sectionId);
-      const targetSec = copy.find((s) => s.id === targetSectionId);
-      if (!sourceSec || !targetSec) return prev;
-
-      const [movedLesson] = sourceSec.lessons.splice(
-        draggedLessonState.lessonIndex,
-        1,
-      );
-      if (movedLesson) {
-        targetSec.lessons.splice(targetLessonIndex, 0, movedLesson);
-      }
-      return copy;
-    });
-
-    setDraggedLessonState({
+    const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const position =
+      e.clientY < targetRect.top + targetRect.height / 2 ? "before" : "after";
+    const nextDropTarget = {
       sectionId: targetSectionId,
-      lessonIndex: targetLessonIndex,
-    });
+      lessonId: targetLessonId,
+      position,
+    } satisfies LessonDropTarget;
+    lessonDropTargetRef.current = nextDropTarget;
+    setLessonDropTarget(nextDropTarget);
   };
 
   const handleLessonDragEnd = async () => {
     const initial = dragInitialLessonStateRef.current;
+    const draggedLesson = draggedLessonStateRef.current;
+    const dropTarget = lessonDropTargetRef.current;
     setDraggedLessonState(null);
     setDragEnabledLessonId(null);
+    draggedLessonStateRef.current = null;
+    lessonDropTargetRef.current = null;
+    setLessonDropTarget(null);
     dragInitialLessonStateRef.current = null;
 
-    if (!initial) return;
+    if (
+      !initial ||
+      !draggedLesson ||
+      !dropTarget ||
+      dropTarget.sectionId !== initial.sectionId
+    ) {
+      return;
+    }
 
     const currentSec = sectionsRef.current.find(
       (s) => s.id === initial.sectionId,
     );
     if (!currentSec) return;
 
-    const currentLessonIds = currentSec.lessons.map((l) => l.id);
+    const sourceIndex = currentSec.lessons.findIndex(
+      (lesson) => lesson.id === draggedLesson.lessonId,
+    );
+    const targetIndex = currentSec.lessons.findIndex(
+      (lesson) => lesson.id === dropTarget.lessonId,
+    );
+    if (sourceIndex < 0 || targetIndex < 0) return;
+
+    let insertionIndex = targetIndex + (dropTarget.position === "after" ? 1 : 0);
+    if (sourceIndex < insertionIndex) insertionIndex -= 1;
+    if (sourceIndex === insertionIndex) return;
+
+    const nextLessons = [...currentSec.lessons];
+    const [movedLesson] = nextLessons.splice(sourceIndex, 1);
+    if (!movedLesson) return;
+    nextLessons.splice(insertionIndex, 0, movedLesson);
+
+    const nextSections = sectionsRef.current.map((section) =>
+      section.id === initial.sectionId
+        ? { ...section, lessons: nextLessons }
+        : section,
+    );
+    sectionsRef.current = nextSections;
+    setSections(nextSections);
+
+    const currentLessonIds = nextLessons.map((l) => l.id);
     const initialLessonIds = initial.lessonIds;
 
     const orderChanged =
@@ -8056,7 +8344,7 @@ export function CourseCreatePage({
           title: "New Lesson 1",
           description: "",
           contentType: "video",
-          contentTypeSelected: false,
+          contentTypeSelected: true,
           isExpanded: true,
           isPublished: true,
           isPreview: false,
@@ -8817,9 +9105,15 @@ export function CourseCreatePage({
       return;
     }
 
-    if (activeStep === "basics") {
+    const leavingStep = activeStep;
+
+    if (
+      leavingStep === "basics" &&
+      !currentCourseIdRef.current &&
+      !currentCourseId
+    ) {
       const flushed = await flushBasicsPersistence();
-      if (!currentCourseIdRef.current && !currentCourseId && !flushed) {
+      if (!flushed) {
         setShowTitleTooltip(true);
         titleInputRef.current?.focus();
         setToastMessage("Add a course title to continue.");
@@ -8838,57 +9132,58 @@ export function CourseCreatePage({
       return;
     }
 
-    if (activeStep === "access-rules") {
-      await flushFixedDurationPersistence();
-    }
-    if (activeStep === "pricing") {
-      await flushPricingPersistence();
-    }
+    const wasDirty = isStepDirty(leavingStep);
 
-    // Prepare the destination before the active step changes so a skipped tab
-    // never renders an empty panel during persistence or swipe setup.
+    // Prepare and activate the destination before persisting the previous
+    // step. This keeps the tab and panel responsive while draft persistence
+    // continues in the background.
     setMountedTabs((current) => {
       const next = getAdjacentWizardSteps(destination);
-      next.add(activeStep);
+      next.add(leavingStep);
       const hasSameTabs =
         next.size === current.size && [...next].every((id) => current.has(id));
       return hasSameTabs ? current : next;
     });
+    pendingWizardNavigationRef.current = destination;
+    setActiveStep(destination);
 
-    if (!isStepDirty(activeStep)) {
-      setActiveStep(destination);
-      return;
-    }
+    const persistPreviousStep = async () => {
+      if (wasDirty) setActionLoading("save");
 
-    if (activeStep === "curriculum") {
-      setActionLoading("save");
       try {
-        await saveCurriculumStep();
-        setActiveStep(destination);
+        if (leavingStep === "basics") {
+          await flushBasicsPersistence();
+        } else if (leavingStep === "access-rules") {
+          await flushFixedDurationPersistence();
+        } else if (leavingStep === "pricing") {
+          await flushPricingPersistence();
+        }
+
+        if (!wasDirty) return;
+
+        if (leavingStep === "curriculum") {
+          await saveCurriculumStep();
+        } else {
+          await saveCurrentStep();
+        }
       } catch (err: unknown) {
         const stepLabel =
-          WIZARD_STEPS.find((s) => s.id === activeStep)?.label || activeStep;
+          WIZARD_STEPS.find((s) => s.id === leavingStep)?.label || leavingStep;
         setToastMessage(
           `Failed to save ${stepLabel}. Your changes are kept locally.`,
         );
       } finally {
         setActionLoading(null);
       }
-      return;
-    }
+    };
 
-    setActionLoading("save");
-    try {
-      await saveCurrentStep();
-    } catch (err: unknown) {
-      const stepLabel =
-        WIZARD_STEPS.find((s) => s.id === activeStep)?.label || activeStep;
-      setToastMessage(
-        `Failed to save ${stepLabel}. Your changes are kept locally.`,
-      );
-    } finally {
-      setActionLoading(null);
-      setActiveStep(destination);
+    if (
+      wasDirty ||
+      leavingStep === "basics" ||
+      leavingStep === "access-rules" ||
+      leavingStep === "pricing"
+    ) {
+      void persistPreviousStep();
     }
   };
 
@@ -9048,16 +9343,6 @@ export function CourseCreatePage({
     }
   };
 
-  if (isInitialLoadingCourse) {
-    return (
-      <CourseWizardSkeleton
-        activeStep={activeStep}
-        isEditing={isEditing}
-        onBack={handleBack}
-      />
-    );
-  }
-
   if (isEditorError && !editorData && isEditing) {
     return (
       <div className="relative flex w-full flex-1 flex-col min-h-[calc(100dvh-130px)] p-0 text-[--text] box-border max-[768px]:pb-0">
@@ -9120,24 +9405,7 @@ export function CourseCreatePage({
     <div
       className="relative flex w-full flex-1 flex-col min-h-full p-0 text-[--text] box-border"
       data-course-wizard
-      data-focus-mode={isCurriculumFocusMode ? "true" : undefined}
     >
-      {/* Floating Exit Focus Button */}
-      {isCurriculumFocusMode && (
-        <button
-          type="button"
-          onClick={() => setIsCurriculumFocusMode(false)}
-          title="Exit focus mode (show topbar and bottom navigation) [Esc]"
-          aria-label="Exit focus mode"
-          className="fixed top-3.5 right-6 z-50 inline-flex items-center gap-1.5 h-8.5 px-2.5 rounded-full border border-(--accent) bg-[color-mix(in_srgb,var(--surface)_92%,var(--canvas))] text-(--text) shadow-[0_4px_20px_color-mix(in_srgb,var(--accent)_25%,transparent)] backdrop-blur-md cursor-pointer transition-all hover:scale-105 active:scale-95"
-        >
-          <CornersIn size={15} weight="bold" className="text-(--accent)" />
-          <kbd className="inline-block px-1.5 py-0.5 text-[0.68rem] font-mono rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--text-secondary) font-bold">
-            Esc
-          </kbd>
-        </button>
-      )}
-
       {/* Wizard Header */}
       <header className="relative shrink-0 mb-2 max-[768px]:mb-1.5 max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0 max-[768px]:box-border">
         <div className="flex items-start justify-between gap-4 mb-1 max-[768px]:flex-col max-[768px]:gap-2 max-[768px]:mb-1.5">
@@ -9194,18 +9462,6 @@ export function CourseCreatePage({
               </p>
             </div>
           </div>
-
-          {activeStep === "curriculum" && (
-            <button
-              type="button"
-              onClick={() => setIsCurriculumFocusMode(true)}
-              title="Focus mode (hide topbar and bottom bar for more workspace) [Esc]"
-              aria-label="Enter focus mode"
-              className="inline-flex items-center justify-center w-8.5 h-8.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--text)_4%,transparent)] text-(--text-secondary) cursor-pointer transition-all hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] shrink-0 self-start sm:self-center p-0"
-            >
-              <CornersOut size={15} weight="bold" />
-            </button>
-          )}
         </div>
 
         {/* Publish validation error toast if any */}
@@ -9262,6 +9518,7 @@ export function CourseCreatePage({
               }
               className={`!border-b-transparent shrink-0 whitespace-nowrap disabled:!opacity-50 disabled:!cursor-not-allowed ${isActive ? "is-active" : ""}`}
               onClick={() => {
+                if (isInitialLoadingCourse) return;
                 void navigateToStep(step.id);
               }}
               onKeyDown={handleRovingTabKeyDown}
@@ -9283,6 +9540,9 @@ export function CourseCreatePage({
       </nav>
 
       {/* Wizard Step Panels using SwipeableTabPanel */}
+      {isInitialLoadingCourse ? (
+        <CourseWizardSkeleton activeStep={activeStep} />
+      ) : (
       <SwipeableTabPanel
         tabs={WIZARD_STEP_IDS}
         activeTab={activeStep}
@@ -9291,7 +9551,7 @@ export function CourseCreatePage({
         }}
         tabListRef={stepsNavRef}
         id="course-wizard-tab-panel"
-        className="course-wizard-tab-content w-full min-h-0 flex-1 flex flex-col"
+        className="course-wizard-tab-content relative min-h-0 flex-1 flex flex-col pt-4 pb-6 max-[640px]:pt-3"
         stateAttribute="data-wizard-step"
         labelledBy={`course-wizard-tab-${activeStep}`}
         disabled={
@@ -9930,7 +10190,269 @@ export function CourseCreatePage({
               </div>
             </div>
           ) : panelStep === "curriculum" ? (
-            <div className="course-wizard-curriculum-panel flex flex-col gap-4 w-full flex-1 min-h-0">
+            editingLessonTarget &&
+            sections.some(
+              (s) =>
+                s.id === editingLessonTarget.sectionId &&
+                s.lessons.some((l) => l.id === editingLessonTarget.lessonId),
+            ) ? (
+              (() => {
+                const activeSection = sections.find(
+                  (s) => s.id === editingLessonTarget.sectionId,
+                )!;
+                const activeLesson = activeSection.lessons.find(
+                  (l) => l.id === editingLessonTarget.lessonId,
+                )!;
+                const secIdx = sections.findIndex((s) => s.id === activeSection.id);
+                const lesIdx = activeSection.lessons.findIndex(
+                  (l) => l.id === activeLesson.id,
+                );
+
+                return (
+                  <div className="course-wizard-curriculum-panel flex flex-col gap-4 w-full flex-1 min-h-0">
+                    <LessonStudioEditor
+                      sectionNumber={secIdx + 1}
+                      sectionTitle={activeSection.title}
+                      lessonNumber={lesIdx + 1}
+                      lessonTitle={activeLesson.title}
+                      courseSlug={editorData?.course?.slug}
+                      courseTitle={
+                        courseTitle ||
+                        "Web Development Course for Absolute Beginners | Hindi"
+                      }
+                      contentType={
+                        (activeLesson.contentType as StudioLessonContentType) ||
+                        "video"
+                      }
+                      isPublished={activeLesson.isPublished !== false}
+                      isPreview={activeLesson.isPreview === true}
+                      mediaInfo={
+                        activeLesson.contentMediaId
+                          ? {
+                              id: activeLesson.contentMediaId,
+                              name:
+                                activeLesson.contentType === "video"
+                                  ? "intro-to-web-dev.mp4"
+                                  : activeLesson.contentType === "audio"
+                                    ? "intro-to-web-dev.mp3"
+                                    : activeLesson.contentType === "image"
+                                      ? "web-dev-thumbnail.png"
+                                      : "intro-to-web-dev.pdf",
+                              durationSeconds:
+                                activeLesson.durationSeconds || 754,
+                              sizeBytes: 128 * 1024 * 1024,
+                            }
+                          : null
+                      }
+                      resources={activeLesson.resources.map((r) => ({
+                        id: r.id,
+                        name: r.name,
+                        type: r.type,
+                        size: r.size,
+                        mediaAssetId: r.mediaAssetId,
+                      }))}
+                      isSaving={savingLessonId === activeLesson.id}
+                      onBack={() => setEditingLessonTarget(null)}
+                      onCancel={(draft) =>
+                        handleCancelLessonDraft(
+                          activeSection.id,
+                          activeLesson.id,
+                          draft,
+                        )
+                      }
+                      onSave={async (payload) => {
+                        handleUpdateLesson(activeSection.id, activeLesson.id, {
+                          title: payload.title,
+                          contentType: payload.contentType,
+                          isPublished: payload.isPublished,
+                          isPreview: payload.isPreview,
+                        });
+                        const saved = await persistLesson(
+                          activeSection.id,
+                          activeLesson.id,
+                          { collapseOnSuccess: false },
+                        );
+                        if (saved) {
+                          setToastMessage("Lesson changes saved successfully.");
+                          setEditingLessonTarget(null);
+                        }
+                      }}
+                      onContentTypeChange={(contentType) => {
+                        handleUpdateLesson(activeSection.id, activeLesson.id, {
+                          contentType,
+                        });
+                      }}
+                      onDeleteLesson={() => {
+                        handleDeleteLesson(activeSection.id, activeLesson.id);
+                        setEditingLessonTarget(null);
+                      }}
+                      onPreviewLesson={() => {
+                        if (currentCourseId) {
+                          window.open(`/courses/${currentCourseId}`, "_blank");
+                        }
+                      }}
+                      onMediaAttached={(mediaAssetId) =>
+                        handleLessonMediaAttached(
+                          activeSection.id,
+                          activeLesson.id,
+                          mediaAssetId,
+                        )
+                      }
+                      onProcessingComplete={() =>
+                        handleLessonProcessingComplete()
+                      }
+                      onUploadMedia={async (file) => {
+                        try {
+                          const presigned =
+                            await mediaService.presignMediaUpload({
+                              filename: file.name,
+                              contentType:
+                                file.type || "application/octet-stream",
+                              fileSize: file.size,
+                              type:
+                                activeLesson.contentType === "image"
+                                  ? "image"
+                                  : activeLesson.contentType === "document"
+                                    ? "document"
+                                    : "video",
+                              visibility: "protected",
+                            });
+                          await mediaService.uploadFileToPresignedUrl(
+                            presigned.uploadUrl,
+                            file,
+                          );
+                          await mediaService.confirmUpload(
+                            presigned.mediaAssetId,
+                          );
+                          await handleLessonMediaAttached(
+                            activeSection.id,
+                            activeLesson.id,
+                            presigned.mediaAssetId,
+                          );
+                          setToastMessage(
+                            "Media uploaded and attached successfully.",
+                          );
+                        } catch (err: unknown) {
+                          setToastMessage(
+                            err instanceof Error
+                              ? err.message
+                              : "Media upload failed.",
+                          );
+                        }
+                      }}
+                      onAddResourceFile={async (file) => {
+                        try {
+                          const presigned =
+                            await mediaService.presignMediaUpload({
+                              filename: file.name,
+                              contentType:
+                                file.type || "application/octet-stream",
+                              fileSize: file.size,
+                              type: "document",
+                              visibility: "protected",
+                            });
+                          await mediaService.uploadFileToPresignedUrl(
+                            presigned.uploadUrl,
+                            file,
+                          );
+                          await mediaService.confirmUpload(
+                            presigned.mediaAssetId,
+                          );
+                          const created = await handleCreateLessonResource(
+                            activeLesson.id,
+                            {
+                              title: file.name,
+                              mediaAssetId: presigned.mediaAssetId,
+                            },
+                          );
+                          handleLessonResourceAdded(
+                            activeSection.id,
+                            activeLesson.id,
+                            {
+                              id: created.id,
+                              name: created.title,
+                              type: "document",
+                              size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+                              mediaAssetId: created.mediaAssetId,
+                            },
+                          );
+                          setToastMessage("Resource attached successfully.");
+                        } catch (err: unknown) {
+                          setToastMessage(
+                            err instanceof Error
+                              ? err.message
+                              : "Resource upload failed.",
+                          );
+                        }
+                      }}
+                      onDeleteResource={async (resId) => {
+                        try {
+                          await handleDeleteLessonResource(resId);
+                          const resItem = activeLesson.resources.find(
+                            (r) => r.id === resId,
+                          );
+                          if (resItem) {
+                            handleLessonResourceRemoved(
+                              activeSection.id,
+                              activeLesson.id,
+                              resItem,
+                            );
+                          }
+                          setToastMessage("Resource removed.");
+                        } catch (err: unknown) {
+                          setToastMessage(
+                            err instanceof Error
+                              ? err.message
+                              : "Could not remove resource.",
+                          );
+                        }
+                      }}
+                      descriptionSection={
+                        <div className="flex flex-col gap-2">
+                          <LessonDescriptionEditor
+                            id={`lesson-description-${activeLesson.id}`}
+                            disabled={
+                              activeLesson.isPendingCreation ||
+                              savingLessonId === activeLesson.id
+                            }
+                            value={activeLesson.description}
+                            onChange={(val) =>
+                              handleUpdateLesson(
+                                activeSection.id,
+                                activeLesson.id,
+                                { description: val },
+                              )
+                            }
+                            placeholder="Add a detailed description of what students will learn in this lesson..."
+                            maxLength={1500}
+                          />
+                        </div>
+                      }
+                      quizSection={
+                        currentCourseId &&
+                        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                          activeLesson.id,
+                        ) ? (
+                          <QuizAuthoringPanel
+                            courseId={currentCourseId}
+                            lessonId={activeLesson.id}
+                            lessonTitle={activeLesson.title}
+                            onQuizDeleted={() => {}}
+                          />
+                        ) : (
+                          <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
+                            Save the course and lesson before configuring an
+                            attached Quiz.
+                          </div>
+                        )
+                      }
+                    />
+
+                  </div>
+                );
+              })()
+            ) : (
+              <div className="course-wizard-curriculum-panel flex flex-col gap-4 w-full flex-1 min-h-0">
               {/* Header row */}
               <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3">
                 <div className="">
@@ -9953,42 +10475,6 @@ export function CourseCreatePage({
                       <span>Saving section order...</span>
                     </span>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setIsCurriculumFocusMode((prev) => !prev)}
-                    style={{
-                      width: "34px",
-                      height: "34px",
-                      borderRadius: "8px",
-                      padding: 0,
-                    }}
-                    className={`inline-flex items-center justify-center border text-xs font-semibold cursor-pointer transition-all duration-150 ease-out shrink-0 ${
-                      isCurriculumFocusMode
-                        ? "border-(--accent) text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]"
-                        : "border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
-                    }`}
-                    title={
-                      isCurriculumFocusMode
-                        ? "Exit focus mode (show topbar and bottom navigation) [Esc]"
-                        : "Focus mode (hide topbar and bottom bar for more workspace)"
-                    }
-                    aria-label={
-                      isCurriculumFocusMode
-                        ? "Exit focus mode"
-                        : "Enter focus mode"
-                    }
-                    aria-pressed={isCurriculumFocusMode}
-                  >
-                    {isCurriculumFocusMode ? (
-                      <CornersIn
-                        size={16}
-                        weight="bold"
-                        className="text-(--accent)"
-                      />
-                    ) : (
-                      <CornersOut size={16} weight="bold" />
-                    )}
-                  </button>
                   <button
                     type="button"
                     disabled={
@@ -10336,16 +10822,29 @@ export function CourseCreatePage({
                       >
                         {sec.isExpanded && (
                           <div className="flex flex-col gap-2.5">
-                            {sec.lessons.map((les, lesIndex) => (
-                              <MemoizedLessonCard
-                                key={les.id}
+                            {sec.lessons.map((les, lesIndex) => {
+                              const isDraggedLesson =
+                                draggedLessonState?.sectionId === sec.id &&
+                                draggedLessonState.lessonId === les.id;
+                              const isDropBefore =
+                                lessonDropTarget?.sectionId === sec.id &&
+                                lessonDropTarget.lessonId === les.id &&
+                                lessonDropTarget.position === "before" &&
+                                !isDraggedLesson;
+                              const isDropAfter =
+                                lessonDropTarget?.sectionId === sec.id &&
+                                lessonDropTarget.lessonId === les.id &&
+                                lessonDropTarget.position === "after" &&
+                                !isDraggedLesson;
+
+                              return (
+                              <Fragment key={les.id}>
+                                {isDropBefore && <LessonDropIndicator />}
+                                <MemoizedLessonCard
                                 lesson={les}
                                 sectionId={sec.id}
                                 lessonIndex={lesIndex}
-                                isDragged={
-                                  draggedLessonState?.sectionId === sec.id &&
-                                  draggedLessonState?.lessonIndex === lesIndex
-                                }
+                                isDragged={isDraggedLesson}
                                 isDragEnabled={
                                   dragEnabledLessonId === les.id
                                 }
@@ -10357,11 +10856,18 @@ export function CourseCreatePage({
                                 isReorderPending={
                                   reorderLessonsMutation.isPending
                                 }
-                                isFocusMode={isCurriculumFocusMode}
                                 isResourceBusy={
                                   createLessonResourceMutation.isPending ||
                                   deleteLessonResourceMutation.isPending
                                 }
+                                isLessonEditorMounted={mountedLessonEditorIds.includes(
+                                  les.id,
+                                )}
+                                isUrlFocused={
+                                  requestedSectionId === sec.id &&
+                                  requestedLessonId === les.id
+                                }
+                                onLessonEditorOpen={rememberLessonEditor}
                                 render={({
                                   isExpanded,
                                   setExpanded,
@@ -10369,10 +10875,19 @@ export function CourseCreatePage({
                                   setEditorOpen,
                                   isQuizOpen,
                                   setQuizOpen,
+                                  lessonEditorRef,
+                                  isLessonEditorMounted,
+                                  onLessonEditorOpen,
                                 }) => {
+                                  const shouldKeepEditorMounted =
+                                    isEditorOpen || isLessonEditorMounted;
                                   const toggleLesson = async () => {
                                     const nextExpanded = !isExpanded;
-                                    if (nextExpanded) setExpanded(true);
+                                    if (nextExpanded) {
+                                      setExpanded(true);
+                                      setEditorOpen(true);
+                                      onLessonEditorOpen(les.id);
+                                    }
                                     const canToggle =
                                       await handleToggleLessonExpand(
                                         sec.id,
@@ -10381,10 +10896,17 @@ export function CourseCreatePage({
                                       );
                                     if (!canToggle) {
                                       setExpanded(isExpanded);
+                                      if (nextExpanded) setEditorOpen(false);
                                     } else if (!nextExpanded) {
                                       setExpanded(false);
                                       setEditorOpen(false);
                                       setQuizOpen(false);
+                                    }
+                                    if (canToggle) {
+                                      navigateToCurriculumFocus(
+                                        nextExpanded ? sec.id : null,
+                                        nextExpanded ? les.id : null,
+                                      );
                                     }
                                   };
 
@@ -10392,9 +10914,7 @@ export function CourseCreatePage({
                                   <div
                                     style={{ contain: "layout" }}
                                     className={`border rounded-[10px] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
-                                      draggedLessonState?.sectionId === sec.id &&
-                                      draggedLessonState?.lessonIndex ===
-                                        lesIndex
+                                      isDraggedLesson
                                         ? "opacity-35 border-dashed border-(--accent)"
                                         : "border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
                                     }`}
@@ -10404,31 +10924,36 @@ export function CourseCreatePage({
                                       !reorderingLessonsSectionId &&
                                       !reorderLessonsMutation.isPending
                                     }
-                                    onDragStart={(e) =>
+                                    onDragStart={(e) => {
+                                      e.stopPropagation();
                                       handleLessonDragStart(
                                         e,
                                         sec.id,
                                         lesIndex,
                                         les,
-                                      )
-                                    }
-                                    onDragOver={(e) =>
+                                      );
+                                    }}
+                                    onDragOver={(e) => {
+                                      e.stopPropagation();
                                       handleLessonDragOver(
                                         e,
                                         sec.id,
-                                        lesIndex,
-                                      )
-                                    }
-                                    onDragEnd={handleLessonDragEnd}
+                                        les.id,
+                                      );
+                                    }}
+                                    onDragEnd={(e) => {
+                                      e.stopPropagation();
+                                      void handleLessonDragEnd();
+                                    }}
                                   >
                               <>
                                 {/* Lesson Header */}
                                 <div
                                   className="flex items-center justify-between px-4 py-3 select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[10px_12px]"
                                   onClick={() => void toggleLesson()}
-                                  title="Click to toggle lesson editor"
+                                  title="Expand lesson editor"
                                 >
-                                  <div className="flex min-w-0 flex-1 items-center gap-3 max-[768px]:w-full max-[768px]:gap-2">
+                                  <div className="flex min-w-0 flex-1 items-center gap-2.5 max-[768px]:w-full max-[768px]:gap-2">
                                     <span
                                       className={`flex items-center justify-center text-(--muted) transition-opacity duration-150 ${
                                         les.isPendingCreation ||
@@ -10475,14 +11000,19 @@ export function CourseCreatePage({
                                     >
                                       <DotsSixVertical size={18} />
                                     </span>
-                                    <span className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded text-(--muted) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-[0.72rem] font-medium">
-                                      {lesIndex + 1}
-                                    </span>
+                                    <LessonContentTypeIcon
+                                      contentType={
+                                        les.pendingContentType || les.contentType
+                                      }
+                                    />
                                     {les.isEditingTitle ? (
                                       <div
                                         className="flex min-w-0 flex-1 items-center gap-2"
                                         onClick={(e) => e.stopPropagation()}
                                       >
+                                        <span className="shrink-0 text-(--text) text-[0.88rem] font-medium">
+                                          {lesIndex + 1}.{" "}
+                                        </span>
                                         <input
                                           id={`les-title-${les.id}`}
                                           type="text"
@@ -10493,7 +11023,7 @@ export function CourseCreatePage({
                                           style={{
                                             fontFamily: "inherit",
                                             fontSize: "0.88rem",
-                                            fontWeight: 600,
+                                            fontWeight: 500,
                                             lineHeight: 1.5,
                                             borderRadius: "6px",
                                           }}
@@ -10525,7 +11055,7 @@ export function CourseCreatePage({
                                             }
                                           }}
                                           placeholder="e.g. Introduction to React Hooks"
-                                          className="h-7 min-w-0 flex-1 border border-[color-mix(in_srgb,var(--accent)_52%,transparent)] rounded-[6px] px-2 py-0.5 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] font-semibold leading-[1.5] outline-none [font-family:inherit] focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
+                                          className="h-7 min-w-0 flex-1 border border-[color-mix(in_srgb,var(--accent)_52%,transparent)] rounded-[6px] px-2 py-0.5 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] font-medium leading-[1.5] outline-none [font-family:inherit] focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
                                         />
                                         <button
                                           type="button"
@@ -10549,8 +11079,8 @@ export function CourseCreatePage({
                                       </div>
                                     ) : (
                                       <div className="group/title flex min-w-0 flex-1 items-center gap-1.5">
-                                        <span className="min-w-0 flex-1 truncate whitespace-nowrap text-(--text) text-[0.88rem] font-semibold cursor-pointer">
-                                          {les.title}
+                                        <span className="min-w-0 flex-1 truncate whitespace-nowrap text-(--text) text-[0.88rem] font-medium cursor-pointer">
+                                          {lesIndex + 1}. {les.title}
                                         </span>
                                         <button
                                           type="button"
@@ -10605,27 +11135,31 @@ export function CourseCreatePage({
                                         Unpublished
                                       </span>
                                     )}
-                                    {les.isPreview === true && (
-                                      <span
-                                        className="inline-flex items-center gap-1 text-[#10b981] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#10b981_12%,transparent)] border border-[color-mix(in_srgb,#10b981_28%,transparent)]"
-                                        title="Free Preview: Anyone can view this lesson without enrolling."
-                                      >
-                                        Preview
-                                      </span>
-                                    )}
-                                    {les.contentType === "video" ? (
-                                      <span
-                                        className="inline-flex shrink-0 items-center justify-center text-(--accent-ink,var(--accent))"
-                                        aria-label="Video lesson"
-                                        title="Video lesson"
-                                      >
-                                        <PlayCircle size={17} weight="fill" />
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-1.25 text-(--accent-ink,var(--accent)) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_24%,transparent)]">
-                                        <FileText size={13} weight="fill" />{" "}
-                                        Document
-                                      </span>
+                                    {isEditorOpen && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          disabled={savingLessonId === les.id || deletingLessonId === les.id}
+                                          className="inline-flex h-7 items-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-2.5 text-[14px]! font-[700]! text-(--text) transition-colors hover:bg-[color-mix(in_srgb,var(--text)_12%,transparent)] disabled:cursor-not-allowed disabled:opacity-50"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            lessonEditorRef.current?.cancel();
+                                          }}
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={savingLessonId === les.id || deletingLessonId === les.id}
+                                          className="inline-flex h-7 items-center rounded-[8px] bg-(--accent) px-2.5 text-[14px]! font-[700]! text-(--on-accent,#ffffff) shadow-[0_2px_8px_var(--accent-shadow)] transition-colors hover:bg-(--accent-hover,var(--accent)) disabled:cursor-not-allowed disabled:opacity-50"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            lessonEditorRef.current?.save();
+                                          }}
+                                        >
+                                          Save
+                                        </button>
+                                      </>
                                     )}
                                     <button
                                       type="button"
@@ -10671,9 +11205,10 @@ export function CourseCreatePage({
                                   </div>
                                 </div>
 
-                                {isExpanded && (
+                                {(isExpanded || shouldKeepEditorMounted) && (
                                   <div
-                                    aria-hidden={false}
+                                    aria-hidden={!isExpanded}
+                                    className={isExpanded ? undefined : "hidden"}
                                   >
                                     {les.isPendingCreation ? (
                                   <div className="flex min-h-48 items-center justify-center border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-8">
@@ -10685,84 +11220,203 @@ export function CourseCreatePage({
                                       Creating lesson...
                                     </div>
                                   </div>
-                                ) : !les.contentTypeSelected ? (
-                                  <div className="flex flex-col items-center justify-center gap-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-8 text-center">
-                                    <h3 className="m-0 text-(--text) text-[1rem] font-bold">
-                                      What type of lesson is this?
-                                    </h3>
-                                    <p className="m-0 text-(--muted) text-[0.82rem]">
-                                      Choose whether this lesson delivers video or document content. Quizzes can be added as assessments to either type.
-                                    </p>
-                                    <div className="flex items-center justify-center gap-3 pt-2 max-[520px]:w-full max-[520px]:flex-col">
-                                      <button
-                                        type="button"
-                                        style={{
-                                          fontSize: "0.84rem",
-                                          fontWeight: 600,
-                                          gap: "6px",
-                                        }}
-                                        className={`inline-flex min-h-9 min-w-36 items-center justify-center gap-2 rounded-[8px] border px-4 py-1.5 text-[0.84rem] font-semibold cursor-pointer transition-colors ${les.pendingContentType === "video" ? "border-(--accent) bg-[color-mix(in_srgb,var(--text)_10%,var(--surface))] text-(--text)" : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-transparent text-(--muted) hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"}`}
-                                        onClick={() =>
-                                          handleUpdateLesson(sec.id, les.id, {
-                                            pendingContentType: "video",
-                                          })
-                                        }
-                                      >
-                                        <Video size={18} weight="fill" /> Video
-                                      </button>
-                                      <button
-                                        type="button"
-                                        style={{
-                                          fontSize: "0.84rem",
-                                          fontWeight: 600,
-                                          gap: "6px",
-                                        }}
-                                        className={`inline-flex min-h-9 min-w-36 items-center justify-center gap-2 rounded-[8px] border px-4 py-1.5 text-[0.84rem] font-semibold cursor-pointer transition-colors ${les.pendingContentType === "document" ? "border-(--accent) bg-[color-mix(in_srgb,var(--text)_10%,var(--surface))] text-(--text)" : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-transparent text-(--muted) hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"}`}
-                                        onClick={() =>
-                                          handleUpdateLesson(sec.id, les.id, {
-                                            pendingContentType: "document",
-                                          })
-                                        }
-                                      >
-                                        <FileText size={18} weight="fill" />{" "}
-                                        Document / PDF
-                                      </button>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      disabled={
-                                        !les.pendingContentType ||
-                                        savingLessonId === les.id
+                                ) : shouldKeepEditorMounted ? (
+                                  <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-5 max-[768px]:p-[14px_12px_16px]">
+                                    <LessonStudioEditor
+                                      ref={lessonEditorRef}
+                                      hideHeader
+                                      sectionNumber={sections.findIndex((item) => item.id === sec.id) + 1}
+                                      sectionTitle={sec.title}
+                                      lessonNumber={lesIndex + 1}
+                                      lessonTitle={les.title}
+                                      courseSlug={editorData?.course?.slug}
+                                      courseTitle={
+                                        courseTitle ||
+                                        "Web Development Course for Absolute Beginners | Hindi"
                                       }
-                                      style={{
-                                        fontSize: "0.84rem",
-                                        fontWeight: 600,
-                                        height: "34px",
-                                        borderRadius: "8px",
-                                        gap: "6px",
-                                        paddingTop: 0,
-                                        paddingBottom: 0,
+                                      contentType={
+                                        (les.contentType as StudioLessonContentType) ||
+                                        "video"
+                                      }
+                                      isPublished={les.isPublished !== false}
+                                      isPreview={les.isPreview === true}
+                                      playbackSuspended={!isExpanded}
+                                      mediaInfo={
+                                        les.contentMediaId
+                                          ? {
+                                              id: les.contentMediaId,
+                                              name:
+                                                les.contentType === "video"
+                                                  ? "intro-to-web-dev.mp4"
+                                                  : les.contentType === "audio"
+                                                    ? "intro-to-web-dev.mp3"
+                                                    : les.contentType === "image"
+                                                      ? "web-dev-thumbnail.png"
+                                                      : "intro-to-web-dev.pdf",
+                                              durationSeconds:
+                                                les.durationSeconds || 754,
+                                              sizeBytes: 128 * 1024 * 1024,
+                                            }
+                                          : null
+                                      }
+                                      resources={les.resources.map((resource) => ({
+                                        id: resource.id,
+                                        name: resource.name,
+                                        type: resource.type,
+                                        size: resource.size,
+                                        mediaAssetId: resource.mediaAssetId,
+                                      }))}
+                                      isSaving={savingLessonId === les.id}
+                                      onBack={() => {
+                                        setExpanded(false);
+                                        setEditorOpen(false);
+                                        setQuizOpen(false);
                                       }}
-                                      className="mt-2 inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) px-4 shadow-[0_3px_10px_var(--accent-shadow)] cursor-pointer transition-all hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
-                                      onClick={() => {
-                                        if (!les.pendingContentType) return;
-                                        void handleLessonDiscreteChange(
+                                      onCancel={(draft) =>
+                                        handleCancelLessonDraft(
                                           sec.id,
                                           les.id,
-                                          {
-                                            contentType: les.pendingContentType,
-                                            ...(les.pendingContentType ===
-                                            "document"
-                                              ? { contentMediaId: null }
-                                              : {}),
-                                          },
+                                          draft,
+                                        )
+                                      }
+                                      onSave={async (payload) => {
+                                        handleUpdateLesson(sec.id, les.id, {
+                                          title: payload.title,
+                                          contentType: payload.contentType,
+                                          isPublished: payload.isPublished,
+                                          isPreview: payload.isPreview,
+                                        });
+                                        const saved = await persistLesson(
+                                          sec.id,
+                                          les.id,
+                                          { collapseOnSuccess: false },
                                         );
+                                        if (saved) {
+                                          setToastMessage("Lesson changes saved successfully.");
+                                          setEditorOpen(false);
+                                        }
                                       }}
-                                    >
-                                      {savingLessonId === les.id
-                                        ? "Saving..."
-                                        : "Continue"}
-                                    </button>
+                                      onContentTypeChange={(contentType) => {
+                                        handleUpdateLesson(sec.id, les.id, {
+                                          contentType,
+                                        });
+                                      }}
+                                      onMediaAttached={(mediaAssetId) =>
+                                        handleLessonMediaAttached(
+                                          sec.id,
+                                          les.id,
+                                          mediaAssetId,
+                                        )
+                                      }
+                                      onProcessingComplete={() =>
+                                        handleLessonProcessingComplete()
+                                      }
+                                      onUploadMedia={async (file) => {
+                                        try {
+                                          const presigned =
+                                            await mediaService.presignMediaUpload({
+                                              filename: file.name,
+                                              contentType:
+                                                file.type || "application/octet-stream",
+                                              fileSize: file.size,
+                                              type:
+                                                les.contentType === "image"
+                                                  ? "image"
+                                                  : les.contentType === "document"
+                                                    ? "document"
+                                                    : "video",
+                                              visibility: "protected",
+                                            });
+                                          await mediaService.uploadFileToPresignedUrl(
+                                            presigned.uploadUrl,
+                                            file,
+                                          );
+                                          await mediaService.confirmUpload(
+                                            presigned.mediaAssetId,
+                                          );
+                                          await handleLessonMediaAttached(
+                                            sec.id,
+                                            les.id,
+                                            presigned.mediaAssetId,
+                                          );
+                                          setToastMessage(
+                                            "Media uploaded and attached successfully.",
+                                          );
+                                        } catch (err: unknown) {
+                                          setToastMessage(
+                                            err instanceof Error
+                                              ? err.message
+                                              : "Media upload failed.",
+                                          );
+                                        }
+                                      }}
+                                      descriptionSection={
+                                        <LessonDescriptionEditor
+                                          id={`lesson-description-${les.id}`}
+                                          disabled={
+                                            les.isPendingCreation ||
+                                            savingLessonId === les.id
+                                          }
+                                          value={les.description}
+                                          onChange={(value) =>
+                                            handleUpdateLesson(sec.id, les.id, {
+                                              description: value,
+                                            })
+                                          }
+                                          placeholder="Add a detailed description of what students will learn in this lesson..."
+                                          maxLength={1500}
+                                        />
+                                      }
+                                      resourcesSection={
+                                        <LessonResourceManager
+                                          courseId={currentCourseId}
+                                          lessonId={les.id}
+                                          resources={les.resources}
+                                          disabled={
+                                            les.isPendingCreation ||
+                                            createLessonResourceMutation.isPending ||
+                                            deleteLessonResourceMutation.isPending
+                                          }
+                                          onCreateResource={(payload) =>
+                                            handleCreateLessonResource(les.id, payload)
+                                          }
+                                          onResourceAdded={(resource) =>
+                                            handleLessonResourceAdded(
+                                              sec.id,
+                                              les.id,
+                                              resource,
+                                            )
+                                          }
+                                          onDeleteResource={(resourceId) =>
+                                            handleDeleteLessonResource(resourceId)
+                                          }
+                                          onResourceRemoved={(resource) =>
+                                            handleLessonResourceRemoved(
+                                              sec.id,
+                                              les.id,
+                                              resource,
+                                            )
+                                          }
+                                        />
+                                      }
+                                      quizSection={
+                                        currentCourseId &&
+                                        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                                          les.id,
+                                        ) ? (
+                                          <QuizAuthoringPanel
+                                            courseId={currentCourseId}
+                                            lessonId={les.id}
+                                            lessonTitle={les.title}
+                                            onQuizDeleted={() => {}}
+                                          />
+                                        ) : (
+                                          <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
+                                            Save the course and lesson before configuring an attached Quiz.
+                                          </div>
+                                        )
+                                      }
+                                    />
                                   </div>
                                 ) : (
                                   <div
@@ -10852,7 +11506,10 @@ export function CourseCreatePage({
                                           ) : (
                                             <LessonDescriptionPreview
                                               description={les.description}
-                                              onEdit={() => setEditorOpen(true)}
+                                              onEdit={() => {
+                                                setEditorOpen(true);
+                                                onLessonEditorOpen(les.id);
+                                              }}
                                             />
                                           )}
                                         </div>
@@ -11178,12 +11835,6 @@ export function CourseCreatePage({
                                                   onQuizDeleted={() => {
                                                     // Quiz deleted, query invalidation in hook updates UI
                                                   }}
-                                                  isFocusMode={isCurriculumFocusMode}
-                                                  onToggleFocusMode={() =>
-                                                    setIsCurriculumFocusMode(
-                                                      (prev) => !prev,
-                                                    )
-                                                  }
                                                 />
                                               ) : (
                                                 <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
@@ -11212,8 +11863,11 @@ export function CourseCreatePage({
                             </div>
                                   );
                                 }}
-                              />
-                            ))}
+                                />
+                                {isDropAfter && <LessonDropIndicator />}
+                              </Fragment>
+                              );
+                            })}
                           </div>
                         )}
 
@@ -11250,7 +11904,8 @@ export function CourseCreatePage({
                 ))
               )}
             </div>
-          ) : panelStep === "access-rules" ? (
+          )
+        ) : panelStep === "access-rules" ? (
             <div className="flex w-full flex-col gap-5">
               {/* Top Grid: 1. Who can access & 2. Access duration */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
@@ -11905,6 +12560,16 @@ export function CourseCreatePage({
                   </div>
                 </div>
               </div>
+
+              {/* Card 3: Quiz Pricing */}
+              <CourseQuizPricingCard
+                courseId={currentCourseId}
+                courseCurrency={pricing.currency || "INR"}
+                onNavigateTab={(tab) => {
+                  const stepId = parseWizardTab(tab);
+                  if (stepId) void navigateToStep(stepId);
+                }}
+              />
 
               {/* Bottom Card: Coupons Banner */}
               <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[14px] px-5.5 py-4 bg-(--surface) shadow-(--card-shadow) max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3.5">
@@ -12938,6 +13603,7 @@ export function CourseCreatePage({
           )
         }
       </SwipeableTabPanel>
+      )}
 
       {/* Sticky Bottom Action Bar (Desktop / Tablet) */}
       <div

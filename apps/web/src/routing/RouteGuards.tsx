@@ -12,7 +12,7 @@ import { useCurrentUser } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
 import {
   APP_HOME_PATH,
-  MFA_CHALLENGE_PATH,
+  buildMfaChallengePath,
   buildLoginPath,
   shouldRedirectFromCourseAuthorPath,
   isGuestLandingPath,
@@ -54,7 +54,7 @@ function useSessionAccess() {
   return {
     access,
     user: resolvedUser,
-    pending: isPending && !isFetched && !resolvedUser,
+    pending: !isFetched && !resolvedUser,
   };
 }
 
@@ -65,10 +65,9 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const path = normalizeAppPath(location.pathname);
   const authenticationRequired = requiresAcademyAuth(path);
   const landingDestination = resolveAcademyLandingDestination(access);
-  const courseAuthorRouteDenied = shouldRedirectFromCourseAuthorPath(
-    path,
-    user?.roles,
-  );
+  const courseAuthorRouteDenied =
+    access.isSessionReady &&
+    shouldRedirectFromCourseAuthorPath(path, user?.roles);
 
   useEffect(() => {
     if (pending) {
@@ -88,7 +87,10 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     }
 
     if (access.needsMfaChallenge && path !== "/logout") {
-      navigate(MFA_CHALLENGE_PATH, { replace: true });
+      navigate(
+        buildMfaChallengePath(`${location.pathname}${location.search}`),
+        { replace: true },
+      );
       return;
     }
 
@@ -115,15 +117,17 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
-  if (
+  const blockRender =
     (pending && authenticationRequired) ||
     shouldBlockAcademyRender(path, access) ||
-    courseAuthorRouteDenied
-  ) {
-    return <AppLoadingScreen />;
-  }
+    courseAuthorRouteDenied;
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      {blockRender ? <AppLoadingScreen /> : null}
+    </>
+  );
 }
 
 export function AuthRouteGuard() {
@@ -152,7 +156,10 @@ export function AuthRouteGuard() {
 
     if (access.needsMfaChallenge) {
       if (path !== "/login") {
-        navigate(MFA_CHALLENGE_PATH, { replace: true });
+        navigate(
+          buildMfaChallengePath(`${location.pathname}${location.search}`),
+          { replace: true },
+        );
       }
       return;
     }

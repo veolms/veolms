@@ -8,6 +8,10 @@ import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { DiscussionContent } from "./types";
+import {
+  formatInlineTimestampAriaLabel,
+  tokenizeInlineTimestamps,
+} from "./inlineTimestamp";
 import type { DiscussionAttachmentItem } from "../discussion-attachments";
 import { LinkPreviewCard } from "../LinkPreviewCard";
 import {
@@ -96,11 +100,125 @@ export function highlightMentionsInNode(node: React.ReactNode): React.ReactNode 
   return node;
 }
 
+interface InlineTimestampRenderOptions {
+  enableInlineTimestamps: boolean;
+  onSeekToTimestamp?: (seconds: number) => void;
+}
+
+const INLINE_TIMESTAMP_LINK_CLASS_NAME =
+  "inline cursor-pointer border-0 bg-transparent p-0 font-medium text-(--accent-ink,var(--accent)) underline decoration-[color-mix(in_srgb,var(--accent)_45%,transparent)] underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)";
+const INLINE_TIMESTAMP_TEXT_CLASS_NAME =
+  "inline font-medium text-(--accent-ink,var(--accent)) underline decoration-[color-mix(in_srgb,var(--accent)_45%,transparent)] underline-offset-2";
+
+function renderInlineTimestampsInNode(
+  node: React.ReactNode,
+  options: InlineTimestampRenderOptions,
+): React.ReactNode {
+  if (!options.enableInlineTimestamps) return node;
+
+  if (typeof node === "string") {
+    const parts = tokenizeInlineTimestamps(node);
+    if (parts.length === 1 && parts[0]?.type === "text") return node;
+
+    return parts.map((part, index) => {
+      if (part.type === "text") return part.value;
+      const ariaLabel = formatInlineTimestampAriaLabel(part);
+
+      if (!options.onSeekToTimestamp) {
+        return (
+          <span
+            key={`timestamp-${index}-${part.value}`}
+            data-inline-timestamp={part.value}
+            className={INLINE_TIMESTAMP_TEXT_CLASS_NAME}
+          >
+            {part.value}
+          </span>
+        );
+      }
+
+      return (
+        <button
+          key={`timestamp-${index}-${part.value}`}
+          type="button"
+          data-inline-timestamp={part.value}
+          aria-label={ariaLabel}
+          className={INLINE_TIMESTAMP_LINK_CLASS_NAME}
+          onClick={(event) => {
+            event.stopPropagation();
+            options.onSeekToTimestamp?.(part.seconds);
+          }}
+        >
+          {part.value}
+        </button>
+      );
+    });
+  }
+
+  if (Array.isArray(node)) {
+    return React.Children.map(node, (child) =>
+      renderInlineTimestampsInNode(child, options),
+    );
+  }
+
+  if (React.isValidElement(node)) {
+    const props = node.props as {
+      children?: React.ReactNode;
+      node?: { tagName?: string };
+      role?: string;
+      contentEditable?: boolean | "true" | "false";
+      "data-mention"?: string;
+    };
+    const tagName = props.node?.tagName?.toLowerCase();
+    const isExcludedElement =
+      tagName === "code" ||
+      tagName === "pre" ||
+      tagName === "a" ||
+      tagName === "img" ||
+      tagName === "video" ||
+      node.type === "button" ||
+      node.type === "a" ||
+      node.type === "input" ||
+      node.type === "textarea" ||
+      node.type === "select" ||
+      node.type === "img" ||
+      node.type === "video" ||
+      props.role === "button" ||
+      props.role === "link" ||
+      props.contentEditable === true ||
+      props.contentEditable === "true" ||
+      props["data-mention"] !== undefined;
+
+    if (isExcludedElement || props.children === undefined) return node;
+
+    return React.cloneElement(
+      node as React.ReactElement<Record<string, unknown>>,
+      undefined,
+      renderInlineTimestampsInNode(props.children, options),
+    );
+  }
+
+  return node;
+}
+
+function renderInlineContent(
+  children: React.ReactNode,
+  options: InlineTimestampRenderOptions,
+): React.ReactNode {
+  const withTimestamps = renderInlineTimestampsInNode(children, options);
+  return highlightMentionsInNode(withTimestamps);
+}
+
 interface DiscussionMarkdownProps {
   content: DiscussionContent;
   label: string;
   /** Linked attachments allow safe suppression of legacy generated Markdown. */
   linkedAttachments?: readonly DiscussionAttachmentItem[];
+  /** Controls metadata lookups while keeping Markdown links visible. */
+  enableLinkPreview?: boolean;
+  /** Enables Learning Space-only inline video timestamp controls. */
+  enableInlineTimestamps?: boolean;
+  /** Seeks the current lesson player when an inline timestamp is activated. */
+  onSeekToTimestamp?: (seconds: number) => void;
   className?: string;
 }
 
@@ -108,6 +226,9 @@ export function DiscussionMarkdown({
   content,
   label,
   linkedAttachments,
+  enableLinkPreview = true,
+  enableInlineTimestamps = false,
+  onSeekToTimestamp,
   className = "",
 }: DiscussionMarkdownProps) {
   const isGeneratedAttachmentMarkdown = (
@@ -128,7 +249,13 @@ export function DiscussionMarkdown({
       ? content
       : content.plainText || content.markdown || "";
   const detectedUrl = extractFirstUrl(rawText);
-  const { data: linkPreview } = useLinkPreview(detectedUrl);
+  const { data: linkPreview } = useLinkPreview(detectedUrl, {
+    enabled: enableLinkPreview,
+  });
+  const inlineTimestampOptions = {
+    enableInlineTimestamps,
+    onSeekToTimestamp,
+  } satisfies InlineTimestampRenderOptions;
 
   return (
     <div
@@ -157,7 +284,7 @@ export function DiscussionMarkdown({
           },
           blockquote: ({ children }) => (
             <blockquote className="my-3 border-l-3 border-(--accent) pl-4 text-(--muted)">
-              {highlightMentionsInNode(children)}
+              {renderInlineContent(children, inlineTimestampOptions)}
             </blockquote>
           ),
           code: ({ className: codeClassName, children }) => {
@@ -174,17 +301,17 @@ export function DiscussionMarkdown({
           },
           h1: ({ children }) => (
             <h1 className="my-3 text-xl font-bold tracking-tight text-(--text) sm:text-2xl">
-              {children}
+              {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
             </h1>
           ),
           h2: ({ children }) => (
             <h2 className="my-2.5 text-lg font-bold tracking-tight text-(--text) sm:text-xl">
-              {children}
+              {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
             </h2>
           ),
           h3: ({ children }) => (
             <h3 className="my-2 text-base font-semibold text-(--text) sm:text-lg">
-              {children}
+              {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
             </h3>
           ),
           hr: () => (
@@ -219,12 +346,18 @@ export function DiscussionMarkdown({
               />
             );
           },
-          li: ({ children }) => <li className="pl-1">{highlightMentionsInNode(children)}</li>,
+          li: ({ children }) => (
+            <li className="pl-1">
+              {renderInlineContent(children, inlineTimestampOptions)}
+            </li>
+          ),
           ol: ({ children }) => (
             <ol className="my-2 list-decimal space-y-1 pl-6">{children}</ol>
           ),
           p: ({ children }) => (
-            <p className="my-1.5 first:mt-0 last:mb-0">{highlightMentionsInNode(children)}</p>
+            <p className="my-1.5 first:mt-0 last:mb-0">
+              {renderInlineContent(children, inlineTimestampOptions)}
+            </p>
           ),
           pre: ({ children }) => <>{children}</>,
           table: ({ children }) => (
@@ -236,13 +369,28 @@ export function DiscussionMarkdown({
           ),
           td: ({ children }) => (
             <td className="border-t px-3 py-2 [border-color:color-mix(in_srgb,var(--text)_10%,transparent)]">
-              {highlightMentionsInNode(children)}
+              {renderInlineContent(children, inlineTimestampOptions)}
             </td>
           ),
           th: ({ children }) => (
             <th className="border-b px-3 py-2 font-semibold text-(--text) [border-color:color-mix(in_srgb,var(--text)_14%,transparent)]">
-              {children}
+              {renderInlineContent(children, inlineTimestampOptions)}
             </th>
+          ),
+          strong: ({ children }) => (
+            <strong>
+              {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
+            </strong>
+          ),
+          em: ({ children }) => (
+            <em>
+              {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
+            </em>
+          ),
+          del: ({ children }) => (
+            <del>
+              {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
+            </del>
           ),
           ul: ({ children }) => (
             <ul className="my-2 list-disc space-y-1 pl-6">{children}</ul>

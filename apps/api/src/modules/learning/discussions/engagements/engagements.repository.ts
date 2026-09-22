@@ -230,6 +230,7 @@ export function createEngagementsRepository(): EngagementsRepository {
         .selectFrom("users")
         .select(["id", "display_name", "username", "avatar_data_url"])
         .where("username", "is not", null)
+        .where("is_deleted", "=", false)
         .where((eb) =>
           eb.or([
             eb(sql<string>`lower(display_name)`, "like", pattern),

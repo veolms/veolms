@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import * as quizPricingRepo from "../../quizzes/shared/quiz-pricing.repository.ts";
 import type { AccessService } from "../../access/access.service.ts";
 import { createAccessService } from "../../access/access.service.ts";
 import type { Executor } from "./repository.types.ts";
@@ -11,9 +12,10 @@ export interface OrderRefLike {
 }
 
 export interface OrderItemRefLike {
-  item_type: "course" | "bundle";
+  item_type: "course" | "bundle" | "quiz";
   course_id: string | null;
   bundle_id: string | null;
+  quiz_pricing_id?: string | null;
 }
 
 /**
@@ -29,7 +31,7 @@ export interface OrderItemRefLike {
 export interface CourseAccessService {
   /**
    * Grants access + creates an active enrollment for every course an order's
-   * items resolve to (expanding bundle items to their member courses).
+   * items resolve to (expanding bundle items to their member courses and fulfilling quizzes).
    * Returns the flat list of granted course IDs (callers use the count for
    * FinalizePaymentResult.enrollmentCount).
    */
@@ -42,9 +44,8 @@ export interface CourseAccessService {
 
   /**
    * Revokes access_grants for the whole order and flips every course the
-   * order resolves to (direct items + bundle-member courses) to an enrollment
-   * status of "revoked". Resolves the order's items itself so callers don't
-   * each re-implement the course/bundle resolution loop.
+   * order resolves to (direct items + bundle-member courses + quizzes) to an enrollment
+   * status of "revoked".
    */
   revokeAccessForOrder(database: Executor, order: OrderRefLike): Promise<void>;
 
@@ -119,6 +120,27 @@ export function createCourseAccessService({
           });
           enrolledCourseIds.push(bc.course_id);
         }
+      } else if (item.item_type === "quiz" && item.quiz_pricing_id) {
+        const offering = await quizPricingRepo.findPricingById(
+          database,
+          item.quiz_pricing_id,
+        );
+        if (offering) {
+          await quizPricingRepo.upsertGrant(database, {
+            id: crypto.randomUUID(),
+            user_id: order.user_id,
+            course_id: offering.course_id,
+            order_id: order.id,
+            status: "active",
+            source: "purchase",
+            valid_from: now,
+            valid_until: null,
+            created_at: now,
+            updated_at: now,
+          });
+          // Deliberately not added to enrolledCourseIds: a quiz purchase is
+          // not a course enrollment.
+        }
       }
     }
 
@@ -126,16 +148,9 @@ export function createCourseAccessService({
   }
 
   async function revokeAccessForOrder(database: Executor, order: OrderRefLike): Promise<void> {
-    // Both revokes are scoped by order_id, not by resolving order items to
-    // (user_id, course_id) pairs and revoking those — a user can own the
-    // same course through two different orders (bought directly, then
-    // separately via a bundle that also contains it: bundle purchase is
-    // only blocked when *every* member course is already owned), and
-    // revoking by (user_id, course_id) alone would wrongly revoke the
-    // *other* order's still-valid access/enrollment for that course. See
-    // revokeEnrollmentsByOrderId's doc comment for the full scenario.
     await accessService.revokeAccessForOrder(database, order.id);
     await enrollmentRepo.revokeEnrollmentsByOrderId(database, order.id);
+    await quizPricingRepo.revokeGrantsByOrderId(database, order.id);
   }
 
   async function revokeAccessForOrderItem(
@@ -151,6 +166,17 @@ export function createCourseAccessService({
       for (const bc of bundleCourses) {
         await accessService.revokeAccessForOrderCourse(database, order.id, bc.course_id);
         await enrollmentRepo.revokeEnrollmentsForOrderCourse(database, order.id, bc.course_id);
+      }
+    } else if (item.item_type === "quiz" && item.quiz_pricing_id) {
+      const offering = await quizPricingRepo.findPricingById(
+        database,
+        item.quiz_pricing_id,
+      );
+      if (offering) {
+        await quizPricingRepo.revokeGrantForOrderCourse(database, {
+          orderId: order.id,
+          courseId: offering.course_id,
+        });
       }
     }
   }

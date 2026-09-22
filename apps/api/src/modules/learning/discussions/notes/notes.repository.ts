@@ -405,6 +405,12 @@ export function createNotesRepository(): NotesRepository {
           .execute();
 
         await trx
+          .deleteFrom("learning_mentions")
+          .where("source_type", "=", "note")
+          .where("source_id", "=", noteId)
+          .execute();
+
+        await trx
           .deleteFrom("learning_notes")
           .where("id", "=", noteId)
           .execute();

@@ -92,10 +92,10 @@ import {
   clampLearningCurriculumWidth,
   CURRICULUM_COLLAPSED_STORAGE_KEY,
   CURRICULUM_COLLAPSED_WIDTH,
-  CURRICULUM_DEFAULT_WIDTH,
   CURRICULUM_MAX_WIDTH,
   CURRICULUM_MIN_WIDTH,
   CURRICULUM_WIDTH_STORAGE_KEY,
+  applyLearningShellToDocument,
   getInitialLearningShellState,
 } from "./learningShellPreferences";
 import { useCurriculumTestPreferences } from "./useCurriculumTestPreferences";
@@ -237,6 +237,11 @@ interface LearningWorkspaceProps {
   courseSlug: string | undefined;
   userId?: string;
   lessonId: number;
+  deepLinkLessonUuid?: string | null;
+  isDiscussionDeepLink?: boolean;
+  deepLinkRouteSettled?: boolean;
+  noteDeepLinkId?: string | null;
+  courseNavigationActionLabel?: string;
   initialLessonView?: "video" | "quiz";
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden?: boolean;
@@ -315,6 +320,11 @@ export function LearningWorkspace({
   courseSlug,
   userId,
   lessonId,
+  deepLinkLessonUuid = null,
+  isDiscussionDeepLink = false,
+  deepLinkRouteSettled = true,
+  noteDeepLinkId = null,
+  courseNavigationActionLabel,
   initialLessonView = "video",
   mobileBottomNavigation,
   mobileBottomNavigationHidden = false,
@@ -338,6 +348,8 @@ export function LearningWorkspace({
     data: courseOverview,
     isLoading: isCourseOverviewLoading,
     isError: isCourseOverviewError,
+    isFetching: isCourseOverviewFetching,
+    refetch: refetchCourseOverview,
   } = useCourseOverview(courseSlug, {
     enabled: isApiRoute,
   });
@@ -382,6 +394,10 @@ export function LearningWorkspace({
   const [selectedLesson, setSelectedLesson] = useState(
     isLessonAvailable(lessonId) ? lessonId : firstPublicPreviewLessonId,
   );
+  const [
+    deepLinkInitializationPending,
+    setDeepLinkInitializationPending,
+  ] = useState(Boolean(deepLinkLessonUuid));
   const pendingLessonSelectionRef = useRef<number | null>(null);
   const [localLessonProgress, setLocalLessonProgress] = useState<
     Record<number, number>
@@ -462,9 +478,11 @@ export function LearningWorkspace({
     "current" | "top"
   >("current");
   const [curriculumWidth, setCurriculumWidth] = useState(
-    CURRICULUM_DEFAULT_WIDTH,
+    () => getInitialLearningShellState().curriculumWidth,
   );
-  const [curriculumCollapsed, setCurriculumCollapsed] = useState(false);
+  const [curriculumCollapsed, setCurriculumCollapsed] = useState(
+    () => getInitialLearningShellState().curriculumCollapsed,
+  );
   const learningShellHydratedRef = useRef(false);
   const [curriculumResizing, setCurriculumResizing] = useState(false);
   const [curriculumResizePreviewWidth, setCurriculumResizePreviewWidth] =
@@ -487,25 +505,22 @@ export function LearningWorkspace({
       }
     }
 
-    const root = document.documentElement;
     const rootWidth = isInitialShellSync
       ? shellState.curriculumCollapsed
         ? CURRICULUM_COLLAPSED_WIDTH
         : shellState.curriculumWidth
       : (curriculumResizePreviewWidth ??
         (curriculumCollapsed ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth));
-    root.dataset.learningCurriculumState = shellState.curriculumCollapsed
-      ? "collapsed"
-      : "expanded";
-    root.style.setProperty("--learning-curriculum-width", `${rootWidth}px`);
-    root.style.setProperty(
-      "--learning-curriculum-expanded-width",
-      `${shellState.curriculumWidth}px`,
-    );
-    window.__VEO_BOOTSTRAP__ = {
-      ...window.__VEO_BOOTSTRAP__,
-      learning: shellState,
-    };
+    applyLearningShellToDocument({
+      curriculumCollapsed: shellState.curriculumCollapsed,
+      curriculumWidth: shellState.curriculumWidth,
+    });
+    if (rootWidth !== shellState.curriculumWidth) {
+      document.documentElement.style.setProperty(
+        "--learning-curriculum-width",
+        `${rootWidth}px`,
+      );
+    }
   }, [curriculumCollapsed, curriculumResizePreviewWidth, curriculumWidth]);
 
   useLayoutEffect(() => {
@@ -515,7 +530,9 @@ export function LearningWorkspace({
   }, []);
 
   useEffect(() => {
-    if (courseContentDrawerViewport) return;
+    if (courseContentDrawerViewport || !learningShellHydratedRef.current) {
+      return;
+    }
     try {
       window.localStorage.setItem(
         CURRICULUM_COLLAPSED_STORAGE_KEY,
@@ -989,6 +1006,45 @@ export function LearningWorkspace({
   const selectedLessonDescription = selectedLessonRecord?.description ?? null;
   const courseId = courseOverview?.course.id;
   const backendLessonId = selectedLessonRecord?.id;
+  const isLearningDeepLinkReady =
+    !isDiscussionDeepLink ||
+    Boolean(
+      deepLinkRouteSettled &&
+      !deepLinkInitializationPending &&
+      courseId &&
+      backendLessonId &&
+      selectedLesson === lessonId,
+    );
+  const isLearningDeepLinkError =
+    isDiscussionDeepLink &&
+    isCourseOverviewError &&
+    !isCourseOverviewFetching &&
+    !courseOverview;
+  useEffect(() => {
+    if (deepLinkLessonUuid) {
+      setDeepLinkInitializationPending(true);
+    }
+  }, [deepLinkLessonUuid]);
+
+  useEffect(() => {
+    if (
+      !deepLinkInitializationPending ||
+      !deepLinkRouteSettled ||
+      !courseId ||
+      !backendLessonId ||
+      selectedLesson !== lessonId
+    ) {
+      return;
+    }
+    setDeepLinkInitializationPending(false);
+  }, [
+    backendLessonId,
+    courseId,
+    deepLinkRouteSettled,
+    lessonId,
+    selectedLesson,
+    deepLinkInitializationPending,
+  ]);
   const curriculumShortcutLabel = shortcutPlatform === "mac" ? "⌥+C" : "Alt+C";
 
   useLayoutEffect(() => {
@@ -2188,6 +2244,7 @@ export function LearningWorkspace({
           onSelectLesson={selectLesson}
           isLessonAvailable={isLessonAvailable}
           onOpenCourseOverview={onOpenCourseOverview}
+          courseNavigationActionLabel={courseNavigationActionLabel}
           courseTitle={courseTitle}
           courseThumbnail={courseThumbnail}
           focusRequest={fullscreenCurriculumFocusRequest}
@@ -2198,6 +2255,7 @@ export function LearningWorkspace({
     [
       coursePersistenceKey,
       closeFullscreenLessonPanel,
+      courseNavigationActionLabel,
       courseThumbnail,
       courseTitle,
       curriculumLessonsById,
@@ -2211,6 +2269,25 @@ export function LearningWorkspace({
       selectedLesson,
     ],
   );
+  const lessonPlayerSeekRef = useRef<((seconds: number) => void) | null>(
+    null,
+  );
+  const registerLessonPlayerSeek = useCallback(
+    (seekToTimestamp: (seconds: number) => void) => {
+      lessonPlayerSeekRef.current = seekToTimestamp;
+      return () => {
+        if (lessonPlayerSeekRef.current === seekToTimestamp) {
+          lessonPlayerSeekRef.current = null;
+        }
+      };
+    },
+    [],
+  );
+  const seekCurrentLessonToTimestamp = useCallback((seconds: number) => {
+    if (!Number.isFinite(seconds) || seconds < 0) return;
+    lessonPlayerSeekRef.current?.(seconds);
+  }, []);
+
   const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
     () => ({
       media: getCourseVideoForLesson(currentLesson[0]),
@@ -2254,6 +2331,7 @@ export function LearningWorkspace({
       onMiniPlayerRestoreReady,
       onMobileLandscapeFullscreenChange: handleMobileLandscapeFullscreenChange,
       onProgressChange: updateSelectedLessonProgress,
+      onSeekToTimestampReady: registerLessonPlayerSeek,
       resumePersistenceKey: `${coursePersistenceKey}-lesson-${selectedLesson}`,
     }),
     [
@@ -2279,6 +2357,7 @@ export function LearningWorkspace({
       onMinimizePlayer,
       playbackBootstrap,
       protectedPlayback,
+      registerLessonPlayerSeek,
       refreshPlaybackToken,
       playerCourseLessonsOpen,
       playerCourseLessonsSecondPressHold,
@@ -2385,6 +2464,8 @@ export function LearningWorkspace({
                   <QuizAttemptPanel
                     key={`${currentQuizAssignment.id}-${currentLessonUuid ?? selectedLesson}`}
                     assignmentId={currentQuizAssignment.id}
+                    courseId={courseId ?? currentQuizAssignment.courseId}
+                    quizTitle={currentQuizAssignment.quizTitle}
                     activeAttemptId={currentQuizAssignment.activeAttemptId}
                     maxAttempts={currentQuizAssignment.maxAttempts}
                     onBackToVideo={resumeLessonVideoPlayback}
@@ -2532,23 +2613,57 @@ export function LearningWorkspace({
                   </button>
                 ) : null}
               </header>
-              <Discussion
-                key={discussionPersistenceKey}
-                persistenceKey={discussionPersistenceKey}
-                courseSlug={courseSlug}
-                courseId={courseId}
-                lessonId={backendLessonId}
-                mobileBottomNavigation={mobileBottomNavigation}
-                mobileBottomNavigationHidden={mobileBottomNavigationHidden}
-                lessonDescription={selectedLessonDescription}
-                isLessonDescriptionLoading={
-                  isApiRoute && isCourseOverviewLoading
-                }
-                interactionCapabilities={interactionCapabilities}
-                isInteractionCapabilitiesLoading={
-                  isInteractionCapabilitiesLoading
-                }
-              />
+              {isLearningDeepLinkReady ? (
+                <Discussion
+                  key={discussionPersistenceKey}
+                  persistenceKey={discussionPersistenceKey}
+                  courseSlug={courseSlug}
+                  courseId={courseId}
+                  lessonId={backendLessonId}
+                  noteDeepLinkId={noteDeepLinkId}
+                  isThreadDeepLinkReady
+                  mobileBottomNavigation={mobileBottomNavigation}
+                  mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+                  lessonDescription={selectedLessonDescription}
+                  isLessonDescriptionLoading={
+                    isApiRoute && isCourseOverviewLoading
+                  }
+                  interactionCapabilities={interactionCapabilities}
+                  isInteractionCapabilitiesLoading={
+                    isInteractionCapabilitiesLoading
+                  }
+                  onSeekToTimestamp={seekCurrentLessonToTimestamp}
+                />
+              ) : isLearningDeepLinkError ? (
+                <div
+                  className="py-12 text-center"
+                  data-testid="learning-discussion-error"
+                >
+                  <p className="font-semibold text-(--text)">
+                    Failed to load discussion
+                  </p>
+                  <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
+                    There was a problem loading the course for this discussion.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void refetchCourseOverview()}
+                    className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <div
+                  className="flex min-h-48 flex-col items-center justify-center py-12 text-sm text-(--text-secondary)"
+                  data-testid="learning-discussion-loading"
+                  role="status"
+                  aria-label="Loading discussion"
+                >
+                  <div className="mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
+                  Loading discussion…
+                </div>
+              )}
             </article>
           </div>
         </section>
@@ -2606,6 +2721,7 @@ export function LearningWorkspace({
                 onSelectLesson={selectLesson}
                 isLessonAvailable={isLessonAvailable}
                 onOpenCourseOverview={onOpenCourseOverview}
+                courseNavigationActionLabel={courseNavigationActionLabel}
                 courseTitle={courseTitle}
                 courseThumbnail={courseThumbnail}
                 focusRequest={curriculumFocusRequest}
@@ -2752,6 +2868,7 @@ export function LearningWorkspace({
               onSelectLesson={selectLesson}
               isLessonAvailable={isLessonAvailable}
               onOpenCourseOverview={onOpenCourseOverview}
+              courseNavigationActionLabel={courseNavigationActionLabel}
               courseTitle={courseTitle}
               courseThumbnail={courseThumbnail}
               focusRequest={

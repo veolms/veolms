@@ -4,8 +4,9 @@ import {
   type VideoPlaybackBootstrap,
   type VideoPlaybackToken,
 } from "@veolms/contracts";
+import { getApiBaseUrl } from "../lib/api-client";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
+const API_BASE_URL = getApiBaseUrl();
 const CDN_URL = import.meta.env.VITE_CDN_URL || "/cdn";
 
 const bootstrapRequests = new Map<string, Promise<VideoPlaybackBootstrap>>();

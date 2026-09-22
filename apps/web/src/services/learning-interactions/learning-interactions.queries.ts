@@ -10,6 +10,7 @@ import type {
   ListLearningRepliesQuery,
   ListLearningThreadsQuery,
   ListReportsQuery,
+  DiscussionsWorkspaceResponse,
   LearningThreadsListResponse,
   ReportsListResponse,
   UserAutocompleteQuery,
@@ -55,6 +56,9 @@ import type { InteractionCapabilities } from "../../learning/discussionFeed";
 export { flattenReplyPages, getReplyTotalCount } from "./reply-pagination";
 
 type LessonThreadsQuery = Partial<Omit<ListLearningThreadsQuery, "cursor">>;
+type DiscussionsWorkspaceQuery = Partial<
+  Omit<ListLearningThreadsQuery, "cursor">
+>;
 type UserNotesQuery = Partial<Omit<ListLearningNotesQuery, "cursor">>;
 type RepliesQuery = Partial<Omit<ListLearningRepliesQuery, "cursor">>;
 type RepliesInfiniteData = InfiniteData<LearningRepliesCacheResponse>;
@@ -706,6 +710,31 @@ export function useHubThreads(
   };
 }
 
+export function useDiscussionsWorkspace(
+  query?: DiscussionsWorkspaceQuery,
+  options?: { enabled?: boolean },
+) {
+  const queryKey = learningInteractionKeys.discussionsWorkspace(query);
+  return useInfiniteQuery<
+    DiscussionsWorkspaceResponse,
+    ApiError,
+    InfiniteData<DiscussionsWorkspaceResponse>,
+    typeof queryKey,
+    string | null
+  >({
+    queryKey,
+    queryFn: ({ pageParam }) =>
+      learningInteractionsService.listDiscussionsWorkspace({
+        ...query,
+        ...(pageParam ? { cursor: pageParam } : {}),
+      } as ListLearningThreadsQuery),
+    initialPageParam: null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: options?.enabled ?? true,
+    staleTime: 30 * 1000,
+  });
+}
+
 export function useThreadDetails(
   threadId: string | undefined,
   options?: { enabled?: boolean },
@@ -738,6 +767,40 @@ export function useThreadDetails(
       data && optimisticDeletionCoordinator.isTombstoned("thread", data)
         ? undefined
         : data,
+  };
+}
+
+export function useNoteDetails(
+  noteId: string | undefined,
+  options?: { enabled?: boolean },
+) {
+  const isPendingClientId =
+    isClientEntityId(noteId) ||
+    interactionCreationCoordinator.hasPendingClientId(noteId);
+  const result = useQuery<LearningNoteCacheItem, ApiError>({
+    queryKey: learningInteractionKeys.noteDetails(noteId ?? ""),
+    queryFn: async () => {
+      if (!noteId || isPendingClientId) {
+        throw new Error("A confirmed server note ID is required.");
+      }
+      return projectNoteLocalState(
+        await learningInteractionsService.getNote(noteId),
+      );
+    },
+    enabled:
+      (options?.enabled ?? Boolean(noteId)) &&
+      Boolean(noteId) &&
+      !isPendingClientId,
+    staleTime: 30 * 1000,
+  });
+  useOptimisticDeletionRevision();
+  return {
+    ...result,
+    data:
+      result.data &&
+      !optimisticDeletionCoordinator.isTombstoned("note", result.data)
+        ? result.data
+        : undefined,
   };
 }
 

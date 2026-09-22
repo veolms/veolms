@@ -26,12 +26,24 @@ const learningPrerenderScope =
     ? "first-section"
     : "all-lectures";
 
+const isDevelopment = import.meta.env.DEV;
+const developmentPrerenderCourseSlugs = ["tailwind-css"] as const;
+
 const staticLearningPages = createLearningPrerenderPaths({
+  courseSlugs: isDevelopment
+    ? developmentPrerenderCourseSlugs
+    : undefined,
   scope: learningPrerenderScope,
 });
 
 const prerenderConfig = {
-  paths: [...staticApplicationPages, ...staticLearningPages],
+  // React Router still renders configured prerender paths through its dev
+  // server. Keep development focused on the small Tailwind CSS course so
+  // other routes use the SPA fallback while the full production prerender
+  // set remains unchanged.
+  paths: isDevelopment
+    ? staticLearningPages
+    : [...staticApplicationPages, ...staticLearningPages],
   concurrency: 1,
   timeout: 120_000,
   retryCount: 2,

@@ -9,9 +9,9 @@
   },
   "scripts": {
     "dev": "turbo run dev --filter=@veolms/api --filter=@veolms/web --filter=@veolms/media-worker",
+    "dev:lan": "turbo run dev:lan --filter=@veolms/api --filter=@veolms/web --filter=@veolms/media-worker",
     "dev:web": "pnpm --filter @veolms/web dev",
     "dev:web:lan": "pnpm --filter @veolms/web dev --host",
-    "dev:webweb": "pnpm --filter @veolms/web preview",
     "preview:web": "pnpm --filter @veolms/web preview -- --port 4173",
     "preview:web:lan": "pnpm --filter @veolms/web preview -- --host 0.0.0.0 --port 4173",
     "generate:video-thumbnails": "pnpm --filter @veolms/web generate:video-thumbnails",
@@ -33,7 +33,6 @@
     "test": "turbo run test",
     "db:migrate": "pnpm --filter @veolms/database migrate",
     "db:seed": "pnpm --filter @veolms/database seed",
-    "db:seed:admins": "pnpm --filter @veolms/database seed:admins",
     "db:reset": "pnpm --filter @veolms/database reset",
     "fleet:cli": "pnpm --filter @veolms/fleet-manager cli",
     "fleet:run:daemon": "pnpm --filter @veolms/fleet-manager run:daemon",

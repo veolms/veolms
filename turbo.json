@@ -12,6 +12,10 @@
       "cache": false,
       "persistent": true
     },
+    "dev:lan": {
+      "cache": false,
+      "persistent": true
+    },
     "typecheck": {
       "dependsOn": ["^typecheck"],
       "outputs": []

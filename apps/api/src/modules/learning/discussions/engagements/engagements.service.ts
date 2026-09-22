@@ -263,32 +263,58 @@ export function createEngagementsService({
     },
 
     async toggleFollow(db, actor, threadId) {
-      const thread = await threadsRepo.findThreadById(db, threadId);
-      if (!thread) {
-        throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
-      }
-      await courseAccess.assertCanAccessThread(db, actor, thread);
-      courseAccess.assertThreadIsActive(thread);
-      await courseAccess.assertNotSuspended(
-        db,
-        actor.userId,
-        thread.courseId,
-        thread.kind,
-      );
+      return withWriteTransaction(db, async (trx) => {
+        // Lock the root thread before reading the relationship. This keeps
+        // concurrent toggle requests deterministic without changing the
+        // public toggle API or relying on a unique-constraint error.
+        const threadExists = await threadsRepo.lockThreadById(trx, threadId);
+        if (!threadExists) {
+          throw httpError(
+            404,
+            "THREAD_NOT_FOUND",
+            "Discussion thread not found",
+          );
+        }
+        const thread = await threadsRepo.findThreadById(trx, threadId);
+        if (!thread) {
+          throw httpError(
+            404,
+            "THREAD_NOT_FOUND",
+            "Discussion thread not found",
+          );
+        }
+        await courseAccess.assertCanAccessThread(trx, actor, thread);
+        courseAccess.assertThreadIsActive(thread);
 
-      const alreadyFollowed = await engagementsRepo.findFollow(
-        db,
-        actor.userId,
-        threadId,
-      );
+        if (thread.kind !== "question" && thread.kind !== "comment") {
+          throw httpError(
+            404,
+            "THREAD_NOT_FOUND",
+            "Discussion thread not found",
+          );
+        }
 
-      if (alreadyFollowed) {
-        await engagementsRepo.removeFollow(db, actor.userId, threadId);
-        return { threadId, following: false };
-      } else {
-        await engagementsRepo.addFollow(db, actor.userId, threadId);
+        await courseAccess.assertNotSuspended(
+          trx,
+          actor.userId,
+          thread.courseId,
+          thread.kind,
+        );
+
+        const alreadyFollowed = await engagementsRepo.findFollow(
+          trx,
+          actor.userId,
+          threadId,
+        );
+
+        if (alreadyFollowed) {
+          await engagementsRepo.removeFollow(trx, actor.userId, threadId);
+          return { threadId, following: false };
+        }
+
+        await engagementsRepo.addFollow(trx, actor.userId, threadId);
         return { threadId, following: true };
-      }
+      });
     },
 
     async lockThread(db, threadId, isLocked, actor) {

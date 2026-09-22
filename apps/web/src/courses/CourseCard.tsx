@@ -404,7 +404,7 @@ export function CourseCard({
                           onPublish(course);
                         } else {
                           onNavigatePage(
-                            `/courses/create?edit=${encodeURIComponent(course.id)}&tab=publish`,
+                            `/courses/${encodeURIComponent(course.id)}/edit/publish`,
                           );
                         }
                       })

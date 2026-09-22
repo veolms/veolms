@@ -17,6 +17,8 @@ export const learningInteractionKeys = {
     ] as const,
   hubThreads: (filters?: Record<string, unknown>) =>
     [...learningInteractionKeys.all, "hub-threads", "infinite", filters] as const,
+  discussionsWorkspace: (filters?: Record<string, unknown>) =>
+    [...learningInteractionKeys.all, "discussions-workspace", "infinite", filters] as const,
   threadDetails: (threadId: string) =>
     [...learningInteractionKeys.all, "thread", threadId] as const,
   threadRepliesRoot: (threadId: string) =>

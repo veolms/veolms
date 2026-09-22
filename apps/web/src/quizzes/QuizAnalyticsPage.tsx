@@ -37,6 +37,7 @@ import {
   useStudentQuizReport,
   useMyQuizzes,
 } from "../services/quizzes";
+import { SelectCourseForQuizModal } from "./SelectCourseForQuizModal";
 
 interface Props {
   role: "student" | "creator";
@@ -239,7 +240,10 @@ function HubTabs({
 
 function InstructorQuizHub({ onNavigatePage }: Pick<Props, "onNavigatePage">) {
   const [view, setView] = useState<InstructorView>("overview");
+  const [isSelectCourseModalOpen, setSelectCourseModalOpen] = useState(false);
   const quizzes = useMyQuizzes();
+
+  const handleOpenCreateQuiz = () => setSelectCourseModalOpen(true);
 
   return (
     <main
@@ -253,7 +257,7 @@ function InstructorQuizHub({ onNavigatePage }: Pick<Props, "onNavigatePage">) {
         description="Build assessments, configure course delivery, and understand exactly where learners are succeeding or getting stuck."
         action={
           <Button
-            onClick={() => onNavigatePage?.("/quizzes/create")}
+            onClick={handleOpenCreateQuiz}
             className="inline-flex items-center gap-2"
           >
             <Plus size={18} weight="bold" aria-hidden="true" />
@@ -267,6 +271,7 @@ function InstructorQuizHub({ onNavigatePage }: Pick<Props, "onNavigatePage">) {
           quizzes={quizzes.data ?? []}
           onNavigatePage={onNavigatePage}
           onSelectView={setView}
+          onOpenCreateQuiz={handleOpenCreateQuiz}
         />
       ) : null}
       {view === "library" ? (
@@ -274,9 +279,16 @@ function InstructorQuizHub({ onNavigatePage }: Pick<Props, "onNavigatePage">) {
           quizzes={quizzes.data ?? []}
           isLoading={quizzes.isLoading}
           onNavigatePage={onNavigatePage}
+          onOpenCreateQuiz={handleOpenCreateQuiz}
         />
       ) : null}
       {view === "analytics" ? <InstructorAnalytics /> : null}
+
+      <SelectCourseForQuizModal
+        isOpen={isSelectCourseModalOpen}
+        onClose={() => setSelectCourseModalOpen(false)}
+        onNavigatePage={onNavigatePage}
+      />
     </main>
   );
 }
@@ -285,10 +297,12 @@ function InstructorOverview({
   quizzes,
   onNavigatePage,
   onSelectView,
+  onOpenCreateQuiz,
 }: {
   quizzes: NonNullable<ReturnType<typeof useMyQuizzes>["data"]>;
   onNavigatePage?: (destination: string) => void;
   onSelectView?: (view: InstructorView) => void;
+  onOpenCreateQuiz?: () => void;
 }) {
   const courses = useMyCourses();
   const [courseId, setCourseId] = useState<string | null>(null);
@@ -615,7 +629,7 @@ function InstructorOverview({
                 title="No quizzes yet"
                 message="Create your first assessment to start measuring learning outcomes."
                 action={
-                  <Button onClick={() => onNavigatePage?.("/quizzes/create")}>
+                  <Button onClick={() => (onOpenCreateQuiz ? onOpenCreateQuiz() : onNavigatePage?.("/quizzes/create"))}>
                     <Plus size={17} weight="bold" />
                     <span>Create quiz</span>
                   </Button>
@@ -637,7 +651,7 @@ function InstructorOverview({
               icon={<Plus size={19} weight="bold" />}
               title="Create a quiz"
               detail="Start a new draft"
-              onClick={() => onNavigatePage?.("/quizzes/create")}
+              onClick={() => (onOpenCreateQuiz ? onOpenCreateQuiz() : onNavigatePage?.("/quizzes/create"))}
             />
             <QuickAction
               icon={<ChartBar size={19} weight="bold" />}
@@ -666,10 +680,12 @@ function QuizLibrary({
   quizzes,
   isLoading,
   onNavigatePage,
+  onOpenCreateQuiz,
 }: {
   quizzes: NonNullable<ReturnType<typeof useMyQuizzes>["data"]>;
   isLoading: boolean;
   onNavigatePage?: (destination: string) => void;
+  onOpenCreateQuiz?: () => void;
 }) {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, DEFAULT_DEBOUNCE_DELAY_MS);
@@ -707,7 +723,7 @@ function QuizLibrary({
             </p>
           </div>
           <Button
-            onClick={() => onNavigatePage?.("/quizzes/create")}
+            onClick={() => (onOpenCreateQuiz ? onOpenCreateQuiz() : onNavigatePage?.("/quizzes/create"))}
             className="h-9 sm:h-10 text-xs sm:text-sm"
           >
             <Plus size={16} weight="bold" />
@@ -769,7 +785,7 @@ function QuizLibrary({
             }
             action={
               !quizzes.length ? (
-                <Button onClick={() => onNavigatePage?.("/quizzes/create")}>
+                <Button onClick={() => (onOpenCreateQuiz ? onOpenCreateQuiz() : onNavigatePage?.("/quizzes/create"))}>
                   <Plus size={17} weight="bold" />
                   <span>Create quiz</span>
                 </Button>

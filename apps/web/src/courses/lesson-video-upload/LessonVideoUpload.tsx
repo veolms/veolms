@@ -1,24 +1,24 @@
 import {
   ArrowsClockwise,
-  Check,
   CheckCircle,
   CircleNotch,
   CloudArrowUp,
   FileVideo,
-  Info,
   PlayCircle,
   UploadSimple,
   WarningCircle,
   X,
 } from "@phosphor-icons/react";
 import {
+  forwardRef,
   useCallback,
   useEffect,
+  useId,
+  useImperativeHandle,
   useRef,
   useState,
   type ChangeEvent,
   type DragEvent,
-  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -29,18 +29,26 @@ import {
   type VideoJobStatus,
 } from "@veolms/contracts";
 import { mediaService } from "../../services/media";
+import { LessonUploadDropzone } from "../LessonUploadDropzone";
 
 export interface LessonVideoUploadProps {
   mediaAssetId?: string | null;
   visibility?: PresignMediaRequest["visibility"];
   disabled?: boolean;
   hideUploadWhenAttached?: boolean;
+  hideTrigger?: boolean;
+  inline?: boolean;
   attachedActionLabel?: string;
   stackStatusBelow?: boolean;
+  onPreviewFile?: (file: File | null) => void;
   onMediaAttached: (
     mediaAssetId: string,
   ) => void | boolean | Promise<void | boolean>;
   onProcessingComplete?: (mediaAssetId: string) => void | Promise<void>;
+}
+
+export interface LessonVideoUploadHandle {
+  open: (file?: File) => void;
 }
 
 type UploadPhase =
@@ -77,16 +85,25 @@ const PRIMARY_ACTION_CLASS =
 const SECONDARY_ACTION_CLASS =
   "inline-flex h-10 items-center justify-center rounded-[10px] border-none bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--text)_13%,var(--surface))] active:bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))] px-5 text-[0.82rem] font-semibold text-(--text) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_10%,transparent))] transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap";
 
-export function LessonVideoUpload({
-  mediaAssetId,
-  visibility,
-  disabled = false,
-  hideUploadWhenAttached = false,
-  attachedActionLabel = "Change Video",
-  stackStatusBelow = false,
-  onMediaAttached,
-  onProcessingComplete,
-}: LessonVideoUploadProps) {
+export const LessonVideoUpload = forwardRef<
+  LessonVideoUploadHandle,
+  LessonVideoUploadProps
+>(function LessonVideoUpload(
+  {
+    mediaAssetId,
+    visibility,
+    disabled = false,
+    hideUploadWhenAttached = false,
+    hideTrigger = false,
+    inline = false,
+    attachedActionLabel = "Change Video",
+    stackStatusBelow = false,
+    onPreviewFile,
+    onMediaAttached,
+    onProcessingComplete,
+  },
+  ref,
+) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const previousActiveElementRef = useRef<HTMLElement | null>(null);
@@ -152,6 +169,11 @@ export function LessonVideoUpload({
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isReplacingVideo, setIsReplacingVideo] = useState(false);
+  const isUploadSurfaceActive = inline || isOpen;
+
+  useEffect(() => {
+    onPreviewFile?.(selectedFile);
+  }, [onPreviewFile, selectedFile]);
 
   const commitCandidate = useCallback(async (candidateId: string) => {
     if (
@@ -432,7 +454,7 @@ export function LessonVideoUpload({
       replacementForMediaIdRef.current = null;
       setSelectedFile(null);
       setActiveMediaId(mediaAssetId ?? null);
-      setTrackProgress(Boolean(mediaAssetId && isOpen));
+      setTrackProgress(Boolean(mediaAssetId && isUploadSurfaceActive));
       setTranscodeProgress(0);
       setTranscodeStatus(undefined);
       setProgressStreamError(null);
@@ -466,7 +488,7 @@ export function LessonVideoUpload({
     if (mediaAssetId === activeMediaId) return;
 
     setActiveMediaId(mediaAssetId ?? null);
-    setTrackProgress(Boolean(mediaAssetId && isOpen));
+    setTrackProgress(Boolean(mediaAssetId && isUploadSurfaceActive));
     setTranscodeProgress(0);
     setTranscodeStatus(undefined);
     setProgressStreamError(null);
@@ -475,7 +497,7 @@ export function LessonVideoUpload({
     setAttachmentError(null);
     setPhase(mediaAssetId ? "attached" : "idle");
     setErrorMessage(null);
-  }, [activeMediaId, candidateMediaId, isOpen, mediaAssetId]);
+  }, [activeMediaId, candidateMediaId, isUploadSurfaceActive, mediaAssetId]);
 
   useEffect(() => {
     if (!isOpen || typeof document === "undefined") return undefined;
@@ -608,6 +630,7 @@ export function LessonVideoUpload({
       replacementForMediaIdRef.current = null;
       setCandidateMediaId(null);
       setActiveMediaId(mediaAssetId ?? null);
+      onPreviewFile?.(file);
       setSelectedFile(file);
       setErrorMessage(null);
       setUploadProgress(0);
@@ -622,7 +645,27 @@ export function LessonVideoUpload({
       setPhase("idle");
       setTrackProgress(false);
     },
-    [mediaAssetId, phase, resetReconnectBackoff, validateFile],
+    [mediaAssetId, onPreviewFile, phase, resetReconnectBackoff, validateFile],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      open: (file) => {
+        if (disabled) return;
+        if (inline) {
+          if (file) {
+            selectFile(file);
+            return;
+          }
+          fileInputRef.current?.click();
+          return;
+        }
+        openModal();
+        if (file) selectFile(file);
+      },
+    }),
+    [disabled, inline, openModal, selectFile],
   );
 
   const startUpload = useCallback(
@@ -644,6 +687,7 @@ export function LessonVideoUpload({
       resetReconnectBackoff();
       committedMediaIdRef.current = null;
       replacementForMediaIdRef.current = mediaAssetId ?? null;
+      onPreviewFile?.(file);
       setSelectedFile(file);
       setIsReplacingVideo(false);
       setErrorMessage(null);
@@ -715,6 +759,7 @@ export function LessonVideoUpload({
     [
       activeMediaId,
       mediaAssetId,
+      onPreviewFile,
       phase,
       resetReconnectBackoff,
       validateFile,
@@ -835,6 +880,7 @@ export function LessonVideoUpload({
     replacementForMediaIdRef.current = null;
     setCandidateMediaId(null);
     setActiveMediaId(mediaAssetId ?? null);
+    onPreviewFile?.(null);
     setSelectedFile(null);
     setUploadProgress(0);
     setUploadLoadedBytes(0);
@@ -846,17 +892,17 @@ export function LessonVideoUpload({
     setHasReceivedProgress(false);
     setErrorMessage(null);
     setPhase(mediaAssetId ? "attached" : "idle");
-    setTrackProgress(Boolean(mediaAssetId && isOpen));
+    setTrackProgress(Boolean(mediaAssetId && isUploadSurfaceActive));
     setIsReplacingVideo(false);
-  }, [isOpen, mediaAssetId, resetReconnectBackoff]);
+  }, [isUploadSurfaceActive, mediaAssetId, onPreviewFile, resetReconnectBackoff]);
 
   const removeSelectedFile = useCallback(() => {
+    onPreviewFile?.(null);
     setSelectedFile(null);
     setErrorMessage(null);
-    if (!isReplacingVideo) {
-      setPhase(activeMediaId ? "attached" : "idle");
-    }
-  }, [activeMediaId, isReplacingVideo]);
+    setIsReplacingVideo(false);
+    setPhase(mediaAssetId ? "attached" : "idle");
+  }, [mediaAssetId, onPreviewFile]);
 
   const displayErrorMessage =
     errorMessage ||
@@ -871,8 +917,109 @@ export function LessonVideoUpload({
 
   const hasVideo = Boolean(activeMediaId || mediaAssetId);
 
+  const stageContent = isReplacingVideo ? (
+    <div className="min-w-0 space-y-3.5 sm:space-y-4">
+      <div
+        className={`flex items-center justify-between gap-3 p-3 sm:p-3.5 ${RAISED_CARD_CLASS}`}
+      >
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-emerald-500/15 text-emerald-400">
+            <CheckCircle size={16} weight="fill" />
+          </div>
+          <div className="min-w-0">
+            <p className="m-0 truncate text-[0.78rem] sm:text-[0.8rem] font-semibold text-(--text)">
+              Replacing current video
+            </p>
+            <p className="m-0 mt-0.5 truncate text-[0.7rem] sm:text-[0.72rem] text-(--muted)">
+              Your active video stays live until the replacement completes.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            onPreviewFile?.(null);
+            setSelectedFile(null);
+            setIsReplacingVideo(false);
+          }}
+          className="shrink-0 cursor-pointer rounded-[7px] border-none bg-[color-mix(in_srgb,var(--text)_7%,transparent)] px-2.5 py-1 text-[0.72rem] font-semibold text-(--text) transition-all hover:bg-[color-mix(in_srgb,var(--text)_12%,transparent)] active:scale-95"
+        >
+          Keep current
+        </button>
+      </div>
+
+      <SelectVideoStage
+        canChooseFile={canChooseFile}
+        isDragging={isDragging}
+        minimal={inline}
+        onChooseFile={() => fileInputRef.current?.click()}
+        onUploadFile={() => {
+          if (selectedFile) void startUpload(selectedFile);
+        }}
+        onDragEnter={handleDragOver}
+        onDragLeave={() => setIsDragging(false)}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        onRemoveFile={removeSelectedFile}
+        selectedFile={selectedFile}
+        isReplacement={true}
+      />
+    </div>
+  ) : uploadStage === "select" ? (
+    <SelectVideoStage
+      canChooseFile={canChooseFile}
+      isDragging={isDragging}
+      minimal={inline}
+      onChooseFile={() => fileInputRef.current?.click()}
+      onUploadFile={() => {
+        if (selectedFile) void startUpload(selectedFile);
+      }}
+      onDragEnter={handleDragOver}
+      onDragLeave={() => setIsDragging(false)}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      onRemoveFile={removeSelectedFile}
+      selectedFile={selectedFile}
+      isReplacement={false}
+    />
+  ) : uploadStage === "uploading" ? (
+    <UploadProgressStage
+      file={selectedFile}
+      loadedBytes={uploadLoadedBytes}
+      phase={phase}
+      progress={uploadProgress}
+      embedded={inline}
+    />
+  ) : (
+    <TranscodingProgressStage
+      file={selectedFile}
+      mediaAttached={!selectedFile && Boolean(activeMediaId)}
+      progress={hasReceivedProgress ? transcodeProgress : null}
+      status={transcodeStatus}
+      errorMessage={isStreamError ? null : errorMessage}
+      isReplacement={isPendingReplacement}
+      embedded={inline}
+      onReplace={
+        mediaAssetId && !isReplacingVideo && !selectedFile
+          ? () => fileInputRef.current?.click()
+          : undefined
+      }
+    />
+  );
+
   return (
     <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/*"
+        className="hidden"
+        disabled={!canChooseFile}
+        aria-label="Choose a video file"
+        onChange={handleFileInputChange}
+      />
+
+      {!hideTrigger ? (
       <div
         className={`${stackStatusBelow ? "flex flex-col items-center gap-1.5" : "flex flex-wrap items-center gap-2"} max-[768px]:w-full`}
       >
@@ -939,6 +1086,70 @@ export function LessonVideoUpload({
           )
         )}
       </div>
+      ) : null}
+
+      {inline &&
+      (!activeMediaId ||
+        isReplacingVideo ||
+        Boolean(selectedFile) ||
+        isBusy(phase) ||
+        phase === "failed" ||
+        Boolean(candidateMediaId)) ? (
+        <div
+          className="min-w-0 space-y-3.5 sm:space-y-4"
+          data-inline-video-upload="true"
+        >
+          {isReplacementFlow && phase !== "idle" && (
+            <div className="flex items-start gap-2.5 rounded-[12px] border-none bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] p-3.5 text-[0.74rem] leading-relaxed text-(--text-secondary) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_8%,transparent))]">
+              <CheckCircle
+                size={18}
+                weight="fill"
+                className="mt-0.5 shrink-0 text-emerald-400"
+              />
+              <span>
+                Your current lesson video stays available until this
+                replacement is ready.
+              </span>
+            </div>
+          )}
+
+          {displayErrorMessage && (
+            <div
+              role="alert"
+              className={`flex flex-col items-start justify-between gap-3 p-3.5 sm:flex-row sm:items-center sm:p-4 ${inline ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface))" : RAISED_CARD_CLASS}`}
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <WarningCircle
+                  size={19}
+                  weight="fill"
+                  className="shrink-0 text-amber-400"
+                />
+                <p className="m-0 break-words text-[0.82rem] font-semibold leading-snug text-(--text)">
+                  {displayErrorMessage}
+                </p>
+              </div>
+              {canRetry && (
+                <button
+                  type="button"
+                  disabled={isRetrying}
+                  onClick={() => void handleRetry()}
+                  className="inline-flex h-8.5 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[9px] border-none bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3.5 text-[0.74rem] font-semibold text-(--text) transition-all hover:bg-[color-mix(in_srgb,var(--text)_16%,transparent)] active:scale-95 disabled:opacity-50"
+                >
+                  <ArrowsClockwise
+                    size={14}
+                    weight="bold"
+                    className={isRetrying ? "animate-spin" : ""}
+                  />
+                  {isRetrying ? "Retrying…" : retryButtonLabel}
+                </button>
+              )}
+            </div>
+          )}
+
+          {stageContent}
+
+        </div>
+      ) : null}
 
       {isOpen && typeof document !== "undefined"
         ? createPortal(
@@ -982,16 +1193,6 @@ export function LessonVideoUpload({
                 </div>
 
                 <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-3 sm:px-6 sm:py-4">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="video/*"
-                    className="hidden"
-                    disabled={!canChooseFile}
-                    aria-label="Choose a video file"
-                    onChange={handleFileInputChange}
-                  />
-
                   {isReplacementFlow && (
                     <div className="mb-3.5 flex items-start gap-2.5 rounded-[12px] border-none bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] p-3.5 text-[0.74rem] leading-relaxed text-(--text-secondary) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_8%,transparent))]">
                       <CheckCircle
@@ -1079,89 +1280,7 @@ export function LessonVideoUpload({
                     </div>
                   )}
 
-                  {isReplacingVideo ? (
-                    <div className="min-w-0 space-y-3.5 sm:space-y-4">
-                      {/* Context banner reminding user current video remains active */}
-                      <div
-                        className={`flex items-center justify-between gap-3 p-3 sm:p-3.5 ${RAISED_CARD_CLASS}`}
-                      >
-                        <div className="flex min-w-0 items-center gap-2.5">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-emerald-500/15 text-emerald-400">
-                            <CheckCircle size={16} weight="fill" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="m-0 truncate text-[0.78rem] sm:text-[0.8rem] font-semibold text-(--text)">
-                              Replacing current video
-                            </p>
-                            <p className="m-0 mt-0.5 truncate text-[0.7rem] sm:text-[0.72rem] text-(--muted)">
-                              Your active video stays live until the replacement
-                              completes.
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedFile(null);
-                            setIsReplacingVideo(false);
-                          }}
-                          className="shrink-0 cursor-pointer rounded-[7px] border-none bg-[color-mix(in_srgb,var(--text)_7%,transparent)] px-2.5 py-1 text-[0.72rem] font-semibold text-(--text) transition-all hover:bg-[color-mix(in_srgb,var(--text)_12%,transparent)] active:scale-95"
-                        >
-                          Keep current
-                        </button>
-                      </div>
-
-                      <SelectVideoStage
-                        canChooseFile={canChooseFile}
-                        isDragging={isDragging}
-                        onChooseFile={() => fileInputRef.current?.click()}
-                        onDragEnter={handleDragOver}
-                        onDragLeave={() => setIsDragging(false)}
-                        onDragOver={handleDragOver}
-                        onDrop={handleDrop}
-                        onRemoveFile={removeSelectedFile}
-                        selectedFile={selectedFile}
-                        isReplacement={true}
-                      />
-                    </div>
-                  ) : uploadStage === "select" ? (
-                    <SelectVideoStage
-                      canChooseFile={canChooseFile}
-                      isDragging={isDragging}
-                      onChooseFile={() => fileInputRef.current?.click()}
-                      onDragEnter={handleDragOver}
-                      onDragLeave={() => setIsDragging(false)}
-                      onDragOver={handleDragOver}
-                      onDrop={handleDrop}
-                      onRemoveFile={removeSelectedFile}
-                      selectedFile={selectedFile}
-                      isReplacement={false}
-                    />
-                  ) : uploadStage === "uploading" ? (
-                    <UploadProgressStage
-                      file={selectedFile}
-                      loadedBytes={uploadLoadedBytes}
-                      phase={phase}
-                      progress={uploadProgress}
-                    />
-                  ) : (
-                    <TranscodingProgressStage
-                      file={selectedFile}
-                      mediaAttached={!selectedFile && Boolean(activeMediaId)}
-                      progress={transcodeProgress}
-                      status={transcodeStatus}
-                      attachmentError={attachmentError}
-                      errorMessage={isStreamError ? null : errorMessage}
-                      hasReceivedProgress={hasReceivedProgress}
-                      streamConnectionState={streamConnectionState}
-                      isReplacement={isPendingReplacement}
-                      onReplace={
-                        mediaAssetId && !isReplacingVideo && !selectedFile
-                          ? () => setIsReplacingVideo(true)
-                          : undefined
-                      }
-                    />
-                  )}
+                  {stageContent}
                 </div>
 
                 <div className="flex items-center justify-end gap-2 sm:gap-2.5 px-4 pb-4 pt-2 sm:px-6 sm:pb-6 sm:pt-2">
@@ -1228,13 +1347,15 @@ export function LessonVideoUpload({
         : null}
     </>
   );
-}
+});
 
 interface SelectVideoStageProps {
   canChooseFile: boolean;
   isDragging: boolean;
   isReplacement?: boolean;
+  minimal?: boolean;
   onChooseFile: () => void;
+  onUploadFile?: () => void;
   onDragEnter: (event: DragEvent<HTMLDivElement>) => void;
   onDragLeave: () => void;
   onDragOver: (event: DragEvent<HTMLDivElement>) => void;
@@ -1247,7 +1368,9 @@ function SelectVideoStage({
   canChooseFile,
   isDragging,
   isReplacement = false,
+  minimal = false,
   onChooseFile,
+  onUploadFile,
   onDragEnter,
   onDragLeave,
   onDragOver,
@@ -1257,77 +1380,106 @@ function SelectVideoStage({
 }: SelectVideoStageProps) {
   return (
     <div className="min-w-0 space-y-3.5 sm:space-y-4">
-      <p className="m-0 break-words text-[0.78rem] sm:text-[0.8rem] leading-relaxed text-(--muted)">
-        {isReplacement
-          ? "Choose a replacement video. Your current video stays available until the new one is ready."
-          : "Upload a video for this lesson."}{" "}
-        Supported formats: MP4, MOV, AVI, WebM (Max 5 GB)
-      </p>
-
-      {/* Tactile 3D sunken socket dropzone - 0 borders */}
-      <div
-        className={`flex min-h-[210px] sm:min-h-[250px] flex-col items-center justify-center rounded-[16px] border-none p-4 sm:p-6 text-center transition-all duration-150 ${
-          isDragging
-            ? "bg-[linear-gradient(160deg,color-mix(in_srgb,var(--accent)_16%,var(--canvas))_0%,color-mix(in_srgb,var(--accent)_8%,var(--surface))_100%)] shadow-[inset_0_0_0_2px_var(--accent),0_0_24px_var(--accent-shadow)]"
-            : "bg-[linear-gradient(155deg,color-mix(in_srgb,var(--canvas)_80%,var(--surface))_0%,color-mix(in_srgb,var(--surface)_65%,var(--canvas))_100%)] shadow-[inset_0_2px_6px_color-mix(in_srgb,black_28%,transparent),inset_0_1px_2px_color-mix(in_srgb,var(--text)_10%,transparent),inset_0_-1px_0_color-mix(in_srgb,var(--surface)_90%,transparent)]"
-        } ${canChooseFile ? "cursor-pointer" : "cursor-not-allowed opacity-75"}`}
-        onClick={() => {
-          if (canChooseFile) onChooseFile();
-        }}
-        onDragEnter={onDragEnter}
-        onDragOver={onDragOver}
-        onDragLeave={onDragLeave}
-        onDrop={onDrop}
-        role="region"
-        aria-label="Video upload dropzone"
-      >
-        <div className="flex h-13 w-13 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_20%,var(--surface))_0%,color-mix(in_srgb,var(--accent)_8%,var(--canvas))_100%)] text-(--accent) shadow-[var(--card-compact-shadow,0_3px_8px_color-mix(in_srgb,var(--text)_12%,transparent))]">
-          <CloudArrowUp size={34} weight="duotone" />
-        </div>
-        <p className="m-0 mt-3 sm:mt-4 text-[0.88rem] sm:text-[0.92rem] font-semibold text-(--text)">
+      {!minimal && (
+        <p className="m-0 break-words text-[0.78rem] sm:text-[0.8rem] leading-relaxed text-(--muted)">
           {isReplacement
-            ? "Drag and drop the replacement video here"
-            : "Drag and drop your video here"}
+            ? "Choose a replacement video. Your current video stays available until the new one is ready."
+            : "Upload a video for this lesson."}{" "}
+          Supported formats: MP4, MOV, AVI, WebM.
         </p>
-        <p className="m-0 mt-1 text-[0.72rem] sm:text-[0.74rem] font-medium text-[color-mix(in_srgb,var(--muted)_75%,transparent)]">
-          or
-        </p>
-        <button
-          type="button"
-          disabled={!canChooseFile}
-          aria-label={
-            isReplacement ? "Choose Replacement Video" : "Choose Video File"
-          }
-          onClick={(event) => {
-            event.stopPropagation();
-            onChooseFile();
-          }}
-          className={`${PRIMARY_ACTION_CLASS} mt-3 sm:mt-3.5 px-6`}
-        >
-          Choose
-        </button>
-      </div>
-
-      {selectedFile && (
-        <VideoFileSummary file={selectedFile} onRemove={onRemoveFile} />
       )}
 
-      {/* Video requirements: 3D raised surface, 0 borders, content-based low opacity */}
-      <div className={`${RAISED_CARD_CLASS} p-3.5 sm:p-4`}>
-        <h3 className="m-0 text-[0.8rem] sm:text-[0.82rem] font-semibold text-(--text)">
-          {isReplacement
-            ? "Replacement video requirements"
-            : "Video requirements"}
-        </h3>
-        <div className="mt-2.5 sm:mt-3 space-y-2 text-[0.72rem] sm:text-[0.74rem] text-(--text-secondary)">
-          <RequirementRow>MP4, MOV, AVI, WebM supported</RequirementRow>
-          <RequirementRow>Maximum file size: 5 GB</RequirementRow>
-          <RequirementRow>Recommended: 1080p or higher</RequirementRow>
-          <RequirementRow>
-            Clear audio for a better learning experience
-          </RequirementRow>
-        </div>
-      </div>
+      {!selectedFile && (
+        minimal ? (
+          <LessonUploadDropzone
+            title={
+              isReplacement
+                ? "Drag and drop the replacement video here"
+                : "Drag and drop your video here"
+            }
+            supportText="Supports MP4, MOV, AVI, WebM."
+            isDragging={isDragging}
+            disabled={!canChooseFile}
+            ariaLabel="Video upload dropzone"
+            onChooseFile={onChooseFile}
+            onDragEnter={onDragEnter}
+            onDragLeave={onDragLeave}
+            onDragOver={onDragOver}
+            onDrop={onDrop}
+          />
+        ) : (
+          <div
+            className={`flex min-h-[210px] flex-col items-center justify-center rounded-[16px] border-none p-4 text-center transition-all duration-150 sm:min-h-[250px] sm:p-6 ${
+              isDragging
+                ? "bg-[linear-gradient(160deg,color-mix(in_srgb,var(--accent)_16%,var(--canvas))_0%,color-mix(in_srgb,var(--accent)_8%,var(--surface))_100%)] shadow-[inset_0_0_0_2px_var(--accent),0_0_24px_var(--accent-shadow)]"
+                : "bg-[linear-gradient(155deg,color-mix(in_srgb,var(--canvas)_80%,var(--surface))_0%,color-mix(in_srgb,var(--surface)_65%,var(--canvas))_100%)] shadow-[inset_0_2px_6px_color-mix(in_srgb,black_28%,transparent),inset_0_1px_2px_color-mix(in_srgb,var(--text)_10%,transparent),inset_0_-1px_0_color-mix(in_srgb,var(--surface)_90%,transparent)]"
+            } ${canChooseFile ? "cursor-pointer" : "cursor-not-allowed opacity-75"}`}
+            onClick={() => {
+              if (canChooseFile) onChooseFile();
+            }}
+            onDragEnter={onDragEnter}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            role="button"
+            tabIndex={canChooseFile ? 0 : -1}
+            aria-disabled={!canChooseFile}
+            aria-label="Video upload dropzone"
+            onKeyDown={(event) => {
+              if (
+                canChooseFile &&
+                (event.key === "Enter" || event.key === " ")
+              ) {
+                event.preventDefault();
+                onChooseFile();
+              }
+            }}
+          >
+            <div className="flex h-13 w-13 items-center justify-center rounded-2xl bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_20%,var(--surface))_0%,color-mix(in_srgb,var(--accent)_8%,var(--canvas))_100%)] text-(--accent) shadow-[var(--card-compact-shadow,0_3px_8px_color-mix(in_srgb,var(--text)_12%,transparent))] sm:h-16 sm:w-16">
+              <CloudArrowUp size={34} weight="duotone" />
+            </div>
+            <p className="m-0 mt-3 text-[0.88rem] font-semibold text-(--text) sm:mt-4 sm:text-[0.92rem]">
+              {isReplacement
+                ? "Drag and drop the replacement video here"
+                : "Drag and drop your video here"}
+            </p>
+            <p className="m-0 mt-1 text-[0.72rem] font-medium text-(--muted) sm:text-[0.74rem]">
+              <span>or </span>
+              <span className="text-(--accent) underline-offset-4 hover:underline">
+                click to browse
+              </span>
+            </p>
+            <p className="m-0 mt-2 text-[0.70rem] text-(--muted) sm:text-[0.74rem]">
+              Supports MP4, MOV, AVI, WebM.
+            </p>
+            <button
+              type="button"
+              disabled={!canChooseFile}
+              aria-label={
+                isReplacement ? "Choose Replacement Video" : "Choose Video File"
+              }
+              onClick={(event) => {
+                event.stopPropagation();
+                onChooseFile();
+              }}
+              className={`${PRIMARY_ACTION_CLASS} mt-3 px-6 sm:mt-3.5`}
+            >
+              Choose
+            </button>
+          </div>
+        )
+      )}
+
+      {selectedFile && (
+        <VideoFileSummary
+          file={selectedFile}
+          embedded={minimal}
+          onUpload={minimal ? onUploadFile : undefined}
+          uploadTextOnly={minimal}
+          onRemove={onRemoveFile}
+        />
+      )}
+
     </div>
   );
 }
@@ -1337,6 +1489,7 @@ interface UploadProgressStageProps {
   loadedBytes: number;
   phase: UploadPhase;
   progress: number;
+  embedded?: boolean;
 }
 
 function UploadProgressStage({
@@ -1344,20 +1497,19 @@ function UploadProgressStage({
   loadedBytes,
   phase,
   progress,
+  embedded = false,
 }: UploadProgressStageProps) {
-  const uploadState: ProgressState =
-    phase === "confirming" ? "complete" : progress > 0 ? "active" : "pending";
-  const preparingState: ProgressState =
-    phase === "uploading" && progress === 0 ? "active" : "complete";
-  const finalizingState: ProgressState =
-    phase === "confirming" ? "active" : "pending";
-
   return (
     <div className="min-w-0 space-y-3.5 sm:space-y-4">
-      <VideoFileSummary file={file} />
+      <VideoFileSummary file={file} embedded={embedded} isUploading />
 
-      {/* Progress Card: 3D raised surface, 0 borders */}
-      <section className={`min-w-0 ${RAISED_CARD_CLASS} p-3.5 sm:p-4`}>
+      <section
+        className={`min-w-0 ${
+          embedded
+            ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-4"
+            : `${RAISED_CARD_CLASS} p-3.5 sm:p-4`
+        }`}
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="m-0 text-[0.84rem] sm:text-[0.86rem] font-semibold text-(--text)">
@@ -1379,44 +1531,6 @@ function UploadProgressStage({
           <span>{phase === "confirming" ? "Finalizing" : "Uploading"}</span>
         </div>
       </section>
-
-      {/* Checklist Card: 3D raised surface, 0 borders, clear opacity hierarchy */}
-      <section className={`${RAISED_CARD_CLASS} p-3.5 sm:p-4 space-y-1`}>
-        <UploadChecklistItem
-          description="Getting your video ready to upload..."
-          label="Preparing upload"
-          state={preparingState}
-        />
-        <UploadChecklistItem
-          description="Uploading video file"
-          label="Uploading file"
-          state={uploadState}
-          value={progress > 0 ? `${progress}%` : undefined}
-        />
-        <UploadChecklistItem
-          description="Confirming upload completion"
-          label="Finalizing upload"
-          state={finalizingState}
-        />
-        <UploadChecklistItem
-          description="Queued for transcoding"
-          label="Starting video processing"
-          state="pending"
-        />
-      </section>
-
-      {/* Background info note: 0 borders, subtle tinted depth */}
-      <div className="flex items-start gap-2.5 rounded-[12px] border-none bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-3.5 py-3 text-[0.72rem] sm:text-[0.73rem] leading-relaxed text-(--text-secondary) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_8%,transparent))]">
-        <Info
-          size={16}
-          weight="fill"
-          className="mt-0.5 shrink-0 text-(--accent)"
-        />
-        <span>
-          You can close this modal and the upload will continue in the
-          background.
-        </span>
-      </div>
     </div>
   );
 }
@@ -1424,26 +1538,22 @@ function UploadProgressStage({
 interface TranscodingProgressStageProps {
   file: File | null;
   mediaAttached: boolean;
-  progress: number;
+  progress?: number | null;
   status?: string;
-  attachmentError?: string | null;
   errorMessage?: string | null;
-  hasReceivedProgress: boolean;
-  streamConnectionState: StreamConnectionState;
   isReplacement: boolean;
+  embedded?: boolean;
   onReplace?: () => void;
 }
 
 function TranscodingProgressStage({
   file,
   mediaAttached,
-  progress,
+  progress = null,
   status,
-  attachmentError,
   errorMessage,
-  hasReceivedProgress,
-  streamConnectionState,
   isReplacement,
+  embedded = false,
   onReplace,
 }: TranscodingProgressStageProps) {
   // A worker can report 100% FFmpeg progress while the job is still doing
@@ -1452,18 +1562,6 @@ function TranscodingProgressStage({
   const isReady = status === "completed";
   const isFailed =
     status === "failed" || status === "cancelled" || Boolean(errorMessage);
-  const isConnectionDegraded =
-    streamConnectionState === "reconnecting" ||
-    streamConnectionState === "closed";
-  const isWaitingForWorker = status === "queued" || status === "provisioning";
-  const hasDeterminateProgress = isReady || isFailed || progress > 0;
-  const visibleProgress = hasDeterminateProgress ? progress : null;
-  const isCheckingStatus =
-    !isFailed &&
-    !isReady &&
-    !isWaitingForWorker &&
-    !hasReceivedProgress &&
-    !isConnectionDegraded;
   const badge = isReady ? "Ready" : isFailed ? "Failed" : "Processing";
 
   return (
@@ -1472,166 +1570,70 @@ function TranscodingProgressStage({
         file={file}
         mediaAttached={mediaAttached}
         badge={badge}
+        processingProgress={badge === "Processing" ? progress : undefined}
+        embedded={embedded}
         onReplace={onReplace}
       />
 
-      {/* Processing Progress Card: 3D raised, 0 borders */}
-      <section className={`min-w-0 ${RAISED_CARD_CLASS} p-3.5 sm:p-4`}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="m-0 text-[0.84rem] sm:text-[0.86rem] font-semibold text-(--text)">
-              {isFailed
-                ? "Video processing failed"
-                : isReady
-                  ? "Video processing complete"
-                  : isConnectionDegraded
-                    ? "Processing status unavailable"
-                    : isWaitingForWorker
-                      ? "Waiting for transcoder"
-                      : isCheckingStatus
-                        ? "Checking video status"
-                        : "Video is being processed"}
-            </h3>
-            <p className="m-0 mt-0.5 sm:mt-1 text-[0.72rem] sm:text-[0.74rem] leading-relaxed text-(--muted)">
-              {isFailed
-                ? errorMessage || "The video could not be transcoded."
-                : isReady
-                  ? "Your playback files are ready for this lesson."
-                  : isConnectionDegraded
-                    ? "The last known status is preserved. Reconnect to continue receiving live updates."
-                    : isWaitingForWorker
-                      ? "Your upload is complete. A transcoding worker will start processing it shortly."
-                      : isCheckingStatus
-                        ? "Loading the latest transcoding status."
-                        : "Your video has been uploaded. We're now transcoding it into playback files for the best learning experience."}
-            </p>
-          </div>
-          <div className="shrink-0">
-            <span className="text-[0.88rem] sm:text-[0.92rem] font-bold text-(--text) tabular-nums">
-              {visibleProgress === null
-                ? isWaitingForWorker
-                  ? "Preparing…"
-                  : "Checking…"
-                : `${visibleProgress}%`}
-            </span>
-          </div>
-        </div>
-        <ProgressBar
-          label="Video transcoding progress"
-          value={visibleProgress}
-        />
-        <p className="m-0 mt-2.5 text-[0.7rem] sm:text-[0.72rem] text-(--muted)">
-          {isFailed
-            ? isReplacement
-              ? "The current lesson video is still available. Retry this replacement or choose another video."
-              : "Click Retry above to reconnect the status stream or restart the job."
-            : isReady
-              ? "The video can now be used when publishing the course."
-              : isConnectionDegraded
-                ? "Processing continues in the background while live updates reconnect."
-                : "This may take a few minutes. Processing will continue in the background."}
-        </p>
-      </section>
-
-      {/* Transcoding Status Card: 3D raised container + sunken inner socket, 0 borders */}
-      <section className={`${RAISED_CARD_CLASS} p-3.5 sm:p-4`}>
-        <h3 className="m-0 text-[0.8rem] sm:text-[0.82rem] font-semibold text-(--text)">
-          Transcoding status
-        </h3>
-        <div
-          className={`mt-2.5 sm:mt-3 overflow-hidden ${INSET_WELL_CLASS} divide-y divide-[color-mix(in_srgb,var(--text)_8%,transparent)]`}
-        >
-          <TranscodingStatusRow
-            label="Transcoding job"
-            state={isFailed ? "failed" : isReady ? "complete" : "active"}
-            value={
-              isFailed
-                ? status === "cancelled"
-                  ? "Transcoding cancelled"
-                  : "Transcoding failed"
-                : getJobLabel(status)
-            }
-          />
-          <TranscodingStatusRow
-            label="Playback output"
-            state={isReady ? "complete" : isFailed ? "failed" : "pending"}
-            value={
-              isReady
-                ? "Verified"
-                : isFailed
-                  ? "Not generated"
-                  : isConnectionDegraded
-                    ? "Last known status"
-                    : "Pending verification"
-            }
-          />
-          <TranscodingStatusRow
-            label="Lesson attachment"
-            state={
-              attachmentError
-                ? "failed"
-                : isReady
-                  ? "complete"
-                  : isFailed
-                    ? "failed"
-                    : "pending"
-            }
-            value={
-              attachmentError
-                ? "Attachment failed"
-                : isReady
-                  ? isReplacement
-                    ? "Will replace current"
-                    : "Ready"
-                  : isFailed
-                    ? isReplacement
-                      ? "Current video kept"
-                      : "Not attached"
-                    : isReplacement
-                      ? "Current video kept"
-                      : "Pending"
-            }
-          />
-        </div>
-      </section>
-
-      {/* After Processing Card: 3D raised, 0 borders - only shown when not failed to avoid scrolling */}
-      {!isFailed && (
-        <section className={`${RAISED_CARD_CLASS} p-3.5 sm:p-4`}>
-          <h3 className="m-0 text-[0.8rem] sm:text-[0.82rem] font-semibold text-(--text)">
-            After processing
-          </h3>
-          <div className="mt-2 sm:mt-2.5 space-y-2 text-[0.72rem] sm:text-[0.73rem] text-(--text-secondary)">
-            <RequirementRow>
-              {isReplacement
-                ? "The current video remains attached until this replacement is ready"
-                : "Video will be attached to this lesson automatically"}
-            </RequirementRow>
-            <RequirementRow>
-              You&apos;ll be able to preview the video in the player
-            </RequirementRow>
-          </div>
-        </section>
-      )}
     </div>
   );
 }
 
 interface VideoFileSummaryProps {
   badge?: string;
+  embedded?: boolean;
   file: File | null;
+  isUploading?: boolean;
+  onUpload?: () => void;
   mediaAttached?: boolean;
   onRemove?: () => void;
   onReplace?: () => void;
+  processingProgress?: number | null;
+  uploadTextOnly?: boolean;
 }
 
 function VideoFileSummary({
   badge,
+  embedded = false,
   file,
+  isUploading = false,
+  onUpload,
   mediaAttached = false,
   onRemove,
   onReplace,
+  processingProgress = null,
+  uploadTextOnly = false,
 }: VideoFileSummaryProps) {
+  const processingTooltipId = useId();
+  const [videoDimensions, setVideoDimensions] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!file) {
+      setVideoDimensions(null);
+      return;
+    }
+
+    let active = true;
+    const previewUrl = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      if (active && video.videoWidth > 0 && video.videoHeight > 0) {
+        setVideoDimensions(`${video.videoWidth} × ${video.videoHeight}`);
+      }
+    };
+    video.src = previewUrl;
+    video.load();
+
+    return () => {
+      active = false;
+      video.onloadedmetadata = null;
+      video.removeAttribute("src");
+      video.load();
+      URL.revokeObjectURL(previewUrl);
+    };
+  }, [file]);
+
   const badgeClasses =
     badge === "Ready"
       ? "bg-emerald-500/15 text-emerald-400 font-semibold shadow-[inset_0_1px_0_color-mix(in_srgb,white_12%,transparent),0_1px_3px_rgba(0,0,0,0.15)]"
@@ -1641,16 +1643,28 @@ function VideoFileSummary({
 
   return (
     <div
-      className={`flex min-w-0 items-center gap-3 sm:gap-3.5 ${RAISED_CARD_CLASS} p-2.5 sm:p-3`}
+      className={`flex min-w-0 items-center gap-3 sm:gap-3.5 ${
+        embedded
+          ? `border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) px-2.5 ${isUploading ? "pb-3.5 sm:pb-4" : "pb-2.5 sm:pb-3"} pt-2 sm:px-3 sm:pt-2.5`
+          : `${RAISED_CARD_CLASS} p-2.5 sm:p-3`
+      }`}
     >
       <VideoThumbnail file={file} />
       <div className="min-w-0 flex-1">
-        <p className="m-0 truncate text-[0.78rem] sm:text-[0.82rem] font-medium text-(--text)">
+        <p
+          className="m-0 truncate text-[0.78rem] sm:text-[0.82rem] font-medium text-(--text)"
+          title={
+            file?.name ||
+            (mediaAttached ? "Current lesson video" : "Selected video")
+          }
+        >
           {file?.name ||
             (mediaAttached ? "Current lesson video" : "Selected video")}
         </p>
         <p className="m-0 mt-0.5 text-[0.7rem] sm:text-[0.72rem] text-(--muted)">
-          {file ? formatBytes(file.size) : "Existing lesson media"}
+          {file
+            ? `${formatBytes(file.size)}${videoDimensions ? ` • ${videoDimensions}` : ""}`
+            : "Existing lesson media"}
         </p>
       </div>
       {onReplace && (
@@ -1666,21 +1680,57 @@ function VideoFileSummary({
           <span>Replace</span>
         </button>
       )}
-      {badge && (
-        <span
-          className={`shrink-0 rounded-[8px] border-none px-2 py-0.5 sm:px-2.5 sm:py-1 text-[0.68rem] sm:text-[0.7rem] font-semibold ${badgeClasses}`}
+      {onUpload && (
+        <button
+          type="button"
+          onClick={onUpload}
+          aria-label="Upload video"
+          className={`inline-flex h-8 shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-none bg-(--accent) px-3.5 text-[0.76rem] font-semibold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] transition-all hover:bg-(--accent-hover,var(--accent)) active:scale-95 ${uploadTextOnly ? "" : "gap-1.5"}`}
         >
-          {badge}
+          {!uploadTextOnly && (
+            <CloudArrowUp size={15} weight="bold" />
+          )}
+          <span>Upload</span>
+        </button>
+      )}
+      {badge === "Processing" ? (
+        <span
+          className="group/processing-badge relative shrink-0 rounded-[8px] outline-none focus-visible:outline-2 focus-visible:outline-(--accent) focus-visible:outline-offset-2"
+          tabIndex={0}
+          aria-describedby={processingTooltipId}
+        >
+          <span
+            className={`block rounded-[8px] border-none px-2 py-0.5 sm:px-2.5 sm:py-1 text-[0.68rem] sm:text-[0.7rem] font-semibold ${badgeClasses}`}
+          >
+            {badge}
+          </span>
+          <span
+            id={processingTooltipId}
+            role="tooltip"
+            className="pointer-events-none absolute right-0 top-full z-20 mt-1.5 hidden w-max max-w-56 items-center gap-1.5 rounded bg-black/90 px-2 py-1 text-xs font-medium text-white shadow-lg group-hover/processing-badge:flex group-focus-visible/processing-badge:flex"
+          >
+            {processingProgress === null
+              ? "Waiting for progress update"
+              : `Processing ${processingProgress}% complete`}
+          </span>
         </span>
+      ) : (
+        badge && (
+          <span
+            className={`shrink-0 rounded-[8px] border-none px-2 py-0.5 sm:px-2.5 sm:py-1 text-[0.68rem] sm:text-[0.7rem] font-semibold ${badgeClasses}`}
+          >
+            {badge}
+          </span>
+        )
       )}
       {onRemove && (
         <button
           type="button"
           onClick={onRemove}
           aria-label="Remove selected video"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-none bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent)] transition-all hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:text-(--text) active:scale-95 cursor-pointer"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-none bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent)] transition-all hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:text-(--text) active:scale-95 cursor-pointer"
         >
-          <X size={13} weight="bold" />
+          <X size={15} weight="bold" />
         </button>
       )}
     </div>
@@ -1725,162 +1775,6 @@ function VideoThumbnail({ file }: { file: File | null }) {
         className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]"
       />
     </div>
-  );
-}
-
-function RequirementRow({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex items-center gap-2">
-      <Check size={14} weight="bold" className="shrink-0 text-emerald-400" />
-      <span>{children}</span>
-    </div>
-  );
-}
-
-type ProgressState = "pending" | "active" | "complete" | "failed";
-
-function UploadChecklistItem({
-  description,
-  label,
-  state,
-  value,
-}: {
-  description: string;
-  label: string;
-  state: ProgressState;
-  value?: string;
-}) {
-  const isPending = state === "pending";
-  const isActive = state === "active";
-  const isComplete = state === "complete";
-  const isFailed = state === "failed";
-
-  return (
-    <div className="flex items-center gap-2.5 sm:gap-3 py-1.5">
-      <ProgressStateIcon state={state} />
-      <div className="min-w-0 flex-1">
-        <p
-          className={`m-0 text-[0.76rem] sm:text-[0.78rem] ${
-            isActive
-              ? "font-semibold text-(--text)"
-              : isComplete
-                ? "font-medium text-(--text-secondary)"
-                : isFailed
-                  ? "font-semibold text-red-400"
-                  : "font-normal text-[color-mix(in_srgb,var(--muted)_65%,transparent)]"
-          }`}
-        >
-          {label}
-        </p>
-        <p
-          className={`m-0 mt-0.5 text-[0.68rem] sm:text-[0.7rem] ${
-            isActive
-              ? "text-(--text-secondary)"
-              : isComplete
-                ? "text-(--muted)"
-                : isFailed
-                  ? "text-red-400/85"
-                  : "text-[color-mix(in_srgb,var(--muted)_40%,transparent)]"
-          }`}
-        >
-          {description}
-        </p>
-      </div>
-      {value && (
-        <span
-          className={`text-[0.72rem] sm:text-[0.74rem] tabular-nums ${
-            isActive
-              ? "font-semibold text-(--accent)"
-              : isPending
-                ? "text-[color-mix(in_srgb,var(--muted)_60%,transparent)]"
-                : isFailed
-                  ? "font-semibold text-red-400"
-                  : "text-(--muted)"
-          }`}
-        >
-          {value}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function TranscodingStatusRow({
-  label,
-  state,
-  value,
-}: {
-  label: string;
-  state: ProgressState;
-  value: string;
-}) {
-  const isPending = state === "pending";
-  const isActive = state === "active";
-  const isComplete = state === "complete";
-  const isFailed = state === "failed";
-
-  return (
-    <div className="flex items-center justify-between gap-2.5 px-3 py-2.5">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <ProgressStateIcon state={state} />
-        <span
-          className={`truncate text-[0.72rem] sm:text-[0.74rem] ${
-            isPending
-              ? "text-[color-mix(in_srgb,var(--muted)_65%,transparent)]"
-              : isFailed
-                ? "font-medium text-(--text)"
-                : "text-(--text-secondary)"
-          }`}
-        >
-          {label}
-        </span>
-      </div>
-      <span
-        className={`shrink-0 text-right text-[0.72rem] sm:text-[0.74rem] ${
-          isActive
-            ? "font-semibold text-(--accent)"
-            : isComplete
-              ? "font-semibold text-emerald-400"
-              : isFailed
-                ? "font-semibold text-red-400"
-                : "font-normal text-[color-mix(in_srgb,var(--muted)_45%,transparent)]"
-        }`}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function ProgressStateIcon({ state }: { state: ProgressState }) {
-  if (state === "complete") {
-    return (
-      <CheckCircle
-        size={18}
-        weight="fill"
-        className="shrink-0 text-emerald-400 drop-shadow-[0_1px_3px_rgba(0,0,0,0.2)]"
-      />
-    );
-  }
-  if (state === "active") {
-    return (
-      <CircleNotch
-        size={18}
-        className="shrink-0 animate-spin text-(--accent) drop-shadow-[0_1px_3px_var(--accent-shadow)]"
-      />
-    );
-  }
-  if (state === "failed") {
-    return (
-      <WarningCircle
-        size={18}
-        weight="fill"
-        className="shrink-0 text-red-400 drop-shadow-[0_1px_3px_rgba(0,0,0,0.2)]"
-      />
-    );
-  }
-  return (
-    <span className="h-[18px] w-[18px] shrink-0 rounded-full border-none bg-[color-mix(in_srgb,var(--text)_12%,transparent)] shadow-[inset_0_1px_2px_color-mix(in_srgb,black_20%,transparent)]" />
   );
 }
 

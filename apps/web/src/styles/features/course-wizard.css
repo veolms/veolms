@@ -3,17 +3,29 @@
    The wizard nav uses the .page-tabs contract so the user's "Page tab colors"
    setting is respected. The indicator must always be visible (no swipe state).
    ───────────────────────────────────────────────────────────────────────────── */
+/* Overflow-hidden flex framing would clip nav bleed at the main content box.
+   Pull the wizard into the main gutter so tabs/bottom bar can touch the frame
+   while header + tab labels stay aligned with the Basics underline. */
+[data-course-wizard] {
+  --wizard-tab-nav-bleed: var(--application-page-inline-gutter, 25px);
+  box-sizing: border-box;
+  width: calc(100% + (2 * var(--wizard-tab-nav-bleed)));
+  max-width: none;
+  margin-inline: calc(-1 * var(--wizard-tab-nav-bleed));
+  padding-inline: var(--wizard-tab-nav-bleed);
+}
+
 /* Sticky Course Wizard Tabs Navigation */
 .course-wizard-steps-nav {
   --wizard-tab-nav-bleed: var(--application-page-inline-gutter, 25px);
   position: sticky !important;
   top: var(--page-tabs-sticky-top, 0px) !important;
   z-index: 30 !important;
-  width: auto !important;
+  width: calc(100% + (2 * var(--wizard-tab-nav-bleed))) !important;
   max-width: none !important;
   align-self: stretch !important;
   box-sizing: border-box !important;
-  margin: 0 calc(-1 * var(--wizard-tab-nav-bleed)) 14px !important;
+  margin: 0 calc(-1 * var(--wizard-tab-nav-bleed)) 0 !important;
   padding: 0 var(--wizard-tab-nav-bleed) !important;
   gap: 8px !important;
   background: color-mix(in srgb, var(--main-surface) 78%, transparent) !important;
@@ -200,29 +212,12 @@ body[data-modal-open="true"] .course-wizard-mobile-action-bar {
   }
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Course Wizard - Focus Mode (Full Screen / Maximize Editor)
-   Hides top header, step tabs, and bottom action bars to give full viewport space
-   to curriculum, lessons, and quiz building.
-   ───────────────────────────────────────────────────────────────────────────── */
-[data-course-wizard][data-focus-mode="true"] > header,
-[data-course-wizard][data-focus-mode="true"] > .course-wizard-steps-nav,
-[data-course-wizard][data-focus-mode="true"] > .course-wizard-sticky-bottom-bar,
-[data-course-wizard][data-focus-mode="true"] > .course-wizard-mobile-action-bar {
-  display: none !important;
-}
-
-[data-course-wizard][data-focus-mode="true"] > .course-wizard-tab-content {
-  padding-top: 14px !important;
-  padding-bottom: 28px !important;
-}
-
 .course-wizard-sticky-bottom-bar {
   --wizard-tab-nav-bleed: var(--application-page-inline-gutter, 25px);
   position: sticky !important;
   bottom: 0 !important;
   z-index: 25 !important;
-  width: auto !important;
+  width: calc(100% + (2 * var(--wizard-tab-nav-bleed))) !important;
   max-width: none !important;
   align-self: stretch !important;
   box-sizing: border-box !important;
@@ -317,7 +312,7 @@ body[data-modal-open="true"] .course-wizard-mobile-action-bar {
     flex-shrink: 0 !important;
     position: relative !important;
     top: 0 !important;
-    margin-bottom: 8px !important;
+    margin-bottom: 0 !important;
   }
 
   [data-course-wizard] > .course-wizard-tab-content {
@@ -346,9 +341,15 @@ body[data-modal-open="true"] .course-wizard-mobile-action-bar {
    Course Wizard — Swipeable Tab Content & Layout Constraints
    ───────────────────────────────────────────────────────────────────────────── */
 .course-wizard-tab-content {
-  width: 100%;
+  --swipeable-tab-panel-inline-start: var(--wizard-tab-nav-bleed);
+  --swipeable-tab-panel-inline-end: var(--wizard-tab-nav-bleed);
+  width: calc(
+    100% + var(--swipeable-tab-panel-inline-start) +
+      var(--swipeable-tab-panel-inline-end)
+  );
   min-width: 0;
-  max-width: 100%;
+  max-width: none;
+  align-self: stretch;
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
@@ -364,7 +365,9 @@ body[data-modal-open="true"] .course-wizard-mobile-action-bar {
 .course-wizard-tab-content .swiper-slide {
   min-width: 0 !important;
   box-sizing: border-box;
-  padding: 0 !important;
+  padding-block: 0 !important;
+  padding-inline-start: var(--swipeable-tab-panel-inline-start, 0px) !important;
+  padding-inline-end: var(--swipeable-tab-panel-inline-end, 0px) !important;
 }
 
 .course-wizard-tab-content .swiper-slide:not(.swiper-slide-active) {

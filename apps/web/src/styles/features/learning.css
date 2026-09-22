@@ -25,6 +25,12 @@
   transition: --learning-curriculum-width 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Keep the head bootstrap width on first paint. The registered custom
+   property otherwise interpolates from 400px after React hydrates. */
+html[data-app-hydrated="false"] .learning-workspace__main {
+  transition: none;
+}
+
 @media (min-width: 1081px) {
   .learning-workspace__main:has(
     .learning-workspace__curriculum-column:not(.is-collapsed)
