@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { CourseListResponse } from "@veolms/contracts";
 import { flushSync } from "react-dom";
 import type {
   CSSProperties,
@@ -37,7 +38,6 @@ import { StudentHome } from "./StudentHome";
 import type { LearningCourse } from "./StudentPages";
 import { SettingsPage } from "./SettingsPage";
 import { CourseCatalogue } from "./courses/CourseCatalogue";
-import { CourseCreatePage } from "./courses/CourseCreatePage";
 import { PlaceholderPage } from "./courses/PlaceholderPage";
 import {
   getLearningPlayerSwipeSplitX,
@@ -75,9 +75,9 @@ import { useCurrentUser, useSignOut } from "./services/auth";
 import { useSidenav } from "./services/navigation";
 import { useAuthStore } from "./store/auth.store";
 import {
-  useCourses,
   useDeleteCourse,
   useDeletedCourses,
+  useCourses,
   useMyCourses,
   useRestoreCourse,
 } from "./services/courses";
@@ -199,6 +199,11 @@ const CreatorDashboard = lazy(() =>
     default: module.CreatorDashboard,
   })),
 );
+const CourseCreatePage = lazy(() =>
+  import("./courses/CourseCreatePage").then((module) => ({
+    default: module.CourseCreatePage,
+  })),
+);
 const ReadingModeQuickMenu = lazy(() =>
   import("./reading-mode/ReadingModeQuickMenu").then((module) => ({
     default: module.ReadingModeQuickMenu,
@@ -241,6 +246,7 @@ interface CoursesPageProps {
   } | null;
   learningMotionStageRef?: Ref<HTMLDivElement>;
   renderMain?: ((context: CoursesPageRenderContext) => ReactNode) | null;
+  initialPublishedCourses?: CourseListResponse | null;
 }
 
 export interface CoursesPageRenderContext {
@@ -533,6 +539,33 @@ function LoginProfileButton({
   );
 }
 
+function AuthProfilePlaceholder({ className }: { className: string }) {
+  return (
+    <div
+      className={`${className} invisible`}
+      aria-hidden="true"
+      data-auth-profile-pending
+    />
+  );
+}
+
+function CourseCreateLoadingFallback() {
+  return (
+    <main
+      className="mx-auto grid min-h-96 w-full max-w-[1320px] place-items-center py-24"
+      data-course-create-loading
+    >
+      <div className="text-center">
+        <CircleNotch
+          size={28}
+          className="mx-auto mb-3 animate-spin text-(--accent)"
+        />
+        <p className="text-sm text-(--muted)">Loading course editor...</p>
+      </div>
+    </main>
+  );
+}
+
 export function CoursesPage({
   onOpenCourse,
   onNavigatePage,
@@ -550,6 +583,7 @@ export function CoursesPage({
   learningBackground = null,
   learningMotionStageRef,
   renderMain = null,
+  initialPublishedCourses = null,
 }: CoursesPageProps) {
   const [role, setRole] = useState<CourseRole>(() => {
     if (typeof window === "undefined") return "student";
@@ -755,38 +789,37 @@ export function CoursesPage({
   }, [signOut]);
   const shouldLoadCourseSurface =
     (!renderMain || Boolean(learningBackground)) && !isEditingOrCreatingCourse;
-  const shouldQueryCourses = isAuthReady && shouldLoadCourseSurface;
-
+  const shouldQueryAuthenticatedCourseData =
+    isAuthReady && Boolean(activeUser) && shouldLoadCourseSurface;
   const { data: publishedCoursesData, isPending: isPublishedPending } =
     useCourses({
-      enabled: shouldQueryCourses && effectiveRole === "student",
+      enabled: shouldLoadCourseSurface && effectiveRole === "student",
+      initialData: initialPublishedCourses,
     });
   const { data: enrolledCoursesData } = useEnrolledCourses({
-    enabled: shouldLoadCourseSurface && effectiveRole === "student",
+    enabled: shouldQueryAuthenticatedCourseData && effectiveRole === "student",
   });
   const { data: myCoursesData, isPending: isMyCoursesPending } = useMyCourses({
     enabled:
-      shouldQueryCourses &&
+      shouldQueryAuthenticatedCourseData &&
       effectiveRole === "creator" &&
       enrollmentFilter !== "bin",
   });
   const { data: deletedCoursesData, isPending: isDeletedPending } =
     useDeletedCourses(undefined, {
       enabled:
-        shouldQueryCourses &&
+        shouldQueryAuthenticatedCourseData &&
         isAdmin &&
         effectiveRole === "creator" &&
         enrollmentFilter === "bin",
     });
 
   const isLoadingCourses =
-    !isAuthReady ||
-    (effectiveRole === "student"
+    effectiveRole === "student"
       ? isPublishedPending
       : enrollmentFilter === "bin"
         ? isDeletedPending
-        : isMyCoursesPending);
-
+        : isMyCoursesPending;
   useEffect(() => {
     if (
       enrollmentFilter === "bin" &&
@@ -1787,40 +1820,46 @@ export function CoursesPage({
     publishedCoursesData?.courses?.length,
   ]);
 
-  const handleDeleteCourse = async (course: Course) => {
-    setDeletingCourseIds((prev) => new Set(prev).add(course.id));
-    try {
-      await deleteCourseMutation.mutateAsync(course.id);
-      setNotice(`${course.title} moved to Bin.`);
-    } catch (err: unknown) {
-      const apiError = err as { message?: string };
-      setNotice(
-        apiError?.message ||
-          `Failed to move "${course.title}" to Bin. Please try again.`,
-      );
-      throw err;
-    } finally {
-      setDeletingCourseIds((prev) => {
-        const next = new Set(prev);
-        next.delete(course.id);
-        return next;
-      });
-    }
-  };
+  const handleDeleteCourse = useCallback(
+    async (course: Course) => {
+      setDeletingCourseIds((prev) => new Set(prev).add(course.id));
+      try {
+        await deleteCourseMutation.mutateAsync(course.id);
+        setNotice(`${course.title} moved to Bin.`);
+      } catch (err: unknown) {
+        const apiError = err as { message?: string };
+        setNotice(
+          apiError?.message ||
+            `Failed to move "${course.title}" to Bin. Please try again.`,
+        );
+        throw err;
+      } finally {
+        setDeletingCourseIds((prev) => {
+          const next = new Set(prev);
+          next.delete(course.id);
+          return next;
+        });
+      }
+    },
+    [deleteCourseMutation.mutateAsync],
+  );
 
-  const handleRestoreCourse = async (course: Course) => {
-    try {
-      await restoreCourseMutation.mutateAsync(course.id);
-      setNotice(`${course.title} was restored.`);
-    } catch (err: unknown) {
-      const apiError = err as { message?: string };
-      setNotice(
-        apiError?.message ||
-          `Failed to restore "${course.title}". Please try again.`,
-      );
-      throw err;
-    }
-  };
+  const handleRestoreCourse = useCallback(
+    async (course: Course) => {
+      try {
+        await restoreCourseMutation.mutateAsync(course.id);
+        setNotice(`${course.title} was restored.`);
+      } catch (err: unknown) {
+        const apiError = err as { message?: string };
+        setNotice(
+          apiError?.message ||
+            `Failed to restore "${course.title}". Please try again.`,
+        );
+        throw err;
+      }
+    },
+    [restoreCourseMutation.mutateAsync],
+  );
 
   const visibleCourses = useMemo(
     () =>
@@ -1845,20 +1884,20 @@ export function CoursesPage({
     ],
   );
 
-  const toggleWishlist = (courseId: string) => {
+  const toggleWishlist = useCallback((courseId: string) => {
     setWishlisted((current) => {
       const next = new Set(current);
       if (next.has(courseId)) next.delete(courseId);
       else next.add(courseId);
       return next;
     });
-  };
+  }, []);
 
-  const resetCatalogue = () => {
+  const resetCatalogue = useCallback(() => {
     setSearch("");
     setStatusFilter("all");
     setEnrollmentFilter("all");
-  };
+  }, [setSearch]);
 
   const closeMobileMenu = () => {
     setMobileMenuOpen(false);
@@ -3341,10 +3380,12 @@ export function CoursesPage({
         return null;
       }
       return (
-        <CourseCreatePage
-          onNavigatePage={onNavigatePage}
-          bottomNavHidden={mobileBottomNavHidden}
-        />
+        <Suspense fallback={<CourseCreateLoadingFallback />}>
+          <CourseCreatePage
+            onNavigatePage={onNavigatePage}
+            bottomNavHidden={mobileBottomNavHidden}
+          />
+        </Suspense>
       );
     }
     if (surfacePage === "course-overview") {
@@ -3367,8 +3408,14 @@ export function CoursesPage({
     if (surfacePage === "coupon-builder") {
       if (!isAuthReady) {
         return (
-          <main data-coupon-surface="" className="mx-auto grid w-full max-w-[1320px] place-items-center py-24">
-            <CircleNotch size={28} className="mb-3 animate-spin text-(--accent)" />
+          <main
+            data-coupon-surface=""
+            className="mx-auto grid w-full max-w-[1320px] place-items-center py-24"
+          >
+            <CircleNotch
+              size={28}
+              className="mb-3 animate-spin text-(--accent)"
+            />
             <p className="text-sm text-(--muted)">Loading coupon builder...</p>
           </main>
         );
@@ -3772,7 +3819,9 @@ export function CoursesPage({
                   onLogout={openLogoutConfirm}
                 />
               )}
-              {isAuthenticated ? (
+              {!isAuthReady ? (
+                <AuthProfilePlaceholder className="courses-profile__button" />
+              ) : isAuthenticated ? (
                 <button
                   type="button"
                   className="courses-profile__button"
@@ -4272,7 +4321,9 @@ export function CoursesPage({
               className="mobile-menu-sheet__profile-wrap"
               data-profile-surface
             >
-              {isAuthenticated ? (
+              {!isAuthReady ? (
+                <AuthProfilePlaceholder className="mobile-menu-sheet__profile" />
+              ) : isAuthenticated ? (
                 <button
                   type="button"
                   className="mobile-menu-sheet__profile"
