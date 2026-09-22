@@ -100,6 +100,7 @@ export interface ThreadsService {
     threadId: string,
     actor: DiscussionActor,
   ): Promise<void>;
+
 }
 
 export function createThreadsService(
@@ -603,5 +604,6 @@ export function createThreadsService(
         await threadsRepo.deleteThread(trx, threadId);
       });
     },
+
   };
 }

@@ -18,6 +18,7 @@ export async function findCouponById(database: Executor, id: string) {
     .executeTakeFirst();
 }
 
+
 export async function countCouponRedemptionsGlobal(
   database: Executor,
   couponId: string,

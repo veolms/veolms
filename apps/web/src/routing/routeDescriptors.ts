@@ -20,6 +20,7 @@ export type ShellPage =
   | "orders"
   | "order-history"
   | "notifications"
+  | "analytics"
   | "placeholder"
   | "settings"
   | "course-create"
@@ -193,7 +194,7 @@ export const routeDescriptors = {
   },
   analytics: {
     kind: "shell",
-    page: "placeholder",
+    page: "analytics",
     section: "Analytics",
     title: "Analytics",
     description:

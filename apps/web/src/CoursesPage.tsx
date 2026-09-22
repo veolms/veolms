@@ -209,6 +209,11 @@ const CourseOverviewPage = lazy(() =>
     default: module.CourseOverviewPage,
   })),
 );
+const AnalyticsDashboardPage = lazy(() =>
+  import("./analytics/AnalyticsDashboardPage").then((module) => ({
+    default: module.AnalyticsDashboardPage,
+  })),
+);
 
 type ThemePreference = "light" | "dark" | "device";
 type AppearanceOption = ThemePreference | "theme";
@@ -3454,6 +3459,18 @@ export function CoursesPage({
       }
       return (
         <StudentsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+      );
+    }
+    if (surfacePage === "analytics" || surfaceActiveSection === "Analytics") {
+      if (effectiveRole !== "creator") {
+        return null;
+      }
+      return (
+        <AnalyticsDashboardPage
+          role={role}
+          isAdmin={isAdmin}
+          onNavigatePage={onNavigatePage}
+        />
       );
     }
     if (surfacePage === "placeholder") {

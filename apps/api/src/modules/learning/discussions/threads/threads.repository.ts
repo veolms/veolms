@@ -128,6 +128,7 @@ export interface ThreadsRepository {
     threadId: string,
     status: InteractionStatus,
   ): Promise<void>;
+
 }
 
 function applyThreadFilters<O>(
@@ -537,5 +538,6 @@ export function createThreadsRepository(): ThreadsRepository {
         .where("id", "=", threadId)
         .execute();
     },
+
   };
 }
