@@ -1606,7 +1606,8 @@ function DiscussionInner({
 
       desiredStateCoordinator.setLiked({
         targetType,
-        targetId: serverId,
+        targetId: getClientEntityId(entry),
+        serverId,
         desiredLiked,
         currentBaseline: currentLiked,
         lessonContext:

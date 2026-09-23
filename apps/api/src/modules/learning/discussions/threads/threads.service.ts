@@ -60,6 +60,12 @@ type LearningAttachmentRow = Selectable<LearningAttachmentTable>;
 
 const MENTIONS_WORKSPACE_SORT = "mentions";
 
+export type ThreadsListQuery = ListLearningThreadsQuery & {
+  currentUserId?: string;
+  roles?: readonly string[];
+  ids?: readonly string[];
+};
+
 function assertVisibilityAllowed(
   kind: string,
   visibility: string | undefined,
@@ -103,10 +109,7 @@ export interface ThreadsService {
 
   listThreads(
     db: DatabaseExecutor,
-    query: ListLearningThreadsQuery & {
-      currentUserId?: string;
-      roles?: readonly string[];
-    },
+    query: ThreadsListQuery,
   ): Promise<LearningThreadsListResponse>;
 
   updateThread(
