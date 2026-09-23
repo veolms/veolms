@@ -10,6 +10,7 @@ import { QueryClientContext } from "@tanstack/react-query";
 import {
   defaultRangeExtractor,
   useVirtualizer,
+  useWindowVirtualizer,
 } from "@tanstack/react-virtual";
 import { useInRouterContext, useSearchParams } from "react-router";
 import { createPortal } from "react-dom";
@@ -25,6 +26,7 @@ import { CommentCard } from "./CommentCard";
 import type { Comment, CommentReply } from "./CommentCard";
 import { CommentComposer } from "./CommentComposer";
 import { DiscussionAvatar } from "./DiscussionAvatar";
+import { getApplicationScrollElement } from "../shell/applicationScroll";
 import {
   applyDiscussionFeed,
   DISCUSSION_FEED_SORT_OPTIONS,
@@ -2443,9 +2445,11 @@ function DiscussionVirtualFeedRows({
   entries,
   renderEntry,
   virtualizer,
+  scrollMargin = 0,
 }: DiscussionVirtualFeedProps & {
   feedRef?: React.Ref<HTMLDivElement>;
   virtualizer: DiscussionVirtualizer;
+  scrollMargin?: number;
 }) {
   const virtualItems = virtualizer.getVirtualItems();
 
@@ -2474,7 +2478,7 @@ function DiscussionVirtualFeedRows({
               top: 0,
               left: 0,
               width: "100%",
-              transform: `translateY(${virtualItem.start}px)`,
+              transform: `translateY(${virtualItem.start - scrollMargin}px)`,
             }}
           >
             {renderEntry(entry)}
@@ -2516,17 +2520,169 @@ function DiscussionViewportVirtualFeed({
         measureElement: (element) =>
           virtualizer.measureElement(element),
       }}
+      scrollMargin={0}
     />
   );
 }
 
+function getDiscussionVirtualFeedScrollMargin(
+  feed: HTMLDivElement | null,
+  scrollport: HTMLElement | null,
+): number {
+  if (!feed || typeof window === "undefined") return 0;
+
+  const feedRect = feed.getBoundingClientRect();
+  if (scrollport) {
+    return (
+      feedRect.top -
+      scrollport.getBoundingClientRect().top +
+      scrollport.scrollTop
+    );
+  }
+
+  return feedRect.top + window.scrollY;
+}
+
+function useDiscussionScrollMode() {
+  const [useWindowScroll, setUseWindowScroll] = useState(true);
+
+  useLayoutEffect(() => {
+    const syncScrollMode = () => {
+      setUseWindowScroll(getApplicationScrollElement() === null);
+    };
+
+    syncScrollMode();
+    window.addEventListener("resize", syncScrollMode);
+    return () => window.removeEventListener("resize", syncScrollMode);
+  }, []);
+
+  return useWindowScroll;
+}
+
+function useDiscussionVirtualFeedScrollMargin(
+  feedRef: React.RefObject<HTMLDivElement | null>,
+  useWindowScroll: boolean,
+  layoutKey: string | undefined,
+  itemCount: number,
+) {
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  useLayoutEffect(() => {
+    const syncScrollMargin = () => {
+      const nextScrollMargin = getDiscussionVirtualFeedScrollMargin(
+        feedRef.current,
+        useWindowScroll ? null : getApplicationScrollElement(),
+      );
+      setScrollMargin((current) =>
+        Math.abs(current - nextScrollMargin) > 1 ? nextScrollMargin : current,
+      );
+    };
+
+    syncScrollMargin();
+    window.addEventListener("resize", syncScrollMargin);
+    return () => window.removeEventListener("resize", syncScrollMargin);
+  }, [feedRef, itemCount, layoutKey, useWindowScroll]);
+
+  return scrollMargin;
+}
+
+function DiscussionWindowVirtualFeed(props: DiscussionVirtualFeedProps) {
+  const feedRef = useRef<HTMLDivElement>(null);
+  const scrollMargin = useDiscussionVirtualFeedScrollMargin(
+    feedRef,
+    true,
+    props.layoutKey,
+    props.entries.length,
+  );
+  const virtualizer = useWindowVirtualizer({
+    count: props.entries.length,
+    estimateSize: () => DISCUSSION_VIRTUAL_ESTIMATE_SIZE,
+    getItemKey: (index) => getClientEntityId(props.entries[index]!),
+    initialRect: { width: 1024, height: 768 },
+    overscan: DISCUSSION_VIRTUAL_OVERSCAN,
+    rangeExtractor: useDiscussionRangeExtractor(
+      props.entries,
+      props.protectedEntryIndices,
+    ),
+    scrollMargin,
+  });
+
+  useEffect(() => {
+    virtualizer.measure();
+  }, [props.layoutKey, virtualizer]);
+
+  return (
+    <DiscussionVirtualFeedRows
+      {...props}
+      feedRef={feedRef}
+      scrollMargin={scrollMargin}
+      virtualizer={{
+        ...virtualizer,
+        measureElement: (element) => virtualizer.measureElement(element),
+      }}
+    />
+  );
+}
+
+function DiscussionScrollportVirtualFeed(props: DiscussionVirtualFeedProps) {
+  const feedRef = useRef<HTMLDivElement>(null);
+  const scrollMargin = useDiscussionVirtualFeedScrollMargin(
+    feedRef,
+    false,
+    props.layoutKey,
+    props.entries.length,
+  );
+  const virtualizer = useVirtualizer({
+    count: props.entries.length,
+    getScrollElement: getApplicationScrollElement,
+    estimateSize: () => DISCUSSION_VIRTUAL_ESTIMATE_SIZE,
+    getItemKey: (index) => getClientEntityId(props.entries[index]!),
+    initialRect: { width: 1024, height: 768 },
+    overscan: DISCUSSION_VIRTUAL_OVERSCAN,
+    rangeExtractor: useDiscussionRangeExtractor(
+      props.entries,
+      props.protectedEntryIndices,
+    ),
+    scrollMargin,
+  });
+
+  useEffect(() => {
+    virtualizer.measure();
+  }, [props.layoutKey, virtualizer]);
+
+  return (
+    <DiscussionVirtualFeedRows
+      {...props}
+      feedRef={feedRef}
+      scrollMargin={scrollMargin}
+      virtualizer={{
+        ...virtualizer,
+        measureElement: (element) => virtualizer.measureElement(element),
+      }}
+    />
+  );
+}
+
+function DiscussionDesktopVirtualFeed(props: DiscussionVirtualFeedProps) {
+  const useWindowScroll = useDiscussionScrollMode();
+
+  if (useWindowScroll) return <DiscussionWindowVirtualFeed {...props} />;
+  return <DiscussionScrollportVirtualFeed {...props} />;
+}
+
 function DiscussionVirtualFeed({
   viewportRef,
+  isPhone,
   ...props
 }: DiscussionVirtualFeedProps & {
   viewportRef: React.RefObject<HTMLDivElement | null>;
+  isPhone: boolean;
 }) {
-  return <DiscussionViewportVirtualFeed viewportRef={viewportRef} {...props} />;
+  if (isPhone) {
+    return <DiscussionViewportVirtualFeed viewportRef={viewportRef} {...props} />;
+  }
+
+  return <DiscussionDesktopVirtualFeed {...props} />;
 }
 
 function ThreadSurface({
@@ -2776,13 +2932,15 @@ function ThreadSurface({
         }
       },
       {
-        root: discussionViewportRef.current,
+        root: isPhone
+          ? discussionViewportRef.current
+          : getApplicationScrollElement(),
         rootMargin: "600px 0px",
       },
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, onLoadMore]);
+  }, [hasNextPage, isFetchingNextPage, isPhone, onLoadMore]);
 
   const protectedEntryIndices = useMemo(() => {
     const indices = new Set<number>();
@@ -3077,6 +3235,7 @@ function ThreadSurface({
         renderEntry={renderEntry}
         layoutKey={`${composerMode}:${entryFilter}:${isLessonDescriptionLoading}`}
         viewportRef={discussionViewportRef}
+        isPhone={isPhone}
       />
       {isBackendMode && hasNextPage && (
         <div ref={feedSentinelRef} className="h-1" aria-hidden="true" />
@@ -3174,23 +3333,27 @@ function ThreadSurface({
       {!isPhone && discussionToolbar}
 
       <div
-        className="mt-2.5 flex min-h-0 min-w-0 flex-1 flex-col"
+        className={
+          isPhone
+            ? "mt-2.5 flex min-h-0 min-w-0 flex-1 flex-col"
+            : "mt-2.5 min-w-0 max-w-full"
+        }
         data-discussion-feed-list
       >
-        <div
-          ref={discussionViewportRef}
-          data-discussion-scroll-viewport
-          className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col touch-pan-y overflow-x-hidden overflow-y-auto"
-          style={{
-            minHeight: 0,
-            maxWidth: "100%",
-            overflowX: "hidden",
-            overflowY: "auto",
-            overscrollBehaviorX: "none",
-            touchAction: "pan-y",
-          }}
-        >
-          {isPhone && (
+        {isPhone ? (
+          <div
+            ref={discussionViewportRef}
+            data-discussion-scroll-viewport
+            className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col touch-pan-y overflow-x-hidden overflow-y-auto"
+            style={{
+              minHeight: 0,
+              maxWidth: "100%",
+              overflowX: "hidden",
+              overflowY: "auto",
+              overscrollBehaviorX: "none",
+              touchAction: "pan-y",
+            }}
+          >
             <div
               data-discussion-scroll-header
               className="min-w-0 max-w-full shrink-0"
@@ -3200,9 +3363,11 @@ function ThreadSurface({
               {discussionFilters}
               {discussionToolbar}
             </div>
-          )}
-          {discussionContent}
-        </div>
+            {discussionContent}
+          </div>
+        ) : (
+          <div className="min-w-0 max-w-full">{discussionContent}</div>
+        )}
       </div>
 
       {isPhone && enabledKinds.length > 0 && composerMode !== "mobile" && (

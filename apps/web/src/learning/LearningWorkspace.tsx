@@ -2626,7 +2626,7 @@ export function LearningWorkspace({
                     }
               }
             >
-              <div className="max-[640px]:hidden">{lessonHeader()}</div>
+              {!phoneLessonDrawerViewport && lessonHeader()}
               {isLearningDeepLinkReady ? (
                 <Discussion
                   key={discussionPersistenceKey}

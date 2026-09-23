@@ -1158,6 +1158,29 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   padding: 0 0 28px;
 }
 
+@media (min-width: 641px) {
+  /* Tablet and desktop use the Learning/application scroll owner. Keep the
+     mobile-only discussion viewport and its available-height flex chain out
+     of this path so the page can grow with variable-height discussion rows. */
+  .courses-main--learning > [data-learning-motion-stage],
+  .courses-main--learning > [data-learning-motion-stage] > .relative.min-h-full,
+  .courses-main--learning .learning-workspace,
+  .courses-main--learning .learning-workspace__main {
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .courses-main--learning .learning-workspace__lesson-column,
+  .courses-main--learning .learning-workspace__lesson-content-clip,
+  .courses-main--learning .learning-workspace__lesson-content,
+  .courses-main--learning .learning-discussion {
+    display: block;
+    height: auto;
+    min-height: 0;
+    flex: none;
+  }
+}
+
 .learning-discussion__filter-button {
   font-size: 15px;
   line-height: 20px;
