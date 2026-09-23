@@ -63,12 +63,14 @@ export function applyDiscussionFeed({
   filter,
   sort,
   capabilities,
+  preserveOrder = false,
 }: {
   currentUserName: string;
   entries: readonly Comment[];
   filter: DiscussionEntryFilter;
   sort: DiscussionFeedSort;
   capabilities?: InteractionCapabilities;
+  preserveOrder?: boolean;
 }): Comment[] {
   const uniqueEntries = Array.from(
     new Map(entries.map((entry) => [getClientEntityId(entry), entry])).values(),
@@ -94,6 +96,8 @@ export function applyDiscussionFeed({
           isOwnDiscussionEntry(entry, currentUserName),
         )
       : typedEntries;
+
+  if (preserveOrder) return visibleEntries;
 
   return [...visibleEntries].sort((left, right) => {
     if (sort === "top") {

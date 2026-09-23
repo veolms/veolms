@@ -2,6 +2,22 @@ export const learningInteractionKeys = {
   all: ["learning-interactions"] as const,
   lessonThreads: (courseId: string, lessonId: string, filters?: Record<string, unknown>) =>
     [...learningInteractionKeys.all, "lesson-threads", courseId, lessonId, "infinite", filters] as const,
+  lessonDiscussionsRoot: (courseId?: string, lessonId?: string) =>
+    courseId && lessonId
+      ? [...learningInteractionKeys.all, "lesson-discussions", courseId, lessonId] as const
+      : [...learningInteractionKeys.all, "lesson-discussions"] as const,
+  lessonDiscussions: (
+    courseId: string,
+    lessonId: string,
+    filters?: { kind?: string; sort?: string; mine?: boolean },
+  ) =>
+    [
+      ...learningInteractionKeys.lessonDiscussionsRoot(courseId, lessonId),
+      "infinite",
+      filters?.kind ?? "all",
+      filters?.sort ?? "newest",
+      Boolean(filters?.mine),
+    ] as const,
   lessonInteractionCountsRoot: (courseId?: string, lessonId?: string) =>
     courseId && lessonId
       ? [...learningInteractionKeys.all, "lesson-interaction-counts", courseId, lessonId] as const

@@ -16,6 +16,8 @@ import type {
   LearningReply,
   LearningThread,
   LearningThreadsListResponse,
+  LessonDiscussionsListResponse,
+  ListLessonDiscussionsQuery,
   LearningUploadResponse,
   LinkPreviewResponse,
   ListAuditLogsQuery,
@@ -51,6 +53,17 @@ export interface AttachmentUploadProgress {
 }
 
 export const learningInteractionsService = {
+  listLessonDiscussions(
+    courseId: string,
+    lessonId: string,
+    query?: ListLessonDiscussionsQuery,
+  ): Promise<LessonDiscussionsListResponse> {
+    return api.get<LessonDiscussionsListResponse>(
+      `/courses/${courseId}/lessons/${lessonId}/discussions`,
+      { params: query },
+    );
+  },
+
   // Threads (Lessons & Assignments)
   listLessonThreads(
     courseId: string,

@@ -6,6 +6,11 @@ import React, {
   useRef,
   useState,
 } from "react";
+import type {
+  LessonDiscussionItem,
+  LearningNotesListResponse,
+  LearningThreadsListResponse,
+} from "@veolms/contracts";
 import { QueryClientContext } from "@tanstack/react-query";
 import {
   defaultRangeExtractor,
@@ -35,6 +40,17 @@ import {
   type DiscussionFeedSort,
   type InteractionCapabilities,
 } from "./discussionFeed";
+import {
+  adaptUnifiedDiscussionItem,
+  orderUnifiedDiscussionEntries,
+  withSourceAwareIdentity,
+} from "./unified-discussions.adapter";
+import {
+  filterTombstonedEntities,
+  mergeLocalOnlyEntities,
+  reconcileUnifiedEntity,
+  type ReconciliationEntity,
+} from "./unified-discussions.reconciliation";
 
 export type { InteractionCapabilities };
 import { DiscussionThreadPanel } from "./DiscussionThreadPanel";
@@ -80,6 +96,13 @@ import {
   revokeLocalAttachmentPreview,
   type LocalComposerAttachment,
 } from "../services/learning-interactions/attachment-model";
+import {
+  interactionCreationCoordinator,
+  learningInteractionKeys,
+  mergeNotesWithCreationRecords,
+  mergeThreadsWithCreationRecords,
+  useLessonDiscussions,
+} from "../services/learning-interactions";
 import { optimisticEditCoordinator } from "../services/learning-interactions/optimistic-edit-coordinator";
 import {
   optimisticDeletionCoordinator,
@@ -110,6 +133,20 @@ const CURRENT_USER = {
 };
 
 const EMPTY_MOBILE_COMPOSER_DRAFT = createEmptyDiscussionDraft();
+
+function getCachedInteractionItems<T>(
+  data: unknown,
+  key: "notes" | "threads",
+): T[] {
+  if (!data || typeof data !== "object") return [];
+  const cache = data as Record<string, unknown>;
+  const pages = Array.isArray(cache.pages) ? cache.pages : [cache];
+  return pages.flatMap((page) => {
+    if (!page || typeof page !== "object") return [];
+    const items = (page as Record<string, unknown>)[key];
+    return Array.isArray(items) ? (items as T[]) : [];
+  });
+}
 
 function getThreadIdentityValues(entry: Comment): string[] {
   return Array.from(
@@ -473,6 +510,7 @@ function DiscussionInner({
     currentUser?.username?.trim() ||
     CURRENT_USER.name;
   const authorAvatar = currentUser?.avatarDataUrl || CURRENT_USER.avatar;
+  const deletionRevision = useOptimisticDeletionRevision();
 
   const [entryKind, setEntryKind] =
     useState<DiscussionEntryKind>(firstAvailableKind);
@@ -520,21 +558,13 @@ function DiscussionInner({
 
   const {
     data: notesData,
-    isLoading: isNotesLoading,
-    isError: isNotesError,
-    refetch: refetchNotes,
-    fetchNextPage: fetchNextNotesPage,
-    hasNextPage: hasNextNotesPage,
-    isFetchingNextPage: isFetchingNextNotesPage,
   } = useUserNotes(
     notesQuery,
     {
-      enabled: Boolean(
-        courseId &&
-          lessonId &&
-          (capabilities.allowNotes || hasNoteDeepLink) &&
-          (entryFilter === "all" || entryFilter === "note"),
-      ),
+      // The unified lesson-discussions query is the only remote feed source.
+      // This query remains mounted as a cache observer for existing optimistic
+      // interaction projections.
+      enabled: false,
     },
   ) ?? {};
 
@@ -559,20 +589,77 @@ function DiscussionInner({
 
   const {
     data: threadsData,
-    isLoading: isThreadsLoading,
-    isError: isThreadsError,
-    refetch: refetchThreads,
-    fetchNextPage: fetchNextThreadsPage,
-    hasNextPage: hasNextThreadsPage,
-    isFetchingNextPage: isFetchingNextThreadsPage,
   } = useLessonThreads(
     courseId ?? "",
     lessonId ?? "",
     threadQuery,
     {
-      enabled: shouldFetchThreads && entryFilter !== "note",
+      // See the notes observer above. Keeping this cache observer active lets
+      // existing creation/edit/like/delete projections stay reactive.
+      enabled: false,
     },
   ) ?? {};
+
+  const unifiedDiscussionQuery = useMemo(
+    () => ({
+      kind:
+        entryFilter === "comment" ||
+        entryFilter === "question" ||
+        entryFilter === "note"
+          ? entryFilter
+          : ("all" as const),
+      sort: feedSort === "top" ? ("top" as const) : ("newest" as const),
+      ...(feedSort === "mine" ? { mine: true } : {}),
+    }),
+    [entryFilter, feedSort],
+  );
+  const unifiedDiscussions = useLessonDiscussions(
+    courseId ?? "",
+    lessonId ?? "",
+    unifiedDiscussionQuery,
+    {
+      enabled: Boolean(
+        courseId &&
+          lessonId &&
+          !isInteractionCapabilitiesLoading &&
+          (enabledKinds.length > 0 || hasNoteDeepLink),
+      ),
+    },
+  );
+  const unifiedDiscussionItems = useMemo<LessonDiscussionItem[]>(
+    () =>
+      unifiedDiscussions.data?.pages.flatMap((page) => page.items) ?? [],
+    [unifiedDiscussions.data],
+  );
+  const unifiedRemoteBaseRef = useRef<
+    Map<string, Readonly<Record<string, unknown>>>
+  >(new Map());
+  const visibleUnifiedDiscussionItems = useMemo(
+    () =>
+      unifiedDiscussionItems.filter((item) => {
+        const entity = item.sourceType === "thread" ? item.thread : item.note;
+        return !optimisticDeletionCoordinator.isTombstoned(
+          item.sourceType,
+          entity,
+        );
+      }),
+    [deletionRevision, unifiedDiscussionItems],
+  );
+  useEffect(() => {
+    unifiedRemoteBaseRef.current.clear();
+  }, [courseId, currentUser?.id, lessonId]);
+  const isNotesLoading =
+    unifiedDiscussions.isLoading &&
+    (entryFilter === "all" || entryFilter === "note");
+  const isThreadsLoading =
+    unifiedDiscussions.isLoading && entryFilter !== "note";
+  const isNotesError =
+    unifiedDiscussions.isError &&
+    (entryFilter === "all" || entryFilter === "note");
+  const isThreadsError =
+    unifiedDiscussions.isError && entryFilter !== "note";
+  const refetchNotes = unifiedDiscussions.refetch;
+  const refetchThreads = unifiedDiscussions.refetch;
 
   const createNoteMutation = useCreateNote();
   const updateNoteMutation = useUpdateNote();
@@ -600,7 +687,7 @@ function DiscussionInner({
     return "Student";
   }, [currentUser?.roles]);
 
-  const backendNotes = useMemo<Comment[]>(() => {
+  const legacyNotes = useMemo<LearningNoteCacheItem[]>(() => {
     const legacyNotesData = notesData as unknown as
       | {
           pages?: Array<{ notes: LearningNoteCacheItem[] }>;
@@ -610,23 +697,263 @@ function DiscussionInner({
     const pages =
       legacyNotesData?.pages ??
       (legacyNotesData?.notes ? [{ notes: legacyNotesData.notes }] : []);
+    return pages.flatMap((page) => page.notes);
+  }, [notesData]);
+
+  const legacyThreads = useMemo<LearningThreadEntity[]>(() => {
+    const legacyThreadsData = threadsData as unknown as
+      | {
+          pages?: Array<{ threads: LearningThreadEntity[] }>;
+          threads?: LearningThreadEntity[];
+        }
+      | undefined;
+    const pages =
+      legacyThreadsData?.pages ??
+      (legacyThreadsData?.threads
+        ? [{ threads: legacyThreadsData.threads }]
+        : []);
+    return pages.flatMap((page) => page.threads);
+  }, [threadsData]);
+
+  useEffect(() => {
+    // Do not replace the legacy cache during the unified query's initial
+    // loading pass. Existing optimistic/confirmed creations must remain
+    // available until there is an authoritative unified response to merge.
+    if (!queryClient || !courseId || !lessonId || !unifiedDiscussions.data) {
+      return;
+    }
+
+    const threadIdentity = (thread: LearningThreadEntity) => {
+      const serverId = getServerEntityId(thread);
+      return serverId
+        ? `thread:${serverId}`
+        : `thread:client:${getClientEntityId(thread)}`;
+    };
+    const noteIdentity = (note: LearningNoteCacheItem) => {
+      const serverId = getServerEntityId(note);
+      return serverId
+        ? `note:${serverId}`
+        : `note:client:${getClientEntityId(note)}`;
+    };
+
+    const existingThreads = getCachedInteractionItems<LearningThreadEntity>(
+      queryClient.getQueryData(
+        learningInteractionKeys.lessonThreads(courseId, lessonId, threadQuery),
+      ),
+      "threads",
+    );
+    const existingNotes = getCachedInteractionItems<LearningNoteCacheItem>(
+      queryClient.getQueryData(learningInteractionKeys.notes(notesQuery)),
+      "notes",
+    );
+
+    const existingThreadsByIdentity = new Map<string, LearningThreadEntity>();
+    const existingThreadsByClientId = new Map<string, LearningThreadEntity>();
+    for (const thread of existingThreads) {
+      const identity = threadIdentity(thread);
+      if (identity) existingThreadsByIdentity.set(identity, thread);
+      existingThreadsByClientId.set(getClientEntityId(thread), thread);
+    }
+
+    const existingNotesByIdentity = new Map<string, LearningNoteCacheItem>();
+    const existingNotesByClientId = new Map<string, LearningNoteCacheItem>();
+    for (const note of existingNotes) {
+      const identity = noteIdentity(note);
+      if (identity) existingNotesByIdentity.set(identity, note);
+      existingNotesByClientId.set(getClientEntityId(note), note);
+    }
+
+    const threadResponse: LearningThreadsListResponse = {
+      threads: visibleUnifiedDiscussionItems.flatMap((item) =>
+        item.sourceType === "thread" ? [item.thread] : [],
+      ),
+      nextCursor: null,
+    };
+    const noteResponse: LearningNotesListResponse = {
+      notes: visibleUnifiedDiscussionItems.flatMap((item) =>
+        item.sourceType === "note" ? [item.note] : [],
+      ),
+      nextCursor: null,
+    };
+    const threadPage = mergeThreadsWithCreationRecords(
+      threadResponse,
+      threadQuery,
+      interactionCreationCoordinator.getActiveThreadRecords({
+        courseId,
+        lessonId,
+      }),
+    );
+    const notePage = mergeNotesWithCreationRecords(
+      noteResponse,
+      notesQuery,
+      interactionCreationCoordinator.getActiveNoteRecords(notesQuery),
+    );
+
+    const reconciledThreads = threadPage.threads.map((thread) => {
+      const identity = threadIdentity(thread);
+      const existing = identity
+        ? existingThreadsByIdentity.get(identity)
+        : existingThreadsByClientId.get(getClientEntityId(thread));
+      return reconcileUnifiedEntity(
+        thread as unknown as ReconciliationEntity,
+        existing as unknown as ReconciliationEntity | undefined,
+        identity ? unifiedRemoteBaseRef.current.get(identity) : undefined,
+      ) as unknown as LearningThreadEntity;
+    });
+    const reconciledNotes = notePage.notes.map((note) => {
+      const identity = noteIdentity(note);
+      const existing = identity
+        ? existingNotesByIdentity.get(identity)
+        : existingNotesByClientId.get(getClientEntityId(note));
+      return reconcileUnifiedEntity(
+        note as unknown as ReconciliationEntity,
+        existing as unknown as ReconciliationEntity | undefined,
+        identity ? unifiedRemoteBaseRef.current.get(identity) : undefined,
+      ) as unknown as LearningNoteCacheItem;
+    });
+
+    const threadsWithLocalOnly = filterTombstonedEntities(
+      mergeLocalOnlyEntities(
+        reconciledThreads as unknown as ReconciliationEntity[],
+        existingThreads as unknown as ReconciliationEntity[],
+        (thread) => threadIdentity(thread as unknown as LearningThreadEntity),
+        (thread) => {
+          const candidate = thread as unknown as LearningThreadEntity;
+          const requestedKind = threadQuery.kind;
+          return (
+            (requestedKind === "all" || candidate.kind === requestedKind) &&
+            (threadQuery.mine === undefined ||
+              Boolean(threadQuery.mine) === Boolean(candidate.isOwn))
+          );
+        },
+      ),
+      (thread) =>
+        optimisticDeletionCoordinator.isTombstoned(
+          "thread",
+          thread as unknown as LearningThreadEntity,
+        ),
+    ).map((thread) => thread as unknown as LearningThreadEntity);
+    const notesWithLocalOnly = filterTombstonedEntities(
+      mergeLocalOnlyEntities(
+        reconciledNotes as unknown as ReconciliationEntity[],
+        existingNotes as unknown as ReconciliationEntity[],
+        (note) => noteIdentity(note as unknown as LearningNoteCacheItem),
+        (note) => {
+          const candidate = note as unknown as LearningNoteCacheItem;
+          return (
+            (entryFilter === "all" || entryFilter === "note") &&
+            (feedSort !== "mine" || Boolean(candidate.isOwn))
+          );
+        },
+      ),
+      (note) =>
+        optimisticDeletionCoordinator.isTombstoned(
+          "note",
+          note as unknown as LearningNoteCacheItem,
+        ),
+    ).map((note) => note as unknown as LearningNoteCacheItem);
+
+    const reconciledThreadPage = {
+      ...threadPage,
+      threads: threadsWithLocalOnly,
+    };
+    const reconciledNotePage = {
+      ...notePage,
+      notes: notesWithLocalOnly,
+    };
+
+    for (const item of unifiedDiscussionItems) {
+      if (
+        !visibleUnifiedDiscussionItems.some(
+          ({ identity }) => identity === item.identity,
+        )
+      ) {
+        unifiedRemoteBaseRef.current.delete(item.identity);
+        continue;
+      }
+      unifiedRemoteBaseRef.current.set(
+        item.identity,
+        (item.sourceType === "thread" ? item.thread : item.note) as unknown as Readonly<
+          Record<string, unknown>
+        >,
+      );
+    }
+
+    queryClient.setQueryData(
+      learningInteractionKeys.lessonThreads(courseId, lessonId, threadQuery),
+      { pages: [reconciledThreadPage], pageParams: [null] },
+    );
+    queryClient.setQueryData(learningInteractionKeys.notes(notesQuery), {
+      pages: [reconciledNotePage],
+      pageParams: [null],
+    });
+  }, [
+    courseId,
+    currentUser?.id,
+    entryFilter,
+    feedSort,
+    lessonId,
+    notesQuery,
+    queryClient,
+    threadQuery,
+    unifiedDiscussionItems,
+    unifiedDiscussions.data,
+    visibleUnifiedDiscussionItems,
+  ]);
+
+  const backendNotes = useMemo<Comment[]>(() => {
     if (
       !courseId ||
       !lessonId ||
-      (!capabilities.allowNotes && !hasNoteDeepLink)
+      (!capabilities.allowNotes && !hasNoteDeepLink) ||
+      (entryFilter !== "all" && entryFilter !== "note")
     )
       return [];
 
-    const notes = pages.flatMap((page) =>
-      page.notes.map((note) =>
-        adaptLearningNoteToComment(
+    const unifiedNoteIdentities = new Set(
+      visibleUnifiedDiscussionItems
+        .filter((item) => item.sourceType === "note")
+        .map((item) => item.identity),
+    );
+    const notes = legacyNotes
+      .filter((note) => {
+        const serverId = getServerEntityId(note);
+        return (
+          (!serverId ||
+            (isClientEntityId(getClientEntityId(note)) &&
+              (feedSort !== "mine" || Boolean(note.isOwn)))) ||
+          unifiedNoteIdentities.has(`note:${serverId}`)
+        );
+      })
+      .map((note) => {
+        const adapted = adaptLearningNoteToComment(
           note,
           authorName,
           authorAvatar,
           currentUser?.id,
+        );
+        const serverId = getServerEntityId(note);
+        return serverId
+          ? withSourceAwareIdentity(adapted, "note", serverId)
+          : adapted;
+      });
+    const unifiedNotes = visibleUnifiedDiscussionItems
+      .filter((item) => item.sourceType === "note")
+      .filter(
+        (item) =>
+          !notes.some(
+            (note) => getServerEntityId(note) === item.entityId,
+          ),
+      )
+      .map((item) =>
+        adaptUnifiedDiscussionItem(
+          item,
+          authorName,
+          authorAvatar,
+          currentUser?.id,
         ),
-      ),
-    );
+      );
+    const allNotes = [...notes, ...unifiedNotes];
 
     if (
       directNoteData &&
@@ -639,15 +966,20 @@ function DiscussionInner({
         authorAvatar,
         currentUser?.id,
       );
-      return [
+      const sourceAwareDirectNote = withSourceAwareIdentity(
         directNote,
-        ...notes.filter(
+        "note",
+        directNoteData.id,
+      );
+      return [
+        sourceAwareDirectNote,
+        ...allNotes.filter(
           (note) => getServerEntityId(note) !== directNoteData.id,
         ),
       ];
     }
 
-    return notes;
+    return allNotes;
   }, [
     authorAvatar,
     authorName,
@@ -655,9 +987,12 @@ function DiscussionInner({
     courseId,
     currentUser?.id,
     directNoteData,
+    entryFilter,
+    feedSort,
     hasNoteDeepLink,
     lessonId,
-    notesData,
+    legacyNotes,
+    visibleUnifiedDiscussionItems,
   ]);
 
   const isBackendMode = Boolean(
@@ -688,41 +1023,81 @@ function DiscussionInner({
   const directThreadComment = useMemo<Comment | null>(() => {
     if (!directThreadData || !isCommentOrQaThread(directThreadData))
       return null;
-    return adaptLearningThreadToComment(directThreadData, currentUser?.id);
+    return withSourceAwareIdentity(
+      adaptLearningThreadToComment(directThreadData, currentUser?.id),
+      "thread",
+      directThreadData.id,
+    );
   }, [currentUser?.id, directThreadData]);
 
   const backendThreads = useMemo<Comment[]>(() => {
-    const legacyThreadsData = threadsData as unknown as
-      | {
-          pages?: Array<{ threads: LearningThreadEntity[] }>;
-          threads?: LearningThreadEntity[];
-        }
-      | undefined;
-    const pages =
-      legacyThreadsData?.pages ??
-      (legacyThreadsData?.threads ? [{ threads: legacyThreadsData.threads }] : []);
     if (
       !courseId ||
       !lessonId ||
-      (!capabilities.allowComments && !capabilities.allowQa) ||
-      pages.length === 0
+      (!capabilities.allowComments && !capabilities.allowQa)
     ) {
       return [];
     }
 
-    return pages.flatMap((page) =>
-      page.threads
-        .filter(isCommentOrQaThread)
-        .map((thread) => adaptLearningThreadToComment(thread, currentUser?.id)),
+    const unifiedThreadIdentities = new Set(
+      visibleUnifiedDiscussionItems
+        .filter((item) => item.sourceType === "thread")
+        .map((item) => item.identity),
     );
+    const threads = legacyThreads
+      .filter(isCommentOrQaThread)
+      .filter((thread) => {
+        const serverId = getServerEntityId(thread);
+        return (
+          !serverId ||
+          isClientEntityId(getClientEntityId(thread)) ||
+          unifiedThreadIdentities.has(`thread:${serverId}`)
+        );
+      })
+      .map((thread) => {
+        const adapted = adaptLearningThreadToComment(thread, currentUser?.id);
+        const serverId = getServerEntityId(thread);
+        return serverId
+          ? withSourceAwareIdentity(adapted, "thread", serverId)
+          : adapted;
+      });
+    const unifiedThreads = visibleUnifiedDiscussionItems
+      .filter((item) => item.sourceType === "thread")
+      .filter(
+        (item) =>
+          !threads.some(
+            (thread) => getServerEntityId(thread) === item.entityId,
+          ),
+      )
+      .map((item) =>
+        adaptUnifiedDiscussionItem(
+          item,
+          authorName,
+          authorAvatar,
+          currentUser?.id,
+        ),
+      );
+    return [...threads, ...unifiedThreads];
   }, [
+    authorAvatar,
+    authorName,
     capabilities.allowComments,
     capabilities.allowQa,
     courseId,
     currentUser?.id,
     lessonId,
-    threadsData,
+    legacyThreads,
+    visibleUnifiedDiscussionItems,
   ]);
+
+  const backendOrderedEntries = useMemo(
+    () =>
+      orderUnifiedDiscussionEntries(visibleUnifiedDiscussionItems, [
+        ...backendNotes,
+        ...backendThreads,
+      ]),
+    [backendNotes, backendThreads, visibleUnifiedDiscussionItems],
+  );
 
   const storageBase = `veolms-learning-${persistenceKey}-discussion`;
   const [draft, setDraft] = useSessionStorageState<DiscussionDraft>(
@@ -846,10 +1221,10 @@ function DiscussionInner({
 
   const combinedEntries = useMemo<Comment[]>(() => {
     if (isBackendMode) {
-      return [...backendNotes, ...backendThreads];
+      return backendOrderedEntries;
     }
     return [...backendNotes, ...entries];
-  }, [backendNotes, backendThreads, entries, isBackendMode]);
+  }, [backendOrderedEntries, backendNotes, entries, isBackendMode]);
 
   const feedCapabilities = useMemo<InteractionCapabilities>(
     () =>
@@ -873,13 +1248,11 @@ function DiscussionInner({
     () =>
       applyDiscussionFeed({
         currentUserName: authorName,
-        // All intentionally keeps the existing client-side mixed projection.
-        // A globally ordered mixed cursor requires a backend unified-feed
-        // contract and is deferred to that future migration.
         entries: isBackendMode ? dedupedBackendEntries : combinedEntries,
         filter: entryFilter,
         sort: feedSort,
         capabilities: feedCapabilities,
+        preserveOrder: isBackendMode,
       }),
     [
       authorName,
@@ -1027,51 +1400,32 @@ function DiscussionInner({
   ]);
 
   const loadMoreDiscussion = useCallback(async () => {
-    if (entryFilter === "note") {
-      if (hasNextNotesPage && !isFetchingNextNotesPage) {
-        await fetchNextNotesPage();
-      }
+    if (
+      allFeedPagePendingRef.current ||
+      unifiedDiscussions.isFetchingNextPage ||
+      unifiedDiscussions.isFetchNextPageError ||
+      !unifiedDiscussions.hasNextPage
+    ) {
       return;
     }
+
     if (entryFilter === "all") {
-      if (allFeedPagePendingRef.current) return;
-
-      const shouldLoadThreads = Boolean(
-        hasNextThreadsPage && !isFetchingNextThreadsPage,
-      );
-      const shouldLoadNotes = Boolean(
-        hasNextNotesPage && !isFetchingNextNotesPage,
-      );
-      if (!shouldLoadThreads && !shouldLoadNotes) return;
-
       allFeedPagePendingRef.current = true;
       allFeedPageSnapshotRef.current = filteredEntries;
       setIsAllFeedPagePending(true);
-
-      try {
-        const requests: Promise<unknown>[] = [];
-        if (shouldLoadThreads) requests.push(fetchNextThreadsPage());
-        if (shouldLoadNotes) requests.push(fetchNextNotesPage());
-        await Promise.allSettled(requests);
-      } finally {
-        allFeedPagePendingRef.current = false;
-        allFeedPageSnapshotRef.current = null;
-        setIsAllFeedPagePending(false);
-      }
-      return;
     }
-    if (hasNextThreadsPage && !isFetchingNextThreadsPage) {
-      await fetchNextThreadsPage();
+
+    try {
+      await unifiedDiscussions.fetchNextPage();
+    } finally {
+      allFeedPagePendingRef.current = false;
+      allFeedPageSnapshotRef.current = null;
+      setIsAllFeedPagePending(false);
     }
   }, [
     entryFilter,
-    fetchNextNotesPage,
-    fetchNextThreadsPage,
-    hasNextNotesPage,
-    hasNextThreadsPage,
     filteredEntries,
-    isFetchingNextNotesPage,
-    isFetchingNextThreadsPage,
+    unifiedDiscussions,
   ]);
 
   useEffect(() => {
@@ -1083,13 +1437,9 @@ function DiscussionInner({
 
   const hasNextDiscussionPage =
     isBackendMode &&
-    (entryFilter === "note"
-      ? Boolean(hasNextNotesPage)
-      : entryFilter === "all"
-        ? Boolean(hasNextThreadsPage || hasNextNotesPage)
-        : Boolean(hasNextThreadsPage));
-  const isFetchingNextDiscussionPage =
-    isFetchingNextThreadsPage || isFetchingNextNotesPage;
+    Boolean(unifiedDiscussions.hasNextPage) &&
+    !unifiedDiscussions.isFetchNextPageError;
+  const isFetchingNextDiscussionPage = unifiedDiscussions.isFetchingNextPage;
   const threadEntries = useMemo(() => {
     const list = combinedEntries.filter((entry) => entry.entryKind !== "note");
     if (!directThreadComment) {
