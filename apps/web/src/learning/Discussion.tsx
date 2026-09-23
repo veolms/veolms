@@ -2685,6 +2685,40 @@ function DiscussionVirtualFeed({
   return <DiscussionDesktopVirtualFeed {...props} />;
 }
 
+type DiscussionLoadingRowVariant = "short" | "long";
+
+function DiscussionLoadingRow({
+  variant,
+}: {
+  variant: DiscussionLoadingRowVariant;
+}) {
+  const hasSecondTextLine = variant === "long";
+
+  return (
+    <div className="relative py-4" aria-hidden="true">
+      <div className="relative flex gap-3">
+        <div className="size-10 shrink-0 animate-pulse rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <div className="h-3.5 w-24 animate-pulse rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+            <div className="h-3 w-16 animate-pulse rounded-full bg-[color-mix(in_srgb,var(--text)_9%,transparent)]" />
+          </div>
+
+          <div className="mt-1.5 space-y-2">
+            <div
+              className={`h-3.5 animate-pulse rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)] ${hasSecondTextLine ? "w-full" : "w-4/5"}`}
+            />
+            {hasSecondTextLine && (
+              <div className="h-3.5 w-3/5 animate-pulse rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ThreadSurface({
   lessonDescription,
   isLessonDescriptionLoading = false,
@@ -3058,26 +3092,14 @@ function ThreadSurface({
     ],
   );
 
-  if (isInteractionCapabilitiesLoading) {
-    return (
-      <div>
-        <LessonDescription
-          description={lessonDescription}
-          isLoading={isLessonDescriptionLoading}
-        />
-        <div
-          className="mt-4 flex flex-col gap-3"
-          data-testid="learner-interactions-loading"
-        >
-          <div className="h-10 w-full animate-pulse rounded-md bg-[color-mix(in_srgb,var(--surface)_70%,transparent)]" />
-          <div className="flex gap-2">
-            <div className="h-8 w-16 animate-pulse rounded-lg bg-[color-mix(in_srgb,var(--surface)_70%,transparent)]" />
-            <div className="h-8 w-24 animate-pulse rounded-lg bg-[color-mix(in_srgb,var(--surface)_70%,transparent)]" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const discussionDescription = (
+    <LessonDescription
+      description={lessonDescription}
+      isLoading={isLessonDescriptionLoading}
+    />
+  );
+  const hasDescriptionSurface =
+    isLessonDescriptionLoading || Boolean(lessonDescription?.trim());
 
   if (isAllDisabled) {
     return (
@@ -3098,12 +3120,6 @@ function ThreadSurface({
     );
   }
 
-  const discussionDescription = (
-    <LessonDescription
-      description={lessonDescription}
-      isLoading={isLessonDescriptionLoading}
-    />
-  );
   const discussionFilters = availableFilters.length > 0 ? (
     <div
       role="group"
@@ -3150,7 +3166,20 @@ function ThreadSurface({
     </div>
   );
 
-  const discussionContent = isThreadDeepLinkPending ? (
+  const discussionLoadingContent = (
+    <div
+      className="mt-4 flex min-h-0 flex-1 flex-col gap-3"
+      data-testid="learner-interactions-loading"
+    >
+      <DiscussionLoadingRow variant="short" />
+      <DiscussionLoadingRow variant="long" />
+      <DiscussionLoadingRow variant="short" />
+    </div>
+  );
+
+  const discussionContent = isInteractionCapabilitiesLoading ? (
+    discussionLoadingContent
+  ) : isThreadDeepLinkPending ? (
     <div
       className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
       data-testid="learning-thread-deep-link-loading"
@@ -3285,7 +3314,11 @@ function ThreadSurface({
         <div
           ref={composerHostRef}
           data-comment-composer-container
-          className="mt-3 scroll-mt-4 sm:mt-4"
+          className={
+            hasDescriptionSurface
+              ? "mt-3 scroll-mt-4 sm:mt-4"
+              : "scroll-mt-4"
+          }
         >
           {composerMode === "desktop" ? (
             <CommentComposer

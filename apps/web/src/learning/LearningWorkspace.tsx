@@ -2418,7 +2418,7 @@ export function LearningWorkspace({
     selectedLesson,
   ]);
 
-  const lessonHeader = (contained = false) => (
+  const lessonHeader = (contained = false, titleLoading = false) => (
     <header className="learning-workspace__lesson-header">
       <button
         id="learning-course-content-trigger"
@@ -2440,7 +2440,15 @@ export function LearningWorkspace({
         onClick={openLessonDrawer}
       >
         <div className="min-w-0">
-          <h1 id="learning-lesson-title">{currentLesson[1]}</h1>
+          {titleLoading ? (
+            <span
+              className="block h-5 w-40 max-w-full animate-pulse rounded-md bg-[color-mix(in_srgb,var(--text)_12%,transparent)]"
+              data-testid="learning-lesson-title-loading"
+              aria-hidden="true"
+            />
+          ) : (
+            <h1 id="learning-lesson-title">{currentLesson[1]}</h1>
+          )}
         </div>
       </button>
       {hasLessonQuiz(selectedLesson) ? (
@@ -2626,7 +2634,8 @@ export function LearningWorkspace({
                     }
               }
             >
-              {!phoneLessonDrawerViewport && lessonHeader()}
+              {!phoneLessonDrawerViewport &&
+                lessonHeader(false, isInteractionCapabilitiesLoading)}
               {isLearningDeepLinkReady ? (
                 <Discussion
                   key={discussionPersistenceKey}
@@ -2638,7 +2647,10 @@ export function LearningWorkspace({
                   isThreadDeepLinkReady
                   mobileBottomNavigation={mobileBottomNavigation}
                   mobileBottomNavigationHidden={mobileBottomNavigationHidden}
-                  mobileLessonHeader={lessonHeader(true)}
+                  mobileLessonHeader={lessonHeader(
+                    true,
+                    isInteractionCapabilitiesLoading,
+                  )}
                   lessonDescription={selectedLessonDescription}
                   isLessonDescriptionLoading={
                     isApiRoute && isCourseOverviewLoading
