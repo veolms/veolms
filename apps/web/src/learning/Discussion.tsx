@@ -10,7 +10,6 @@ import { QueryClientContext } from "@tanstack/react-query";
 import {
   defaultRangeExtractor,
   useVirtualizer,
-  useWindowVirtualizer,
 } from "@tanstack/react-virtual";
 import { useInRouterContext, useSearchParams } from "react-router";
 import { createPortal } from "react-dom";
@@ -102,7 +101,6 @@ import {
   adaptLearningThreadToComment,
   isCommentOrQaThread,
 } from "./learning-threads.adapter";
-import { getApplicationScrollElement } from "../shell/applicationScroll";
 
 const CURRENT_USER = {
   name: "Ashi Singh",
@@ -289,6 +287,7 @@ export interface DiscussionProps {
   courseSlug?: string;
   courseId?: string;
   lessonId?: string;
+  mobileLessonHeader?: React.ReactNode;
   mobileBottomNavigation?: boolean;
   mobileBottomNavigationHidden?: boolean;
   lessonDescription?: string | null;
@@ -388,6 +387,7 @@ function DiscussionInner({
   courseSlug,
   courseId,
   lessonId,
+  mobileLessonHeader,
   mobileBottomNavigation = false,
   mobileBottomNavigationHidden = false,
   lessonDescription,
@@ -2058,6 +2058,7 @@ function DiscussionInner({
       <ThreadSurface
         lessonDescription={lessonDescription}
         isLessonDescriptionLoading={isLessonDescriptionLoading}
+        mobileLessonHeader={mobileLessonHeader}
         draft={activeDraft}
         entryKind={activeEntryKind}
         visibility={activeVisibility}
@@ -2304,6 +2305,7 @@ export function Discussion(props: DiscussionProps) {
 interface ThreadSurfaceProps {
   lessonDescription?: string | null;
   isLessonDescriptionLoading?: boolean;
+  mobileLessonHeader?: React.ReactNode;
   draft: DiscussionDraft;
   entryKind: DiscussionEntryKind;
   visibility: DiscussionVisibility;
@@ -2420,24 +2422,6 @@ type DiscussionVirtualFeedProps = {
   layoutKey?: string;
 };
 
-export function getDiscussionVirtualFeedScrollMargin(
-  feed: HTMLElement | null,
-  scrollport: HTMLElement | null,
-): number {
-  if (!feed || typeof window === "undefined") return 0;
-
-  const feedRect = feed.getBoundingClientRect();
-  if (scrollport) {
-    return (
-      feedRect.top -
-      scrollport.getBoundingClientRect().top +
-      scrollport.scrollTop
-    );
-  }
-
-  return feedRect.top + window.scrollY;
-}
-
 function useDiscussionRangeExtractor(
   entries: Comment[],
   protectedEntryIndices: ReadonlySet<number>,
@@ -2458,11 +2442,9 @@ function DiscussionVirtualFeedRows({
   feedRef,
   entries,
   renderEntry,
-  scrollMargin = 0,
   virtualizer,
 }: DiscussionVirtualFeedProps & {
   feedRef?: React.Ref<HTMLDivElement>;
-  scrollMargin?: number;
   virtualizer: DiscussionVirtualizer;
 }) {
   const virtualItems = virtualizer.getVirtualItems();
@@ -2473,7 +2455,7 @@ function DiscussionVirtualFeedRows({
       data-entry-count={entries.length}
       ref={feedRef}
       style={{ height: `${virtualizer.getTotalSize()}px` }}
-      className="relative w-full"
+      className="relative w-full shrink-0"
     >
       {virtualItems.map((virtualItem) => {
         const entry = entries[virtualItem.index];
@@ -2492,7 +2474,7 @@ function DiscussionVirtualFeedRows({
               top: 0,
               left: 0,
               width: "100%",
-              transform: `translateY(${virtualItem.start - scrollMargin}px)`,
+              transform: `translateY(${virtualItem.start}px)`,
             }}
           >
             {renderEntry(entry)}
@@ -2503,38 +2485,23 @@ function DiscussionVirtualFeedRows({
   );
 }
 
-function DiscussionScrollportVirtualFeed(
-  props: DiscussionVirtualFeedProps,
-) {
+function DiscussionViewportVirtualFeed({
+  viewportRef,
+  ...props
+}: DiscussionVirtualFeedProps & {
+  viewportRef: React.RefObject<HTMLDivElement | null>;
+}) {
   const rangeExtractor = useDiscussionRangeExtractor(
     props.entries,
     props.protectedEntryIndices,
   );
   const feedRef = useRef<HTMLDivElement>(null);
-  const [scrollMargin, setScrollMargin] = useState(0);
-
-  const syncScrollMargin = useCallback(() => {
-    const nextScrollMargin = getDiscussionVirtualFeedScrollMargin(
-      feedRef.current,
-      getApplicationScrollElement(),
-    );
-    setScrollMargin((current) =>
-      Math.abs(current - nextScrollMargin) > 1 ? nextScrollMargin : current,
-    );
-  }, []);
-
-  useLayoutEffect(() => {
-    syncScrollMargin();
-    window.addEventListener("resize", syncScrollMargin);
-    return () => window.removeEventListener("resize", syncScrollMargin);
-  }, [props.entries.length, props.layoutKey, syncScrollMargin]);
 
   const virtualizer = useVirtualizer({
     count: props.entries.length,
-    getScrollElement: getApplicationScrollElement,
+    getScrollElement: () => viewportRef.current,
     estimateSize: () => DISCUSSION_VIRTUAL_ESTIMATE_SIZE,
     getItemKey: (index) => getClientEntityId(props.entries[index]!),
-    scrollMargin,
     initialRect: { width: 1024, height: 768 },
     overscan: DISCUSSION_VIRTUAL_OVERSCAN,
     rangeExtractor,
@@ -2544,7 +2511,6 @@ function DiscussionScrollportVirtualFeed(
     <DiscussionVirtualFeedRows
       {...props}
       feedRef={feedRef}
-      scrollMargin={scrollMargin}
       virtualizer={{
         ...virtualizer,
         measureElement: (element) =>
@@ -2554,66 +2520,19 @@ function DiscussionScrollportVirtualFeed(
   );
 }
 
-function DiscussionWindowVirtualFeed(props: DiscussionVirtualFeedProps) {
-  const rangeExtractor = useDiscussionRangeExtractor(
-    props.entries,
-    props.protectedEntryIndices,
-  );
-  const feedRef = useRef<HTMLDivElement>(null);
-  const [scrollMargin, setScrollMargin] = useState(0);
-
-  useLayoutEffect(() => {
-    const syncWindowScrollMargin = () => {
-      const feed = feedRef.current;
-      if (!feed) return;
-      const nextMargin = getDiscussionVirtualFeedScrollMargin(feed, null);
-      setScrollMargin((current) =>
-        Math.abs(current - nextMargin) > 1 ? nextMargin : current,
-      );
-    };
-
-    syncWindowScrollMargin();
-    window.addEventListener("resize", syncWindowScrollMargin);
-    return () => window.removeEventListener("resize", syncWindowScrollMargin);
-  }, [props.entries.length, props.layoutKey]);
-
-  const virtualizer = useWindowVirtualizer({
-    count: props.entries.length,
-    estimateSize: () => DISCUSSION_VIRTUAL_ESTIMATE_SIZE,
-    getItemKey: (index) => getClientEntityId(props.entries[index]!),
-    scrollMargin,
-    initialRect: { width: 1024, height: 768 },
-    overscan: DISCUSSION_VIRTUAL_OVERSCAN,
-    rangeExtractor,
-  });
-
-  return (
-    <DiscussionVirtualFeedRows
-      {...props}
-      feedRef={feedRef}
-      scrollMargin={scrollMargin}
-      virtualizer={{
-        ...virtualizer,
-        measureElement: (element) => virtualizer.measureElement(element),
-      }}
-    />
-  );
-}
-
 function DiscussionVirtualFeed({
-  useWindowScroll,
+  viewportRef,
   ...props
-}: DiscussionVirtualFeedProps & { useWindowScroll: boolean }) {
-  return useWindowScroll ? (
-    <DiscussionWindowVirtualFeed {...props} />
-  ) : (
-    <DiscussionScrollportVirtualFeed {...props} />
-  );
+}: DiscussionVirtualFeedProps & {
+  viewportRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  return <DiscussionViewportVirtualFeed viewportRef={viewportRef} {...props} />;
 }
 
 function ThreadSurface({
   lessonDescription,
   isLessonDescriptionLoading = false,
+  mobileLessonHeader,
   draft,
   entryKind,
   visibility,
@@ -2679,6 +2598,7 @@ function ThreadSurface({
   const deletionRevision = useOptimisticDeletionRevision();
   const composerHostRef = useRef<HTMLDivElement>(null);
   const feedSentinelRef = useRef<HTMLDivElement>(null);
+  const discussionViewportRef = useRef<HTMLDivElement>(null);
   const compactComposerScrollHidden =
     mobileBottomNavigation && mobileBottomNavigationHidden;
   const [composerMode, setComposerMode] = useState<ComposerMode>("collapsed");
@@ -2856,7 +2776,7 @@ function ThreadSurface({
         }
       },
       {
-        root: document.getElementById("courses-main-scrollport"),
+        root: discussionViewportRef.current,
         rootMargin: "600px 0px",
       },
     );
@@ -2926,7 +2846,6 @@ function ThreadSurface({
     onNoteDeepLinkHandled?.(noteDeepLinkTargetId);
   }, [entryFilter, noteDeepLinkTargetId, onNoteDeepLinkHandled]);
 
-  const usesWindowScroll = isPhone || getApplicationScrollElement() === null;
   const renderEntry = useCallback(
     (entry: Comment) => (
       <CommentCard
@@ -2947,6 +2866,7 @@ function ThreadSurface({
         onToggleFollow={onToggleFollow}
         onSeekToTimestamp={onSeekToTimestamp}
         courseId={courseId}
+        constrainToContainer
         canEdit={entry.entryKind !== "note" || capabilities.allowNotes}
         canDelete={entry.entryKind !== "note" || capabilities.allowNotes}
         isDeepLinkTarget={
@@ -3020,12 +2940,188 @@ function ThreadSurface({
     );
   }
 
-  return (
-    <div>
-      <LessonDescription
-        description={lessonDescription}
-        isLoading={isLessonDescriptionLoading}
+  const discussionDescription = (
+    <LessonDescription
+      description={lessonDescription}
+      isLoading={isLessonDescriptionLoading}
+    />
+  );
+  const discussionFilters = availableFilters.length > 0 ? (
+    <div
+      role="group"
+      aria-label="Filter discussion entries"
+      className="learning-discussion__filter-group mt-3 flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] sm:mt-5 [&::-webkit-scrollbar]:hidden"
+    >
+      {availableFilters.map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={entryFilter === value}
+          onClick={() => onEntryFilterChange(value)}
+          className={`learning-discussion__filter-button h-8 shrink-0 rounded-lg px-2.5 font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:px-3 ${entryFilter === value ? "bg-(--text) text-(--canvas) shadow-[0_6px_18px_color-mix(in_srgb,var(--canvas)_28%,transparent)]" : "bg-[color-mix(in_srgb,var(--surface)_54%,transparent)] text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover) hover:text-(--text)"}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  ) : null;
+  const discussionToolbar = (
+    <div
+      className="mt-3.5 flex min-w-0 items-end max-[640px]:mt-2.5"
+      data-discussion-feed-toolbar
+    >
+      <p className="min-w-0 truncate text-lg leading-none font-semibold tracking-[-0.02em] text-(--text)">
+        {discussionCount === undefined
+          ? "Discussions"
+          : `${discussionCount} Discussions`}
+      </p>
+      <span
+        className="shrink-0 text-lg leading-none text-(--text-secondary)"
+        aria-hidden="true"
+        data-discussion-feed-separator
+      >
+        {"\u00A0\u00A0·\u00A0\u00A0"}
+      </span>
+      <ThemedSelect
+        value={feedSort}
+        onValueChange={onFeedSortChange}
+        ariaLabel="Sort discussions"
+        options={DISCUSSION_FEED_SORT_OPTIONS}
+        triggerClassName="h-auto! w-auto! max-w-full shrink-0! items-end! justify-start! gap-1! border-0! bg-transparent! p-0! shadow-none! text-[13px] leading-none! font-medium whitespace-nowrap text-(--text-secondary)! hover:bg-transparent! hover:text-(--text)! data-[state=open]:bg-transparent! data-[state=open]:shadow-none!"
       />
+    </div>
+  );
+
+  const discussionContent = isThreadDeepLinkPending ? (
+    <div
+      className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
+      data-testid="learning-thread-deep-link-loading"
+      role="status"
+    >
+      <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
+      <p className="text-sm font-medium text-(--muted)">
+        Loading discussion…
+      </p>
+    </div>
+  ) : isAllInitialLoading ? (
+    <div
+      className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
+      data-testid="learning-all-loading"
+    >
+      <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
+      <p className="text-sm font-medium text-(--muted)">
+        Loading discussions…
+      </p>
+    </div>
+  ) : entryFilter === "note" && isNotesLoading && entries.length === 0 ? (
+    <div
+      className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
+      data-testid="learning-notes-loading"
+    >
+      <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
+      <p className="text-sm font-medium text-(--muted)">Loading notes…</p>
+    </div>
+  ) : entryFilter === "note" && isNotesError && entries.length === 0 ? (
+    <div
+      className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
+      data-testid="learning-notes-error"
+    >
+      <p className="font-semibold text-(--text)">Failed to load notes</p>
+      <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
+        There was a problem loading your notes for this lesson.
+      </p>
+      {onRetryNotes && (
+        <button
+          type="button"
+          onClick={onRetryNotes}
+          className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+        >
+          Retry
+        </button>
+      )}
+    </div>
+  ) : entryFilter !== "note" && isThreadsLoading && entries.length === 0 ? (
+    <div
+      className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
+      data-testid="learning-threads-loading"
+    >
+      <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
+      <p className="text-sm font-medium text-(--muted)">
+        Loading discussions…
+      </p>
+    </div>
+  ) : entryFilter !== "note" && isThreadsError && entries.length === 0 ? (
+    <div
+      className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
+      data-testid="learning-threads-error"
+    >
+      <p className="font-semibold text-(--text)">Failed to load discussions</p>
+      <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
+        There was a problem loading the discussion for this lesson.
+      </p>
+      {onRetryThreads && (
+        <button
+          type="button"
+          onClick={onRetryThreads}
+          className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+        >
+          Retry
+        </button>
+      )}
+    </div>
+  ) : (
+    <>
+      <DiscussionVirtualFeed
+        entries={entries}
+        protectedEntryIndices={protectedEntryIndices}
+        renderEntry={renderEntry}
+        layoutKey={`${composerMode}:${entryFilter}:${isLessonDescriptionLoading}`}
+        viewportRef={discussionViewportRef}
+      />
+      {isBackendMode && hasNextPage && (
+        <div ref={feedSentinelRef} className="h-1" aria-hidden="true" />
+      )}
+      {isBackendMode && isFetchingNextPage && (
+        <p
+          className="py-4 text-center text-sm text-(--muted)"
+          data-testid="learning-feed-loading-more"
+        >
+          Loading more…
+        </p>
+      )}
+      {shouldShowDiscussionEnd({
+        isBackendMode,
+        entryFilter,
+        entryCount: entries.length,
+        hasNextPage,
+        isNotesLoading,
+        isThreadsLoading,
+      }) && (
+        <p
+          className="py-4 text-center text-xs text-(--muted)"
+          data-testid="learning-feed-end"
+        >
+          You’ve reached the end.
+        </p>
+      )}
+      {entries.length === 0 && (
+        <div className="py-12 text-center">
+          <p className="font-semibold text-(--text)">
+            No {entryFilter === "all" ? "entries" : getFilterName(entryFilter)} yet
+          </p>
+          {availableFilters.some(([val]) => val === "all") && (
+            <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-(--muted)">
+              Choose All to return to the full lesson discussion.
+            </p>
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {!isPhone && discussionDescription}
       {!isPhone && enabledKinds.length > 0 && (
         <div
           ref={composerHostRef}
@@ -3074,188 +3170,39 @@ function ThreadSurface({
         {notice}
       </p>
 
-      {availableFilters.length > 0 && (
-        <div
-          role="group"
-          aria-label="Filter discussion entries"
-          className="learning-discussion__filter-group mt-3 flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] sm:mt-5 [&::-webkit-scrollbar]:hidden"
-        >
-          {availableFilters.map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={entryFilter === value}
-              onClick={() => onEntryFilterChange(value)}
-              className={`learning-discussion__filter-button h-8 shrink-0 rounded-lg px-2.5 font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:px-3 ${entryFilter === value ? "bg-(--text) text-(--canvas) shadow-[0_6px_18px_color-mix(in_srgb,var(--canvas)_28%,transparent)]" : "bg-[color-mix(in_srgb,var(--surface)_54%,transparent)] text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover) hover:text-(--text)"}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+      {!isPhone && discussionFilters}
+      {!isPhone && discussionToolbar}
 
       <div
-        className="mt-3.5 flex min-w-0 items-end max-[640px]:mt-2.5"
-        data-discussion-feed-toolbar
-      >
-        <p className="min-w-0 truncate text-lg leading-none font-semibold tracking-[-0.02em] text-(--text)">
-          {discussionCount === undefined
-            ? "Discussions"
-            : `${discussionCount} Discussions`}
-        </p>
-        <span
-          className="shrink-0 text-lg leading-none text-(--text-secondary)"
-          aria-hidden="true"
-          data-discussion-feed-separator
-        >
-          {"\u00A0\u00A0·\u00A0\u00A0"}
-        </span>
-        <ThemedSelect
-          value={feedSort}
-          onValueChange={onFeedSortChange}
-          ariaLabel="Sort discussions"
-          options={DISCUSSION_FEED_SORT_OPTIONS}
-          triggerClassName="h-auto! w-auto! max-w-full shrink-0! items-end! justify-start! gap-1! border-0! bg-transparent! p-0! shadow-none! text-[13px] leading-none! font-medium whitespace-nowrap text-(--text-secondary)! hover:bg-transparent! hover:text-(--text)! data-[state=open]:bg-transparent! data-[state=open]:shadow-none!"
-        />
-      </div>
-
-      <div
-        className={`mt-2.5 ${isPhone ? "pb-36" : "pb-4"}`}
+        className="mt-2.5 flex min-h-0 min-w-0 flex-1 flex-col"
         data-discussion-feed-list
       >
-        {isThreadDeepLinkPending ? (
-          <div
-            className="py-12 text-center"
-            data-testid="learning-thread-deep-link-loading"
-            role="status"
-          >
-            <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-            <p className="text-sm font-medium text-(--muted)">
-              Loading discussion…
-            </p>
-          </div>
-        ) : isAllInitialLoading ? (
-          <div
-            className="py-12 text-center"
-            data-testid="learning-all-loading"
-          >
-            <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-            <p className="text-sm font-medium text-(--muted)">
-              Loading discussions…
-            </p>
-          </div>
-        ) : entryFilter === "note" && isNotesLoading && entries.length === 0 ? (
-          <div
-            className="py-12 text-center"
-            data-testid="learning-notes-loading"
-          >
-            <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-            <p className="text-sm font-medium text-(--muted)">Loading notes…</p>
-          </div>
-        ) : entryFilter === "note" &&
-          isNotesError &&
-          entries.length === 0 ? (
-          <div className="py-12 text-center" data-testid="learning-notes-error">
-            <p className="font-semibold text-(--text)">Failed to load notes</p>
-            <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
-              There was a problem loading your notes for this lesson.
-            </p>
-            {onRetryNotes && (
-              <button
-                type="button"
-                onClick={onRetryNotes}
-                className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
-              >
-                Retry
-              </button>
-            )}
-          </div>
-        ) : entryFilter !== "note" &&
-          isThreadsLoading &&
-          entries.length === 0 ? (
-          <div
-            className="py-12 text-center"
-            data-testid="learning-threads-loading"
-          >
-            <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-            <p className="text-sm font-medium text-(--muted)">
-              Loading discussions…
-            </p>
-          </div>
-        ) : entryFilter !== "note" && isThreadsError && entries.length === 0 ? (
-          <div
-            className="py-12 text-center"
-            data-testid="learning-threads-error"
-          >
-            <p className="font-semibold text-(--text)">
-              Failed to load discussions
-            </p>
-            <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
-              There was a problem loading the discussion for this lesson.
-            </p>
-            {onRetryThreads && (
-              <button
-                type="button"
-                onClick={onRetryThreads}
-                className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
-              >
-                Retry
-              </button>
-            )}
-          </div>
-        ) : (
-          <>
-            <DiscussionVirtualFeed
-              entries={entries}
-              protectedEntryIndices={protectedEntryIndices}
-              renderEntry={renderEntry}
-              layoutKey={`${composerMode}:${entryFilter}:${isLessonDescriptionLoading}`}
-              useWindowScroll={usesWindowScroll}
-            />
-            {isBackendMode && hasNextPage && (
-              <div ref={feedSentinelRef} className="h-1" aria-hidden="true" />
-            )}
-            {isBackendMode && isFetchingNextPage && (
-              <p
-                className="py-4 text-center text-sm text-(--muted)"
-                data-testid="learning-feed-loading-more"
-              >
-                Loading more…
-              </p>
-            )}
-            {shouldShowDiscussionEnd({
-              isBackendMode,
-              entryFilter,
-              entryCount: entries.length,
-              hasNextPage,
-              isNotesLoading,
-              isThreadsLoading,
-            }) && (
-              <p
-                className="py-4 text-center text-xs text-(--muted)"
-                data-testid="learning-feed-end"
-              >
-                You’ve reached the end.
-              </p>
-            )}
-            {entries.length === 0 && (
-              <div className="py-12 text-center">
-                <p className="font-semibold text-(--text)">
-                  No{" "}
-                  {entryFilter === "all"
-                    ? "entries"
-                    : getFilterName(entryFilter)}{" "}
-                  yet
-                </p>
-                {availableFilters.some(([val]) => val === "all") && (
-                  <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-(--muted)">
-                    Choose All to return to the full lesson discussion.
-                  </p>
-                )}
-              </div>
-            )}
-          </>
-        )}
+        <div
+          ref={discussionViewportRef}
+          data-discussion-scroll-viewport
+          className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col touch-pan-y overflow-x-hidden overflow-y-auto"
+          style={{
+            minHeight: 0,
+            maxWidth: "100%",
+            overflowX: "hidden",
+            overflowY: "auto",
+            overscrollBehaviorX: "none",
+            touchAction: "pan-y",
+          }}
+        >
+          {isPhone && (
+            <div
+              data-discussion-scroll-header
+              className="min-w-0 max-w-full shrink-0"
+            >
+              {mobileLessonHeader}
+              {discussionDescription}
+              {discussionFilters}
+              {discussionToolbar}
+            </div>
+          )}
+          {discussionContent}
+        </div>
       </div>
 
       {isPhone && enabledKinds.length > 0 && composerMode !== "mobile" && (

@@ -2418,6 +2418,62 @@ export function LearningWorkspace({
     selectedLesson,
   ]);
 
+  const lessonHeader = (contained = false) => (
+    <header className="learning-workspace__lesson-header">
+      <button
+        id="learning-course-content-trigger"
+        ref={lessonTriggerRef}
+        type="button"
+        className="learning-workspace__lesson-heading"
+        style={
+          contained
+            ? {
+                width: "100%",
+                minWidth: 0,
+                marginInline: 0,
+                paddingInline: 0,
+              }
+            : undefined
+        }
+        aria-label={`Open course lessons for ${currentLesson[1]}`}
+        aria-expanded={lessonDrawer}
+        onClick={openLessonDrawer}
+      >
+        <div className="min-w-0">
+          <h1 id="learning-lesson-title">{currentLesson[1]}</h1>
+        </div>
+      </button>
+      {hasLessonQuiz(selectedLesson) ? (
+        <button
+          type="button"
+          onClick={() => {
+            if (activeLessonView === "quiz") {
+              resumeLessonVideoPlayback();
+            } else {
+              handleOpenLessonQuiz(selectedLesson);
+            }
+          }}
+          className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer shadow-(--card-compact-shadow) shrink-0 ${
+            activeLessonView === "quiz"
+              ? "border border-(--accent) bg-[color-mix(in_srgb,var(--accent)_15%,var(--surface))] text-(--accent)"
+              : "border border-[color-mix(in_srgb,var(--text)_15%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] text-(--text) hover:border-(--accent) hover:text-(--accent)"
+          }`}
+          aria-label={`Open quiz for lesson ${selectedLesson}: ${currentLesson[1]}`}
+          title={
+            activeLessonView === "quiz"
+              ? "Return to video lesson"
+              : "Open lesson quiz"
+          }
+        >
+          <Exam size={12} weight="bold" className="text-(--accent)" />
+          <span>
+            {activeLessonView === "quiz" ? "Back to video" : "Quiz"}
+          </span>
+        </button>
+      ) : null}
+    </header>
+  );
+
   return (
     <div
       ref={workspaceRef}
@@ -2570,49 +2626,7 @@ export function LearningWorkspace({
                     }
               }
             >
-              <header className="learning-workspace__lesson-header">
-                <button
-                  id="learning-course-content-trigger"
-                  ref={lessonTriggerRef}
-                  type="button"
-                  className="learning-workspace__lesson-heading"
-                  aria-label={`Open course lessons for ${currentLesson[1]}`}
-                  aria-expanded={lessonDrawer}
-                  onClick={openLessonDrawer}
-                >
-                  <div className="min-w-0">
-                    <h1 id="learning-lesson-title">{currentLesson[1]}</h1>
-                  </div>
-                </button>
-                {hasLessonQuiz(selectedLesson) ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (activeLessonView === "quiz") {
-                        resumeLessonVideoPlayback();
-                      } else {
-                        handleOpenLessonQuiz(selectedLesson);
-                      }
-                    }}
-                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer shadow-(--card-compact-shadow) shrink-0 ${
-                      activeLessonView === "quiz"
-                        ? "border border-(--accent) bg-[color-mix(in_srgb,var(--accent)_15%,var(--surface))] text-(--accent)"
-                        : "border border-[color-mix(in_srgb,var(--text)_15%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] text-(--text) hover:border-(--accent) hover:text-(--accent)"
-                    }`}
-                    aria-label={`Open quiz for lesson ${selectedLesson}: ${currentLesson[1]}`}
-                    title={
-                      activeLessonView === "quiz"
-                        ? "Return to video lesson"
-                        : "Open lesson quiz"
-                    }
-                  >
-                    <Exam size={12} weight="bold" className="text-(--accent)" />
-                    <span>
-                      {activeLessonView === "quiz" ? "Back to video" : "Quiz"}
-                    </span>
-                  </button>
-                ) : null}
-              </header>
+              <div className="max-[640px]:hidden">{lessonHeader()}</div>
               {isLearningDeepLinkReady ? (
                 <Discussion
                   key={discussionPersistenceKey}
@@ -2624,6 +2638,7 @@ export function LearningWorkspace({
                   isThreadDeepLinkReady
                   mobileBottomNavigation={mobileBottomNavigation}
                   mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+                  mobileLessonHeader={lessonHeader(true)}
                   lessonDescription={selectedLessonDescription}
                   isLessonDescriptionLoading={
                     isApiRoute && isCourseOverviewLoading
