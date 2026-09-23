@@ -3351,6 +3351,7 @@ function ThreadSurface({
               overflowX: "hidden",
               overflowY: "auto",
               overscrollBehaviorX: "none",
+              overscrollBehaviorY: "none",
               touchAction: "pan-y",
             }}
           >
