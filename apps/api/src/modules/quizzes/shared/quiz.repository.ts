@@ -13,14 +13,15 @@ export async function findQuiz(database: DatabaseExecutor, quizId: string) {
 export async function listQuizzesByCreator(
   database: DatabaseExecutor,
   creatorId: string,
+  academyId?: string,
 ) {
-  return await database
+  let query = database
     .selectFrom("quizzes")
     .selectAll()
     .where("creator_id", "=", creatorId)
-    .where("deleted_at", "is", null)
-    .orderBy("updated_at", "desc")
-    .execute();
+    .where("deleted_at", "is", null);
+  if (academyId) query = query.where("academy_id", "=", academyId);
+  return await query.orderBy("updated_at", "desc").execute();
 }
 
 export async function listQuizzesByAcademy(
@@ -33,6 +34,19 @@ export async function listQuizzesByAcademy(
     .where("academy_id", "=", academyId)
     .where("deleted_at", "is", null)
     .orderBy("updated_at", "desc")
+    .execute();
+}
+
+export async function listQuizzesByIds(
+  database: DatabaseExecutor,
+  quizIds: readonly string[],
+) {
+  if (quizIds.length === 0) return [];
+  return await database
+    .selectFrom("quizzes")
+    .selectAll()
+    .where("id", "in", quizIds)
+    .where("deleted_at", "is", null)
     .execute();
 }
 
@@ -52,6 +66,19 @@ export async function listVersions(database: DatabaseExecutor, quizId: string) {
     .selectFrom("quiz_versions")
     .selectAll()
     .where("quiz_id", "=", quizId)
+    .orderBy("version_number", "asc")
+    .execute();
+}
+
+export async function listVersionsForQuizzes(
+  database: DatabaseExecutor,
+  quizIds: readonly string[],
+) {
+  if (quizIds.length === 0) return [];
+  return await database
+    .selectFrom("quiz_versions")
+    .selectAll()
+    .where("quiz_id", "in", quizIds)
     .orderBy("version_number", "asc")
     .execute();
 }
@@ -142,6 +169,20 @@ export async function listQuestions(
     .selectFrom("quiz_questions")
     .selectAll()
     .where("quiz_version_id", "=", versionId)
+    .where("deleted_at", "is", null)
+    .orderBy("position", "asc")
+    .execute();
+}
+
+export async function listQuestionsForVersions(
+  database: DatabaseExecutor,
+  versionIds: readonly string[],
+) {
+  if (versionIds.length === 0) return [];
+  return await database
+    .selectFrom("quiz_questions")
+    .selectAll()
+    .where("quiz_version_id", "in", versionIds)
     .where("deleted_at", "is", null)
     .orderBy("position", "asc")
     .execute();
@@ -279,6 +320,27 @@ export async function listAssignmentsForCourse(
     .execute();
 }
 
+export async function listAssignmentsForCourseWithQuiz(
+  database: DatabaseExecutor,
+  courseId: string,
+) {
+  return await database
+    .selectFrom("quiz_assignments")
+    .leftJoin("quizzes", (join) =>
+      join
+        .onRef("quizzes.id", "=", "quiz_assignments.quiz_id")
+        .on("quizzes.deleted_at", "is", null),
+    )
+    .selectAll("quiz_assignments")
+    .select([
+      "quizzes.title as quiz_title",
+      "quizzes.creator_id as quiz_creator_id",
+    ])
+    .where("quiz_assignments.course_id", "=", courseId)
+    .orderBy("quiz_assignments.created_at", "asc")
+    .execute();
+}
+
 export async function listAssignmentsForCourses(
   database: DatabaseExecutor,
   courseIds: readonly string[],
@@ -289,6 +351,25 @@ export async function listAssignmentsForCourses(
     .selectAll()
     .where("course_id", "in", courseIds)
     .orderBy("created_at", "asc")
+    .execute();
+}
+
+export async function listAssignmentsForCoursesWithQuiz(
+  database: DatabaseExecutor,
+  courseIds: readonly string[],
+) {
+  if (courseIds.length === 0) return [];
+  return await database
+    .selectFrom("quiz_assignments")
+    .leftJoin("quizzes", (join) =>
+      join
+        .onRef("quizzes.id", "=", "quiz_assignments.quiz_id")
+        .on("quizzes.deleted_at", "is", null),
+    )
+    .selectAll("quiz_assignments")
+    .select(["quizzes.title as quiz_title"])
+    .where("quiz_assignments.course_id", "in", courseIds)
+    .orderBy("quiz_assignments.created_at", "asc")
     .execute();
 }
 
@@ -511,6 +592,26 @@ export async function listAnalyticsAttempts(
     .execute();
 }
 
+export async function listAnalyticsAttemptsForAssignments(
+  database: DatabaseExecutor,
+  assignmentIds: readonly string[],
+) {
+  if (assignmentIds.length === 0) return [];
+  return await database
+    .selectFrom("quiz_attempts")
+    .select([
+      "assignment_id as assignmentId",
+      "user_id as studentId",
+      "status",
+      "score_percentage as scorePercentage",
+      "created_at as createdAt",
+      "submitted_at as submittedAt",
+    ])
+    .where("assignment_id", "in", assignmentIds)
+    .orderBy("created_at", "desc")
+    .execute();
+}
+
 export async function expireAbandonedAttempts(
   database: DatabaseExecutor,
   now: Date = new Date(),
@@ -524,10 +625,7 @@ export async function expireAbandonedAttempts(
     .where("status", "=", "in_progress")
     .where((eb) =>
       eb.or([
-        eb.and([
-          eb("expires_at", "is not", null),
-          eb("expires_at", "<=", now),
-        ]),
+        eb.and([eb("expires_at", "is not", null), eb("expires_at", "<=", now)]),
         eb(
           "assignment_id",
           "in",

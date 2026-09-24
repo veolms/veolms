@@ -1,5 +1,7 @@
 import {
+  lazy,
   startTransition,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -14,7 +16,9 @@ import {
   useMatches,
   useNavigate,
   useParams,
+  useRouteLoaderData,
 } from "react-router";
+import type { CourseListResponse } from "@veolms/contracts";
 import { CoursesPage } from "../CoursesPage";
 import {
   getCourseRouteKey,
@@ -25,19 +29,34 @@ import { useCurrentUser, useSignOut } from "../services/auth";
 import { useSidenav } from "../services/navigation";
 import { useAuthStore } from "../store/auth.store";
 import type { LearningCourse } from "../StudentPages";
+import { SettingsLoadingFallback } from "../settings/SettingsLoadingFallback";
 import {
   getCoursePlayerLaunchPath,
   getCoursePlayerReturnPath,
   getCoursePlayerSession,
 } from "../learning/coursePlayerNavigation";
-import { LearningMiniPlayer } from "../learning/player/LearningMiniPlayer";
-import {
-  PersistentLearningPlayerHost,
-  type LearningPlayerPresentation,
-  type LessonPlayerMinimizeGestureState,
-  type PersistentLearningPlayerRegistration,
-  type RegisterPersistentLearningPlayer,
+import type {
+  LearningPlayerPresentation,
+  LessonPlayerMinimizeGestureState,
+  PersistentLearningPlayerRegistration,
+  RegisterPersistentLearningPlayer,
 } from "../learning/player";
+
+const LearningMiniPlayer = lazy(() =>
+  import("../learning/player/LearningMiniPlayer").then((module) => ({
+    default: module.LearningMiniPlayer,
+  })),
+);
+const PersistentLearningPlayerHost = lazy(() =>
+  import("../learning/player/PersistentLearningPlayerHost").then((module) => ({
+    default: module.PersistentLearningPlayerHost,
+  })),
+);
+const SettingsPage = lazy(() =>
+  import("../SettingsPage").then((module) => ({
+    default: module.SettingsPage,
+  })),
+);
 import {
   easeLearningPlayerMotionProgress,
   getLearningBackgroundMotionState,
@@ -55,11 +74,7 @@ import {
   resolveLearningMiniPlayerLessonPath,
   resolveMiniPlayerCourseId,
 } from "../learning/player/persistentMiniPlayerLesson";
-import {
-  getCachedVideoPlaybackBootstrap,
-  getVideoPlaybackBootstrap,
-  refreshVideoPlaybackToken,
-} from "../learning/videoPlaybackBootstrap";
+import { getCachedVideoPlaybackBootstrap } from "../learning/videoPlaybackBootstrapCache";
 import type { LearningMiniPlayerSession } from "../learning/player/learningMiniPlayerTypes";
 import {
   closeLearningMiniPlayerSession,
@@ -283,6 +298,14 @@ export default function AcademyLayout() {
   const selectLessonTokenRef = useRef(0);
   const currentLocationPath = `${location.pathname}${location.search}${location.hash}`;
   const route = getMatchedRouteDescriptor(matches, location.pathname);
+  const courseRouteData = useRouteLoaderData("courses") as
+    { publicCourses?: CourseListResponse | null } | undefined;
+  const rootCourseRouteData = useRouteLoaderData("root-courses") as
+    { publicCourses?: CourseListResponse | null } | undefined;
+  const prerenderedPublicCourses =
+    courseRouteData?.publicCourses ??
+    rootCourseRouteData?.publicCourses ??
+    null;
   const {
     data: authUser,
     isError: authUserError,
@@ -430,7 +453,11 @@ export default function AcademyLayout() {
         }
       };
 
-      void autosyncManager.flushAll().then(performNavigation);
+      if (options?.skipAutosync) {
+        performNavigation();
+      } else {
+        void autosyncManager.flushAll().then(performNavigation);
+      }
     },
     [navigate],
   );
@@ -702,7 +729,7 @@ export default function AcademyLayout() {
 
     const isProtected = Boolean(
       current.playerProps.protectedPlayback ||
-        current.playerProps.playbackBootstrap != null,
+      current.playerProps.playbackBootstrap != null,
     );
 
     const token = ++selectLessonTokenRef.current;
@@ -736,7 +763,10 @@ export default function AcademyLayout() {
     persistentPlayerRef.current = updated;
     setPersistentPlayer(updated);
 
-    void getVideoPlaybackBootstrap({ courseSlug, lessonNumber })
+    void import("../learning/videoPlaybackBootstrap")
+      .then(({ getVideoPlaybackBootstrap }) =>
+        getVideoPlaybackBootstrap({ courseSlug, lessonNumber }),
+      )
       .then((bootstrap) => {
         if (selectLessonTokenRef.current !== token) return;
         const active = persistentPlayerRef.current;
@@ -755,7 +785,10 @@ export default function AcademyLayout() {
             playbackBootstrap: bootstrap,
             playbackSuspended: false,
             refreshPlaybackToken: () =>
-              refreshVideoPlaybackToken({ courseSlug, lessonNumber }),
+              import("../learning/videoPlaybackBootstrap").then(
+                ({ refreshVideoPlaybackToken }) =>
+                  refreshVideoPlaybackToken({ courseSlug, lessonNumber }),
+              ),
           },
         };
         persistentPlayerRef.current = withBootstrap;
@@ -1176,6 +1209,9 @@ export default function AcademyLayout() {
   return (
     <AcademyRouteGuard>
       <CoursesPage
+        activeUser={activeUser ?? null}
+        authUserFetched={authUserFetched}
+        initialPublishedCourses={prerenderedPublicCourses}
         page={route.page}
         section={route.section}
         settingsTab={route.settingsTab}
@@ -1198,6 +1234,11 @@ export default function AcademyLayout() {
         onNavigatePage={navigateTo}
         onExitSettings={exitSettings}
         onOpenCourse={openCourse}
+        renderSettingsPage={(settingsPageProps) => (
+          <Suspense fallback={<SettingsLoadingFallback />}>
+            <SettingsPage {...settingsPageProps} />
+          </Suspense>
+        )}
         renderMain={
           route.kind === "learning"
             ? ({ mobileBottomNavigation, mobileBottomNavigationHidden }) => (
@@ -1220,22 +1261,26 @@ export default function AcademyLayout() {
             : null
         }
       />
-      {persistentPlayer ? (
-        <PersistentLearningPlayerHost
-          player={persistentPlayer}
-          presentation={playerPresentation}
-          onClose={closeLearningMiniPlayer}
-          onRestore={restoreLearningMiniPlayer}
-          onSelectMiniPlayerLesson={selectPersistentMiniPlayerLesson}
-          onOpenCourseOverview={openPersistentPlayerCourseOverview}
-        />
-      ) : learningMiniPlayer ? (
-        <LearningMiniPlayer
-          session={learningMiniPlayer}
-          onClose={closeLearningMiniPlayer}
-          onRestore={restoreLearningMiniPlayer}
-          onOpenCourseOverview={openStandaloneMiniPlayerCourseOverview}
-        />
+      {persistentPlayer || learningMiniPlayer ? (
+        <Suspense fallback={null}>
+          {persistentPlayer ? (
+            <PersistentLearningPlayerHost
+              player={persistentPlayer}
+              presentation={playerPresentation}
+              onClose={closeLearningMiniPlayer}
+              onRestore={restoreLearningMiniPlayer}
+              onSelectMiniPlayerLesson={selectPersistentMiniPlayerLesson}
+              onOpenCourseOverview={openPersistentPlayerCourseOverview}
+            />
+          ) : learningMiniPlayer ? (
+            <LearningMiniPlayer
+              session={learningMiniPlayer}
+              onClose={closeLearningMiniPlayer}
+              onRestore={restoreLearningMiniPlayer}
+              onOpenCourseOverview={openStandaloneMiniPlayerCourseOverview}
+            />
+          ) : null}
+        </Suspense>
       ) : null}
     </AcademyRouteGuard>
   );

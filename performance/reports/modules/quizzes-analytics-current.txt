@@ -1,0 +1,148 @@
+QUIZZES AND QUIZ ANALYTICS - CURRENT STATUS
+===========================================
+
+Date: 2026-09-22
+Environment: local isolated performance database
+Test levels completed: 5 and 10 users
+
+IMPORTANT LIMITATION
+--------------------
+The current automatic test did not log in. Quiz endpoints require a logged-in
+user, and analytics requires a logged-in admin/instructor with MFA verification.
+Therefore the current measured timings are only authentication timings. They
+are NOT the real quiz or analytics database timings.
+
+WHAT WAS MEASURED
+-----------------
+All safe Quiz GET endpoints returned HTTP 401 quickly.
+
+5 users:  p95 about 20 ms, p99 about 26 ms, 0 timeouts, 0 server errors
+10 users: p95 about 31 ms, p99 about 36 ms, 0 timeouts, 0 server errors
+
+This proves that anonymous access is protected and the auth rejection is fast.
+It does NOT prove that the logged-in Quiz APIs are fast.
+
+ENDPOINT STATUS
+---------------
+
+GET /api/v1/quizzes/mine
+Status: NOT REALLY MEASURED
+Reason: login required; returned 401 in the test.
+Code observation: each quiz is loaded with its full detail. Detail loading
+also loads quiz versions, questions, options and assignments. Query work can
+grow as the number of quizzes and versions grows.
+
+GET /api/v1/quizzes/{id}
+Status: NOT REALLY MEASURED
+Reason: login required; returned 401 in the test.
+Code observation: a quiz with many versions can require multiple database
+queries. Test with a small and a large quiz before changing code.
+
+GET /api/v1/courses/{courseId}/quiz-assignments
+Status: NOT REALLY MEASURED
+Reason: login required; returned 401 in the test.
+Code observation: one quiz lookup is performed for each assignment. This is a
+confirmed N+1 pattern in the code. If a course has 20 assignments, this can
+become approximately 1 assignment-list query plus 20 quiz lookup queries.
+Best fix direction: fetch assignment and quiz title together in one JOIN or
+batch query.
+
+GET /api/v1/quiz-assignments/{assignmentId}/analytics
+Status: NOT REALLY MEASURED
+Priority: HIGH
+Reason: admin/instructor login and MFA are required.
+Code observation: the endpoint loads attempts and then performs one user lookup
+for each student to obtain the display name. This is a confirmed N+1 pattern in
+the code. If 100 students are assigned, this can add about 100 user queries.
+Best fix direction: fetch all student names in one query and map them in memory.
+
+GET /api/v1/courses/{courseId}/quiz-analytics
+Status: NOT REALLY MEASURED
+Priority: VERY HIGH
+Reason: admin/instructor login and MFA are required.
+Code observation: the endpoint processes every assignment separately. Each
+assignment loads its attempts and the students again; then each student name
+can be looked up separately. The total work grows with both assignment count
+and student count. This is the first analytics endpoint to test and optimize.
+Best fix direction: aggregate attempts for the course in fewer queries, batch
+student names, and avoid repeating the same active-student query for every
+assignment.
+
+GET /api/v1/students/{studentId}/quiz-report
+Status: NOT REALLY MEASURED
+Reason: login required; returned 401 in the test.
+Code observation: it loads visible quizzes, assignments and the student's
+attempts. Test with 10, 50 and 100 quizzes/assignments to verify growth.
+
+GET /api/v1/me/quizzes and /api/v1/me/quizzes/history
+Status: NOT REALLY MEASURED
+Reason: login required; returned 401 in the test.
+Code observation: history is expected to be simpler. The current code must be
+measured with a real learner session before calling it good or slow.
+
+GET /api/v1/quiz-attempts/{attemptId}
+GET /api/v1/quiz-attempts/{attemptId}/result
+Status: NOT REALLY MEASURED
+Reason: login required; returned 401 in the test.
+Next check: one attempt with a small quiz and one attempt with a large quiz.
+
+N+1 SUMMARY
+-----------
+Confirmed from code (runtime timing still required):
+1. Course quiz assignments: one quiz query per assignment.
+2. Assignment analytics: one user query per student.
+3. Course analytics: repeated assignment-level work plus the per-student
+   lookup pattern; this is the highest risk.
+
+INDEX SUMMARY
+-------------
+The database already has indexes for the main Quiz filters:
+- quiz_assignments.course_id
+- quiz_assignments.quiz_id
+- quiz_attempts.assignment_id
+- quiz_attempts.user_id
+- quiz_attempts.quiz_version_id
+
+No missing index is proven by the current test. Do not add another index until
+the authenticated SQL trace and EXPLAIN ANALYZE show a real slow query.
+
+PAYLOAD SUMMARY
+---------------
+The actual logged-in payload was not measured.
+Likely growth areas:
+- assignment analytics returns a student row for every assigned student;
+- course analytics returns a summary row for every assignment;
+- quiz detail returns versions, questions, options and assignments.
+
+Measure response bytes at 10, 50, 100 and 300 students before deciding whether
+pagination or a summary/detail split is required.
+
+WHAT IS GOOD RIGHT NOW
+----------------------
+- No 5xx errors or timeouts in the anonymous check.
+- Anonymous access is correctly blocked.
+- Main Quiz filter indexes already exist.
+- No runtime N+1 was claimed from the anonymous test because no SQL ran.
+
+WHAT SHOULD BE FIXED FIRST
+--------------------------
+1. Measure authenticated course quiz analytics.
+2. Remove per-student user queries from assignment/course analytics.
+3. Remove per-assignment quiz lookups from course assignment listing.
+4. Re-test with realistic data sizes: 1, 10, 50, 100 and 300 students.
+5. Only then inspect EXPLAIN ANALYZE and payload size.
+
+REQUIRED TEST DATA FOR THE NEXT REAL TEST
+-----------------------------------------
+- one admin/instructor test account with MFA already verified;
+- one learner test account;
+- one course;
+- quiz assignments: 1, 10 and 20;
+- active students: 1, 10, 50, 100 and 300;
+- attempts for none, some and all students.
+
+Until this authenticated test is run, the correct status is:
+QUIZ AUTH CHECK = GOOD
+QUIZ BUSINESS PERFORMANCE = NOT MEASURED
+QUIZ ANALYTICS CODE RISK = HIGH, especially course analytics
+

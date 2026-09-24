@@ -5,10 +5,9 @@ import axios, {
   type AxiosResponse,
 } from "axios";
 import { getApiError, type ApiError } from "./api-error";
+import { API_BASE_URL, getApiRequestUrl } from "./apiBaseUrl";
 import { authStore } from "../store/auth.store";
-import { interactionCreationCoordinator } from "../services/learning-interactions/interaction-creation-coordinator";
-import { desiredStateCoordinator } from "../services/learning-interactions/desired-state-coordinator";
-import { optimisticDeletionCoordinator } from "../services/learning-interactions/optimistic-deletion-coordinator";
+import { resetLoadedLearningInteractions } from "../services/learning-interactions/lifecycle";
 import {
   buildMfaChallengePath,
   shouldRedirectToMfaChallenge,
@@ -16,12 +15,9 @@ import {
 import { isReactRouterBuildRequest } from "./react-router-build";
 
 export { getApiError, type ApiError };
+export { getApiRequestUrl };
 
-const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
-
-export function getApiRequestUrl(path: string): string {
-  return `${BACKEND_URL.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
-}
+const BACKEND_URL = API_BASE_URL;
 
 function redirectToMfaSetup(apiError: ApiError): void {
   if (typeof window === "undefined") {
@@ -128,14 +124,16 @@ axiosInstance.interceptors.response.use(
     }
     return response.data;
   },
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
     const apiError = getApiError(error);
     redirectToMfaSetup(apiError);
     if (shouldClearAuthOnUnauthorized(error, apiError)) {
       authStore.clearAuth();
-      desiredStateCoordinator.reset();
-      interactionCreationCoordinator.reset();
-      optimisticDeletionCoordinator.reset();
+      try {
+        resetLoadedLearningInteractions();
+      } catch {
+        // Keep the original API error if lazy auth cleanup cannot be loaded.
+      }
     }
     return Promise.reject(apiError);
   },

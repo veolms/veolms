@@ -1,0 +1,104 @@
+MODULE: Notifications
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: AUTH_REQUIRED | requests=8 | p50=7 ms | p95=19 ms | p99=19 ms | max=19 ms | avg response=102 B | 5xx=0 | timeout=0
+10 users: AUTH_REQUIRED | requests=14 | p50=17 ms | p95=19 ms | p99=19 ms | max=19 ms | avg response=102 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+getMyNotificationSummary | GET /api/v1/notifications/summary | status=AUTH_REQUIRED | p95=19 ms | p99=19 ms | max=19 ms | avg bytes=102 B | success=0 | auth=7 | 4xx=0 | 5xx=0
+listMyNotifications | GET /api/v1/notifications | status=AUTH_REQUIRED | p95=19 ms | p99=19 ms | max=19 ms | avg bytes=102 B | success=0 | auth=7 | 4xx=0 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- This module needs login; anonymous timing is only an auth-protection check.
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+getMyNotificationSummary | GET /api/v1/notifications/summary | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyNotifications | GET /api/v1/notifications | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No endpoint in this module showed an obvious 5+ query N+1 pattern in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+listMyNotifications | GET /api/v1/notifications | HTTP=401 | total=19ms | SQL=2 | SQL max=4ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getMyNotificationSummary | GET /api/v1/notifications/summary | HTTP=401 | total=5ms | SQL=2 | SQL max=4ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No endpoint in this module showed an obvious 5+ query N+1 pattern in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+MODULE: Notifications
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: AUTH_REQUIRED | requests=8 | p50=7 ms | p95=19 ms | p99=19 ms | max=19 ms | avg response=102 B | 5xx=0 | timeout=0
+10 users: AUTH_REQUIRED | requests=14 | p50=17 ms | p95=19 ms | p99=19 ms | max=19 ms | avg response=102 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+getMyNotificationSummary | GET /api/v1/notifications/summary | status=AUTH_REQUIRED | p95=19 ms | p99=19 ms | max=19 ms | avg bytes=102 B | success=0 | auth=7 | 4xx=0 | 5xx=0
+listMyNotifications | GET /api/v1/notifications | status=AUTH_REQUIRED | p95=19 ms | p99=19 ms | max=19 ms | avg bytes=102 B | success=0 | auth=7 | 4xx=0 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- This module needs login; anonymous timing is only an auth-protection check.
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+getMyNotificationSummary | GET /api/v1/notifications/summary | HTTP=401 | total=17ms | SQL=2 | SQL max=16ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyNotifications | GET /api/v1/notifications | HTTP=401 | total=4ms | SQL=1 | SQL max=9ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No multi-query endpoint was observed in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+MODULE: Notifications
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: AUTH_REQUIRED | requests=8 | p50=7 ms | p95=19 ms | p99=19 ms | max=19 ms | avg response=102 B | 5xx=0 | timeout=0
+10 users: AUTH_REQUIRED | requests=14 | p50=17 ms | p95=19 ms | p99=19 ms | max=19 ms | avg response=102 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+getMyNotificationSummary | GET /api/v1/notifications/summary | status=AUTH_REQUIRED | p95=19 ms | p99=19 ms | max=19 ms | avg bytes=102 B | success=0 | auth=7 | 4xx=0 | 5xx=0
+listMyNotifications | GET /api/v1/notifications | status=AUTH_REQUIRED | p95=19 ms | p99=19 ms | max=19 ms | avg bytes=102 B | success=0 | auth=7 | 4xx=0 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- This module needs login; anonymous timing is only an auth-protection check.
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+getMyNotificationSummary | GET /api/v1/notifications/summary | HTTP=401 | total=15ms | SQL=2 | SQL max=6ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyNotifications | GET /api/v1/notifications | HTTP=401 | total=15ms | SQL=1 | SQL max=4ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No multi-query endpoint was observed in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.

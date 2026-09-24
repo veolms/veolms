@@ -1,0 +1,1050 @@
+{
+  "generatedAt": "2026-09-23T14:51:31.734Z",
+  "origin": "http://localhost:3000",
+  "profile": {
+    "cpuSlowdown": 4,
+    "device": "412x915 @2x, Android mobile emulation",
+    "network": "1.6 Mbps down, 750 Kbps up, 150 ms RTT",
+    "samplesPerRoute": 3
+  },
+  "routes": [
+    {
+      "name": "Courses",
+      "path": "/courses",
+      "ready": "section[aria-label=\"Courses\"]",
+      "medians": {
+        "cls": 0,
+        "domContentLoaded": 12616.5,
+        "domNodes": 337,
+        "fcp": 66864,
+        "interactionLatency": 0,
+        "jsRequests": 259,
+        "jsTransferBytes": 11948630,
+        "lcp": 73544,
+        "load": 47486,
+        "longTaskCount": 28,
+        "requestCount": 266,
+        "tbt": 9409,
+        "transferBytes": 12883649,
+        "ttfb": 115.9,
+        "wallTime": 74905
+      },
+      "samples": [
+        {
+          "cls": 0,
+          "domContentLoaded": 12616.5,
+          "domNodes": 337,
+          "fcp": 66864,
+          "interactionLatency": 0,
+          "jsRequests": 259,
+          "jsTransferBytes": 11948630,
+          "lcpBreakdown": {
+            "elementRenderDelay": null,
+            "resourceLoadDelay": null,
+            "resourceLoadTime": null,
+            "ttfb": 65.09999999403954
+          },
+          "lcpEntry": {
+            "className": "truncate text-[0.92rem] font-semibold leading-8 tracking-[-0.015em] text-(--text) lg:text-[0.98rem]",
+            "fetchPriority": null,
+            "height": 32,
+            "id": "",
+            "loadTime": 0,
+            "renderTime": 73544,
+            "resourceUrl": "http://localhost:3000/courses",
+            "size": 6140,
+            "tagName": "h2",
+            "width": 308
+          },
+          "lcp": 73544,
+          "load": 47486,
+          "longTaskCount": 27,
+          "requestCount": 266,
+          "apiResources": [
+            {
+              "duration": 494.59999999403954,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/auth/me",
+              "responseEnd": 67911.09999999404,
+              "responseStart": 0,
+              "startTime": 67416.5,
+              "transferBytes": 0
+            },
+            {
+              "duration": 518.2000000029802,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/navigation/sidenav",
+              "responseEnd": 67943.5,
+              "responseStart": 0,
+              "startTime": 67425.29999999702,
+              "transferBytes": 0
+            },
+            {
+              "duration": 562.4000000059605,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/courses",
+              "responseEnd": 68014.5,
+              "responseStart": 0,
+              "startTime": 67452.09999999404,
+              "transferBytes": 0
+            }
+          ],
+          "largestResources": [
+            {
+              "duration": 14569.79999999702,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/react-dom_client.js",
+              "responseEnd": 62075.89999999106,
+              "responseStart": 47590.20000000298,
+              "startTime": 47506.09999999404,
+              "transferBytes": 2820270
+            },
+            {
+              "duration": 30930.09999999404,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/zod-DI8C21rv.js",
+              "responseEnd": 36683.29999999702,
+              "responseStart": 6874.399999991059,
+              "startTime": 5753.20000000298,
+              "transferBytes": 1622096
+            },
+            {
+              "duration": 32639.90000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/development-BzrG69Kl.js",
+              "responseEnd": 46086.5,
+              "responseStart": 19288.70000000298,
+              "startTime": 13446.59999999404,
+              "transferBytes": 1581090
+            },
+            {
+              "duration": 11678.79999999702,
+              "initiatorType": "link",
+              "path": "http://localhost:3000/src/full-app.css",
+              "responseEnd": 12158.89999999106,
+              "responseStart": 785.3999999910593,
+              "startTime": 480.09999999403954,
+              "transferBytes": 811685
+            },
+            {
+              "duration": 17608.19999998808,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/CoursesPage.tsx",
+              "responseEnd": 30214.89999999106,
+              "responseStart": 15860.09999999404,
+              "startTime": 12606.70000000298,
+              "transferBytes": 586921
+            },
+            {
+              "duration": 12926.90000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/axios.js",
+              "responseEnd": 42530.29999999702,
+              "responseStart": 32496.59999999404,
+              "startTime": 29603.39999999106,
+              "transferBytes": 415508
+            },
+            {
+              "duration": 11915.5,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/modern-e-OeLJf8.js",
+              "responseEnd": 37693.79999999702,
+              "responseStart": 30144.59999999404,
+              "startTime": 25778.29999999702,
+              "transferBytes": 294419
+            },
+            {
+              "duration": 5284.5,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/@vite/client",
+              "responseEnd": 17863.29999999702,
+              "responseStart": 12627,
+              "startTime": 12578.79999999702,
+              "transferBytes": 204961
+            },
+            {
+              "duration": 3552,
+              "initiatorType": "other",
+              "path": "http://localhost:3000/src/routes/academy-layout.tsx",
+              "responseEnd": 4027.0999999940395,
+              "responseStart": 486.09999999403954,
+              "startTime": 475.09999999403954,
+              "transferBytes": 152839
+            },
+            {
+              "duration": 3488.0999999940395,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/react.js",
+              "responseEnd": 16069.59999999404,
+              "responseStart": 12638.29999999702,
+              "startTime": 12581.5,
+              "transferBytes": 130607
+            },
+            {
+              "duration": 1283.1000000089407,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/react-router_dom.js",
+              "responseEnd": 48789.70000000298,
+              "responseStart": 47595.59999999404,
+              "startTime": 47506.59999999404,
+              "transferBytes": 107237
+            },
+            {
+              "duration": 9596.5,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/services/learning-interactions/desired-state-coordinator.ts",
+              "responseEnd": 29884,
+              "responseStart": 26887.09999999404,
+              "startTime": 20287.5,
+              "transferBytes": 106429
+            },
+            {
+              "duration": 1613.2999999970198,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/courses/CourseCard.tsx",
+              "responseEnd": 68547.79999999702,
+              "responseStart": 66963.29999999702,
+              "startTime": 66934.5,
+              "transferBytes": 100141
+            },
+            {
+              "duration": 4386.79999999702,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/services/learning-interactions/creation-cache-updaters.ts",
+              "responseEnd": 32995.09999999404,
+              "responseStart": 30883.70000000298,
+              "startTime": 28608.29999999702,
+              "transferBytes": 85883
+            },
+            {
+              "duration": 2153.7000000029802,
+              "initiatorType": "other",
+              "path": "http://localhost:3000/@id/__x00__virtual:react-router/browser-manifest",
+              "responseEnd": 2611.7000000029802,
+              "responseStart": 471.3999999910593,
+              "startTime": 458,
+              "transferBytes": 82998
+            }
+          ],
+          "slowestResources": [
+            {
+              "duration": 32639.90000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/development-BzrG69Kl.js",
+              "responseEnd": 46086.5,
+              "responseStart": 19288.70000000298,
+              "startTime": 13446.59999999404,
+              "transferBytes": 1581090
+            },
+            {
+              "duration": 30930.09999999404,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/zod-DI8C21rv.js",
+              "responseEnd": 36683.29999999702,
+              "responseStart": 6874.399999991059,
+              "startTime": 5753.20000000298,
+              "transferBytes": 1622096
+            },
+            {
+              "duration": 17608.19999998808,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/CoursesPage.tsx",
+              "responseEnd": 30214.89999999106,
+              "responseStart": 15860.09999999404,
+              "startTime": 12606.70000000298,
+              "transferBytes": 586921
+            },
+            {
+              "duration": 14569.79999999702,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/react-dom_client.js",
+              "responseEnd": 62075.89999999106,
+              "responseStart": 47590.20000000298,
+              "startTime": 47506.09999999404,
+              "transferBytes": 2820270
+            },
+            {
+              "duration": 12926.90000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/axios.js",
+              "responseEnd": 42530.29999999702,
+              "responseStart": 32496.59999999404,
+              "startTime": 29603.39999999106,
+              "transferBytes": 415508
+            },
+            {
+              "duration": 11915.5,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/modern-e-OeLJf8.js",
+              "responseEnd": 37693.79999999702,
+              "responseStart": 30144.59999999404,
+              "startTime": 25778.29999999702,
+              "transferBytes": 294419
+            },
+            {
+              "duration": 11678.79999999702,
+              "initiatorType": "link",
+              "path": "http://localhost:3000/src/full-app.css",
+              "responseEnd": 12158.89999999106,
+              "responseStart": 785.3999999910593,
+              "startTime": 480.09999999403954,
+              "transferBytes": 811685
+            },
+            {
+              "duration": 10809.09999999404,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/hooks/useDebounce.ts",
+              "responseEnd": 41149.59999999404,
+              "responseStart": 40357.29999999702,
+              "startTime": 30340.5,
+              "transferBytes": 27151
+            },
+            {
+              "duration": 10804.800000011921,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/navigation/useBackDismiss.ts",
+              "responseEnd": 41145.70000000298,
+              "responseStart": 40419,
+              "startTime": 30340.89999999106,
+              "transferBytes": 23068
+            },
+            {
+              "duration": 10803.60000000894,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/learning/useSessionStorageState.ts",
+              "responseEnd": 41145.20000000298,
+              "responseStart": 40777.39999999106,
+              "startTime": 30341.59999999404,
+              "transferBytes": 7991
+            },
+            {
+              "duration": 10696.20000000298,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/courses/courseOverviewPreload.ts",
+              "responseEnd": 41038,
+              "responseStart": 40853.20000000298,
+              "startTime": 30341.79999999702,
+              "transferBytes": 1383
+            },
+            {
+              "duration": 10509.20000000298,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/fullscreen.ts",
+              "responseEnd": 40850.59999999404,
+              "responseStart": 40514.79999999702,
+              "startTime": 30341.39999999106,
+              "transferBytes": 7477
+            },
+            {
+              "duration": 10506.29999999702,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/@veolms_contracts_auth.js",
+              "responseEnd": 30880.29999999702,
+              "responseStart": 29109.89999999106,
+              "startTime": 20374,
+              "transferBytes": 63325
+            },
+            {
+              "duration": 10432.59999999404,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/useShortcutPlatform.ts",
+              "responseEnd": 40773.79999999702,
+              "responseStart": 40433.89999999106,
+              "startTime": 30341.20000000298,
+              "transferBytes": 6643
+            },
+            {
+              "duration": 10170.300000011921,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/searchShortcut.tsx",
+              "responseEnd": 40510.70000000298,
+              "responseStart": 39878.59999999404,
+              "startTime": 30340.39999999106,
+              "transferBytes": 18168
+            }
+          ],
+          "tbt": 9409,
+          "transferBytes": 12883649,
+          "ttfb": 65.1,
+          "wallTime": 74905
+        },
+        {
+          "cls": 0,
+          "domContentLoaded": 13931.6,
+          "domNodes": 337,
+          "fcp": 68080,
+          "interactionLatency": 0,
+          "jsRequests": 259,
+          "jsTransferBytes": 11948630,
+          "lcpBreakdown": {
+            "elementRenderDelay": null,
+            "resourceLoadDelay": null,
+            "resourceLoadTime": null,
+            "ttfb": 1186.5
+          },
+          "lcpEntry": {
+            "className": "truncate text-[0.92rem] font-semibold leading-8 tracking-[-0.015em] text-(--text) lg:text-[0.98rem]",
+            "fetchPriority": null,
+            "height": 32,
+            "id": "",
+            "loadTime": 0,
+            "renderTime": 74220,
+            "resourceUrl": "http://localhost:3000/courses",
+            "size": 6140,
+            "tagName": "h2",
+            "width": 308
+          },
+          "lcp": 74220,
+          "load": 49110.8,
+          "longTaskCount": 29,
+          "requestCount": 266,
+          "apiResources": [
+            {
+              "duration": 494,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/auth/me",
+              "responseEnd": 69065.59999999404,
+              "responseStart": 0,
+              "startTime": 68571.59999999404,
+              "transferBytes": 0
+            },
+            {
+              "duration": 528.9000000059605,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/navigation/sidenav",
+              "responseEnd": 69112.29999999702,
+              "responseStart": 0,
+              "startTime": 68583.39999999106,
+              "transferBytes": 0
+            },
+            {
+              "duration": 579.6000000089407,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/courses",
+              "responseEnd": 69189.20000000298,
+              "responseStart": 0,
+              "startTime": 68609.59999999404,
+              "transferBytes": 0
+            }
+          ],
+          "largestResources": [
+            {
+              "duration": 14559.90000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/react-dom_client.js",
+              "responseEnd": 63678,
+              "responseStart": 49198.39999999106,
+              "startTime": 49118.09999999404,
+              "transferBytes": 2820270
+            },
+            {
+              "duration": 30679.70000000298,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/zod-DI8C21rv.js",
+              "responseEnd": 37715.29999999702,
+              "responseStart": 8129.0999999940395,
+              "startTime": 7035.5999999940395,
+              "transferBytes": 1622096
+            },
+            {
+              "duration": 32627.90000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/development-BzrG69Kl.js",
+              "responseEnd": 47400,
+              "responseStart": 20599.79999999702,
+              "startTime": 14772.09999999404,
+              "transferBytes": 1581090
+            },
+            {
+              "duration": 11727.90000000596,
+              "initiatorType": "link",
+              "path": "http://localhost:3000/src/full-app.css",
+              "responseEnd": 13440.29999999702,
+              "responseStart": 2031.8999999910593,
+              "startTime": 1712.3999999910593,
+              "transferBytes": 811685
+            },
+            {
+              "duration": 17624.29999999702,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/CoursesPage.tsx",
+              "responseEnd": 31537.59999999404,
+              "responseStart": 17182.39999999106,
+              "startTime": 13913.29999999702,
+              "transferBytes": 586921
+            },
+            {
+              "duration": 12612.5,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/axios.js",
+              "responseEnd": 43309.89999999106,
+              "responseStart": 33052.59999999404,
+              "startTime": 30697.39999999106,
+              "transferBytes": 415508
+            },
+            {
+              "duration": 11976.90000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/modern-e-OeLJf8.js",
+              "responseEnd": 39086.5,
+              "responseStart": 31546.09999999404,
+              "startTime": 27109.59999999404,
+              "transferBytes": 294419
+            },
+            {
+              "duration": 5306.0999999940395,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/@vite/client",
+              "responseEnd": 19202.09999999404,
+              "responseStart": 13958.39999999106,
+              "startTime": 13896,
+              "transferBytes": 204961
+            },
+            {
+              "duration": 3560.6000000089407,
+              "initiatorType": "other",
+              "path": "http://localhost:3000/src/routes/academy-layout.tsx",
+              "responseEnd": 5265,
+              "responseStart": 1726.2999999970198,
+              "startTime": 1704.3999999910593,
+              "transferBytes": 152839
+            },
+            {
+              "duration": 3505.2999999970198,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/react.js",
+              "responseEnd": 17402.5,
+              "responseStart": 13970.29999999702,
+              "startTime": 13897.20000000298,
+              "transferBytes": 130607
+            },
+            {
+              "duration": 1260.7000000029802,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/react-router_dom.js",
+              "responseEnd": 50383.59999999404,
+              "responseStart": 49207.29999999702,
+              "startTime": 49122.89999999106,
+              "transferBytes": 107237
+            },
+            {
+              "duration": 9946.29999999702,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/services/learning-interactions/desired-state-coordinator.ts",
+              "responseEnd": 31582,
+              "responseStart": 28585,
+              "startTime": 21635.70000000298,
+              "transferBytes": 106429
+            },
+            {
+              "duration": 1598.699999988079,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/courses/CourseCard.tsx",
+              "responseEnd": 69718.39999999106,
+              "responseStart": 68149.59999999404,
+              "startTime": 68119.70000000298,
+              "transferBytes": 100141
+            },
+            {
+              "duration": 5117.100000008941,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/services/learning-interactions/creation-cache-updaters.ts",
+              "responseEnd": 35448.20000000298,
+              "responseStart": 32956.79999999702,
+              "startTime": 30331.09999999404,
+              "transferBytes": 85883
+            },
+            {
+              "duration": 2154.5,
+              "initiatorType": "other",
+              "path": "http://localhost:3000/@id/__x00__virtual:react-router/browser-manifest",
+              "responseEnd": 3848.2000000029802,
+              "responseStart": 1720.5,
+              "startTime": 1693.7000000029802,
+              "transferBytes": 82998
+            }
+          ],
+          "slowestResources": [
+            {
+              "duration": 32627.90000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/development-BzrG69Kl.js",
+              "responseEnd": 47400,
+              "responseStart": 20599.79999999702,
+              "startTime": 14772.09999999404,
+              "transferBytes": 1581090
+            },
+            {
+              "duration": 30679.70000000298,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/zod-DI8C21rv.js",
+              "responseEnd": 37715.29999999702,
+              "responseStart": 8129.0999999940395,
+              "startTime": 7035.5999999940395,
+              "transferBytes": 1622096
+            },
+            {
+              "duration": 17624.29999999702,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/CoursesPage.tsx",
+              "responseEnd": 31537.59999999404,
+              "responseStart": 17182.39999999106,
+              "startTime": 13913.29999999702,
+              "transferBytes": 586921
+            },
+            {
+              "duration": 14559.90000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/react-dom_client.js",
+              "responseEnd": 63678,
+              "responseStart": 49198.39999999106,
+              "startTime": 49118.09999999404,
+              "transferBytes": 2820270
+            },
+            {
+              "duration": 12612.5,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/axios.js",
+              "responseEnd": 43309.89999999106,
+              "responseStart": 33052.59999999404,
+              "startTime": 30697.39999999106,
+              "transferBytes": 415508
+            },
+            {
+              "duration": 11976.90000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/modern-e-OeLJf8.js",
+              "responseEnd": 39086.5,
+              "responseStart": 31546.09999999404,
+              "startTime": 27109.59999999404,
+              "transferBytes": 294419
+            },
+            {
+              "duration": 11727.90000000596,
+              "initiatorType": "link",
+              "path": "http://localhost:3000/src/full-app.css",
+              "responseEnd": 13440.29999999702,
+              "responseStart": 2031.8999999910593,
+              "startTime": 1712.3999999910593,
+              "transferBytes": 811685
+            },
+            {
+              "duration": 10979.90000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/hooks/useDebounce.ts",
+              "responseEnd": 42624.5,
+              "responseStart": 41836.5,
+              "startTime": 31644.59999999404,
+              "transferBytes": 27151
+            },
+            {
+              "duration": 10951.40000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/navigation/useBackDismiss.ts",
+              "responseEnd": 42596.20000000298,
+              "responseStart": 41881.39999999106,
+              "startTime": 31644.79999999702,
+              "transferBytes": 23068
+            },
+            {
+              "duration": 10932.29999999702,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/learning/useSessionStorageState.ts",
+              "responseEnd": 42577.79999999702,
+              "responseStart": 42221.89999999106,
+              "startTime": 31645.5,
+              "transferBytes": 7991
+            },
+            {
+              "duration": 10854.10000000894,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/courses/courseOverviewPreload.ts",
+              "responseEnd": 42499.70000000298,
+              "responseStart": 42316.20000000298,
+              "startTime": 31645.59999999404,
+              "transferBytes": 1383
+            },
+            {
+              "duration": 10667.5,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/fullscreen.ts",
+              "responseEnd": 42312.79999999702,
+              "responseStart": 41973.5,
+              "startTime": 31645.29999999702,
+              "transferBytes": 7477
+            },
+            {
+              "duration": 10574.20000000298,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/useShortcutPlatform.ts",
+              "responseEnd": 42219.20000000298,
+              "responseStart": 41882.59999999404,
+              "startTime": 31645,
+              "transferBytes": 6643
+            },
+            {
+              "duration": 10334.29999999702,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/@veolms_contracts_auth.js",
+              "responseEnd": 32034,
+              "responseStart": 30312,
+              "startTime": 21699.70000000298,
+              "transferBytes": 63325
+            },
+            {
+              "duration": 10326.70000000298,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/searchShortcut.tsx",
+              "responseEnd": 41971.09999999404,
+              "responseStart": 41339.39999999106,
+              "startTime": 31644.39999999106,
+              "transferBytes": 18168
+            }
+          ],
+          "tbt": 9714,
+          "transferBytes": 12883649,
+          "ttfb": 1186.5,
+          "wallTime": 75408
+        },
+        {
+          "cls": 0,
+          "domContentLoaded": 12549.4,
+          "domNodes": 337,
+          "fcp": 65300,
+          "interactionLatency": 0,
+          "jsRequests": 259,
+          "jsTransferBytes": 11948630,
+          "lcpBreakdown": {
+            "elementRenderDelay": null,
+            "resourceLoadDelay": null,
+            "resourceLoadTime": null,
+            "ttfb": 115.8999999910593
+          },
+          "lcpEntry": {
+            "className": "truncate text-[0.92rem] font-semibold leading-8 tracking-[-0.015em] text-(--text) lg:text-[0.98rem]",
+            "fetchPriority": null,
+            "height": 32,
+            "id": "",
+            "loadTime": 0,
+            "renderTime": 70048,
+            "resourceUrl": "http://localhost:3000/courses",
+            "size": 6140,
+            "tagName": "h2",
+            "width": 308
+          },
+          "lcp": 70048,
+          "load": 47154.7,
+          "longTaskCount": 28,
+          "requestCount": 266,
+          "apiResources": [
+            {
+              "duration": 500.70000000298023,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/auth/me",
+              "responseEnd": 66147.29999999702,
+              "responseStart": 0,
+              "startTime": 65646.59999999404,
+              "transferBytes": 0
+            },
+            {
+              "duration": 557.8999999910593,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/navigation/sidenav",
+              "responseEnd": 66208.39999999106,
+              "responseStart": 0,
+              "startTime": 65650.5,
+              "transferBytes": 0
+            },
+            {
+              "duration": 609.4000000059605,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/courses",
+              "responseEnd": 66286,
+              "responseStart": 0,
+              "startTime": 65676.59999999404,
+              "transferBytes": 0
+            }
+          ],
+          "largestResources": [
+            {
+              "duration": 14648.29999999702,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/react-dom_client.js",
+              "responseEnd": 61825.5,
+              "responseStart": 47256,
+              "startTime": 47177.20000000298,
+              "transferBytes": 2820270
+            },
+            {
+              "duration": 30026.90000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/zod-DI8C21rv.js",
+              "responseEnd": 35980.20000000298,
+              "responseStart": 6475.0999999940395,
+              "startTime": 5953.29999999702,
+              "transferBytes": 1622096
+            },
+            {
+              "duration": 32527.40000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/development-BzrG69Kl.js",
+              "responseEnd": 45886.79999999702,
+              "responseStart": 19215.29999999702,
+              "startTime": 13359.39999999106,
+              "transferBytes": 1581090
+            },
+            {
+              "duration": 11551.89999999106,
+              "initiatorType": "link",
+              "path": "http://localhost:3000/src/full-app.css",
+              "responseEnd": 11974.89999999106,
+              "responseStart": 622.2999999970198,
+              "startTime": 423,
+              "transferBytes": 811685
+            },
+            {
+              "duration": 17600.69999998808,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/CoursesPage.tsx",
+              "responseEnd": 30116.89999999106,
+              "responseStart": 15808.29999999702,
+              "startTime": 12516.20000000298,
+              "transferBytes": 586921
+            },
+            {
+              "duration": 12906.29999999702,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/axios.js",
+              "responseEnd": 42403.5,
+              "responseStart": 32426.59999999404,
+              "startTime": 29497.20000000298,
+              "transferBytes": 415508
+            },
+            {
+              "duration": 11883.59999999404,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/modern-e-OeLJf8.js",
+              "responseEnd": 37551.59999999404,
+              "responseStart": 30029.70000000298,
+              "startTime": 25668,
+              "transferBytes": 294419
+            },
+            {
+              "duration": 5288.5,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/@vite/client",
+              "responseEnd": 17772.20000000298,
+              "responseStart": 12564.79999999702,
+              "startTime": 12483.70000000298,
+              "transferBytes": 204961
+            },
+            {
+              "duration": 3550.5999999940395,
+              "initiatorType": "other",
+              "path": "http://localhost:3000/src/routes/academy-layout.tsx",
+              "responseEnd": 3823.7999999970198,
+              "responseStart": 309.8999999910593,
+              "startTime": 273.20000000298023,
+              "transferBytes": 152839
+            },
+            {
+              "duration": 3489.7000000029802,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/react.js",
+              "responseEnd": 15974.59999999404,
+              "responseStart": 12579.59999999404,
+              "startTime": 12484.89999999106,
+              "transferBytes": 130607
+            },
+            {
+              "duration": 1259.7999999970198,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/react-router_dom.js",
+              "responseEnd": 48437.39999999106,
+              "responseStart": 47259.5,
+              "startTime": 47177.59999999404,
+              "transferBytes": 107237
+            },
+            {
+              "duration": 9629.70000000298,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/services/learning-interactions/desired-state-coordinator.ts",
+              "responseEnd": 29775.59999999404,
+              "responseStart": 26769.09999999404,
+              "startTime": 20145.89999999106,
+              "transferBytes": 106429
+            },
+            {
+              "duration": 1600.2999999970198,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/courses/CourseCard.tsx",
+              "responseEnd": 66908.39999999106,
+              "responseStart": 65363.89999999106,
+              "startTime": 65308.09999999404,
+              "transferBytes": 100141
+            },
+            {
+              "duration": 4488.5999999940395,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/services/learning-interactions/creation-cache-updaters.ts",
+              "responseEnd": 32972.89999999106,
+              "responseStart": 30865.89999999106,
+              "startTime": 28484.29999999702,
+              "transferBytes": 85883
+            },
+            {
+              "duration": 2155.0999999940395,
+              "initiatorType": "other",
+              "path": "http://localhost:3000/@id/__x00__virtual:react-router/browser-manifest",
+              "responseEnd": 2424.5999999940395,
+              "responseStart": 300.8999999910593,
+              "startTime": 269.5,
+              "transferBytes": 82998
+            }
+          ],
+          "slowestResources": [
+            {
+              "duration": 32527.40000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/development-BzrG69Kl.js",
+              "responseEnd": 45886.79999999702,
+              "responseStart": 19215.29999999702,
+              "startTime": 13359.39999999106,
+              "transferBytes": 1581090
+            },
+            {
+              "duration": 30026.90000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/zod-DI8C21rv.js",
+              "responseEnd": 35980.20000000298,
+              "responseStart": 6475.0999999940395,
+              "startTime": 5953.29999999702,
+              "transferBytes": 1622096
+            },
+            {
+              "duration": 17600.69999998808,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/CoursesPage.tsx",
+              "responseEnd": 30116.89999999106,
+              "responseStart": 15808.29999999702,
+              "startTime": 12516.20000000298,
+              "transferBytes": 586921
+            },
+            {
+              "duration": 14648.29999999702,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/react-dom_client.js",
+              "responseEnd": 61825.5,
+              "responseStart": 47256,
+              "startTime": 47177.20000000298,
+              "transferBytes": 2820270
+            },
+            {
+              "duration": 12906.29999999702,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/axios.js",
+              "responseEnd": 42403.5,
+              "responseStart": 32426.59999999404,
+              "startTime": 29497.20000000298,
+              "transferBytes": 415508
+            },
+            {
+              "duration": 11883.59999999404,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/modern-e-OeLJf8.js",
+              "responseEnd": 37551.59999999404,
+              "responseStart": 30029.70000000298,
+              "startTime": 25668,
+              "transferBytes": 294419
+            },
+            {
+              "duration": 11551.89999999106,
+              "initiatorType": "link",
+              "path": "http://localhost:3000/src/full-app.css",
+              "responseEnd": 11974.89999999106,
+              "responseStart": 622.2999999970198,
+              "startTime": 423,
+              "transferBytes": 811685
+            },
+            {
+              "duration": 10734.40000000596,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/hooks/useDebounce.ts",
+              "responseEnd": 40938.70000000298,
+              "responseStart": 40150.79999999702,
+              "startTime": 30204.29999999702,
+              "transferBytes": 27151
+            },
+            {
+              "duration": 10686.29999999702,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/learning/useSessionStorageState.ts",
+              "responseEnd": 40891.09999999404,
+              "responseStart": 40537.89999999106,
+              "startTime": 30204.79999999702,
+              "transferBytes": 7991
+            },
+            {
+              "duration": 10655,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/navigation/useBackDismiss.ts",
+              "responseEnd": 40859.39999999106,
+              "responseStart": 40153,
+              "startTime": 30204.39999999106,
+              "transferBytes": 23068
+            },
+            {
+              "duration": 10592.70000000298,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/courses/courseOverviewPreload.ts",
+              "responseEnd": 40797.79999999702,
+              "responseStart": 40614.20000000298,
+              "startTime": 30205.09999999404,
+              "transferBytes": 1383
+            },
+            {
+              "duration": 10585.10000000894,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/node_modules/.vite/deps/@veolms_contracts_auth.js",
+              "responseEnd": 30862.5,
+              "responseStart": 29062.5,
+              "startTime": 20277.39999999106,
+              "transferBytes": 63325
+            },
+            {
+              "duration": 10406,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/fullscreen.ts",
+              "responseEnd": 40610.59999999404,
+              "responseStart": 40274.89999999106,
+              "startTime": 30204.59999999404,
+              "transferBytes": 7477
+            },
+            {
+              "duration": 10329,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/useShortcutPlatform.ts",
+              "responseEnd": 40533.5,
+              "responseStart": 40196,
+              "startTime": 30204.5,
+              "transferBytes": 6643
+            },
+            {
+              "duration": 10066.59999999404,
+              "initiatorType": "script",
+              "path": "http://localhost:3000/src/searchShortcut.tsx",
+              "responseEnd": 40270.59999999404,
+              "responseStart": 39651,
+              "startTime": 30204,
+              "transferBytes": 18168
+            }
+          ],
+          "tbt": 7771,
+          "transferBytes": 12883649,
+          "ttfb": 115.9,
+          "wallTime": 71163
+        }
+      ]
+    }
+  ]
+}

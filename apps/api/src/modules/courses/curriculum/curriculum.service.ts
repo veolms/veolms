@@ -139,7 +139,11 @@ export function createCurriculumService({
     version: number,
     userRoles?: readonly string[],
   ) {
-    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+    );
     if (course.version !== version) {
       throw new AppError(
         409,
@@ -363,7 +367,11 @@ export function createCurriculumService({
     version: number,
     userRoles?: readonly string[],
   ) {
-    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+    );
     if (course.version !== version) {
       throw new AppError(
         409,
@@ -550,6 +558,10 @@ export function createCurriculumService({
     return await curriculumRepo.findLessonById(database, lessonId, courseId);
   }
 
+  async function findLessonsByIds(lessonIds: readonly string[]) {
+    return await curriculumRepo.findLessonsByIds(database, lessonIds);
+  }
+
   async function findResourceById(resourceId: string, courseId: string) {
     return await curriculumRepo.findResourceById(
       database,
@@ -575,6 +587,7 @@ export function createCurriculumService({
     listResourcesForLessons,
     findSectionById,
     findLessonById,
+    findLessonsByIds,
     findResourceById,
   };
 }

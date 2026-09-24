@@ -1,0 +1,1041 @@
+{
+  "generatedAt": "2026-09-24T06:31:13.355Z",
+  "origin": "http://127.0.0.1:4173",
+  "profile": {
+    "cpuSlowdown": 4,
+    "device": "412x915 @2x, Android mobile emulation",
+    "network": "1.6 Mbps down, 750 Kbps up, 150 ms RTT",
+    "samplesPerRoute": 3
+  },
+  "routes": [
+    {
+      "name": "Courses",
+      "path": "/courses",
+      "ready": "section[aria-label=\"Courses\"]",
+      "medians": {
+        "cls": 0,
+        "domContentLoaded": 2135.6,
+        "domNodes": 433,
+        "fcp": 5576,
+        "interactionLatency": 0,
+        "jsRequests": 79,
+        "jsTransferBytes": 408387,
+        "lcp": 7340,
+        "load": 4320.1,
+        "longTaskCount": 10,
+        "requestCount": 85,
+        "tbt": 2453,
+        "transferBytes": 522546,
+        "ttfb": 7.5,
+        "wallTime": 7577
+      },
+      "samples": [
+        {
+          "cls": 0,
+          "domContentLoaded": 2142.9,
+          "domNodes": 168,
+          "fcp": 5564,
+          "interactionLatency": 0,
+          "jsRequests": 79,
+          "jsTransferBytes": 408387,
+          "lcpBreakdown": {
+            "elementRenderDelay": null,
+            "resourceLoadDelay": null,
+            "resourceLoadTime": null,
+            "ttfb": 20.599999994039536
+          },
+          "lcpEntry": {
+            "className": "text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)",
+            "fetchPriority": null,
+            "height": 35.984375,
+            "id": "",
+            "loadTime": 0,
+            "renderTime": 5980,
+            "resourceUrl": "http://127.0.0.1:4173/courses",
+            "size": 4400,
+            "tagName": "h1",
+            "width": 109.484375
+          },
+          "lcp": 5980,
+          "load": 4293.7,
+          "longTaskCount": 9,
+          "requestCount": 84,
+          "apiResources": [
+            {
+              "duration": 478.69999998807907,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/auth/me",
+              "responseEnd": 6219.899999976158,
+              "responseStart": 0,
+              "startTime": 5741.199999988079,
+              "transferBytes": 0
+            },
+            {
+              "duration": 567.1999999880791,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/navigation/sidenav",
+              "responseEnd": 6313.399999976158,
+              "responseStart": 0,
+              "startTime": 5746.199999988079,
+              "transferBytes": 0
+            }
+          ],
+          "largestResources": [
+            {
+              "duration": 1877.0999999940395,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/entry.client-BlN2DXEv.js",
+              "responseEnd": 2090.899999976158,
+              "responseStart": 239.39999997615814,
+              "startTime": 213.7999999821186,
+              "transferBytes": 99593
+            },
+            {
+              "duration": 1775.4000000059605,
+              "initiatorType": "link",
+              "path": "http://127.0.0.1:4173/assets/full-app-DB7RUdV0.css",
+              "responseEnd": 2028.5,
+              "responseStart": 428.2999999821186,
+              "startTime": 253.09999999403954,
+              "transferBytes": 85765
+            },
+            {
+              "duration": 2694,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/shell-icons-DhtH5HRH.js",
+              "responseEnd": 2933.699999988079,
+              "responseStart": 2412.5,
+              "startTime": 239.69999998807907,
+              "transferBytes": 46010
+            },
+            {
+              "duration": 1865.2000000178814,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/api-client-CYcjZtxe.js",
+              "responseEnd": 2090.5999999940395,
+              "responseStart": 1229.199999988079,
+              "startTime": 225.39999997615814,
+              "transferBytes": 40041
+            },
+            {
+              "duration": 2461.2000000178814,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/academy-layout-CaR06e8L.js",
+              "responseEnd": 2700,
+              "responseStart": 2301.0999999940395,
+              "startTime": 238.7999999821186,
+              "transferBytes": 26057
+            },
+            {
+              "duration": 602,
+              "initiatorType": "link",
+              "path": "http://127.0.0.1:4173/assets/manrope-core-4MznZ3IH.woff2",
+              "responseEnd": 813.3999999761581,
+              "responseStart": 219.89999997615814,
+              "startTime": 211.39999997615814,
+              "transferBytes": 21541
+            },
+            {
+              "duration": 2016.699999988079,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/auth-V6jDRq35.js",
+              "responseEnd": 2248.399999976158,
+              "responseStart": 1956.5,
+              "startTime": 231.69999998807907,
+              "transferBytes": 20996
+            },
+            {
+              "duration": 813.3000000119209,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/hooks-Huc2gCQr.js",
+              "responseEnd": 1031.699999988079,
+              "responseStart": 475.2999999821186,
+              "startTime": 218.39999997615814,
+              "transferBytes": 18932
+            },
+            {
+              "duration": 874.5999999940395,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/errorBoundaries-DkeWof87.js",
+              "responseEnd": 1093.8999999761581,
+              "responseStart": 707.5999999940395,
+              "startTime": 219.2999999821186,
+              "transferBytes": 11079
+            },
+            {
+              "duration": 1890.7000000178814,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/src-Cf30QMje.js",
+              "responseEnd": 2122,
+              "responseStart": 1861.5999999940395,
+              "startTime": 231.2999999821186,
+              "transferBytes": 10447
+            },
+            {
+              "duration": 345.7999999821186,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/home-icons-B-T8HHFQ.js",
+              "responseEnd": 562.3999999761581,
+              "responseStart": 231,
+              "startTime": 216.59999999403954,
+              "transferBytes": 9706
+            },
+            {
+              "duration": 261.30000001192093,
+              "initiatorType": "script",
+              "path": "http://127.0.0.1:4173/assets/CourseCatalogue-BeMZtGDi.js",
+              "responseEnd": 5516.0999999940395,
+              "responseStart": 5258.899999976158,
+              "startTime": 5254.799999982119,
+              "transferBytes": 6463
+            },
+            {
+              "duration": 485.19999998807907,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/utils-CmpeEGqn.js",
+              "responseEnd": 703.1999999880791,
+              "responseStart": 441.2999999821186,
+              "startTime": 218,
+              "transferBytes": 5432
+            },
+            {
+              "duration": 2213.0999999940395,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/learning-interactions-Bg3xwn7G.js",
+              "responseEnd": 2451.0999999940395,
+              "responseStart": 2268,
+              "startTime": 238,
+              "transferBytes": 4316
+            },
+            {
+              "duration": 1257.0999999940395,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/autosync-Cd4ujYGF.js",
+              "responseEnd": 1483.0999999940395,
+              "responseStart": 1270.199999988079,
+              "startTime": 226,
+              "transferBytes": 4116
+            }
+          ],
+          "slowestResources": [
+            {
+              "duration": 3167.0999999940395,
+              "initiatorType": "script",
+              "path": "http://127.0.0.1:4173/assets/early-hls-preload-Bh25BkGp.js",
+              "responseEnd": 3448.199999988079,
+              "responseStart": 3279.5999999940395,
+              "startTime": 281.09999999403954,
+              "transferBytes": 1121
+            },
+            {
+              "duration": 3132.9000000059605,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/ConfirmActionModal-7POucr6-.js",
+              "responseEnd": 3384.5999999940395,
+              "responseStart": 3202,
+              "startTime": 251.69999998807907,
+              "transferBytes": 1705
+            },
+            {
+              "duration": 3132.5,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/academy-marker-client-loader-BIIlbFL_.js",
+              "responseEnd": 3385.0999999940395,
+              "responseStart": 3204.0999999940395,
+              "startTime": 252.59999999403954,
+              "transferBytes": 358
+            },
+            {
+              "duration": 3117.5999999940395,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/academy-marker-main-D4BFn1YG.js",
+              "responseEnd": 3369.899999976158,
+              "responseStart": 3200.5999999940395,
+              "startTime": 252.2999999821186,
+              "transferBytes": 512
+            },
+            {
+              "duration": 3071.7000000178814,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/RouteGuards-D0R32MR7.js",
+              "responseEnd": 3323,
+              "responseStart": 3153.0999999940395,
+              "startTime": 251.2999999821186,
+              "transferBytes": 1741
+            },
+            {
+              "duration": 3040.300000011921,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/learningMiniPlayerStore-CZGd5vTG.js",
+              "responseEnd": 3291.0999999940395,
+              "responseStart": 3108.2999999821186,
+              "startTime": 250.7999999821186,
+              "transferBytes": 3811
+            },
+            {
+              "duration": 3026.9000000059605,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/SettingsLoadingFallback-DXxzO27b.js",
+              "responseEnd": 3277.0999999940395,
+              "responseStart": 3107.5,
+              "startTime": 250.19999998807907,
+              "transferBytes": 580
+            },
+            {
+              "duration": 2952.0999999940395,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/courseOverviewPreload-DBLfV9Gq.js",
+              "responseEnd": 3201.699999988079,
+              "responseStart": 3046,
+              "startTime": 249.59999999403954,
+              "transferBytes": 1165
+            },
+            {
+              "duration": 2949.4000000059605,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/useDebounce-BZ2vAsoe.js",
+              "responseEnd": 3197.5999999940395,
+              "responseStart": 3030.899999976158,
+              "startTime": 248.19999998807907,
+              "transferBytes": 1130
+            },
+            {
+              "duration": 2949,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/useSessionStorageState-DPLgQmQh.js",
+              "responseEnd": 3197.7999999821186,
+              "responseStart": 3031.0999999940395,
+              "startTime": 248.7999999821186,
+              "transferBytes": 699
+            },
+            {
+              "duration": 2901.899999976158,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/searchShortcut-g9bvoItK.js",
+              "responseEnd": 3149.899999976158,
+              "responseStart": 2983.699999988079,
+              "startTime": 248,
+              "transferBytes": 1266
+            },
+            {
+              "duration": 2857.600000023842,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/keyboardShortcuts-CCyMyU0U.js",
+              "responseEnd": 3105,
+              "responseStart": 2937.399999976158,
+              "startTime": 247.39999997615814,
+              "transferBytes": 781
+            },
+            {
+              "duration": 2857.199999988079,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/useShortcutPlatform-MV4lp6DJ.js",
+              "responseEnd": 3104.7999999821186,
+              "responseStart": 2936.7999999821186,
+              "startTime": 247.59999999403954,
+              "transferBytes": 623
+            },
+            {
+              "duration": 2796.4000000059605,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/applicationScroll-BdCBqc-N.js",
+              "responseEnd": 3043.5999999940395,
+              "responseStart": 2874.5,
+              "startTime": 247.19999998807907,
+              "transferBytes": 589
+            },
+            {
+              "duration": 2781.0999999940395,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/courseAdapter-CYqx0B_W.js",
+              "responseEnd": 3027.5999999940395,
+              "responseStart": 2842.899999976158,
+              "startTime": 246.5,
+              "transferBytes": 1780
+            }
+          ],
+          "tbt": 1698,
+          "transferBytes": 522546,
+          "ttfb": 20.6,
+          "wallTime": 7159
+        },
+        {
+          "cls": 0,
+          "domContentLoaded": 2135.6,
+          "domNodes": 433,
+          "fcp": 5576,
+          "interactionLatency": 0,
+          "jsRequests": 79,
+          "jsTransferBytes": 408387,
+          "lcpBreakdown": {
+            "elementRenderDelay": null,
+            "resourceLoadDelay": null,
+            "resourceLoadTime": null,
+            "ttfb": 7.5
+          },
+          "lcpEntry": {
+            "className": "truncate text-[0.92rem] font-semibold leading-8 tracking-[-0.015em] text-(--text) lg:text-[0.98rem]",
+            "fetchPriority": null,
+            "height": 32,
+            "id": "",
+            "loadTime": 0,
+            "renderTime": 7340,
+            "resourceUrl": "http://127.0.0.1:4173/courses",
+            "size": 6180,
+            "tagName": "h2",
+            "width": 308
+          },
+          "lcp": 7340,
+          "load": 4320.1,
+          "longTaskCount": 10,
+          "requestCount": 85,
+          "apiResources": [
+            {
+              "duration": 479.7000000178814,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/auth/me",
+              "responseEnd": 6282.5,
+              "responseStart": 0,
+              "startTime": 5802.799999982119,
+              "transferBytes": 0
+            },
+            {
+              "duration": 567.1999999880791,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/navigation/sidenav",
+              "responseEnd": 6376.0999999940395,
+              "responseStart": 0,
+              "startTime": 5808.9000000059605,
+              "transferBytes": 0
+            },
+            {
+              "duration": 620.6000000238419,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/courses",
+              "responseEnd": 6438.4000000059605,
+              "responseStart": 0,
+              "startTime": 5817.799999982119,
+              "transferBytes": 0
+            }
+          ],
+          "largestResources": [
+            {
+              "duration": 1854.699999988079,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/entry.client-BlN2DXEv.js",
+              "responseEnd": 2066.5999999940395,
+              "responseStart": 234.5,
+              "startTime": 211.90000000596046,
+              "transferBytes": 99593
+            },
+            {
+              "duration": 1776.6000000238419,
+              "initiatorType": "link",
+              "path": "http://127.0.0.1:4173/assets/full-app-DB7RUdV0.css",
+              "responseEnd": 2019.4000000059605,
+              "responseStart": 415.2999999821186,
+              "startTime": 242.7999999821186,
+              "transferBytes": 85765
+            },
+            {
+              "duration": 2693.7999999821186,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/shell-icons-DhtH5HRH.js",
+              "responseEnd": 2926.2999999821186,
+              "responseStart": 2403.199999988079,
+              "startTime": 232.5,
+              "transferBytes": 46010
+            },
+            {
+              "duration": 1847.9000000059605,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/api-client-CYcjZtxe.js",
+              "responseEnd": 2069.0999999940395,
+              "responseStart": 1213.9000000059605,
+              "startTime": 221.19999998807907,
+              "transferBytes": 40041
+            },
+            {
+              "duration": 2459.699999988079,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/academy-layout-CaR06e8L.js",
+              "responseEnd": 2690.5999999940395,
+              "responseStart": 2276.5,
+              "startTime": 230.90000000596046,
+              "transferBytes": 26057
+            },
+            {
+              "duration": 593.5999999940395,
+              "initiatorType": "link",
+              "path": "http://127.0.0.1:4173/assets/manrope-core-4MznZ3IH.woff2",
+              "responseEnd": 801.1999999880791,
+              "responseStart": 215.5,
+              "startTime": 207.59999999403954,
+              "transferBytes": 21541
+            },
+            {
+              "duration": 2042.800000011921,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/auth-V6jDRq35.js",
+              "responseEnd": 2270.4000000059605,
+              "responseStart": 1963.5999999940395,
+              "startTime": 227.59999999403954,
+              "transferBytes": 20996
+            },
+            {
+              "duration": 789.0999999940395,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/hooks-Huc2gCQr.js",
+              "responseEnd": 1003.7999999821186,
+              "responseStart": 462.5,
+              "startTime": 214.69999998807907,
+              "transferBytes": 18932
+            },
+            {
+              "duration": 880.1999999880791,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/errorBoundaries-DkeWof87.js",
+              "responseEnd": 1096.0999999940395,
+              "responseStart": 712.1999999880791,
+              "startTime": 215.90000000596046,
+              "transferBytes": 11079
+            },
+            {
+              "duration": 1871.3999999761581,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/src-Cf30QMje.js",
+              "responseEnd": 2098.7999999821186,
+              "responseStart": 1851.699999988079,
+              "startTime": 227.40000000596046,
+              "transferBytes": 10447
+            },
+            {
+              "duration": 338.09999999403954,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/home-icons-B-T8HHFQ.js",
+              "responseEnd": 551.2999999821186,
+              "responseStart": 220.69999998807907,
+              "startTime": 213.19999998807907,
+              "transferBytes": 9706
+            },
+            {
+              "duration": 276.5,
+              "initiatorType": "script",
+              "path": "http://127.0.0.1:4173/assets/CourseCatalogue-BeMZtGDi.js",
+              "responseEnd": 5528.199999988079,
+              "responseStart": 5256.4000000059605,
+              "startTime": 5251.699999988079,
+              "transferBytes": 6463
+            },
+            {
+              "duration": 493.40000000596046,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/utils-CmpeEGqn.js",
+              "responseEnd": 707.5999999940395,
+              "responseStart": 430.40000000596046,
+              "startTime": 214.19999998807907,
+              "transferBytes": 5432
+            },
+            {
+              "duration": 2212.0999999940395,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/learning-interactions-Bg3xwn7G.js",
+              "responseEnd": 2442.2999999821186,
+              "responseStart": 2242.2999999821186,
+              "startTime": 230.19999998807907,
+              "transferBytes": 4316
+            },
+            {
+              "duration": 1250.8999999761581,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/autosync-Cd4ujYGF.js",
+              "responseEnd": 1472.2999999821186,
+              "responseStart": 1256.4000000059605,
+              "startTime": 221.40000000596046,
+              "transferBytes": 4116
+            }
+          ],
+          "slowestResources": [
+            {
+              "duration": 3166.7999999821186,
+              "initiatorType": "script",
+              "path": "http://127.0.0.1:4173/assets/early-hls-preload-Bh25BkGp.js",
+              "responseEnd": 3438.199999988079,
+              "responseStart": 3270.699999988079,
+              "startTime": 271.40000000596046,
+              "transferBytes": 1121
+            },
+            {
+              "duration": 3133.600000023842,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/academy-marker-main-D4BFn1YG.js",
+              "responseEnd": 3375.9000000059605,
+              "responseStart": 3209.0999999940395,
+              "startTime": 242.2999999821186,
+              "transferBytes": 512
+            },
+            {
+              "duration": 3133.0999999940395,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/academy-marker-client-loader-BIIlbFL_.js",
+              "responseEnd": 3375.5999999940395,
+              "responseStart": 3208.699999988079,
+              "startTime": 242.5,
+              "transferBytes": 358
+            },
+            {
+              "duration": 3117.5,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/RouteGuards-D0R32MR7.js",
+              "responseEnd": 3359.2999999821186,
+              "responseStart": 3179.2999999821186,
+              "startTime": 241.7999999821186,
+              "transferBytes": 1741
+            },
+            {
+              "duration": 3117.5,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/ConfirmActionModal-7POucr6-.js",
+              "responseEnd": 3359.5999999940395,
+              "responseStart": 3179.5,
+              "startTime": 242.09999999403954,
+              "transferBytes": 1705
+            },
+            {
+              "duration": 3041.300000011921,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/learningMiniPlayerStore-CZGd5vTG.js",
+              "responseEnd": 3283,
+              "responseStart": 3102.5,
+              "startTime": 241.69999998807907,
+              "transferBytes": 3811
+            },
+            {
+              "duration": 3027.2999999821186,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/SettingsLoadingFallback-DXxzO27b.js",
+              "responseEnd": 3268.2999999821186,
+              "responseStart": 3101.699999988079,
+              "startTime": 241,
+              "transferBytes": 580
+            },
+            {
+              "duration": 2967.9000000059605,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/useSessionStorageState-DPLgQmQh.js",
+              "responseEnd": 3206.5,
+              "responseStart": 3037.4000000059605,
+              "startTime": 238.59999999403954,
+              "transferBytes": 699
+            },
+            {
+              "duration": 2967.5999999940395,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/courseOverviewPreload-DBLfV9Gq.js",
+              "responseEnd": 3206.7999999821186,
+              "responseStart": 3052.699999988079,
+              "startTime": 239.19999998807907,
+              "transferBytes": 1165
+            },
+            {
+              "duration": 2938.9000000059605,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/searchShortcut-g9bvoItK.js",
+              "responseEnd": 3176.5999999940395,
+              "responseStart": 3007.5999999940395,
+              "startTime": 237.69999998807907,
+              "transferBytes": 1266
+            },
+            {
+              "duration": 2938.5,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/useDebounce-BZ2vAsoe.js",
+              "responseEnd": 3176.699999988079,
+              "responseStart": 3009.7999999821186,
+              "startTime": 238.19999998807907,
+              "transferBytes": 1130
+            },
+            {
+              "duration": 2861.2999999821186,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/keyboardShortcuts-CCyMyU0U.js",
+              "responseEnd": 3098.199999988079,
+              "responseStart": 2929,
+              "startTime": 236.90000000596046,
+              "transferBytes": 781
+            },
+            {
+              "duration": 2861.2000000178814,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/useShortcutPlatform-MV4lp6DJ.js",
+              "responseEnd": 3098.4000000059605,
+              "responseStart": 2931.199999988079,
+              "startTime": 237.19999998807907,
+              "transferBytes": 623
+            },
+            {
+              "duration": 2813.9000000059605,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/applicationScroll-BdCBqc-N.js",
+              "responseEnd": 3050.5,
+              "responseStart": 2881.2999999821186,
+              "startTime": 236.59999999403954,
+              "transferBytes": 589
+            },
+            {
+              "duration": 2798.5,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/navigation-DFIG36EG.js",
+              "responseEnd": 3034.9000000059605,
+              "responseStart": 2866,
+              "startTime": 236.40000000596046,
+              "transferBytes": 1825
+            }
+          ],
+          "tbt": 2453,
+          "transferBytes": 522546,
+          "ttfb": 7.5,
+          "wallTime": 7577
+        },
+        {
+          "cls": 0,
+          "domContentLoaded": 2121.9,
+          "domNodes": 433,
+          "fcp": 5744,
+          "interactionLatency": 0,
+          "jsRequests": 79,
+          "jsTransferBytes": 408387,
+          "lcpBreakdown": {
+            "elementRenderDelay": null,
+            "resourceLoadDelay": null,
+            "resourceLoadTime": null,
+            "ttfb": 7
+          },
+          "lcpEntry": {
+            "className": "truncate text-[0.92rem] font-semibold leading-8 tracking-[-0.015em] text-(--text) lg:text-[0.98rem]",
+            "fetchPriority": null,
+            "height": 32,
+            "id": "",
+            "loadTime": 0,
+            "renderTime": 7436,
+            "resourceUrl": "http://127.0.0.1:4173/courses",
+            "size": 6180,
+            "tagName": "h2",
+            "width": 308
+          },
+          "lcp": 7436,
+          "load": 4493.3,
+          "longTaskCount": 13,
+          "requestCount": 85,
+          "apiResources": [
+            {
+              "duration": 477.80000001192093,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/auth/me",
+              "responseEnd": 6425.5999999940395,
+              "responseStart": 0,
+              "startTime": 5947.799999982119,
+              "transferBytes": 0
+            },
+            {
+              "duration": 861.4000000059605,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/navigation/sidenav",
+              "responseEnd": 6814.9000000059605,
+              "responseStart": 0,
+              "startTime": 5953.5,
+              "transferBytes": 0
+            },
+            {
+              "duration": 613.7000000178814,
+              "initiatorType": "xmlhttprequest",
+              "path": "http://localhost:4000/api/v1/courses",
+              "responseEnd": 6574.5,
+              "responseStart": 0,
+              "startTime": 5960.799999982119,
+              "transferBytes": 0
+            }
+          ],
+          "largestResources": [
+            {
+              "duration": 1841,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/entry.client-BlN2DXEv.js",
+              "responseEnd": 2063.5999999940395,
+              "responseStart": 246.2999999821186,
+              "startTime": 222.59999999403954,
+              "transferBytes": 99593
+            },
+            {
+              "duration": 1753.9000000059605,
+              "initiatorType": "link",
+              "path": "http://127.0.0.1:4173/assets/full-app-DB7RUdV0.css",
+              "responseEnd": 2016.199999988079,
+              "responseStart": 421.19999998807907,
+              "startTime": 262.2999999821186,
+              "transferBytes": 85765
+            },
+            {
+              "duration": 2698.9000000059605,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/shell-icons-DhtH5HRH.js",
+              "responseEnd": 2951.0999999940395,
+              "responseStart": 2398.199999988079,
+              "startTime": 252.19999998807907,
+              "transferBytes": 46010
+            },
+            {
+              "duration": 1830.5999999940395,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/api-client-CYcjZtxe.js",
+              "responseEnd": 2064,
+              "responseStart": 1211.2999999821186,
+              "startTime": 233.40000000596046,
+              "transferBytes": 40041
+            },
+            {
+              "duration": 2511.7999999821186,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/academy-layout-CaR06e8L.js",
+              "responseEnd": 2762.7999999821186,
+              "responseStart": 2317.5999999940395,
+              "startTime": 251,
+              "transferBytes": 26057
+            },
+            {
+              "duration": 511.5,
+              "initiatorType": "link",
+              "path": "http://127.0.0.1:4173/assets/manrope-core-4MznZ3IH.woff2",
+              "responseEnd": 731.6999999880791,
+              "responseStart": 227.7999999821186,
+              "startTime": 220.19999998807907,
+              "transferBytes": 21541
+            },
+            {
+              "duration": 2038.699999988079,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/auth-V6jDRq35.js",
+              "responseEnd": 2280.199999988079,
+              "responseStart": 1992.9000000059605,
+              "startTime": 241.5,
+              "transferBytes": 20996
+            },
+            {
+              "duration": 803.1999999880791,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/hooks-Huc2gCQr.js",
+              "responseEnd": 1030.0999999940395,
+              "responseStart": 503.09999999403954,
+              "startTime": 226.90000000596046,
+              "transferBytes": 18932
+            },
+            {
+              "duration": 897.2999999821186,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/errorBoundaries-DkeWof87.js",
+              "responseEnd": 1124.7999999821186,
+              "responseStart": 734.6999999880791,
+              "startTime": 227.5,
+              "transferBytes": 11079
+            },
+            {
+              "duration": 1898.9000000059605,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/src-Cf30QMje.js",
+              "responseEnd": 2140.199999988079,
+              "responseStart": 1927,
+              "startTime": 241.2999999821186,
+              "transferBytes": 10447
+            },
+            {
+              "duration": 352.10000002384186,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/home-icons-B-T8HHFQ.js",
+              "responseEnd": 576.9000000059605,
+              "responseStart": 233.69999998807907,
+              "startTime": 224.7999999821186,
+              "transferBytes": 9706
+            },
+            {
+              "duration": 276.59999999403954,
+              "initiatorType": "script",
+              "path": "http://127.0.0.1:4173/assets/CourseCatalogue-BeMZtGDi.js",
+              "responseEnd": 5736.0999999940395,
+              "responseStart": 5462.9000000059605,
+              "startTime": 5459.5,
+              "transferBytes": 6463
+            },
+            {
+              "duration": 505,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/utils-CmpeEGqn.js",
+              "responseEnd": 731.5,
+              "responseStart": 454.69999998807907,
+              "startTime": 226.5,
+              "transferBytes": 5432
+            },
+            {
+              "duration": 2187.2999999821186,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/learning-interactions-Bg3xwn7G.js",
+              "responseEnd": 2436.699999988079,
+              "responseStart": 2237.7999999821186,
+              "startTime": 249.40000000596046,
+              "transferBytes": 4316
+            },
+            {
+              "duration": 1309.800000011921,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/autosync-Cd4ujYGF.js",
+              "responseEnd": 1545.9000000059605,
+              "responseStart": 1299.2999999821186,
+              "startTime": 236.09999999403954,
+              "transferBytes": 4116
+            }
+          ],
+          "slowestResources": [
+            {
+              "duration": 3192.4000000059605,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/academy-marker-client-loader-BIIlbFL_.js",
+              "responseEnd": 3454.199999988079,
+              "responseStart": 3286.199999988079,
+              "startTime": 261.7999999821186,
+              "transferBytes": 358
+            },
+            {
+              "duration": 3162.7000000178814,
+              "initiatorType": "script",
+              "path": "http://127.0.0.1:4173/assets/early-hls-preload-Bh25BkGp.js",
+              "responseEnd": 3454.4000000059605,
+              "responseStart": 3287.199999988079,
+              "startTime": 291.69999998807907,
+              "transferBytes": 1121
+            },
+            {
+              "duration": 3129.0999999940395,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/ConfirmActionModal-7POucr6-.js",
+              "responseEnd": 3390.2999999821186,
+              "responseStart": 3210.2999999821186,
+              "startTime": 261.19999998807907,
+              "transferBytes": 1705
+            },
+            {
+              "duration": 3114.300000011921,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/academy-marker-main-D4BFn1YG.js",
+              "responseEnd": 3376,
+              "responseStart": 3209.2999999821186,
+              "startTime": 261.69999998807907,
+              "transferBytes": 512
+            },
+            {
+              "duration": 3098.0999999940395,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/RouteGuards-D0R32MR7.js",
+              "responseEnd": 3359.0999999940395,
+              "responseStart": 3192.5,
+              "startTime": 261,
+              "transferBytes": 1741
+            },
+            {
+              "duration": 3051.7000000178814,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/learningMiniPlayerStore-CZGd5vTG.js",
+              "responseEnd": 3312.4000000059605,
+              "responseStart": 3129.199999988079,
+              "startTime": 260.69999998807907,
+              "transferBytes": 3811
+            },
+            {
+              "duration": 3022.2000000178814,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/courseOverviewPreload-DBLfV9Gq.js",
+              "responseEnd": 3282,
+              "responseStart": 3111.199999988079,
+              "startTime": 259.7999999821186,
+              "transferBytes": 1165
+            },
+            {
+              "duration": 3021.5999999940395,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/SettingsLoadingFallback-DXxzO27b.js",
+              "responseEnd": 3281.7999999821186,
+              "responseStart": 3110.699999988079,
+              "startTime": 260.19999998807907,
+              "transferBytes": 580
+            },
+            {
+              "duration": 2944.9000000059605,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/useDebounce-BZ2vAsoe.js",
+              "responseEnd": 3203.9000000059605,
+              "responseStart": 3032.0999999940395,
+              "startTime": 259,
+              "transferBytes": 1130
+            },
+            {
+              "duration": 2944,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/useSessionStorageState-DPLgQmQh.js",
+              "responseEnd": 3203.5,
+              "responseStart": 3031.7999999821186,
+              "startTime": 259.5,
+              "transferBytes": 699
+            },
+            {
+              "duration": 2929.600000023842,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/searchShortcut-g9bvoItK.js",
+              "responseEnd": 3188.4000000059605,
+              "responseStart": 3016.699999988079,
+              "startTime": 258.7999999821186,
+              "transferBytes": 1266
+            },
+            {
+              "duration": 2865.7999999821186,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/useShortcutPlatform-MV4lp6DJ.js",
+              "responseEnd": 3124.199999988079,
+              "responseStart": 2953.4000000059605,
+              "startTime": 258.40000000596046,
+              "transferBytes": 623
+            },
+            {
+              "duration": 2850.800000011921,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/applicationScroll-BdCBqc-N.js",
+              "responseEnd": 3108.0999999940395,
+              "responseStart": 2938.5,
+              "startTime": 257.2999999821186,
+              "transferBytes": 589
+            },
+            {
+              "duration": 2850.100000023842,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/keyboardShortcuts-CCyMyU0U.js",
+              "responseEnd": 3107.9000000059605,
+              "responseStart": 2938.699999988079,
+              "startTime": 257.7999999821186,
+              "transferBytes": 781
+            },
+            {
+              "duration": 2773.4000000059605,
+              "initiatorType": "other",
+              "path": "http://127.0.0.1:4173/assets/courseAdapter-CYqx0B_W.js",
+              "responseEnd": 3029.5,
+              "responseStart": 2845.199999988079,
+              "startTime": 256.09999999403954,
+              "transferBytes": 1780
+            }
+          ],
+          "tbt": 2616,
+          "transferBytes": 522546,
+          "ttfb": 7,
+          "wallTime": 7706
+        }
+      ]
+    }
+  ]
+}

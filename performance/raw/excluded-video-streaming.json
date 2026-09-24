@@ -1,0 +1,50 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/v1/courses/{idOrSlug}/lessons/{lessonNumber}/playback-bootstrap",
+    "operationId": "getVideoPlaybackBootstrap",
+    "tag": "Media",
+    "description": "Resolve an authorized lesson video playback bootstrap",
+    "reason": "video processing/streaming scope excluded"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/courses/{idOrSlug}/lessons/{lessonNumber}/playback-token",
+    "operationId": "getVideoPlaybackToken",
+    "tag": "Media",
+    "description": "Refresh an authorized lesson video segment token",
+    "reason": "video processing/streaming scope excluded"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/media/{mediaId}/transcode/retry",
+    "operationId": "POST /api/v1/media/{mediaId}/transcode/retry",
+    "tag": "Other",
+    "description": "",
+    "reason": "video processing/streaming scope excluded"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/media/{mediaId}/transcode/cancel",
+    "operationId": "POST /api/v1/media/{mediaId}/transcode/cancel",
+    "tag": "Other",
+    "description": "",
+    "reason": "video processing/streaming scope excluded"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/media/{mediaId}/progress/stream",
+    "operationId": "GET /api/v1/media/{mediaId}/progress/stream",
+    "tag": "Other",
+    "description": "",
+    "reason": "video processing/streaming scope excluded"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/media/{mediaId}",
+    "operationId": "getMediaAssetStream",
+    "tag": "Media",
+    "description": "Stream media file content by media ID",
+    "reason": "video processing/streaming scope excluded"
+  }
+]

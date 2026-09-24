@@ -9,14 +9,15 @@ export function useEnrolledCourses(options?: { enabled?: boolean }) {
     queryKey: enrollmentKeys.courses(),
     queryFn: () => enrollmentsService.listEnrolledCourses(),
     enabled: options?.enabled ?? true,
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
 export function useEnrollFreeCourse() {
   const queryClient = useQueryClient();
   return useMutation<unknown, ApiError, string>({
-    mutationFn: (courseId: string) => enrollmentsService.enrollFreeCourse(courseId),
+    mutationFn: (courseId: string) =>
+      enrollmentsService.enrollFreeCourse(courseId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: enrollmentKeys.courses() });
     },

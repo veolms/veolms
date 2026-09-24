@@ -1,3 +1,5 @@
+import "../styles/features/workspace.css";
+import "../auth/mfa-setup.css";
 import { useEffect, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";

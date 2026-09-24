@@ -120,6 +120,10 @@ export function createAuthService({
     return userRepository.findUserById(database, userId);
   }
 
+  function findUsersByIds(userIds: readonly string[]) {
+    return userRepository.findUsersByIds(database, userIds);
+  }
+
   function findUserByIdForNotification(userId: string) {
     return userRepository.findUserByIdIncludingDeleted(database, userId);
   }
@@ -1276,6 +1280,7 @@ export function createAuthService({
 
   return {
     findUserById,
+    findUsersByIds,
     findUserByIdForNotification,
     findUserByIdentifier,
     findUserByIdentifierIncludingDeleted,

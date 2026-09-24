@@ -1,0 +1,104 @@
+MODULE: Commerce   Manual Payments
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: AUTH_REQUIRED | requests=8 | p50=19 ms | p95=25 ms | p99=27 ms | max=28 ms | avg response=102 B | 5xx=0 | timeout=0
+10 users: AUTH_REQUIRED | requests=16 | p50=19 ms | p95=25 ms | p99=27 ms | max=27 ms | avg response=102 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+listManualPayments | GET /api/v1/manual-payments | status=AUTH_REQUIRED | p95=26 ms | p99=27 ms | max=27 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+listMyManualPayments | GET /api/v1/manual-payments/my | status=AUTH_REQUIRED | p95=25 ms | p99=25 ms | max=25 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- This module needs login; anonymous timing is only an auth-protection check.
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+listMyManualPayments | GET /api/v1/manual-payments/my | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+listManualPayments | GET /api/v1/manual-payments | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No endpoint in this module showed an obvious 5+ query N+1 pattern in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+listMyManualPayments | GET /api/v1/manual-payments/my | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listManualPayments | GET /api/v1/manual-payments | HTTP=401 | total=15ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No endpoint in this module showed an obvious 5+ query N+1 pattern in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+MODULE: Commerce   Manual Payments
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: AUTH_REQUIRED | requests=8 | p50=19 ms | p95=25 ms | p99=27 ms | max=28 ms | avg response=102 B | 5xx=0 | timeout=0
+10 users: AUTH_REQUIRED | requests=16 | p50=19 ms | p95=25 ms | p99=27 ms | max=27 ms | avg response=102 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+listManualPayments | GET /api/v1/manual-payments | status=AUTH_REQUIRED | p95=26 ms | p99=27 ms | max=27 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+listMyManualPayments | GET /api/v1/manual-payments/my | status=AUTH_REQUIRED | p95=25 ms | p99=25 ms | max=25 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- This module needs login; anonymous timing is only an auth-protection check.
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+listManualPayments | GET /api/v1/manual-payments | HTTP=401 | total=19ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyManualPayments | GET /api/v1/manual-payments/my | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No multi-query endpoint was observed in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+MODULE: Commerce   Manual Payments
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: AUTH_REQUIRED | requests=8 | p50=19 ms | p95=25 ms | p99=27 ms | max=28 ms | avg response=102 B | 5xx=0 | timeout=0
+10 users: AUTH_REQUIRED | requests=16 | p50=19 ms | p95=25 ms | p99=27 ms | max=27 ms | avg response=102 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+listManualPayments | GET /api/v1/manual-payments | status=AUTH_REQUIRED | p95=26 ms | p99=27 ms | max=27 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+listMyManualPayments | GET /api/v1/manual-payments/my | status=AUTH_REQUIRED | p95=25 ms | p99=25 ms | max=25 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- This module needs login; anonymous timing is only an auth-protection check.
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+listMyManualPayments | GET /api/v1/manual-payments/my | HTTP=401 | total=18ms | SQL=0 | SQL max=0ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listManualPayments | GET /api/v1/manual-payments | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No multi-query endpoint was observed in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.

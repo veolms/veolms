@@ -3,6 +3,7 @@ import type {
   CreateCourseRequest,
   UpdateCourseBasicsRequest,
   CourseSlugParams,
+  CourseListQuery,
 } from "@veolms/contracts";
 import { httpError } from "../../../lib/errors.ts";
 import type { CourseService } from "./course.service.ts";
@@ -14,13 +15,14 @@ export function createCourseController({
 }) {
   async function listCourses(
     request: FastifyRequest<{
-      Querystring: { creatorId?: string };
+      Querystring: CourseListQuery;
     }>,
   ) {
-    const courses = await service.listPublishedCourses({
+    return await service.listPublishedCourses({
       creatorId: request.query.creatorId,
+      cursor: request.query.cursor,
+      limit: request.query.limit,
     });
-    return { courses };
   }
 
   async function getCourseBySlug(
@@ -72,7 +74,11 @@ export function createCourseController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.getCourseEditorData(id, creatorId, request.user?.roles);
+    return await service.getCourseEditorData(
+      id,
+      creatorId,
+      request.user?.roles,
+    );
   }
 
   async function updateCourseBasics(

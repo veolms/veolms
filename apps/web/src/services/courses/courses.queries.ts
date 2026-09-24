@@ -1,9 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type {
   Category,
+  CourseListResponse,
   CourseEditorDataResponse,
   CourseOverviewResponse,
-  CourseSummary,
   CourseValidationResponse,
   DeletedCoursesListResponse,
   DeletedCoursesQuery,
@@ -11,16 +11,66 @@ import type {
   PublicCourse,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
+import { takeEarlyCourseCataloguePrefetch } from "../../courses/courseCatalogueBootstrap";
 import { courseKeys } from "./courses.keys";
 import { coursesService } from "./courses.service";
 
-export function useCourses(options?: { enabled?: boolean }) {
-  return useQuery<{ courses: CourseSummary[] }, ApiError>({
-    queryKey: courseKeys.lists(),
-    queryFn: () => coursesService.list(),
+export function useCourses(options?: {
+  enabled?: boolean;
+  initialData?: CourseListResponse | null;
+}) {
+  const limit = 50;
+  const hasStaticData =
+    options?.initialData !== null && options?.initialData !== undefined;
+  return useQuery<CourseListResponse, ApiError>({
+    queryKey: courseKeys.publicList({ limit }),
+    queryFn: async () => {
+      const prefetch = takeEarlyCourseCataloguePrefetch();
+      const prefetchedData = prefetch ? await prefetch : null;
+      return prefetchedData ?? coursesService.list({ limit });
+    },
+    enabled: options?.enabled ?? true,
+    initialData: options?.initialData ?? undefined,
+    // SSG data is the authoritative first paint. Avoid a duplicate public
+    // catalogue request during the initial course-page hydration.
+    initialDataUpdatedAt: hasStaticData ? Date.now() : undefined,
+    refetchOnMount: hasStaticData ? false : undefined,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+const DEFAULT_COURSE_PAGE_SIZE = 15;
+
+export function useInfiniteCourses(options?: {
+  enabled?: boolean;
+  limit?: number;
+}) {
+  const limit = options?.limit ?? DEFAULT_COURSE_PAGE_SIZE;
+  const query = useInfiniteQuery<CourseListResponse, ApiError>({
+    queryKey: courseKeys.lists({ limit }),
+    queryFn: ({ pageParam, signal }) =>
+      coursesService.list(
+        {
+          limit,
+          cursor: pageParam as string | undefined,
+        },
+        signal,
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: options?.enabled ?? true,
     staleTime: 5 * 60 * 1000,
   });
+
+  return {
+    ...query,
+    data: query.data
+      ? {
+          courses: query.data.pages.flatMap((page) => page.courses),
+          nextCursor: query.data.pages.at(-1)?.nextCursor ?? null,
+        }
+      : undefined,
+  };
 }
 
 export function useCourse(slug: string) {
@@ -52,7 +102,7 @@ export function useMyCourses(options?: { enabled?: boolean }) {
     queryKey: courseKeys.mine(),
     queryFn: () => coursesService.listMyCourses(),
     enabled: options?.enabled ?? true,
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -64,7 +114,7 @@ export function useDeletedCourses(
     queryKey: [...courseKeys.bin(), params ?? null],
     queryFn: () => coursesService.listDeletedCourses(params),
     enabled: options?.enabled ?? true,
-    staleTime: 30 * 1000,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

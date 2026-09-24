@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-performance.mjs",
+    "analyze": "node scripts/build-performance.mjs --mode analyze",
     "benchmark:web-vitals": "node scripts/benchmark-web-vitals.mjs",
     "dev": "react-router dev",
     "generate:reading-mode-texture": "node scripts/generate-reading-mode-texture.mjs",
@@ -91,6 +92,7 @@
     "@typescript/native": "catalog:",
     "postcss": "^8.5.25",
     "purgecss": "^7.0.2",
+    "rollup-plugin-visualizer": "^7.1.1",
     "tailwindcss": "^4.3.3",
     "vite": "8.2.1"
   }

@@ -10,6 +10,21 @@ export function findUserById(database: Executor, userId: string) {
     .executeTakeFirst();
 }
 
+/**
+ * Batch variant for read-only features that need display names for a list of
+ * users. Keep the projection small so analytics/report endpoints do not load
+ * authentication or profile data they do not return.
+ */
+export function findUsersByIds(database: Executor, userIds: readonly string[]) {
+  if (userIds.length === 0) return [];
+  return database
+    .selectFrom("users")
+    .select(["id", "display_name"])
+    .where("id", "in", userIds)
+    .where("is_deleted", "=", false)
+    .execute();
+}
+
 /** Used only by durable notification delivery after an account is deactivated. */
 export function findUserByIdIncludingDeleted(
   database: Executor,

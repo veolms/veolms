@@ -1,28 +1,26 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { useParams } from "react-router";
-import {
-  ArrowLeft,
-  ArrowsInLineVertical,
-  ArrowsOutLineVertical,
-  BookOpen,
-  CaretDown,
-  CheckCircle,
-  Circle,
-  CircleNotch,
-  Clock,
-  FileText,
-  Heart,
-  Play,
-  PlayCircle,
-  Question,
-  ShoppingBag,
-  Stack,
-  Tag,
-  Ticket,
-  User,
-  X,
-} from "@phosphor-icons/react";
+import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { ArrowsInLineVerticalIcon as ArrowsInLineVertical } from "@phosphor-icons/react/ArrowsInLineVertical";
+import { ArrowsOutLineVerticalIcon as ArrowsOutLineVertical } from "@phosphor-icons/react/ArrowsOutLineVertical";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
+import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { CircleIcon as Circle } from "@phosphor-icons/react/Circle";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
+import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
+import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
+import { PlayIcon as Play } from "@phosphor-icons/react/Play";
+import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
+import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
+import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
+import { StackIcon as Stack } from "@phosphor-icons/react/Stack";
+import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
+import { TicketIcon as Ticket } from "@phosphor-icons/react/Ticket";
+import { UserIcon as User } from "@phosphor-icons/react/User";
+import { XIcon as X } from "@phosphor-icons/react/X";
 import {
   MAX_VOLUNTARY_AMOUNT,
   type Category,
@@ -319,7 +317,7 @@ function CurriculumSectionItem({
         type="button"
         className="flex w-full min-h-13 items-center gap-3.5 border-0 px-4.5 py-3 text-(--text) bg-transparent text-[0.92rem] font-semibold text-left cursor-pointer transition-colors duration-140 hover:bg-(--hover) max-[640px]:p-[10px_14px] max-[640px]:text-[0.88rem]"
         aria-expanded={isOpen}
-        aria-controls={panelId}
+        aria-controls={isOpen ? panelId : undefined}
         onClick={onToggle}
       >
         <span
@@ -343,112 +341,111 @@ function CurriculumSectionItem({
         </span>
       </button>
 
-      <div
-        id={panelId}
-        role="region"
-        aria-labelledby={buttonId}
-        aria-hidden={!isOpen}
-        className={`grid motion-reduce:transition-none ${
-          isOpen
-            ? "grid-rows-[1fr] opacity-100 visible transition-[grid-template-rows,opacity,visibility] duration-300 ease-in-out"
-            : "grid-rows-[0fr] opacity-0 invisible transition-[grid-template-rows,opacity,visibility] duration-250 ease-[cubic-bezier(0,1,0,1)]"
-        }`}
-      >
-        <div className="overflow-hidden min-h-0">
-          <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,var(--text))]">
-            {section.lessons.length > 0 ? (
-              section.lessons.map(
-                ([number, title, duration, status, isPreview, contentType]) => {
-                  const isDoc = contentType === "document";
-                  const isQuiz = contentType === "quiz";
-                  return (
-                    <button
-                      type="button"
-                      className={`group/lesson flex items-center gap-3 w-full min-h-11.5 border-0 bg-transparent px-4.5 py-1.5 text-(--text-secondary) text-[0.85rem] text-left transition-colors duration-140 ${
-                        isReadOnlyPreview
-                          ? "cursor-default opacity-85 hover:bg-transparent hover:text-(--text-secondary)"
-                          : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-inset"
-                      }`}
-                      key={number}
-                      disabled={isReadOnlyPreview}
-                      onClick={() => {
-                        if (isReadOnlyPreview) return;
-                        onSelectLesson?.(number);
-                      }}
-                      aria-label={`Lesson ${number}: ${title}${duration ? `, ${duration}` : ""}`}
-                    >
-                      {/* Content type icon */}
-                      <span
-                        className={`inline-flex w-5 shrink-0 items-center justify-center text-(--muted) transition-colors duration-140 ${
+      {isOpen ? (
+        <div id={panelId} role="region" aria-labelledby={buttonId}>
+          <div className="overflow-hidden min-h-0">
+            <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,var(--text))]">
+              {section.lessons.length > 0 ? (
+                section.lessons.map(
+                  ([
+                    number,
+                    title,
+                    duration,
+                    status,
+                    isPreview,
+                    contentType,
+                  ]) => {
+                    const isDoc = contentType === "document";
+                    const isQuiz = contentType === "quiz";
+                    return (
+                      <button
+                        type="button"
+                        className={`group/lesson flex items-center gap-3 w-full min-h-11.5 border-0 bg-transparent px-4.5 py-1.5 text-(--text-secondary) text-[0.85rem] text-left transition-colors duration-140 ${
                           isReadOnlyPreview
-                            ? ""
-                            : "group-hover/lesson:text-(--accent)"
+                            ? "cursor-default opacity-85 hover:bg-transparent hover:text-(--text-secondary)"
+                            : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-inset"
                         }`}
-                        aria-hidden="true"
+                        key={number}
+                        disabled={isReadOnlyPreview}
+                        onClick={() => {
+                          if (isReadOnlyPreview) return;
+                          onSelectLesson?.(number);
+                        }}
+                        aria-label={`Lesson ${number}: ${title}${duration ? `, ${duration}` : ""}`}
                       >
-                        {isDoc ? (
-                          <FileText size={16} weight="regular" />
-                        ) : isQuiz ? (
-                          <Question size={16} weight="regular" />
-                        ) : (
-                          <PlayCircle size={16} weight="regular" />
-                        )}
-                      </span>
-
-                      {/* Lesson title */}
-                      <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-(--text-secondary)">
-                        {title}
-                      </span>
-
-                      {/* Duration */}
-                      {duration ? (
-                        <span className="text-(--muted) text-[0.78rem] shrink-0 w-11.25 text-right">
-                          {duration}
-                        </span>
-                      ) : null}
-
-                      {/* Free preview badge: only displayed when course is paid and lesson is marked as free preview */}
-                      {isPaidCourse && isPreview ? (
+                        {/* Content type icon */}
                         <span
-                          className="shrink-0 inline-flex items-center rounded-[5px] px-[6px] py-[2px] text-[0.7rem] font-[700] leading-none bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent) border border-[color-mix(in_srgb,var(--accent)_30%,transparent)]"
-                          aria-label="Free preview"
-                        >
-                          Free
-                        </span>
-                      ) : null}
-
-                      {/* Progress status */}
-                      {status === "done" ? (
-                        <span
-                          className="inline-flex items-center justify-center shrink-0"
+                          className={`inline-flex w-5 shrink-0 items-center justify-center text-(--muted) transition-colors duration-140 ${
+                            isReadOnlyPreview
+                              ? ""
+                              : "group-hover/lesson:text-(--accent)"
+                          }`}
                           aria-hidden="true"
                         >
-                          <CheckCircle
-                            size={16}
-                            weight="fill"
-                            className="text-[#10b981]"
-                          />
+                          {isDoc ? (
+                            <FileText size={16} weight="regular" />
+                          ) : isQuiz ? (
+                            <Question size={16} weight="regular" />
+                          ) : (
+                            <PlayCircle size={16} weight="regular" />
+                          )}
                         </span>
-                      ) : status === "todo" ? (
-                        <span
-                          className="inline-flex items-center justify-center shrink-0"
-                          aria-hidden="true"
-                        >
-                          <Circle size={16} className="text-(--muted)" />
+
+                        {/* Lesson title */}
+                        <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-(--text-secondary)">
+                          {title}
                         </span>
-                      ) : null}
-                    </button>
-                  );
-                },
-              )
-            ) : (
-              <div className="px-3.5 py-3 text-(--muted) text-[0.82rem] italic">
-                No lessons added yet
-              </div>
-            )}
+
+                        {/* Duration */}
+                        {duration ? (
+                          <span className="text-(--muted) text-[0.78rem] shrink-0 w-11.25 text-right">
+                            {duration}
+                          </span>
+                        ) : null}
+
+                        {/* Free preview badge: only displayed when course is paid and lesson is marked as free preview */}
+                        {isPaidCourse && isPreview ? (
+                          <span
+                            className="shrink-0 inline-flex items-center rounded-[5px] px-[6px] py-[2px] text-[0.7rem] font-[700] leading-none bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent) border border-[color-mix(in_srgb,var(--accent)_30%,transparent)]"
+                            aria-label="Free preview"
+                          >
+                            Free
+                          </span>
+                        ) : null}
+
+                        {/* Progress status */}
+                        {status === "done" ? (
+                          <span
+                            className="inline-flex items-center justify-center shrink-0"
+                            aria-hidden="true"
+                          >
+                            <CheckCircle
+                              size={16}
+                              weight="fill"
+                              className="text-[#10b981]"
+                            />
+                          </span>
+                        ) : status === "todo" ? (
+                          <span
+                            className="inline-flex items-center justify-center shrink-0"
+                            aria-hidden="true"
+                          >
+                            <Circle size={16} className="text-(--muted)" />
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  },
+                )
+              ) : (
+                <div className="px-3.5 py-3 text-(--muted) text-[0.82rem] italic">
+                  No lessons added yet
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
@@ -1960,6 +1957,7 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
   const courseSlug = props.courseSlug ?? routeCourseSlug;
   const serverCategories = props.categories ?? [];
   const authUser = useAuthStore((s) => s.user);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const defaultInstructorName =
     authUser?.displayName || authUser?.username || "Instructor";
 
@@ -1987,7 +1985,9 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
 
   const course = activeAdapted?.course ?? props.customCourse;
 
-  const { data: enrolledData } = useEnrolledCourses();
+  const { data: enrolledData } = useEnrolledCourses({
+    enabled: isAuthenticated,
+  });
 
   const isEnrolled = useMemo(() => {
     if (!enrolledData?.courses) return false;

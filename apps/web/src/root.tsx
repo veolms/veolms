@@ -6,11 +6,16 @@ import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
 import { getLearningPlayerBootstrapScript } from "./learning/learningPlayerPreferences";
 import { getLearningShellBootstrapScript } from "./learning/learningShellPreferences";
+import { getEarlyCourseCatalogueScript } from "./courses/courseCatalogueBootstrap";
+import {
+  API_BASE_URL_ORIGIN,
+  getApiRequestUrl,
+} from "./lib/apiBaseUrl";
 import {
   EARLY_HLS_PRELOAD_URL_PLACEHOLDER,
   getEarlyHlsPreloadInlineScript,
-} from "./learning/learningHlsBootstrap";
-import { getVideoPlaybackCdnOrigin } from "./learning/videoPlaybackBootstrap";
+} from "./learning/learningHlsInlineScript";
+import { getVideoPlaybackCdnOrigin } from "./learning/videoPlaybackCdn";
 import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
@@ -175,6 +180,13 @@ export function Layout({ children }: LayoutProps) {
           content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
         />
         <meta name="theme-color" content="#151718" />
+        {API_BASE_URL_ORIGIN ? (
+          <link
+            rel="preconnect"
+            href={API_BASE_URL_ORIGIN}
+            crossOrigin="use-credentials"
+          />
+        ) : null}
         {videoPlaybackCdnOrigin ? (
           <link
             rel="preconnect"
@@ -196,6 +208,13 @@ export function Layout({ children }: LayoutProps) {
           }}
         />
         <Meta />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: getEarlyCourseCatalogueScript(
+              getApiRequestUrl("courses?limit=50"),
+            ),
+          }}
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: getEarlyHlsPreloadInlineScript(
@@ -221,15 +240,19 @@ export function Layout({ children }: LayoutProps) {
           }}
         />
         <link rel="stylesheet" href={fullAppStylesheet} />
-        {/* The complete app stylesheet is linked above. In development,
-            React Router otherwise synthesizes an additional route-critical
-            stylesheet on every document request, delaying first paint by
-            seconds in this large app. Production still receives route links
-            and preloads through Links. */}
+        {/* Shared shell styles stay linked for the initial view. Feature
+            styles are loaded with their lazy page modules. In development,
+            keep React Router from adding a second route stylesheet request. */}
         {!import.meta.env.DEV && <Links />}
       </head>
       <body {...initialLayoutDomState.bodyAttributes}>
         <div id="root">{children}</div>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              '(()=>{const e=document.getElementById("courses-hydrate-fallback");if(!e)return;if(location.pathname==="/courses"||location.pathname==="/")e.style.removeProperty("display");else e.style.display="none"})();',
+          }}
+        />
         <Scripts />
         <ReadingModeEffects />
       </body>
@@ -247,10 +270,55 @@ export const meta = () => [
 ];
 
 export function HydrateFallback() {
-  // Route loaders decide whether the user belongs in the academy or auth
-  // flow. Keep the build-time SPA fallback neutral so it cannot expose the
-  // wrong screen while that secure session check is in flight.
-  return <div aria-hidden="true" className="fixed inset-0 bg-(--canvas)" />;
+  const showCoursesFallback =
+    typeof window !== "undefined" &&
+    (window.location.pathname === "/courses" ||
+      window.location.pathname === "/");
+
+  return (
+    <div
+      id="courses-hydrate-fallback"
+      aria-hidden="true"
+      className="courses-app"
+      style={showCoursesFallback ? undefined : { display: "none" }}
+    >
+      <aside className="courses-sidebar" />
+      <div className="courses-main-frame">
+        <main className="courses-main">
+          <div className="mx-auto w-full max-w-screen-2xl">
+            <div className="mb-8 space-y-3">
+              <h1 className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
+                Courses
+              </h1>
+              <p className="mt-1.5 hidden text-[0.88rem] leading-6 text-(--muted) min-[640px]:block">
+                Browse courses and keep learning.
+              </p>
+            </div>
+            <div className="mb-7 flex gap-3">
+              <div className="h-10 w-24 rounded-full bg-(--track)" />
+              <div className="h-10 w-28 rounded-full bg-(--track)" />
+              <div className="h-10 w-28 rounded-full bg-(--track)" />
+            </div>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+              {Array.from({ length: 8 }, (_, index) => (
+                <div
+                  key={index}
+                  className="overflow-hidden rounded-xl border border-(--border) bg-(--surface)"
+                >
+                  <div className="aspect-video bg-(--track)" />
+                  <div className="space-y-3 p-4">
+                    <div className="h-5 w-4/5 rounded bg-(--track)" />
+                    <div className="h-4 w-2/3 rounded bg-(--track)" />
+                    <div className="h-9 w-28 rounded-lg bg-(--track)" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
 }
 
 function SessionInitializer({ children }: { children: ReactNode }) {
