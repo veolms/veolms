@@ -4,7 +4,7 @@ import { AUTH_CARD_HEADING_ID } from "../auth/authFlow";
 import { MfaEnrollmentSetup } from "../auth/MfaEnrollmentSetup";
 import { MfaStepUp } from "../auth/MfaStepUp";
 import { resolveMfaSetupView, type MfaSetupView } from "../auth/mfaGate";
-import { APP_HOME_PATH, resolveMfaBackPath } from "../routing/routeAccess";
+import { APP_HOME_PATH, resolveMfaBackPath, sanitizeReturnTo } from "../routing/routeAccess";
 import { useCurrentUser } from "../services/auth";
 export default function MfaSetupRoute() {
   const navigate = useNavigate();
@@ -22,9 +22,10 @@ export default function MfaSetupRoute() {
     setInitialView(resolved);
 
     if (resolved === "done") {
-      navigate(APP_HOME_PATH, { replace: true });
+      const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
+      navigate(returnTo ?? APP_HOME_PATH, { replace: true });
     }
-  }, [isLoading, initialView, navigate, user]);
+  }, [isLoading, initialView, navigate, searchParams, user]);
 
   const view = initialView ?? (isLoading ? null : resolveMfaSetupView(user));
   const backPath = resolveMfaBackPath(searchParams.get("returnTo"));
