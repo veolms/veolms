@@ -397,13 +397,7 @@ export function createLearningDiscussionsFeedService(options?: {
       for (const row of page) {
         if (row.sourceType === "thread") {
           const thread = threadsById.get(row.entityId);
-          if (!thread) {
-            throw httpError(
-              500,
-              "DISCUSSION_FEED_HYDRATION_FAILED",
-              "The discussion feed could not be hydrated.",
-            );
-          }
+          if (!thread) continue;
           const kind = thread.kind === "qna" ? "question" : thread.kind;
           if (kind !== "comment" && kind !== "question") {
             throw httpError(
@@ -421,13 +415,7 @@ export function createLearningDiscussionsFeedService(options?: {
           });
         } else {
           const note = notesById.get(row.entityId);
-          if (!note) {
-            throw httpError(
-              500,
-              "DISCUSSION_FEED_HYDRATION_FAILED",
-              "The discussion feed could not be hydrated.",
-            );
-          }
+          if (!note) continue;
           items.push({
             sourceType: "note",
             identity: `note:${note.id}`,

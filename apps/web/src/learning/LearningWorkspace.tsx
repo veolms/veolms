@@ -2666,33 +2666,41 @@ export function LearningWorkspace({
                   onSeekToTimestamp={seekCurrentLessonToTimestamp}
                 />
               ) : isLearningDeepLinkError ? (
-                <div
-                  className="py-12 text-center"
-                  data-testid="learning-discussion-error"
-                >
-                  <p className="font-semibold text-(--text)">
-                    Failed to load discussion
-                  </p>
-                  <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
-                    There was a problem loading the course for this discussion.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => void refetchCourseOverview()}
-                    className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+                <div>
+                  {phoneLessonDrawerViewport &&
+                    lessonHeader(true, isLearningBootstrapLoading)}
+                  <div
+                    className="py-12 text-center"
+                    data-testid="learning-discussion-error"
                   >
-                    Retry
-                  </button>
+                    <p className="font-semibold text-(--text)">
+                      Failed to load discussion
+                    </p>
+                    <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
+                      There was a problem loading the course for this discussion.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void refetchCourseOverview()}
+                      className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+                    >
+                      Retry
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <div
-                  className="flex min-h-48 flex-col items-center justify-center py-12 text-sm text-(--text-secondary)"
-                  data-testid="learning-discussion-loading"
-                  role="status"
-                  aria-label="Loading discussion"
-                >
-                  <div className="mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-                  Loading discussion…
+                <div>
+                  {phoneLessonDrawerViewport &&
+                    lessonHeader(true, isLearningBootstrapLoading)}
+                  <div
+                    className="flex min-h-48 flex-col items-center justify-center py-12 text-sm text-(--text-secondary)"
+                    data-testid="learning-discussion-loading"
+                    role="status"
+                    aria-label="Loading discussion"
+                  >
+                    <div className="mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
+                    Loading discussion…
+                  </div>
                 </div>
               )}
             </article>

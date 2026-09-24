@@ -404,7 +404,22 @@ export function mergeNotesWithCreationRecords(
     );
 
     if (existingIndex >= 0) {
-      notes[existingIndex] = localNote;
+      if (
+        record.status === "confirmed" &&
+        record.serverId !== undefined &&
+        getServerEntityId(notes[existingIndex]!) === record.serverId
+      ) {
+        const existingNote = notes[existingIndex]!;
+        notes[existingIndex] = {
+          ...existingNote,
+          id: record.clientId,
+          clientId: record.clientId,
+          serverId: record.serverId,
+          creationStatus: "confirmed",
+        };
+      } else {
+        notes[existingIndex] = localNote;
+      }
     } else {
       notes.push(localNote);
       addedLocalNotes += 1;
@@ -487,7 +502,22 @@ export function mergeThreadsWithCreationRecords(
           getServerEntityId(thread) === record.serverId),
     );
     if (existingIndex >= 0) {
-      threads[existingIndex] = localThread;
+      if (
+        record.status === "confirmed" &&
+        record.serverId !== undefined &&
+        getServerEntityId(threads[existingIndex]!) === record.serverId
+      ) {
+        const existingThread = threads[existingIndex]!;
+        threads[existingIndex] = {
+          ...existingThread,
+          id: record.clientId,
+          clientId: record.clientId,
+          serverId: record.serverId,
+          creationStatus: "confirmed",
+        };
+      } else {
+        threads[existingIndex] = localThread;
+      }
     } else {
       threads.push(localThread);
       addedLocalThreads += 1;

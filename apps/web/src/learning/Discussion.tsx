@@ -1403,7 +1403,6 @@ function DiscussionInner({
     if (
       allFeedPagePendingRef.current ||
       unifiedDiscussions.isFetchingNextPage ||
-      unifiedDiscussions.isFetchNextPageError ||
       !unifiedDiscussions.hasNextPage
     ) {
       return;
@@ -2471,8 +2470,14 @@ function DiscussionInner({
         isNotesError={isNotesError}
         onRetryNotes={() => refetchNotes()}
         onLoadMore={loadMoreDiscussion}
+        onRetryNextPage={loadMoreDiscussion}
         hasNextPage={isNoteDeepLinkPending ? false : hasNextDiscussionPage}
         isFetchingNextPage={isFetchingNextDiscussionPage}
+        isNextPageError={
+          isNoteDeepLinkPending
+            ? false
+            : unifiedDiscussions.isFetchNextPageError
+        }
         isThreadsLoading={isThreadsLoading}
         isThreadDeepLinkPending={isThreadDeepLinkPending}
         isAllInitialLoading={isAllInitialLoading}
@@ -2707,8 +2712,10 @@ interface ThreadSurfaceProps {
   isNotesError?: boolean;
   onRetryNotes?: () => void;
   onLoadMore?: () => Promise<void>;
+  onRetryNextPage?: () => Promise<void>;
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
+  isNextPageError?: boolean;
   isThreadsLoading?: boolean;
   isThreadDeepLinkPending?: boolean;
   isAllInitialLoading?: boolean;
@@ -2774,6 +2781,7 @@ export function shouldShowDiscussionEnd({
   entryFilter,
   entryCount,
   hasNextPage,
+  isNextPageError,
   isNotesLoading,
   isThreadsLoading,
 }: {
@@ -2781,10 +2789,18 @@ export function shouldShowDiscussionEnd({
   entryFilter: DiscussionEntryFilter;
   entryCount: number;
   hasNextPage: boolean;
+  isNextPageError?: boolean;
   isNotesLoading: boolean;
   isThreadsLoading: boolean;
 }): boolean {
-  if (!isBackendMode || entryCount === 0 || hasNextPage) return false;
+  if (
+    !isBackendMode ||
+    entryCount === 0 ||
+    hasNextPage ||
+    isNextPageError
+  ) {
+    return false;
+  }
   if (entryFilter === "all") {
     return !isNotesLoading && !isThreadsLoading;
   }
@@ -3122,8 +3138,10 @@ function ThreadSurface({
   isNotesError = false,
   onRetryNotes,
   onLoadMore,
+  onRetryNextPage,
   hasNextPage = false,
   isFetchingNextPage = false,
+  isNextPageError = false,
   isThreadsLoading = false,
   isThreadDeepLinkPending = false,
   isAllInitialLoading = false,
@@ -3482,7 +3500,48 @@ function ThreadSurface({
   const hasDescriptionSurface =
     isLessonDescriptionLoading || Boolean(lessonDescription?.trim());
 
+  const disabledMessage = (
+    <div
+      className="py-8 text-center"
+      data-testid="learner-interactions-disabled-message"
+    >
+      <p className="text-sm font-medium text-(--muted)">
+        Learner interactions are disabled for this course.
+      </p>
+    </div>
+  );
+
   if (isAllDisabled) {
+    if (isPhone) {
+      return (
+        <div className="mt-2.5 flex min-h-0 min-w-0 flex-1 flex-col">
+          <div
+            ref={discussionViewportRef}
+            data-discussion-scroll-viewport
+            className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col touch-pan-y overflow-x-hidden overflow-y-auto"
+            style={{
+              minHeight: 0,
+              maxWidth: "100%",
+              overflowX: "hidden",
+              overflowY: "auto",
+              overscrollBehaviorX: "none",
+              overscrollBehaviorY: "none",
+              touchAction: "pan-y",
+            }}
+          >
+            <div
+              data-discussion-scroll-header
+              className="min-w-0 max-w-full shrink-0"
+            >
+              {mobileLessonHeader}
+              {discussionDescription}
+            </div>
+            {disabledMessage}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div>
         <LessonDescription
@@ -3490,14 +3549,7 @@ function ThreadSurface({
           isLoading={isLessonDescriptionLoading}
           onSeekToTimestamp={onSeekToTimestamp}
         />
-        <div
-          className="py-8 text-center"
-          data-testid="learner-interactions-disabled-message"
-        >
-          <p className="text-sm font-medium text-(--muted)">
-            Learner interactions are disabled for this course.
-          </p>
-        </div>
+        {disabledMessage}
       </div>
     );
   }
@@ -3659,11 +3711,32 @@ function ThreadSurface({
           Loading more…
         </p>
       )}
+      {isBackendMode && isNextPageError && entries.length > 0 && (
+        <div
+          className="flex flex-col items-center gap-2 py-4 text-center"
+          data-testid="learning-feed-load-more-error"
+        >
+          <p className="text-sm text-(--muted)">
+            There was a problem loading more discussions.
+          </p>
+          {onRetryNextPage && (
+            <button
+              type="button"
+              onClick={() => void onRetryNextPage()}
+              disabled={isFetchingNextPage}
+              className="inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover) disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Retry loading more
+            </button>
+          )}
+        </div>
+      )}
       {shouldShowDiscussionEnd({
         isBackendMode,
         entryFilter,
         entryCount: entries.length,
         hasNextPage,
+        isNextPageError,
         isNotesLoading,
         isThreadsLoading,
       }) && (
