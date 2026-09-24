@@ -112,6 +112,12 @@ const serverConfigSchema = z.object({
    */
   OAUTH_ALLOW_MOCK_CODES: booleanEnvironmentValueSchema.default(false),
 
+  /**
+   * When enabled (true), MFA enforcement, step-up challenges, and mandatory
+   * MFA enrollment are skipped for administrator accounts.
+   */
+  SKIP_ADMIN_MFA: booleanEnvironmentValueSchema.default(false),
+
   // OAuth Keys
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
