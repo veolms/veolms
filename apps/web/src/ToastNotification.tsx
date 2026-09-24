@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import {
-  CheckCircle,
-  Info,
-  Link,
-  WarningCircle,
-  XCircle,
-  X,
-} from "@phosphor-icons/react";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { InfoIcon as Info } from "@phosphor-icons/react/Info";
+import { LinkIcon as Link } from "@phosphor-icons/react/Link";
+import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import { XCircleIcon as XCircle } from "@phosphor-icons/react/XCircle";
+import { XIcon as X } from "@phosphor-icons/react/X";
 
 export type ToastType = "success" | "info" | "warning" | "error";
 export type ToastIcon = "default" | "link";

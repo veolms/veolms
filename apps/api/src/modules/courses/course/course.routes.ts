@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   courseSchema,
+  courseListQuerySchema,
   courseListResponseSchema,
   courseSlugParamsSchema,
   publicCourseSchema,
@@ -28,6 +29,12 @@ const courseRoutes: RoutePlugin = async (app, options) => {
   });
   const controller = createCourseController({ service });
 
+  try {
+    await service.listPublishedCourses({ limit: 50 });
+  } catch (error) {
+    app.log.warn({ err: error }, "Public course catalogue warmup failed");
+  }
+
   // --- Public Catalogue Routes ---
 
   app.get(
@@ -38,11 +45,9 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         tags: ["Courses"],
         summary: "List published courses",
         description:
-          "Returns every course with `published` status, oldest first. " +
+          "Returns a cursor-paginated page of published courses, oldest first. " +
           "Unpublished courses are never exposed. Supports optional filtering by creatorId.",
-        querystring: z.object({
-          creatorId: z.uuid().optional(),
-        }),
+        querystring: courseListQuerySchema,
         response: {
           200: jsonResponse(
             "The published course catalogue.",
@@ -260,7 +265,9 @@ const courseRoutes: RoutePlugin = async (app, options) => {
           subtitle: z.string().max(500).optional().nullable(),
           description: z.string().max(20000).optional().nullable(),
           language: z.string().max(10).optional(),
-          level: z.enum(["beginner", "intermediate", "advanced", "all_levels"]).optional(),
+          level: z
+            .enum(["beginner", "intermediate", "advanced", "all_levels"])
+            .optional(),
           categoryId: z.string().uuid().optional().nullable(),
         }),
         response: {
@@ -282,10 +289,12 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         tags: ["Course Authoring"],
         summary: "Update course thumbnail only",
         params: z.object({ id: z.uuid() }),
-        body: z.object({
-          thumbnailUrl: z.string().url().max(2048),
-          thumbnailMediaId: z.string().uuid().optional().nullable(),
-        }).strict(),
+        body: z
+          .object({
+            thumbnailUrl: z.string().url().max(2048),
+            thumbnailMediaId: z.string().uuid().optional().nullable(),
+          })
+          .strict(),
         response: {
           200: jsonResponse("Course thumbnail updated", courseSchema),
           403: errorResponse("Forbidden - not permitted"),

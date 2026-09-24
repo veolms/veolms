@@ -1,4 +1,4 @@
-import { otpVerifyRequestSchema } from "@veolms/contracts";
+import { otpVerifyRequestSchema } from "@veolms/contracts/auth";
 import {
   DEFAULT_COUNTRY_ID,
   findCountry,

@@ -1,0 +1,1082 @@
+[
+  {
+    "method": "POST",
+    "path": "/api/v1/access/grants",
+    "operationId": "grantManualAccess",
+    "tag": "Access Grants",
+    "description": "Grant manual course access to a user",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/access/grants/{grantId}",
+    "operationId": "revokeAccessGrant",
+    "tag": "Access Grants",
+    "description": "Revoke an access grant",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/login",
+    "operationId": "loginUser",
+    "tag": "Auth",
+    "description": "Log in with OTP",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/register",
+    "operationId": "registerUser",
+    "tag": "Auth",
+    "description": "Register a new user",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/logout",
+    "operationId": "logout",
+    "tag": "Auth",
+    "description": "Log out of session",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/auth/me",
+    "operationId": "updateCurrentUserProfile",
+    "tag": "Auth",
+    "description": "Update current user profile",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/auth/me",
+    "operationId": "deactivateCurrentUserAccount",
+    "tag": "Auth",
+    "description": "Deactivate the current user account",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/me/avatar/presign",
+    "operationId": "presignCurrentUserAvatarUpload",
+    "tag": "Auth",
+    "description": "Obtain a pre-signed profile photo upload URL",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/me/avatar/complete",
+    "operationId": "completeCurrentUserAvatarUpload",
+    "tag": "Auth",
+    "description": "Complete a profile photo upload",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/auth/me/avatars",
+    "operationId": "deleteCurrentUserUploadedAvatars",
+    "tag": "Auth",
+    "description": "Delete all uploaded avatars",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/me/avatar/select",
+    "operationId": "selectCurrentUserAvatar",
+    "tag": "Auth",
+    "description": "Select a stored avatar",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/totp/setup",
+    "operationId": "setupTotp",
+    "tag": "Auth",
+    "description": "Generate TOTP Secret",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/totp/enable",
+    "operationId": "enableTotp",
+    "tag": "Auth",
+    "description": "Activate TOTP Authenticator",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/auth/totp",
+    "operationId": "disableTotp",
+    "tag": "Auth",
+    "description": "Disable TOTP Authenticator",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/auth/passkey",
+    "operationId": "deletePasskeys",
+    "tag": "Auth",
+    "description": "Delete All Passkeys",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/totp/verify",
+    "operationId": "verifyTotpCode",
+    "tag": "Auth",
+    "description": "Verify TOTP Authenticator Code",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/passkey/register/options",
+    "operationId": "getPasskeyRegisterOptions",
+    "tag": "Auth",
+    "description": "Generate Passkey Registration Options",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/passkey/register/verify",
+    "operationId": "verifyPasskeyRegister",
+    "tag": "Auth",
+    "description": "Verify Passkey Registration Response",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/passkey/login/options",
+    "operationId": "getPasskeyLoginOptions",
+    "tag": "Auth",
+    "description": "Generate Passkey Login Options",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/passkey/login/verify",
+    "operationId": "verifyPasskeyLogin",
+    "tag": "Auth",
+    "description": "Verify Passkey Login Response",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/oauth/url",
+    "operationId": "getOauthUrl",
+    "tag": "Auth",
+    "description": "Get OAuth redirection URL",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/oauth/login",
+    "operationId": "oauthLogin",
+    "tag": "Auth",
+    "description": "OAuth Login",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/oauth/register",
+    "operationId": "oauthRegister",
+    "tag": "Auth",
+    "description": "OAuth Register",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/otp/send",
+    "operationId": "sendOtp",
+    "tag": "Auth",
+    "description": "Send login/register OTP",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/me/phone/otp/send",
+    "operationId": "sendPhoneVerificationOtp",
+    "tag": "Auth",
+    "description": "Send mobile verification OTP",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/me/phone/otp/verify",
+    "operationId": "verifyPhoneNumber",
+    "tag": "Auth",
+    "description": "Verify mobile number",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/me/email/otp/send",
+    "operationId": "sendEmailVerificationOtp",
+    "tag": "Auth",
+    "description": "Send email verification OTP",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/me/email/otp/verify",
+    "operationId": "verifyEmailAddress",
+    "tag": "Auth",
+    "description": "Verify email address",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/auth/sessions/{id}",
+    "operationId": "revokeSession",
+    "tag": "Auth",
+    "description": "Revoke active session",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/sessions/revoke-all",
+    "operationId": "revokeAllOtherSessions",
+    "tag": "Auth",
+    "description": "Revoke other active sessions",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/verify-token",
+    "operationId": "verifySetupToken",
+    "tag": "Auth",
+    "description": "Verify setup token",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/creator/register",
+    "operationId": "registerInitialAdmin",
+    "tag": "Auth",
+    "description": "Initial administrator onboarding",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/academy",
+    "operationId": "setupAcademy",
+    "tag": "Auth",
+    "description": "Configure academy brand details",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/setup/finish",
+    "operationId": "finalizeSetup",
+    "tag": "Auth",
+    "description": "Finalize platform setup",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/bundles",
+    "operationId": "createBundle",
+    "tag": "Commerce   Bundles",
+    "description": "Create a new course bundle",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/bundles/{bundleId}",
+    "operationId": "updateBundle",
+    "tag": "Commerce   Bundles",
+    "description": "Update an existing course bundle",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/bundles/{bundleId}",
+    "operationId": "deleteBundle",
+    "tag": "Commerce   Bundles",
+    "description": "Delete a course bundle",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/cart",
+    "operationId": "clearCart",
+    "tag": "Commerce   Cart",
+    "description": "Clear all items from cart",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/cart/items",
+    "operationId": "addCartItem",
+    "tag": "Commerce   Cart",
+    "description": "Add item to cart",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/cart/items/{itemId}",
+    "operationId": "removeCartItem",
+    "tag": "Commerce   Cart",
+    "description": "Remove item from cart",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/checkout/preview",
+    "operationId": "previewCheckout",
+    "tag": "Commerce   Checkout",
+    "description": "Preview checkout calculations",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/checkout/orders",
+    "operationId": "createCheckoutOrder",
+    "tag": "Commerce   Checkout",
+    "description": "Create order and initialize payment",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/coupons",
+    "operationId": "createCoupon",
+    "tag": "Commerce   Coupons",
+    "description": "Create a new coupon",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/coupons/{couponId}",
+    "operationId": "updateCoupon",
+    "tag": "Commerce   Coupons",
+    "description": "Update an existing coupon",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/coupons/{couponId}",
+    "operationId": "deleteCoupon",
+    "tag": "Commerce   Coupons",
+    "description": "Delete a coupon",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/orders/{orderId}/refund",
+    "operationId": "refundOrder",
+    "tag": "Commerce   Orders",
+    "description": "Refund an order",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/payments/verify",
+    "operationId": "verifyPayment",
+    "tag": "Commerce   Payments",
+    "description": "Verify payment and fulfill order",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/orders/{orderId}/manual-payment",
+    "operationId": "submitManualPayment",
+    "tag": "Commerce   Manual Payments",
+    "description": "Submit offline UPI / bank transfer proof",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/manual-payments/{requestId}/verify",
+    "operationId": "verifyManualPayment",
+    "tag": "Commerce   Manual Payments",
+    "description": "Approve or reject offline payment and grant audited access",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/payments/gateway-config",
+    "operationId": "savePaymentGatewayConfig",
+    "tag": "Commerce   Payment Gateways",
+    "description": "Connect payment gateway",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/refunds",
+    "operationId": "createRefund",
+    "tag": "Commerce   Refunds",
+    "description": "Initiate full or partial refund",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/orders/{orderId}/refund-requests",
+    "operationId": "submitStudentRefundRequest",
+    "tag": "Commerce   Refund Requests",
+    "description": "Submit a refund request for an order",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/refund-requests/{requestId}/review",
+    "operationId": "reviewRefundRequest",
+    "tag": "Commerce   Refund Requests",
+    "description": "Approve or reject student refund request",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/webhooks/razorpay",
+    "operationId": "handleRazorpayWebhook",
+    "tag": "Commerce   Webhooks",
+    "description": "Ingest Razorpay webhook events",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/bin/courses/{id}/restore",
+    "operationId": "restoreDeletedCourse",
+    "tag": "Course Bin",
+    "description": "Restore a deleted course before permanent deletion",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/categories",
+    "operationId": "createCategory",
+    "tag": "Course Categories",
+    "description": "Create a new course category",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/categories/{categoryId}",
+    "operationId": "deleteCategory",
+    "tag": "Course Categories",
+    "description": "Soft delete a category",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/courses/{id}/access-rules",
+    "operationId": "upsertCourseAccessRules",
+    "tag": "Course Configuration",
+    "description": "Configure course visibility and durations",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/courses/{id}/pricing",
+    "operationId": "upsertCoursePricing",
+    "tag": "Course Configuration",
+    "description": "Configure pricing tiers and currencies",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/courses/{id}/settings",
+    "operationId": "upsertCourseSettings",
+    "tag": "Course Configuration",
+    "description": "Configure QA, certificates, and features",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses",
+    "operationId": "createCourse",
+    "tag": "Course Authoring",
+    "description": "Create a lightweight course draft",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/courses/{id}/basics",
+    "operationId": "updateCourseBasics",
+    "tag": "Course Authoring",
+    "description": "Update basic course details with optimistic concurrency check",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/courses/{id}/details",
+    "operationId": "updateCourseDetails",
+    "tag": "Course Authoring",
+    "description": "Update course metadata details",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/courses/{id}/thumbnail",
+    "operationId": "updateCourseThumbnail",
+    "tag": "Course Authoring",
+    "description": "Update course thumbnail only",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{id}/archive",
+    "operationId": "archiveCourse",
+    "tag": "Course Authoring",
+    "description": "Archive a course",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/courses/{id}",
+    "operationId": "deleteCourse",
+    "tag": "Course Authoring",
+    "description": "Soft delete a course",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{id}/sections",
+    "operationId": "createCourseSection",
+    "tag": "Course Curriculum",
+    "description": "Create a new curriculum section",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/courses/{id}/sections/{sectionId}",
+    "operationId": "updateCourseSection",
+    "tag": "Course Curriculum",
+    "description": "Update curriculum section fields",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/courses/{id}/sections/{sectionId}",
+    "operationId": "deleteCourseSection",
+    "tag": "Course Curriculum",
+    "description": "Soft delete a section and all its lessons/resources",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{id}/sections/reorder",
+    "operationId": "reorderCourseSections",
+    "tag": "Course Curriculum",
+    "description": "Update order of sections",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{id}/sections/{sectionId}/lessons",
+    "operationId": "createCourseLesson",
+    "tag": "Course Curriculum",
+    "description": "Create a new curriculum lesson",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/courses/{id}/lessons/{lessonId}",
+    "operationId": "updateCourseLesson",
+    "tag": "Course Curriculum",
+    "description": "Update curriculum lesson fields",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/courses/{id}/lessons/{lessonId}",
+    "operationId": "deleteCourseLesson",
+    "tag": "Course Curriculum",
+    "description": "Soft delete a lesson",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{id}/sections/{sectionId}/lessons/reorder",
+    "operationId": "reorderSectionLessons",
+    "tag": "Course Curriculum",
+    "description": "Update position of lessons inside a section",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{id}/lessons/{lessonId}/resources",
+    "operationId": "addLessonResource",
+    "tag": "Course Curriculum",
+    "description": "Attach resource to lesson",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/courses/{id}/resources/{resourceId}",
+    "operationId": "removeLessonResource",
+    "tag": "Course Curriculum",
+    "description": "Remove resource from lesson",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{id}/includes",
+    "operationId": "createCourseInclude",
+    "tag": "Course Includes",
+    "description": "Create a new course include item",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/courses/{id}/includes/{includeId}",
+    "operationId": "updateCourseInclude",
+    "tag": "Course Includes",
+    "description": "Update a course include item",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/courses/{id}/includes/{includeId}",
+    "operationId": "deleteCourseInclude",
+    "tag": "Course Includes",
+    "description": "Delete a course include item",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{id}/includes/reorder",
+    "operationId": "reorderCourseIncludes",
+    "tag": "Course Includes",
+    "description": "Reorder course include items",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{id}/publish",
+    "operationId": "publishCourse",
+    "tag": "Course Lifecycle",
+    "description": "Publish course draft to learners",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{id}/unpublish",
+    "operationId": "unpublishCourse",
+    "tag": "Course Lifecycle",
+    "description": "Unpublish a course and return it to draft state",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/discussion-uploads",
+    "operationId": "uploadDiscussionAttachment",
+    "tag": "Learning Attachments",
+    "description": "Upload an image or video for discussion markdown",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/attachments/initiate",
+    "operationId": "initiateAttachmentUpload",
+    "tag": "Learning Attachments",
+    "description": "Initiate upload session for media or code file",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/attachments/{attachmentId}/upload",
+    "operationId": "uploadAttachmentBinary",
+    "tag": "Learning Attachments",
+    "description": "Upload file payload to prepared attachment slot",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/attachments/complete",
+    "operationId": "completeAttachmentUpload",
+    "tag": "Learning Attachments",
+    "description": "Complete attachment upload verification",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/attachments/upload",
+    "operationId": "uploadLearningAttachment",
+    "tag": "Learning Attachments",
+    "description": "Direct single-step file upload",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/attachments/link-preview",
+    "operationId": "getLearningLinkPreview",
+    "tag": "Learning Attachments",
+    "description": "Fetch metadata preview for external link",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/interactions/likes",
+    "operationId": "toggleLearningLike",
+    "tag": "Learning Engagements",
+    "description": "Toggle like on a discussion thread, reply, or learning note",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/threads/{threadId}/bookmark",
+    "operationId": "toggleLearningBookmark",
+    "tag": "Learning Engagements",
+    "description": "Save or unsave a discussion thread",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/notes/{noteId}/bookmark",
+    "operationId": "toggleNoteBookmark",
+    "tag": "Learning Engagements",
+    "description": "Save or unsave a learning note",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/threads/{threadId}/follow",
+    "operationId": "toggleLearningFollow",
+    "tag": "Learning Engagements",
+    "description": "Follow or unfollow updates for a discussion thread",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/threads/{threadId}/lock",
+    "operationId": "lockLearningThread",
+    "tag": "Learning Engagements",
+    "description": "Lock or unlock a discussion thread",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/reports",
+    "operationId": "createLearningReport",
+    "tag": "Learning Moderation",
+    "description": "Report an inappropriate comment, question, reply, or note",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{courseId}/moderation/reports/{reportId}/status",
+    "operationId": "updateCourseReportStatus",
+    "tag": "Course Moderation",
+    "description": "Update status of a report within a course (reviewed, dismissed, actioned)",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{courseId}/moderation/threads/{threadId}",
+    "operationId": "moderateCourseThread",
+    "tag": "Course Moderation",
+    "description": "Moderate a discussion thread within a course (Hide, Lock, Delete)",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{courseId}/moderation/replies/{replyId}",
+    "operationId": "moderateCourseReply",
+    "tag": "Course Moderation",
+    "description": "Moderate a reply within a course (Hide, Delete)",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{courseId}/moderation/users/{userId}/suspend",
+    "operationId": "suspendCourseParticipant",
+    "tag": "Course Moderation",
+    "description": "Suspend user participation from this course's discussions",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{courseId}/moderation/users/{userId}/unsuspend",
+    "operationId": "unsuspendCourseParticipant",
+    "tag": "Course Moderation",
+    "description": "Unsuspend user participation in this course's discussions",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/moderation/reports/{reportId}/status",
+    "operationId": "updatePlatformReportStatus",
+    "tag": "Platform Moderation",
+    "description": "Update status of a report globally (reviewed, dismissed, actioned)",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/moderation/threads/{threadId}",
+    "operationId": "moderatePlatformThread",
+    "tag": "Platform Moderation",
+    "description": "Moderate a discussion thread globally (Hide, Lock, Delete)",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/moderation/replies/{replyId}",
+    "operationId": "moderatePlatformReply",
+    "tag": "Platform Moderation",
+    "description": "Moderate a reply globally (Hide, Delete)",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/moderation/users/{userId}/suspend",
+    "operationId": "suspendPlatformUser",
+    "tag": "Platform Moderation",
+    "description": "Suspend a user globally from all platform discussions",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/moderation/users/{userId}/unsuspend",
+    "operationId": "unsuspendPlatformUser",
+    "tag": "Platform Moderation",
+    "description": "Lift global discussion suspension for a user",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/notes",
+    "operationId": "createLearningNote",
+    "tag": "Learning Notes",
+    "description": "Create a private, timestamped, lecture-linked note",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/notes/{noteId}",
+    "operationId": "updateLearningNote",
+    "tag": "Learning Notes",
+    "description": "Update note content or timestamp",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/notes/{noteId}",
+    "operationId": "deleteLearningNote",
+    "tag": "Learning Notes",
+    "description": "Delete a note",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/threads/{threadId}/replies",
+    "operationId": "createLearningReply",
+    "tag": "Learning Discussions",
+    "description": "Add a reply to a discussion or answer to a Q&A question",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/replies/{replyId}",
+    "operationId": "updateLearningReply",
+    "tag": "Learning Discussions",
+    "description": "Update a reply (Author only)",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/replies/{replyId}",
+    "operationId": "deleteLearningReply",
+    "tag": "Learning Discussions",
+    "description": "Soft delete a reply (Author or Moderator)",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/replies/{replyId}/accept",
+    "operationId": "acceptLearningReply",
+    "tag": "Learning Discussions",
+    "description": "Mark or unmark a reply as the accepted answer for a Q&A question",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{courseId}/lessons/{lessonId}/threads",
+    "operationId": "createLessonThread",
+    "tag": "Learning Discussions",
+    "description": "Start a comment or Q&A question on a lesson",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/threads/{threadId}",
+    "operationId": "updateLearningThread",
+    "tag": "Learning Discussions",
+    "description": "Update thread content (Author only)",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/threads/{threadId}",
+    "operationId": "deleteLearningThread",
+    "tag": "Learning Discussions",
+    "description": "Soft delete a thread (Author or Moderator)",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/learning-progress/{courseKey}/batch",
+    "operationId": "syncLearningProgress",
+    "tag": "Learning Progress",
+    "description": "Bulk sync the learner's course progress",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/media/presign",
+    "operationId": "presignMediaUpload",
+    "tag": "Media",
+    "description": "Obtain pre-signed upload URL for files",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/media/{mediaId}/upload-complete",
+    "operationId": "confirmMediaUpload",
+    "tag": "Media",
+    "description": "Confirm that a media asset upload is complete",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/notifications/{id}/read",
+    "operationId": "markMyNotificationRead",
+    "tag": "Notifications",
+    "description": "Mark one notification as read",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/notifications/read-all",
+    "operationId": "markAllMyNotificationsRead",
+    "tag": "Notifications",
+    "description": "Mark every notification as read",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/notifications/{id}/archive",
+    "operationId": "archiveMyNotification",
+    "tag": "Notifications",
+    "description": "Archive one notification",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/notification-preferences",
+    "operationId": "updateMyNotificationPreferences",
+    "tag": "Notification Preferences",
+    "description": "Update notification preferences by type and channel",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/quizzes",
+    "operationId": "createQuiz",
+    "tag": "Quizzes",
+    "description": "",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/quizzes/complete",
+    "operationId": "createQuizWithQuestions",
+    "tag": "Quizzes",
+    "description": "",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/quizzes/{id}",
+    "operationId": "updateQuiz",
+    "tag": "Quizzes",
+    "description": "",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/quizzes/{id}",
+    "operationId": "deleteQuiz",
+    "tag": "Quizzes",
+    "description": "",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/quizzes/{id}/questions",
+    "operationId": "addQuizQuestion",
+    "tag": "Quizzes",
+    "description": "",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/quizzes/{id}/questions/{questionId}",
+    "operationId": "updateQuizQuestion",
+    "tag": "Quizzes",
+    "description": "",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/quizzes/{id}/questions/{questionId}",
+    "operationId": "deleteQuizQuestion",
+    "tag": "Quizzes",
+    "description": "",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/quizzes/{id}/publish",
+    "operationId": "publishQuiz",
+    "tag": "Quizzes",
+    "description": "",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/courses/{courseId}/lessons/{lessonId}/quiz-assignment",
+    "operationId": "assignQuiz",
+    "tag": "Quizzes",
+    "description": "",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/quiz-assignments/{assignmentId}",
+    "operationId": "updateQuizAssignment",
+    "tag": "Quizzes",
+    "description": "",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/quiz-assignments/{assignmentId}",
+    "operationId": "deleteQuizAssignment",
+    "tag": "Quizzes",
+    "description": "",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/quiz-assignments/{assignmentId}/attempts",
+    "operationId": "startQuizAttempt",
+    "tag": "Quizzes",
+    "description": "",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/quiz-attempts/{attemptId}/answers",
+    "operationId": "saveQuizAnswers",
+    "tag": "Quizzes",
+    "description": "",
+    "reason": "not executed automatically because it changes data"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/quiz-attempts/{attemptId}/submit",
+    "operationId": "submitQuizAttempt",
+    "tag": "Quizzes",
+    "description": "",
+    "reason": "not executed automatically because it changes data"
+  }
+]

@@ -5,6 +5,7 @@
 # React Router
 /.react-router/
 /build/
+/bundle-stats.html
 /playwright-report/
 /test-results/
 /coverage/

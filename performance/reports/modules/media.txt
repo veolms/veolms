@@ -1,0 +1,101 @@
+MODULE: Media
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: GOOD | requests=8 | p50=20 ms | p95=28 ms | p99=29 ms | max=29 ms | avg response=166 B | 5xx=0 | timeout=0
+10 users: GOOD | requests=14 | p50=15 ms | p95=25 ms | p99=26 ms | max=26 ms | avg response=166 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+getMediaDelivery | GET /api/v1/media/{mediaId}/delivery | status=GOOD | p95=25 ms | p99=26 ms | max=26 ms | avg bytes=229 B | success=0 | auth=0 | 4xx=7 | 5xx=0
+getVideoJobProgress | GET /api/v1/media/{mediaId}/progress | status=AUTH_REQUIRED | p95=24 ms | p99=24 ms | max=24 ms | avg bytes=102 B | success=0 | auth=7 | 4xx=0 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+getMediaDelivery | GET /api/v1/media/{mediaId}/delivery | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+getVideoJobProgress | GET /api/v1/media/{mediaId}/progress | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No endpoint in this module showed an obvious 5+ query N+1 pattern in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+getVideoJobProgress | GET /api/v1/media/{mediaId}/progress | HTTP=401 | total=16ms | SQL=1 | SQL max=3ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getMediaDelivery | GET /api/v1/media/{mediaId}/delivery | HTTP=400 | total=15ms | SQL=1 | SQL max=3ms | bytes=229 | N+1=NO_N_PLUS_ONE_SIGN | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No endpoint in this module showed an obvious 5+ query N+1 pattern in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+MODULE: Media
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: GOOD | requests=8 | p50=20 ms | p95=28 ms | p99=29 ms | max=29 ms | avg response=166 B | 5xx=0 | timeout=0
+10 users: GOOD | requests=14 | p50=15 ms | p95=25 ms | p99=26 ms | max=26 ms | avg response=166 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+getMediaDelivery | GET /api/v1/media/{mediaId}/delivery | status=GOOD | p95=25 ms | p99=26 ms | max=26 ms | avg bytes=229 B | success=0 | auth=0 | 4xx=7 | 5xx=0
+getVideoJobProgress | GET /api/v1/media/{mediaId}/progress | status=AUTH_REQUIRED | p95=24 ms | p99=24 ms | max=24 ms | avg bytes=102 B | success=0 | auth=7 | 4xx=0 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+getVideoJobProgress | GET /api/v1/media/{mediaId}/progress | HTTP=401 | total=20ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getMediaDelivery | GET /api/v1/media/{mediaId}/delivery | HTTP=400 | total=19ms | SQL=1 | SQL max=7ms | bytes=229 | N+1=NO_N_PLUS_ONE_SIGN | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No multi-query endpoint was observed in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+MODULE: Media
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: GOOD | requests=8 | p50=20 ms | p95=28 ms | p99=29 ms | max=29 ms | avg response=166 B | 5xx=0 | timeout=0
+10 users: GOOD | requests=14 | p50=15 ms | p95=25 ms | p99=26 ms | max=26 ms | avg response=166 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+getMediaDelivery | GET /api/v1/media/{mediaId}/delivery | status=GOOD | p95=25 ms | p99=26 ms | max=26 ms | avg bytes=229 B | success=0 | auth=0 | 4xx=7 | 5xx=0
+getVideoJobProgress | GET /api/v1/media/{mediaId}/progress | status=AUTH_REQUIRED | p95=24 ms | p99=24 ms | max=24 ms | avg bytes=102 B | success=0 | auth=7 | 4xx=0 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+getMediaDelivery | GET /api/v1/media/{mediaId}/delivery | HTTP=400 | total=16ms | SQL=1 | SQL max=6ms | multi-query=NO_N_PLUS_ONE_SIGN | index=NOT_CHECKED | payload=PAYLOAD_OK
+getVideoJobProgress | GET /api/v1/media/{mediaId}/progress | HTTP=401 | total=14ms | SQL=0 | SQL max=0ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No multi-query endpoint was observed in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.

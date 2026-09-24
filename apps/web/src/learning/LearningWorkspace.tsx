@@ -1,3 +1,6 @@
+import "../styles/features/player.css";
+import "../styles/features/learning.css";
+import "@veolms/video-player/styles.css";
 import {
   useCallback,
   useEffect,

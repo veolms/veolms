@@ -4,10 +4,7 @@ import {
   lessonsById as defaultLessonsById,
   sections as defaultSections,
 } from "../courseContent";
-import {
-  getCachedVideoPlaybackBootstrap,
-  refreshVideoPlaybackToken,
-} from "../videoPlaybackBootstrap";
+import { getCachedVideoPlaybackBootstrap } from "../videoPlaybackBootstrapCache";
 import type {
   VideoPlaybackBootstrap,
   VideoPlaybackToken,
@@ -72,8 +69,7 @@ export function applyPersistentMiniPlayerLessonChange(
 ): PersistentLearningPlayerRegistration | null {
   if (lessonNumber === registration.selectedLesson) return null;
 
-  const lessonsById =
-    registration.curriculumLessonsById ?? defaultLessonsById;
+  const lessonsById = registration.curriculumLessonsById ?? defaultLessonsById;
   const lesson = lessonsById.get(lessonNumber);
   if (!lesson) return null;
 
@@ -120,7 +116,11 @@ export function applyPersistentMiniPlayerLessonChange(
   const refreshPlaybackToken =
     options?.refreshPlaybackToken ??
     (courseSlug
-      ? () => refreshVideoPlaybackToken({ courseSlug, lessonNumber })
+      ? () =>
+          import("../videoPlaybackBootstrap").then(
+            ({ refreshVideoPlaybackToken }) =>
+              refreshVideoPlaybackToken({ courseSlug, lessonNumber }),
+          )
       : registration.playerProps.refreshPlaybackToken);
 
   const playbackSuspended =

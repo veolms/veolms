@@ -13,7 +13,7 @@ import {
   DEFAULT_DEBOUNCE_DELAY_MS,
   useDebounceValue,
 } from "../hooks/useDebounce";
-import { useCourses } from "../services/courses";
+import { useInfiniteCourses } from "../services/courses";
 import { useStudents } from "../services/students";
 import { StudentsTable } from "./StudentsTable";
 import { StudentFiltersBar } from "./StudentFiltersBar";
@@ -38,7 +38,16 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
   >("recent");
 
   // Load academy courses for the course filter dropdown
-  const { data: coursesData } = useCourses();
+  const {
+    data: coursesData,
+    hasNextPage: hasMoreCourses,
+    isFetchingNextPage: isFetchingMoreCourses,
+    fetchNextPage: fetchMoreCourses,
+  } = useInfiniteCourses({ limit: 50 });
+  useEffect(() => {
+    if (!hasMoreCourses || isFetchingMoreCourses) return;
+    void fetchMoreCourses();
+  }, [fetchMoreCourses, hasMoreCourses, isFetchingMoreCourses]);
   const courseRecords = coursesData?.courses;
   const availableCourses = useMemo(() => {
     if (!courseRecords) return [];

@@ -1,0 +1,9 @@
+VIDEO / STREAMING EXCLUDED
+
+These routes were intentionally excluded from this performance run because the
+current scope excludes video processing and video streaming.
+
+Examples include playback, progress, media delivery, variants, segments, and
+other video/streaming-related operations discovered in Swagger.
+
+No performance conclusion is made for these routes.

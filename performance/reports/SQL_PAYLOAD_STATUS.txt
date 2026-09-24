@@ -1,0 +1,83 @@
+VEOLMS API SQL / PAYLOAD CHECK
+Generated: 2026-09-21T18:28:15.591Z
+One safe GET request was sent to each documented GET operation.
+This is a diagnostic check, not a load test.
+
+STATUS KEY
+NO_N_PLUS_ONE_SIGN = one or zero SQL round-trips observed; not proof of perfect SQL.
+MULTI_QUERY_REVIEW = several SQL statements; this is not automatically N+1 and needs scale testing.
+EXPLAIN_REQUIRED = slow SQL was observed; run EXPLAIN before adding an index.
+PAYLOAD_HEAVY = response over 100 KB; check pagination and returned fields.
+
+ENDPOINT RESULTS
+listCourses | GET /api/v1/courses | HTTP=200 | total=85ms | SQL=1 | SQL max=55ms | bytes=94624 | multi-query=NO_N_PLUS_ONE_SIGN | index=NOT_CHECKED | payload=PAYLOAD_CHECK
+getCourseOverview | GET /api/v1/courses/{idOrSlug}/overview | HTTP=200 | total=82ms | SQL=9 | SQL max=16ms | bytes=1163 | multi-query=MULTI_QUERY_REVIEW | index=NOT_CHECKED | payload=PAYLOAD_OK
+listUserAccessGrants | GET /api/v1/access/users/{userId}/grants | HTTP=401 | total=66ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getSidenav | GET /api/v1/navigation/sidenav | HTTP=200 | total=31ms | SQL=2 | SQL max=6ms | bytes=2142 | multi-query=MULTI_QUERY_REVIEW | index=NOT_CHECKED | payload=PAYLOAD_OK
+listCreatorCourses | GET /api/v1/courses/creator/{creatorId} | HTTP=200 | total=29ms | SQL=2 | SQL max=55ms | bytes=2501 | multi-query=MULTI_QUERY_REVIEW | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuizAnalytics | GET /api/v1/quiz-assignments/{assignmentId}/analytics | HTTP=401 | total=23ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+GET /api/v1/media/{mediaId}/variants/{width} | GET /api/v1/media/{mediaId}/variants/{width} | HTTP=404 | total=22ms | SQL=1 | SQL max=6ms | bytes=104 | multi-query=NO_N_PLUS_ONE_SIGN | index=NOT_CHECKED | payload=PAYLOAD_OK
+getBundleBySlug | GET /api/v1/bundles/{slug} | HTTP=404 | total=21ms | SQL=2 | SQL max=5ms | bytes=164 | multi-query=MULTI_QUERY_REVIEW | index=NOT_CHECKED | payload=PAYLOAD_OK
+listCourseIncludes | GET /api/v1/courses/{id}/includes | HTTP=200 | total=21ms | SQL=1 | SQL max=4ms | bytes=53 | multi-query=NO_N_PLUS_ONE_SIGN | index=NOT_CHECKED | payload=PAYLOAD_OK
+getCourseBySlug | GET /api/v1/courses/{slug} | HTTP=200 | total=21ms | SQL=1 | SQL max=4ms | bytes=535 | multi-query=NO_N_PLUS_ONE_SIGN | index=NOT_CHECKED | payload=PAYLOAD_OK
+listPublishedBundles | GET /api/v1/bundles | HTTP=200 | total=21ms | SQL=1 | SQL max=4ms | bytes=43 | multi-query=NO_N_PLUS_ONE_SIGN | index=NOT_CHECKED | payload=PAYLOAD_OK
+listDeletedCourses | GET /api/v1/bin/courses | HTTP=401 | total=21ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getLearningProgress | GET /api/v1/learning-progress/{courseKey} | HTTP=401 | total=20ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listRefundRequests | GET /api/v1/refund-requests | HTTP=401 | total=19ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listStudents | GET /api/v1/students | HTTP=401 | total=19ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuizAttempt | GET /api/v1/quiz-attempts/{attemptId} | HTTP=401 | total=19ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listPlatformAuditLogs | GET /api/v1/moderation/audit-logs | HTTP=401 | total=19ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getCourseValidationIssues | GET /api/v1/courses/{id}/validation | HTTP=401 | total=18ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyManualPayments | GET /api/v1/manual-payments/my | HTTP=401 | total=18ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getActiveCart | GET /api/v1/cart | HTTP=401 | total=18ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+previewCourseDraft | GET /api/v1/courses/{id}/preview | HTTP=401 | total=18ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getAuthConfig | GET /api/v1/auth/config | HTTP=200 | total=18ms | SQL=0 | SQL max=0ms | bytes=174 | multi-query=NO_QUERY_OBSERVED | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuizResult | GET /api/v1/quiz-attempts/{attemptId}/result | HTTP=401 | total=18ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listCoupons | GET /api/v1/coupons | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listHubThreads | GET /api/v1/threads | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getPaymentGatewayConfig | GET /api/v1/payments/gateway-config | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listLessonThreads | GET /api/v1/courses/{courseId}/lessons/{lessonId}/threads | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getHealth | GET /api/v1/health | HTTP=200 | total=17ms | SQL=0 | SQL max=0ms | bytes=56 | multi-query=NO_QUERY_OBSERVED | index=NOT_CHECKED | payload=PAYLOAD_OK
+getStudentByUsername | GET /api/v1/students/{username} | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listCourseCategories | GET /api/v1/categories | HTTP=401 | total=17ms | SQL=1 | SQL max=9ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listPlatformModerationReports | GET /api/v1/moderation/reports | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getBundleById | GET /api/v1/bundles/manage/{bundleId} | HTTP=401 | total=17ms | SQL=1 | SQL max=5ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyQuizAssignments | GET /api/v1/me/quizzes | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getCurrentUserProfile | GET /api/v1/auth/me | HTTP=200 | total=17ms | SQL=0 | SQL max=0ms | bytes=45 | multi-query=NO_QUERY_OBSERVED | index=NOT_CHECKED | payload=PAYLOAD_OK
+listLearningReplies | GET /api/v1/threads/{threadId}/replies | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listCourseModerationReports | GET /api/v1/courses/{courseId}/moderation/reports | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getLearningNote | GET /api/v1/notes/{noteId} | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listOrders | GET /api/v1/orders | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getCapabilities | GET /api/v1/me/capabilities | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getOrderById | GET /api/v1/orders/{orderId} | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyQuizHistory | GET /api/v1/me/quizzes/history | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getLearningThread | GET /api/v1/threads/{threadId} | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listAllBundles | GET /api/v1/bundles/manage | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listManualPayments | GET /api/v1/manual-payments | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getActiveSessions | GET /api/v1/auth/sessions | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listEnrolledCourses | GET /api/v1/enrollments/courses | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getMediaDelivery | GET /api/v1/media/{mediaId}/delivery | HTTP=400 | total=16ms | SQL=1 | SQL max=6ms | bytes=229 | multi-query=NO_N_PLUS_ONE_SIGN | index=NOT_CHECKED | payload=PAYLOAD_OK
+getDiscussionAttachment | GET /api/v1/discussion-uploads/{fileName} | HTTP=400 | total=16ms | SQL=0 | SQL max=0ms | bytes=259 | multi-query=NO_QUERY_OBSERVED | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyQuizzes | GET /api/v1/quizzes/mine | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+autocompleteUsersForMention | GET /api/v1/interactions/users/autocomplete | HTTP=400 | total=16ms | SQL=0 | SQL max=0ms | bytes=236 | multi-query=NO_QUERY_OBSERVED | index=NOT_CHECKED | payload=PAYLOAD_OK
+getRefund | GET /api/v1/refunds/{refundId} | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getCourseQuizAnalytics | GET /api/v1/courses/{courseId}/quiz-analytics | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getOrderStats | GET /api/v1/orders/stats | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listLearningNotes | GET /api/v1/notes | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getCouponById | GET /api/v1/coupons/{couponId} | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyCourses | GET /api/v1/courses/mine | HTTP=401 | total=16ms | SQL=1 | SQL max=4ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listCourseModerationAuditLogs | GET /api/v1/courses/{courseId}/moderation/audit-logs | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getOrderInvoice | GET /api/v1/orders/{orderId}/invoice | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listCourseQuizAssignments | GET /api/v1/courses/{courseId}/quiz-assignments | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getMyNotificationPreferences | GET /api/v1/notification-preferences | HTTP=401 | total=15ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+downloadOrderInvoice | GET /api/v1/orders/{orderId}/invoice/download | HTTP=401 | total=15ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getMyNotificationSummary | GET /api/v1/notifications/summary | HTTP=401 | total=15ms | SQL=2 | SQL max=6ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyNotifications | GET /api/v1/notifications | HTTP=401 | total=15ms | SQL=1 | SQL max=4ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getVideoJobProgress | GET /api/v1/media/{mediaId}/progress | HTTP=401 | total=14ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyRefundRequests | GET /api/v1/refund-requests/my | HTTP=401 | total=14ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getCourseEditor | GET /api/v1/courses/{id}/editor | HTTP=401 | total=13ms | SQL=8 | SQL max=16ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getStudentQuizReport | GET /api/v1/students/{studentId}/quiz-report | HTTP=401 | total=13ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuiz | GET /api/v1/quizzes/{id} | HTTP=401 | total=12ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getCourseNotesOverview | GET /api/v1/courses/{courseId}/notes-overview | HTTP=401 | total=7ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listCurrentUserAvatars | GET /api/v1/auth/me/avatars | HTTP=401 | total=4ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listOrderRefunds | GET /api/v1/refunds/order/{orderId} | HTTP=401 | total=4ms | SQL=0 | SQL max=0ms | bytes=102 | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK

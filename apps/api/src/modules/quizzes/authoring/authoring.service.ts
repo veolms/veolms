@@ -181,80 +181,118 @@ export function createAuthoringService(options: QuizServiceOptions) {
     return getQuiz(actor, quizId);
   }
 
-  async function listMine(actor: QuizActor) {
-    const rows = isAdmin(actor)
-      ? await repo.listQuizzesByAcademy(database, await academyId())
-      : await repo.listQuizzesByCreator(database, actor.id);
-    return Promise.all(rows.map((quiz) => getQuiz(actor, quiz.id)));
-  }
+  type QuizRow = NonNullable<Awaited<ReturnType<typeof repo.findQuiz>>>;
 
-  async function presentQuiz(quizId: string) {
-    const quiz = await repo.findQuiz(database, quizId);
-    if (!quiz) throw new AppError(404, "QUIZ_NOT_FOUND", "Quiz not found.");
-    const versions = await repo.listVersions(database, quizId);
-    const result = [];
+  async function presentQuizzes(quizRows: readonly QuizRow[]) {
+    if (quizRows.length === 0) return [];
+
+    const quizIds = quizRows.map((quiz) => quiz.id);
+    // Load the complete authoring graph in batches. The previous version did
+    // two queries per version and one detail load per quiz in listMine().
+    const [versions, assignmentRows] = await Promise.all([
+      repo.listVersionsForQuizzes(database, quizIds),
+      repo.listAssignmentsForQuizzes(database, quizIds),
+    ]);
+    const questions = await repo.listQuestionsForVersions(
+      database,
+      versions.map((version) => version.id),
+    );
+    const options = await repo.listOptions(
+      database,
+      questions.map((question) => question.id),
+    );
+
+    const versionsByQuiz = new Map<string, typeof versions>();
     for (const version of versions) {
-      const questions = await repo.listQuestions(database, version.id);
-      const options = await repo.listOptions(
-        database,
-        questions.map((question) => question.id),
-      );
-      result.push({
-        id: version.id,
-        versionNumber: version.version_number,
-        instructions: version.instructions,
-        publishedAt: iso(version.published_at),
-        questions: questions.map((question) => ({
-          id: question.id,
-          questionType: question.question_type,
-          prompt: question.prompt,
-          points: Number(question.points),
-          position: question.position,
-          explanation: question.explanation,
-          options: options
-            .filter((option) => option.question_id === question.id)
-            .map((option) => ({
-              id: option.id,
-              text: option.option_text,
-              isCorrect: option.is_correct,
-              weight: Number(option.weight),
-              position: option.position,
-            })),
-        })),
-      });
+      const current = versionsByQuiz.get(version.quiz_id) ?? [];
+      current.push(version);
+      versionsByQuiz.set(version.quiz_id, current);
     }
-    const assignmentRows = await repo.listAssignmentsForQuizzes(database, [quizId]);
-    const assignments = assignmentRows.map((row) => ({
-      id: row.id,
-      quizId: row.quiz_id,
-      quizVersionId: row.quiz_version_id,
-      courseId: row.course_id,
-      lessonId: row.lesson_id,
-      required: row.required,
-      passPercentage: Number(row.pass_percentage),
-      maxAttempts: row.max_attempts,
-      timeLimitSeconds: row.time_limit_seconds,
-      shuffleQuestions: row.shuffle_questions,
-      shuffleOptions: row.shuffle_options,
-      feedbackMode: row.feedback_mode,
-      availableFrom: row.available_from?.toISOString() ?? null,
-      availableUntil: row.available_until?.toISOString() ?? null,
-    }));
-    return {
+    const questionsByVersion = new Map<string, typeof questions>();
+    for (const question of questions) {
+      const current = questionsByVersion.get(question.quiz_version_id) ?? [];
+      current.push(question);
+      questionsByVersion.set(question.quiz_version_id, current);
+    }
+    const optionsByQuestion = new Map<string, typeof options>();
+    for (const option of options) {
+      const current = optionsByQuestion.get(option.question_id) ?? [];
+      current.push(option);
+      optionsByQuestion.set(option.question_id, current);
+    }
+    const assignmentsByQuiz = new Map<string, typeof assignmentRows>();
+    for (const assignment of assignmentRows) {
+      const current = assignmentsByQuiz.get(assignment.quiz_id) ?? [];
+      current.push(assignment);
+      assignmentsByQuiz.set(assignment.quiz_id, current);
+    }
+
+    return quizRows.map((quiz) => ({
       id: quiz.id,
       title: quiz.title,
       description: quiz.description,
       status: quiz.status,
       createdAt: quiz.created_at.toISOString(),
       updatedAt: quiz.updated_at.toISOString(),
-      versions: result,
-      assignments,
-    };
+      versions: (versionsByQuiz.get(quiz.id) ?? []).map((version) => ({
+        id: version.id,
+        versionNumber: version.version_number,
+        instructions: version.instructions,
+        publishedAt: iso(version.published_at),
+        questions: (questionsByVersion.get(version.id) ?? []).map(
+          (question) => ({
+            id: question.id,
+            questionType: question.question_type,
+            prompt: question.prompt,
+            points: Number(question.points),
+            position: question.position,
+            explanation: question.explanation,
+            options: (optionsByQuestion.get(question.id) ?? []).map(
+              (option) => ({
+                id: option.id,
+                text: option.option_text,
+                isCorrect: option.is_correct,
+                weight: Number(option.weight),
+                position: option.position,
+              }),
+            ),
+          }),
+        ),
+      })),
+      assignments: (assignmentsByQuiz.get(quiz.id) ?? []).map((row) => ({
+        id: row.id,
+        quizId: row.quiz_id,
+        quizVersionId: row.quiz_version_id,
+        courseId: row.course_id,
+        lessonId: row.lesson_id,
+        required: row.required,
+        passPercentage: Number(row.pass_percentage),
+        maxAttempts: row.max_attempts,
+        timeLimitSeconds: row.time_limit_seconds,
+        shuffleQuestions: row.shuffle_questions,
+        shuffleOptions: row.shuffle_options,
+        feedbackMode: row.feedback_mode,
+        availableFrom: row.available_from?.toISOString() ?? null,
+        availableUntil: row.available_until?.toISOString() ?? null,
+      })),
+    }));
+  }
+
+  async function listMine(actor: QuizActor) {
+    const currentAcademyId = await academyId();
+    const rows = isAdmin(actor)
+      ? await repo.listQuizzesByAcademy(database, currentAcademyId)
+      : await repo.listQuizzesByCreator(database, actor.id, currentAcademyId);
+    return presentQuizzes(rows);
+  }
+
+  async function presentQuiz(quiz: QuizRow) {
+    return (await presentQuizzes([quiz]))[0]!;
   }
 
   async function getQuiz(actor: QuizActor, quizId: string) {
-    await requireQuiz(quizId, actor);
-    return presentQuiz(quizId);
+    const quiz = await requireQuiz(quizId, actor);
+    return presentQuiz(quiz);
   }
 
   async function getEditableVersion(trx: DatabaseExecutor, quizId: string) {
@@ -278,9 +316,12 @@ export function createAuthoringService(options: QuizServiceOptions) {
       trx,
       questions.map((question) => question.id),
     );
-    for (const question of questions) {
+    const now = new Date();
+    const questionIdBySourceId = new Map<string, string>();
+    const questionRows = questions.map((question) => {
       const questionId = crypto.randomUUID();
-      await repo.insertQuestion(trx, {
+      questionIdBySourceId.set(question.id, questionId);
+      return {
         id: questionId,
         quiz_version_id: version.id,
         question_type: question.question_type,
@@ -289,26 +330,30 @@ export function createAuthoringService(options: QuizServiceOptions) {
         position: question.position,
         configuration: question.configuration,
         explanation: question.explanation,
-        created_at: new Date(),
-        updated_at: new Date(),
+        created_at: now,
+        updated_at: now,
         deleted_at: null,
-      });
-      await repo.insertOptions(
-        trx,
-        options
-          .filter((option) => option.question_id === question.id)
-          .map((option) => ({
-            id: crypto.randomUUID(),
-            question_id: questionId,
-            option_text: option.option_text,
-            is_correct: option.is_correct,
-            weight: option.weight,
-            position: option.position,
-            created_at: new Date(),
-            updated_at: new Date(),
-          })),
-      );
-    }
+      };
+    });
+    const optionRows = options.flatMap((option) => {
+      const questionId = questionIdBySourceId.get(option.question_id);
+      return questionId
+        ? [
+            {
+              id: crypto.randomUUID(),
+              question_id: questionId,
+              option_text: option.option_text,
+              is_correct: option.is_correct,
+              weight: option.weight,
+              position: option.position,
+              created_at: now,
+              updated_at: now,
+            },
+          ]
+        : [];
+    });
+    await repo.insertQuestions(trx, questionRows);
+    await repo.insertOptions(trx, optionRows);
     return version;
   }
 

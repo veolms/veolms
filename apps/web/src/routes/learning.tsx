@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+} from "react";
 import {
   useLocation,
   useNavigate,
@@ -7,7 +14,6 @@ import {
 } from "react-router";
 import type { CourseLesson } from "@veolms/contracts";
 import type { Route } from "./+types/learning";
-import { LearningWorkspace } from "../learning/LearningWorkspace";
 import {
   getLearningHlsBootstrap,
   getLearningHlsPreconnectHref,
@@ -18,7 +24,6 @@ import {
   LEARNING_LESSON_NUMBER_META_NAME,
 } from "../learning/learningHlsBootstrap";
 import { resolveLessonIdentifier } from "../learning/courseContent";
-import { getApiCourseSlugForLegacyKey } from "../courses/catalogue";
 import {
   getCoursePlayerOrigin,
   getCoursePlayerPath,
@@ -31,12 +36,18 @@ import {
 } from "../learning/coursePlayerNavigation";
 import { getRouteMeta } from "../routing/routeDescriptors";
 import { useCurrentUser } from "../services/auth";
-import { useCourseOverview, useCourses } from "../services/courses";
+import { useCourseOverview } from "../services/courses";
 import { useAuthStore } from "../store/auth.store";
 import type { AcademyOutletContext } from "./academy-layout";
 import type { LearningMiniPlayerRequest } from "../learning/player/learningMiniPlayerTypes";
 import { getVideoPlaybackApiOrigin } from "../learning/videoPlaybackBootstrap";
 import { useMyQuizAssignments } from "../services/quizzes";
+
+const LearningWorkspace = lazy(() =>
+  import("../learning/LearningWorkspace").then((module) => ({
+    default: module.LearningWorkspace,
+  })),
+);
 
 export function meta({ location, params }: Route.MetaArgs) {
   const descriptors = Object.entries(
@@ -105,16 +116,6 @@ export default function LearningRoute() {
   const { data: courseOverview } = useCourseOverview(courseSlug, {
     enabled: Boolean(courseSlug),
   });
-  const { data: publishedCoursesData } = useCourses({
-    enabled: Boolean(activeUser),
-  });
-  const apiCourseSlugForKey = getApiCourseSlugForLegacyKey(courseSlug);
-  const apiCourse = publishedCoursesData?.courses.find(
-    (course) =>
-      course.id === courseSlug ||
-      course.slug === courseSlug ||
-      course.slug === apiCourseSlugForKey,
-  );
   const { data: myQuizAssignments, isLoading: myQuizAssignmentsLoading } =
     useMyQuizAssignments({
       enabled: Boolean(activeUser),
@@ -133,7 +134,9 @@ export default function LearningRoute() {
     : null;
   const routeLessonId = hasExplicitLectureSlug
     ? (resolvedExplicitLessonId ?? 1)
-    : (courseSlug ? getStoredCourseLessonId(courseSlug) : 1);
+    : courseSlug
+      ? getStoredCourseLessonId(courseSlug)
+      : 1;
 
   const allApiLessons = useMemo<CourseLesson[]>(() => {
     if (!courseOverview?.sections) return [];
@@ -149,7 +152,9 @@ export default function LearningRoute() {
 
   const resolvedFromUuid = useMemo(() => {
     if (!targetLessonUuid || allApiLessons.length === 0) return null;
-    const idx = allApiLessons.findIndex((l: CourseLesson) => l.id === targetLessonUuid);
+    const idx = allApiLessons.findIndex(
+      (l: CourseLesson) => l.id === targetLessonUuid,
+    );
     return idx >= 0 ? idx + 1 : null;
   }, [targetLessonUuid, allApiLessons]);
 
@@ -269,30 +274,43 @@ export default function LearningRoute() {
   );
 
   return (
-    <LearningWorkspace
-      key={courseSlug}
-      courseSlug={courseSlug}
-      userId={activeUser?.id}
-      lessonId={lessonId}
-      initialLessonView={isQuizViewRequested ? "quiz" : "video"}
-      mobileBottomNavigation={mobileBottomNavigation}
-      mobileBottomNavigationHidden={mobileBottomNavigationHidden}
-      onSelectLesson={selectLesson}
-      onOpenCourseOverview={openCourseOverview}
-      onMinimizeGestureChange={onLearningPlayerMinimizeGestureChange}
-      onMiniPlayerRestoreReady={onMiniPlayerRestoreReady}
-      persistentPlayerCourseRouteKey={courseSlug}
-      persistentPlayerLessonPath={`${location.pathname}${location.search}`}
-      persistentPlayerReturnPath={
-        (courseSlug && getCoursePlayerSession(courseSlug)?.returnPath) ||
-        routeReturnPath
+    <Suspense
+      fallback={
+        <main
+          className="grid min-h-[50vh] w-full place-items-center py-12 text-sm text-(--muted)"
+          role="status"
+          aria-live="polite"
+          data-learning-workspace-loading
+        >
+          Loading lesson…
+        </main>
       }
-      persistentPlayerMounted={persistentPlayerMounted}
-      registerPersistentPlayer={registerPersistentPlayer}
-      onMinimizePlayer={minimizePlayer}
-      quizAssignment={quizAssignment ?? null}
-      quizAssignments={myQuizAssignments?.assignments ?? null}
-      quizAssignmentLoading={myQuizAssignmentsLoading}
-    />
+    >
+      <LearningWorkspace
+        key={courseSlug}
+        courseSlug={courseSlug}
+        userId={activeUser?.id}
+        lessonId={lessonId}
+        initialLessonView={isQuizViewRequested ? "quiz" : "video"}
+        mobileBottomNavigation={mobileBottomNavigation}
+        mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+        onSelectLesson={selectLesson}
+        onOpenCourseOverview={openCourseOverview}
+        onMinimizeGestureChange={onLearningPlayerMinimizeGestureChange}
+        onMiniPlayerRestoreReady={onMiniPlayerRestoreReady}
+        persistentPlayerCourseRouteKey={courseSlug}
+        persistentPlayerLessonPath={`${location.pathname}${location.search}`}
+        persistentPlayerReturnPath={
+          (courseSlug && getCoursePlayerSession(courseSlug)?.returnPath) ||
+          routeReturnPath
+        }
+        persistentPlayerMounted={persistentPlayerMounted}
+        registerPersistentPlayer={registerPersistentPlayer}
+        onMinimizePlayer={minimizePlayer}
+        quizAssignment={quizAssignment ?? null}
+        quizAssignments={myQuizAssignments?.assignments ?? null}
+        quizAssignmentLoading={myQuizAssignmentsLoading}
+      />
+    </Suspense>
   );
 }

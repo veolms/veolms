@@ -1,3 +1,4 @@
+import "../styles/features/course-wizard.css";
 import {
   useState,
   useEffect,

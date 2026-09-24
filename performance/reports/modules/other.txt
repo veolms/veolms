@@ -1,0 +1,94 @@
+MODULE: Other
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: GOOD | requests=4 | p50=26 ms | p95=27 ms | p99=27 ms | max=27 ms | avg response=104 B | 5xx=0 | timeout=0
+10 users: GOOD | requests=7 | p50=24 ms | p95=34 ms | p99=34 ms | max=34 ms | avg response=104 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+GET /api/v1/media/{mediaId}/variants/{width} | GET /api/v1/media/{mediaId}/variants/{width} | status=GOOD | p95=34 ms | p99=34 ms | max=34 ms | avg bytes=104 B | success=0 | auth=0 | 4xx=7 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+GET /api/v1/media/{mediaId}/variants/{width} | GET /api/v1/media/{mediaId}/variants/{width} | HTTP=NETWORK_ERROR | total=1ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No endpoint in this module showed an obvious 5+ query N+1 pattern in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+GET /api/v1/media/{mediaId}/variants/{width} | GET /api/v1/media/{mediaId}/variants/{width} | HTTP=404 | total=20ms | SQL=1 | SQL max=3ms | bytes=104 | N+1=NO_N_PLUS_ONE_SIGN | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No endpoint in this module showed an obvious 5+ query N+1 pattern in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+MODULE: Other
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: GOOD | requests=4 | p50=26 ms | p95=27 ms | p99=27 ms | max=27 ms | avg response=104 B | 5xx=0 | timeout=0
+10 users: GOOD | requests=7 | p50=24 ms | p95=34 ms | p99=34 ms | max=34 ms | avg response=104 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+GET /api/v1/media/{mediaId}/variants/{width} | GET /api/v1/media/{mediaId}/variants/{width} | status=GOOD | p95=34 ms | p99=34 ms | max=34 ms | avg bytes=104 B | success=0 | auth=0 | 4xx=7 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+GET /api/v1/media/{mediaId}/variants/{width} | GET /api/v1/media/{mediaId}/variants/{width} | HTTP=404 | total=26ms | SQL=1 | SQL max=7ms | bytes=104 | N+1=NO_N_PLUS_ONE_SIGN | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No multi-query endpoint was observed in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+MODULE: Other
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: GOOD | requests=4 | p50=26 ms | p95=27 ms | p99=27 ms | max=27 ms | avg response=104 B | 5xx=0 | timeout=0
+10 users: GOOD | requests=7 | p50=24 ms | p95=34 ms | p99=34 ms | max=34 ms | avg response=104 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+GET /api/v1/media/{mediaId}/variants/{width} | GET /api/v1/media/{mediaId}/variants/{width} | status=GOOD | p95=34 ms | p99=34 ms | max=34 ms | avg bytes=104 B | success=0 | auth=0 | 4xx=7 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+GET /api/v1/media/{mediaId}/variants/{width} | GET /api/v1/media/{mediaId}/variants/{width} | HTTP=404 | total=22ms | SQL=1 | SQL max=6ms | multi-query=NO_N_PLUS_ONE_SIGN | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No multi-query endpoint was observed in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.

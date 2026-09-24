@@ -1,14 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@veolms/video-player/styles.css";
 @import "./styles/base/theme-contract.css";
 @import "./styles/base/foundation.css";
-@import "./styles/features/player.css";
-@import "./styles/features/learning.css";
 @import "./styles/features/courses.css";
 @import "./styles/features/student-learning.css";
-@import "./styles/features/course-wizard.css";
 @import "./styles/components/confirm-delete-modal.css";
 @source "../../../packages/video-player/src";
 @import "./styles/components/toast-notification.css";

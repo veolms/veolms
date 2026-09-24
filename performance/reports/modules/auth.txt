@@ -1,0 +1,115 @@
+MODULE: Auth
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: GOOD | requests=16 | p50=19 ms | p95=22 ms | p99=22 ms | max=22 ms | avg response=106 B | 5xx=0 | timeout=0
+10 users: GOOD | requests=32 | p50=18 ms | p95=25 ms | p99=30 ms | max=32 ms | avg response=106 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+getAuthConfig | GET /api/v1/auth/config | status=GOOD | p95=30 ms | p99=32 ms | max=32 ms | avg bytes=174 B | success=8 | auth=0 | 4xx=0 | 5xx=0
+listCurrentUserAvatars | GET /api/v1/auth/me/avatars | status=AUTH_REQUIRED | p95=23 ms | p99=23 ms | max=23 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+getCurrentUserProfile | GET /api/v1/auth/me | status=GOOD | p95=23 ms | p99=23 ms | max=23 ms | avg bytes=45 B | success=8 | auth=0 | 4xx=0 | 5xx=0
+getActiveSessions | GET /api/v1/auth/sessions | status=AUTH_REQUIRED | p95=22 ms | p99=24 ms | max=24 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+listCurrentUserAvatars | GET /api/v1/auth/me/avatars | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+getCurrentUserProfile | GET /api/v1/auth/me | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+getActiveSessions | GET /api/v1/auth/sessions | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+getAuthConfig | GET /api/v1/auth/config | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No endpoint in this module showed an obvious 5+ query N+1 pattern in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+getActiveSessions | GET /api/v1/auth/sessions | HTTP=401 | total=18ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getCurrentUserProfile | GET /api/v1/auth/me | HTTP=200 | total=18ms | SQL=0 | SQL max=0ms | bytes=45 | N+1=NO_QUERY_OBSERVED | index=NOT_CHECKED | payload=PAYLOAD_OK
+listCurrentUserAvatars | GET /api/v1/auth/me/avatars | HTTP=401 | total=18ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getAuthConfig | GET /api/v1/auth/config | HTTP=200 | total=5ms | SQL=0 | SQL max=0ms | bytes=174 | N+1=NO_QUERY_OBSERVED | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No endpoint in this module showed an obvious 5+ query N+1 pattern in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+MODULE: Auth
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: GOOD | requests=16 | p50=19 ms | p95=22 ms | p99=22 ms | max=22 ms | avg response=106 B | 5xx=0 | timeout=0
+10 users: GOOD | requests=32 | p50=18 ms | p95=25 ms | p99=30 ms | max=32 ms | avg response=106 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+getAuthConfig | GET /api/v1/auth/config | status=GOOD | p95=30 ms | p99=32 ms | max=32 ms | avg bytes=174 B | success=8 | auth=0 | 4xx=0 | 5xx=0
+listCurrentUserAvatars | GET /api/v1/auth/me/avatars | status=AUTH_REQUIRED | p95=23 ms | p99=23 ms | max=23 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+getCurrentUserProfile | GET /api/v1/auth/me | status=GOOD | p95=23 ms | p99=23 ms | max=23 ms | avg bytes=45 B | success=8 | auth=0 | 4xx=0 | 5xx=0
+getActiveSessions | GET /api/v1/auth/sessions | status=AUTH_REQUIRED | p95=22 ms | p99=24 ms | max=24 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+getActiveSessions | GET /api/v1/auth/sessions | HTTP=401 | total=18ms | SQL=1 | SQL max=4ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getCurrentUserProfile | GET /api/v1/auth/me | HTTP=200 | total=16ms | SQL=0 | SQL max=0ms | bytes=45 | N+1=NO_QUERY_OBSERVED | index=NOT_CHECKED | payload=PAYLOAD_OK
+getAuthConfig | GET /api/v1/auth/config | HTTP=200 | total=15ms | SQL=0 | SQL max=0ms | bytes=174 | N+1=NO_QUERY_OBSERVED | index=NOT_CHECKED | payload=PAYLOAD_OK
+listCurrentUserAvatars | GET /api/v1/auth/me/avatars | HTTP=401 | total=7ms | SQL=1 | SQL max=4ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No multi-query endpoint was observed in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+MODULE: Auth
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: GOOD | requests=16 | p50=19 ms | p95=22 ms | p99=22 ms | max=22 ms | avg response=106 B | 5xx=0 | timeout=0
+10 users: GOOD | requests=32 | p50=18 ms | p95=25 ms | p99=30 ms | max=32 ms | avg response=106 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+getAuthConfig | GET /api/v1/auth/config | status=GOOD | p95=30 ms | p99=32 ms | max=32 ms | avg bytes=174 B | success=8 | auth=0 | 4xx=0 | 5xx=0
+listCurrentUserAvatars | GET /api/v1/auth/me/avatars | status=AUTH_REQUIRED | p95=23 ms | p99=23 ms | max=23 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+getCurrentUserProfile | GET /api/v1/auth/me | status=GOOD | p95=23 ms | p99=23 ms | max=23 ms | avg bytes=45 B | success=8 | auth=0 | 4xx=0 | 5xx=0
+getActiveSessions | GET /api/v1/auth/sessions | status=AUTH_REQUIRED | p95=22 ms | p99=24 ms | max=24 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+getAuthConfig | GET /api/v1/auth/config | HTTP=200 | total=18ms | SQL=0 | SQL max=0ms | multi-query=NO_QUERY_OBSERVED | index=NOT_CHECKED | payload=PAYLOAD_OK
+getCurrentUserProfile | GET /api/v1/auth/me | HTTP=200 | total=17ms | SQL=0 | SQL max=0ms | multi-query=NO_QUERY_OBSERVED | index=NOT_CHECKED | payload=PAYLOAD_OK
+getActiveSessions | GET /api/v1/auth/sessions | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listCurrentUserAvatars | GET /api/v1/auth/me/avatars | HTTP=401 | total=4ms | SQL=0 | SQL max=0ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No multi-query endpoint was observed in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.

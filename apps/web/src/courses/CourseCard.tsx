@@ -1,28 +1,30 @@
-import {
-  ArrowCounterClockwiseIcon as ArrowCounterClockwise,
-  CertificateIcon as Certificate,
-  ChartBarIcon as ChartBar,
-  CircleNotchIcon as CircleNotch,
-  CopySimpleIcon as CopySimple,
-  EyeIcon as Eye,
-  FlagIcon as Flag,
-  GraduationCapIcon as GraduationCap,
-  HeartIcon as Heart,
-  LinkSimpleIcon as LinkSimple,
-  ListBulletsIcon as ListBullets,
-  PaperPlaneTiltIcon as PaperPlaneTilt,
-  PencilSimpleIcon as PencilSimple,
-  PlayIcon as Play,
-  PlusIcon as Plus,
-  ShareNetworkIcon as ShareNetwork,
-  TrashIcon as Trash,
-  UploadSimpleIcon as UploadSimple,
-  UsersThreeIcon as UsersThree,
-} from "@phosphor-icons/react";
+import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
+import { CertificateIcon as Certificate } from "@phosphor-icons/react/Certificate";
+import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { CopySimpleIcon as CopySimple } from "@phosphor-icons/react/CopySimple";
+import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
+import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
+import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
+import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
+import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullets";
+import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
+import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { PlayIcon as Play } from "@phosphor-icons/react/Play";
+import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
+import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
+import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
+import { UploadSimpleIcon as UploadSimple } from "@phosphor-icons/react/UploadSimple";
+import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
+import { memo } from "react";
 import { getCourseRouteKey } from "./catalogue";
 import type { Course, CourseRole } from "./catalogue";
 import { CourseActionMenu, MenuAction, MenuDivider } from "./CourseActionMenu";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
+import { preloadCourseOverviewPage } from "./courseOverviewPreload";
+import { COURSE_THUMBNAIL_SIZES } from "./courseThumbnailSizing";
+import type { NavigateTo } from "../routing/navigation";
 
 const courseOverviewPath = (course: Course) =>
   `/courses/${encodeURIComponent(getCourseRouteKey(course))}/overview`;
@@ -45,9 +47,6 @@ const studentStatusStyles = {
 // one column below 560px, two columns from 560px, three from 1280px, and
 // four from 1536px. Avoid `auto` here because eager images cannot use the
 // auto-size shortcut consistently across browsers.
-const courseThumbnailSizes =
-  "(min-width: 1536px) 23vw, (min-width: 1280px) 31vw, (min-width: 560px) 47vw, 100vw";
-
 const getStudentStatus = (course: Course) => {
   if (!course.enrolled) return "not-enrolled" as const;
   const progress = course.progress ?? 0;
@@ -76,7 +75,7 @@ export interface CourseCardProps {
   onPublish?: (course: Course) => void;
   onDeleteRequested?: (course: Course) => void;
   onRestoreRequested?: (course: Course) => Promise<void> | void;
-  onNavigatePage: (destination: string) => void;
+  onNavigatePage: NavigateTo;
   menuOpen: boolean;
   setMenuOpen: (courseId: string | null) => void;
   setNotice: (notice: string) => void;
@@ -87,7 +86,7 @@ export interface CourseCardProps {
   currentUserId?: string;
 }
 
-export function CourseCard({
+export const CourseCard = memo(function CourseCard({
   course,
   role,
   wishlisted,
@@ -121,7 +120,6 @@ export function CourseCard({
     typeof window === "undefined"
       ? overviewPath
       : new URL(overviewPath, window.location.origin).toString();
-
   const closeThen = (action: () => void) => {
     setMenuOpen(null);
     action();
@@ -198,6 +196,7 @@ export function CourseCard({
       aria-busy={isDeleting}
       data-course-card
       data-deleting={isDeleting ? "true" : undefined}
+      onPointerEnter={preloadCourseOverviewPage}
     >
       <div
         className="relative aspect-video overflow-hidden rounded-t-[11px] bg-(--track)"
@@ -206,15 +205,17 @@ export function CourseCard({
         {course.thumbnail ? (
           <img
             src={course.thumbnail}
-            srcSet={course.thumbnailSrcSet?.map((variant) => `${variant.url} ${variant.width}w`).join(", ")}
-            sizes={courseThumbnailSizes}
+            srcSet={course.thumbnailSrcSet
+              ?.map((variant) => `${variant.url} ${variant.width}w`)
+              .join(", ")}
+            sizes={COURSE_THUMBNAIL_SIZES}
             alt={course.title}
             className="h-full w-full object-cover"
             width={960}
             height={540}
             loading={imagePriority ? "eager" : "lazy"}
             fetchPriority={imagePriority ? "high" : "low"}
-            decoding={imagePriority ? "sync" : "async"}
+            decoding="async"
           />
         ) : (
           <CourseThumbnailPlaceholder />
@@ -294,6 +295,8 @@ export function CourseCard({
           aria-label={`View course overview for ${course.title}`}
           title="View Course Overview"
           data-course-card-curriculum
+          onFocus={preloadCourseOverviewPage}
+          onPointerDown={preloadCourseOverviewPage}
           onClick={(event) => {
             if (isDeleting) {
               event.preventDefault();
@@ -308,7 +311,7 @@ export function CourseCard({
             )
               return;
             event.preventDefault();
-            onNavigatePage(overviewPath);
+            onNavigatePage(overviewPath, { skipAutosync: true });
           }}
         />
 
@@ -340,182 +343,188 @@ export function CourseCard({
               ariaLabel={`Actions for ${course.title}`}
               dataMenu=""
             >
-            {role === "creator" ? (
-              isBin || course.deletedAt ? (
-                onRestoreRequested && canEdit ? (
-                  <MenuAction
-                    Icon={ArrowCounterClockwise}
-                    label="Restore Course"
-                    onClick={() => closeThen(() => void handleRestore(course))}
-                  />
-                ) : null
-              ) : canEdit ? (
+              {role === "creator" ? (
+                isBin || course.deletedAt ? (
+                  onRestoreRequested && canEdit ? (
+                    <MenuAction
+                      Icon={ArrowCounterClockwise}
+                      label="Restore Course"
+                      onClick={() =>
+                        closeThen(() => void handleRestore(course))
+                      }
+                    />
+                  ) : null
+                ) : canEdit ? (
+                  <>
+                    <MenuAction
+                      Icon={PencilSimple}
+                      label="Edit Course"
+                      onClick={() => closeThen(() => onEdit?.(course))}
+                    />
+                    <MenuAction
+                      Icon={ListBullets}
+                      label="Manage Curriculum"
+                      onClick={() => closeThen(() => onManage?.(course))}
+                    />
+                    <MenuAction
+                      Icon={Eye}
+                      label="Course Overview"
+                      onClick={() => closeThen(() => onExplore(course))}
+                    />
+                    <MenuAction
+                      Icon={ChartBar}
+                      label="Analytics"
+                      onClick={() =>
+                        closeThen(() =>
+                          onNavigatePage(`/analytics?course=${course.id}`),
+                        )
+                      }
+                    />
+                    <MenuAction
+                      Icon={UsersThree}
+                      label="Manage Students"
+                      onClick={() =>
+                        closeThen(() =>
+                          onNavigatePage(`/students?course=${course.id}`),
+                        )
+                      }
+                    />
+                    <MenuDivider />
+                    <MenuAction
+                      Icon={CopySimple}
+                      label="Copy Course Link"
+                      onClick={() => closeThen(() => void copyCourseLink())}
+                    />
+                    <MenuDivider />
+                    <MenuAction
+                      Icon={UploadSimple}
+                      label={
+                        course.lifecycleStatus === "published"
+                          ? "Unpublish Course"
+                          : "Publish Course"
+                      }
+                      onClick={() =>
+                        closeThen(() => {
+                          if (onPublish) {
+                            onPublish(course);
+                          } else {
+                            onNavigatePage(
+                              `/courses/create?edit=${encodeURIComponent(course.id)}&tab=publish`,
+                            );
+                          }
+                        })
+                      }
+                    />
+                    <MenuDivider />
+                    <MenuAction
+                      Icon={Trash}
+                      label="Delete Course"
+                      destructive
+                      onClick={() =>
+                        closeThen(() => onDeleteRequested?.(course))
+                      }
+                    />
+                  </>
+                ) : (
+                  <>
+                    <MenuAction
+                      Icon={ListBullets}
+                      label="View Curriculum"
+                      onClick={() => closeThen(() => onExplore(course))}
+                    />
+                    <MenuAction
+                      Icon={ChartBar}
+                      label="Analytics"
+                      onClick={() =>
+                        closeThen(() =>
+                          onNavigatePage(`/analytics?course=${course.id}`),
+                        )
+                      }
+                    />
+                    <MenuDivider />
+                    <MenuAction
+                      Icon={CopySimple}
+                      label="Copy Course Link"
+                      onClick={() => closeThen(() => void copyCourseLink())}
+                    />
+                  </>
+                )
+              ) : course.enrolled ? (
                 <>
-                  <MenuAction
-                    Icon={PencilSimple}
-                    label="Edit Course"
-                    onClick={() => closeThen(() => onEdit?.(course))}
-                  />
-                  <MenuAction
-                    Icon={ListBullets}
-                    label="Manage Curriculum"
-                    onClick={() => closeThen(() => onManage?.(course))}
-                  />
                   <MenuAction
                     Icon={Eye}
                     label="Course Overview"
                     onClick={() => closeThen(() => onExplore(course))}
                   />
+                  <MenuDivider />
                   <MenuAction
-                    Icon={ChartBar}
-                    label="Analytics"
+                    Icon={PaperPlaneTilt}
+                    label="Open Discussions"
                     onClick={() =>
                       closeThen(() =>
-                        onNavigatePage(`/analytics?course=${course.id}`),
-                      )
-                    }
-                  />
-                  <MenuAction
-                    Icon={UsersThree}
-                    label="Manage Students"
-                    onClick={() =>
-                      closeThen(() =>
-                        onNavigatePage(`/students?course=${course.id}`),
+                        onNavigatePage(`/discussions?course=${course.id}`),
                       )
                     }
                   />
                   <MenuDivider />
                   <MenuAction
-                    Icon={CopySimple}
+                    Icon={ShareNetwork}
+                    label="Share Course"
+                    onClick={() => closeThen(() => void shareCourse())}
+                  />
+                  <MenuAction
+                    Icon={LinkSimple}
                     label="Copy Course Link"
                     onClick={() => closeThen(() => void copyCourseLink())}
                   />
                   <MenuDivider />
+                  {course.certificateAvailable && progress >= 100 && (
+                    <MenuAction
+                      Icon={Certificate}
+                      label="View Certificate"
+                      onClick={() =>
+                        closeThen(() =>
+                          setNotice(
+                            `Certificate for "${course.title}" is ready.`,
+                          ),
+                        )
+                      }
+                    />
+                  )}
                   <MenuAction
-                    Icon={UploadSimple}
-                    label={
-                      course.lifecycleStatus === "published"
-                        ? "Unpublish Course"
-                        : "Publish Course"
-                    }
+                    Icon={Flag}
+                    label="Report an Issue"
                     onClick={() =>
-                      closeThen(() => {
-                        if (onPublish) {
-                          onPublish(course);
-                        } else {
-                          onNavigatePage(
-                            `/courses/create?edit=${encodeURIComponent(course.id)}&tab=publish`,
-                          );
-                        }
-                      })
+                      closeThen(() =>
+                        setNotice(
+                          `Issue reporting opened for ${course.title}.`,
+                        ),
+                      )
                     }
-                  />
-                  <MenuDivider />
-                  <MenuAction
-                    Icon={Trash}
-                    label="Delete Course"
-                    destructive
-                    onClick={() => closeThen(() => onDeleteRequested?.(course))}
                   />
                 </>
               ) : (
                 <>
                   <MenuAction
-                    Icon={ListBullets}
-                    label="View Curriculum"
+                    Icon={Eye}
+                    label="Course Overview"
                     onClick={() => closeThen(() => onExplore(course))}
-                  />
-                  <MenuAction
-                    Icon={ChartBar}
-                    label="Analytics"
-                    onClick={() =>
-                      closeThen(() =>
-                        onNavigatePage(`/analytics?course=${course.id}`),
-                      )
-                    }
                   />
                   <MenuDivider />
                   <MenuAction
-                    Icon={CopySimple}
+                    Icon={ShareNetwork}
+                    label="Share Course"
+                    onClick={() => closeThen(() => void shareCourse())}
+                  />
+                  <MenuAction
+                    Icon={LinkSimple}
                     label="Copy Course Link"
                     onClick={() => closeThen(() => void copyCourseLink())}
                   />
                 </>
-              )
-            ) : course.enrolled ? (
-              <>
-                <MenuAction
-                  Icon={Eye}
-                  label="Course Overview"
-                  onClick={() => closeThen(() => onExplore(course))}
-                />
-                <MenuDivider />
-                <MenuAction
-                  Icon={PaperPlaneTilt}
-                  label="Open Discussions"
-                  onClick={() =>
-                    closeThen(() =>
-                      onNavigatePage(`/discussions?course=${course.id}`),
-                    )
-                  }
-                />
-                <MenuDivider />
-                <MenuAction
-                  Icon={ShareNetwork}
-                  label="Share Course"
-                  onClick={() => closeThen(() => void shareCourse())}
-                />
-                <MenuAction
-                  Icon={LinkSimple}
-                  label="Copy Course Link"
-                  onClick={() => closeThen(() => void copyCourseLink())}
-                />
-                <MenuDivider />
-                {course.certificateAvailable && progress >= 100 && (
-                  <MenuAction
-                    Icon={Certificate}
-                    label="View Certificate"
-                    onClick={() =>
-                      closeThen(() =>
-                        setNotice(
-                          `Certificate for "${course.title}" is ready.`,
-                        ),
-                      )
-                    }
-                  />
-                )}
-                <MenuAction
-                  Icon={Flag}
-                  label="Report an Issue"
-                  onClick={() =>
-                    closeThen(() =>
-                      setNotice(`Issue reporting opened for ${course.title}.`),
-                    )
-                  }
-                />
-              </>
-            ) : (
-              <>
-                <MenuAction
-                  Icon={Eye}
-                  label="Course Overview"
-                  onClick={() => closeThen(() => onExplore(course))}
-                />
-                <MenuDivider />
-                <MenuAction
-                  Icon={ShareNetwork}
-                  label="Share Course"
-                  onClick={() => closeThen(() => void shareCourse())}
-                />
-                <MenuAction
-                  Icon={LinkSimple}
-                  label="Copy Course Link"
-                  onClick={() => closeThen(() => void copyCourseLink())}
-                />
-              </>
-            )}
-          </CourseActionMenu>
-        )}
+              )}
+            </CourseActionMenu>
+          )}
         </div>
 
         <div
@@ -607,7 +616,7 @@ export function CourseCard({
                   return;
                 }
 
-                onNavigatePage(overviewPath);
+                onNavigatePage(overviewPath, { skipAutosync: true });
               }}
             >
               {role === "creator" ? (
@@ -677,7 +686,10 @@ export function CourseCard({
           data-testid="course-deleting-overlay"
         >
           <div className="inline-flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-(--surface) px-3.5 py-1.5 shadow-[0_2px_10px_rgba(0,0,0,0.08)]">
-            <CircleNotch size={14} className="animate-spin text-red-500 shrink-0" />
+            <CircleNotch
+              size={14}
+              className="animate-spin text-red-500 shrink-0"
+            />
             <span className="text-[0.78rem] font-semibold text-(--text)">
               {isBin || course.deletedAt ? "Deleting..." : "Moving to Bin..."}
             </span>
@@ -686,4 +698,4 @@ export function CourseCard({
       )}
     </article>
   );
-}
+});

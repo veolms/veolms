@@ -1,0 +1,160 @@
+MODULE: Quizzes
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: AUTH_REQUIRED | requests=32 | p50=8 ms | p95=20 ms | p99=26 ms | max=28 ms | avg response=102 B | 5xx=0 | timeout=0
+10 users: AUTH_REQUIRED | requests=78 | p50=18 ms | p95=31 ms | p99=36 ms | max=36 ms | avg response=102 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+getQuizAttempt | GET /api/v1/quiz-attempts/{attemptId} | status=AUTH_REQUIRED | p95=32 ms | p99=36 ms | max=36 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+listMyQuizHistory | GET /api/v1/me/quizzes/history | status=AUTH_REQUIRED | p95=32 ms | p99=35 ms | max=36 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+listMyQuizAssignments | GET /api/v1/me/quizzes | status=AUTH_REQUIRED | p95=31 ms | p99=35 ms | max=36 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+listCourseQuizAssignments | GET /api/v1/courses/{courseId}/quiz-assignments | status=AUTH_REQUIRED | p95=28 ms | p99=30 ms | max=31 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+getQuiz | GET /api/v1/quizzes/{id} | status=AUTH_REQUIRED | p95=28 ms | p99=30 ms | max=31 ms | avg bytes=102 B | success=0 | auth=7 | 4xx=0 | 5xx=0
+getQuizResult | GET /api/v1/quiz-attempts/{attemptId}/result | status=AUTH_REQUIRED | p95=27 ms | p99=28 ms | max=29 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+getStudentQuizReport | GET /api/v1/students/{studentId}/quiz-report | status=AUTH_REQUIRED | p95=27 ms | p99=28 ms | max=28 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+getQuizAnalytics | GET /api/v1/quiz-assignments/{assignmentId}/analytics | status=AUTH_REQUIRED | p95=26 ms | p99=26 ms | max=26 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+getCourseQuizAnalytics | GET /api/v1/courses/{courseId}/quiz-analytics | status=AUTH_REQUIRED | p95=25 ms | p99=27 ms | max=28 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+listMyQuizzes | GET /api/v1/quizzes/mine | status=AUTH_REQUIRED | p95=20 ms | p99=20 ms | max=20 ms | avg bytes=102 B | success=0 | auth=7 | 4xx=0 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- This module needs login; anonymous timing is only an auth-protection check.
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+getStudentQuizReport | GET /api/v1/students/{studentId}/quiz-report | HTTP=NETWORK_ERROR | total=1ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyQuizzes | GET /api/v1/quizzes/mine | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+listCourseQuizAssignments | GET /api/v1/courses/{courseId}/quiz-assignments | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuizAnalytics | GET /api/v1/quiz-assignments/{assignmentId}/analytics | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyQuizHistory | GET /api/v1/me/quizzes/history | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyQuizAssignments | GET /api/v1/me/quizzes | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuiz | GET /api/v1/quizzes/{id} | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuizAttempt | GET /api/v1/quiz-attempts/{attemptId} | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuizResult | GET /api/v1/quiz-attempts/{attemptId}/result | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+getCourseQuizAnalytics | GET /api/v1/courses/{courseId}/quiz-analytics | HTTP=NETWORK_ERROR | total=0ms | SQL=0 | SQL max=0ms | bytes=0 | N+1=PROBLEM | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No endpoint in this module showed an obvious 5+ query N+1 pattern in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+getQuizResult | GET /api/v1/quiz-attempts/{attemptId}/result | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyQuizAssignments | GET /api/v1/me/quizzes | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listCourseQuizAssignments | GET /api/v1/courses/{courseId}/quiz-assignments | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getStudentQuizReport | GET /api/v1/students/{studentId}/quiz-report | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getCourseQuizAnalytics | GET /api/v1/courses/{courseId}/quiz-analytics | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyQuizHistory | GET /api/v1/me/quizzes/history | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuizAttempt | GET /api/v1/quiz-attempts/{attemptId} | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuiz | GET /api/v1/quizzes/{id} | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyQuizzes | GET /api/v1/quizzes/mine | HTTP=401 | total=15ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuizAnalytics | GET /api/v1/quiz-assignments/{assignmentId}/analytics | HTTP=401 | total=4ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No endpoint in this module showed an obvious 5+ query N+1 pattern in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+MODULE: Quizzes
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: AUTH_REQUIRED | requests=32 | p50=8 ms | p95=20 ms | p99=26 ms | max=28 ms | avg response=102 B | 5xx=0 | timeout=0
+10 users: AUTH_REQUIRED | requests=78 | p50=18 ms | p95=31 ms | p99=36 ms | max=36 ms | avg response=102 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+getQuizAttempt | GET /api/v1/quiz-attempts/{attemptId} | status=AUTH_REQUIRED | p95=32 ms | p99=36 ms | max=36 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+listMyQuizHistory | GET /api/v1/me/quizzes/history | status=AUTH_REQUIRED | p95=32 ms | p99=35 ms | max=36 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+listMyQuizAssignments | GET /api/v1/me/quizzes | status=AUTH_REQUIRED | p95=31 ms | p99=35 ms | max=36 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+listCourseQuizAssignments | GET /api/v1/courses/{courseId}/quiz-assignments | status=AUTH_REQUIRED | p95=28 ms | p99=30 ms | max=31 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+getQuiz | GET /api/v1/quizzes/{id} | status=AUTH_REQUIRED | p95=28 ms | p99=30 ms | max=31 ms | avg bytes=102 B | success=0 | auth=7 | 4xx=0 | 5xx=0
+getQuizResult | GET /api/v1/quiz-attempts/{attemptId}/result | status=AUTH_REQUIRED | p95=27 ms | p99=28 ms | max=29 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+getStudentQuizReport | GET /api/v1/students/{studentId}/quiz-report | status=AUTH_REQUIRED | p95=27 ms | p99=28 ms | max=28 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+getQuizAnalytics | GET /api/v1/quiz-assignments/{assignmentId}/analytics | status=AUTH_REQUIRED | p95=26 ms | p99=26 ms | max=26 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+getCourseQuizAnalytics | GET /api/v1/courses/{courseId}/quiz-analytics | status=AUTH_REQUIRED | p95=25 ms | p99=27 ms | max=28 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+listMyQuizzes | GET /api/v1/quizzes/mine | status=AUTH_REQUIRED | p95=20 ms | p99=20 ms | max=20 ms | avg bytes=102 B | success=0 | auth=7 | 4xx=0 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- This module needs login; anonymous timing is only an auth-protection check.
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+listMyQuizHistory | GET /api/v1/me/quizzes/history | HTTP=401 | total=59ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyQuizzes | GET /api/v1/quizzes/mine | HTTP=401 | total=28ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuiz | GET /api/v1/quizzes/{id} | HTTP=401 | total=22ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getStudentQuizReport | GET /api/v1/students/{studentId}/quiz-report | HTTP=401 | total=19ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyQuizAssignments | GET /api/v1/me/quizzes | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuizAttempt | GET /api/v1/quiz-attempts/{attemptId} | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listCourseQuizAssignments | GET /api/v1/courses/{courseId}/quiz-assignments | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuizResult | GET /api/v1/quiz-attempts/{attemptId}/result | HTTP=401 | total=15ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getCourseQuizAnalytics | GET /api/v1/courses/{courseId}/quiz-analytics | HTTP=401 | total=15ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuizAnalytics | GET /api/v1/quiz-assignments/{assignmentId}/analytics | HTTP=401 | total=13ms | SQL=0 | SQL max=0ms | bytes=102 | N+1=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No multi-query endpoint was observed in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.
+MODULE: Quizzes
+BASE URL: http://127.0.0.1:4000
+TEST: GET endpoints from Swagger; 15s per level; 5 and 10 active users.
+
+STATUS BY USER LEVEL
+5 users: AUTH_REQUIRED | requests=32 | p50=8 ms | p95=20 ms | p99=26 ms | max=28 ms | avg response=102 B | 5xx=0 | timeout=0
+10 users: AUTH_REQUIRED | requests=78 | p50=18 ms | p95=31 ms | p99=36 ms | max=36 ms | avg response=102 B | 5xx=0 | timeout=0
+
+ENDPOINTS
+getQuizAttempt | GET /api/v1/quiz-attempts/{attemptId} | status=AUTH_REQUIRED | p95=32 ms | p99=36 ms | max=36 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+listMyQuizHistory | GET /api/v1/me/quizzes/history | status=AUTH_REQUIRED | p95=32 ms | p99=35 ms | max=36 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+listMyQuizAssignments | GET /api/v1/me/quizzes | status=AUTH_REQUIRED | p95=31 ms | p99=35 ms | max=36 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+listCourseQuizAssignments | GET /api/v1/courses/{courseId}/quiz-assignments | status=AUTH_REQUIRED | p95=28 ms | p99=30 ms | max=31 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+getQuiz | GET /api/v1/quizzes/{id} | status=AUTH_REQUIRED | p95=28 ms | p99=30 ms | max=31 ms | avg bytes=102 B | success=0 | auth=7 | 4xx=0 | 5xx=0
+getQuizResult | GET /api/v1/quiz-attempts/{attemptId}/result | status=AUTH_REQUIRED | p95=27 ms | p99=28 ms | max=29 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+getStudentQuizReport | GET /api/v1/students/{studentId}/quiz-report | status=AUTH_REQUIRED | p95=27 ms | p99=28 ms | max=28 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+getQuizAnalytics | GET /api/v1/quiz-assignments/{assignmentId}/analytics | status=AUTH_REQUIRED | p95=26 ms | p99=26 ms | max=26 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+getCourseQuizAnalytics | GET /api/v1/courses/{courseId}/quiz-analytics | status=AUTH_REQUIRED | p95=25 ms | p99=27 ms | max=28 ms | avg bytes=102 B | success=0 | auth=8 | 4xx=0 | 5xx=0
+listMyQuizzes | GET /api/v1/quizzes/mine | status=AUTH_REQUIRED | p95=20 ms | p99=20 ms | max=20 ms | avg bytes=102 B | success=0 | auth=7 | 4xx=0 | 5xx=0
+
+WHAT IS GOOD
+- GOOD means no timeout/5xx was seen and p95 was below the baseline threshold.
+- AUTH_REQUIRED means the endpoint correctly protected anonymous access; it is not a backend failure.
+
+WHAT TO CHECK/FIX
+- This module needs login; anonymous timing is only an auth-protection check.
+- N+1 status: not proven by Swagger timing; requires SQL query-count measurement.
+- Index status: not proven by Swagger timing; requires EXPLAIN on the slow SQL query.
+
+SQL / PAYLOAD CHECK
+One safe GET request per documented GET endpoint; background jobs can add small noise.
+
+getQuizAnalytics | GET /api/v1/quiz-assignments/{assignmentId}/analytics | HTTP=401 | total=23ms | SQL=0 | SQL max=0ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuizAttempt | GET /api/v1/quiz-attempts/{attemptId} | HTTP=401 | total=19ms | SQL=0 | SQL max=0ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuizResult | GET /api/v1/quiz-attempts/{attemptId}/result | HTTP=401 | total=18ms | SQL=0 | SQL max=0ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyQuizAssignments | GET /api/v1/me/quizzes | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyQuizHistory | GET /api/v1/me/quizzes/history | HTTP=401 | total=17ms | SQL=0 | SQL max=0ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listMyQuizzes | GET /api/v1/quizzes/mine | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getCourseQuizAnalytics | GET /api/v1/courses/{courseId}/quiz-analytics | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+listCourseQuizAssignments | GET /api/v1/courses/{courseId}/quiz-assignments | HTTP=401 | total=16ms | SQL=0 | SQL max=0ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getStudentQuizReport | GET /api/v1/students/{studentId}/quiz-report | HTTP=401 | total=13ms | SQL=0 | SQL max=0ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+getQuiz | GET /api/v1/quizzes/{id} | HTTP=401 | total=12ms | SQL=0 | SQL max=0ms | multi-query=NOT_MEASURED_AUTH | index=NOT_CHECKED | payload=PAYLOAD_OK
+
+SIMPLE ACTION
+- No multi-query endpoint was observed in this check.
+- No slow query crossed the EXPLAIN trigger in this small test.
+- No response over 100 KB was observed in this module.

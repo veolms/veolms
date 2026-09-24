@@ -1,5 +1,6 @@
 import type { Route } from "./+types/auth-layout";
 import { Outlet, redirect } from "react-router";
+import "../auth/auth.css";
 import { useAuthAppearance } from "../auth/useAuthAppearance";
 import { queryClient } from "../lib/query-client";
 import { AuthRouteGuard } from "../routing/RouteGuards";

@@ -265,14 +265,14 @@ export function createAssignmentService(options: QuizServiceOptions) {
         "COURSE_ACCESS_REQUIRED",
         "You need active course access to view this Quiz assignment.",
       );
-    const rows = await repo.listAssignmentsForCourse(database, courseId);
-    return Promise.all(
-      rows.map(async (row) => ({
-        ...present(row),
-        quizTitle:
-          (await repo.findQuiz(database, row.quiz_id))?.title ?? "Quiz",
-      })),
+    const rows = await repo.listAssignmentsForCourseWithQuiz(
+      database,
+      courseId,
     );
+    return rows.map((row) => ({
+      ...present(row),
+      quizTitle: row.quiz_title ?? "Quiz",
+    }));
   }
 
   async function get(assignmentId: string) {
