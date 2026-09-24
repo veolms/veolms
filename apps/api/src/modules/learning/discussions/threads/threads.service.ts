@@ -788,6 +788,10 @@ export function createThreadsService(
       const isStaff = actor.roles.some((r) =>
         ["admin", "instructor", "creator", "staff"].includes(r.toLowerCase()),
       );
+      const isAuthorRestrictedTab =
+        tab === "q-and-a" || tab === "comments" || tab === "notes";
+      const effectiveMine =
+        isAuthorRestrictedTab && !isStaff ? true : query.mine;
 
       // Validate courseId if supplied
       if (query.courseId) {
@@ -956,7 +960,7 @@ export function createThreadsService(
           );
         }
 
-        if (query.mine === true) {
+        if (effectiveMine === true) {
           // `mine=true` is an ownership constraint for every role.
           notesQuery = notesQuery.where("n.user_id", "=", actor.userId);
           notesCountQuery = notesCountQuery.where(
@@ -1688,15 +1692,15 @@ export function createThreadsService(
 
       // Other tabs: "comments", "q-and-a", "following", "all"
       // Status filtering is only applicable to the "q-and-a" tab. Ownership
-      // is controlled by the explicit `mine` query value; the repository
-      // continues to enforce accessible visibility when it is omitted.
+      // is controlled by the effective `mine` value; the repository continues
+      // to enforce accessible visibility when it is omitted.
       const effectiveStatus = tab === "q-and-a" ? query.status : "all";
 
       const threadOptions = {
         ...query,
         tab,
         status: effectiveStatus,
-        mine: query.mine,
+        mine: effectiveMine,
         academyId,
         currentUserId: actor.userId,
         pageCursor,

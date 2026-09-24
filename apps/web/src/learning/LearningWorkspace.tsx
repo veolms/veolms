@@ -1020,6 +1020,9 @@ export function LearningWorkspace({
     isCourseOverviewError &&
     !isCourseOverviewFetching &&
     !courseOverview;
+  const isLearningBootstrapLoading =
+    isInteractionCapabilitiesLoading ||
+    (!isLearningDeepLinkReady && !isLearningDeepLinkError);
   useEffect(() => {
     if (deepLinkLessonUuid) {
       setDeepLinkInitializationPending(true);
@@ -2635,8 +2638,8 @@ export function LearningWorkspace({
               }
             >
               {!phoneLessonDrawerViewport &&
-                lessonHeader(false, isInteractionCapabilitiesLoading)}
-              {isLearningDeepLinkReady ? (
+                lessonHeader(false, isLearningBootstrapLoading)}
+              {isLearningDeepLinkReady || isLearningBootstrapLoading ? (
                 <Discussion
                   key={discussionPersistenceKey}
                   persistenceKey={discussionPersistenceKey}
@@ -2644,20 +2647,21 @@ export function LearningWorkspace({
                   courseId={courseId}
                   lessonId={backendLessonId}
                   noteDeepLinkId={noteDeepLinkId}
-                  isThreadDeepLinkReady
+                  isThreadDeepLinkReady={isLearningDeepLinkReady}
                   mobileBottomNavigation={mobileBottomNavigation}
                   mobileBottomNavigationHidden={mobileBottomNavigationHidden}
                   mobileLessonHeader={lessonHeader(
                     true,
-                    isInteractionCapabilitiesLoading,
+                    isLearningBootstrapLoading,
                   )}
                   lessonDescription={selectedLessonDescription}
                   isLessonDescriptionLoading={
-                    isApiRoute && isCourseOverviewLoading
+                    (isApiRoute && isCourseOverviewLoading) ||
+                    isLearningBootstrapLoading
                   }
                   interactionCapabilities={interactionCapabilities}
                   isInteractionCapabilitiesLoading={
-                    isInteractionCapabilitiesLoading
+                    isLearningBootstrapLoading
                   }
                   onSeekToTimestamp={seekCurrentLessonToTimestamp}
                 />

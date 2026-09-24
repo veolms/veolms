@@ -82,7 +82,7 @@ import {
 } from "../shell/applicationScroll";
 
 type DiscussionStatus = NonNullable<DiscussionWorkspaceCard["status"]>;
-type DiscussionOwnership = "all" | "mine";
+type DiscussionEffectiveOwnership = "all" | "mine";
 
 const normalizeDiscussionRestorationValue = (
   value: string | undefined,
@@ -152,9 +152,7 @@ function getVisibleCollapsedCardToggle(
 interface DiscussionRestorationKeyInput {
   tab: DiscussionTab;
   courseId: string;
-  qnaOwnership: DiscussionOwnership;
-  commentsOwnership: DiscussionOwnership;
-  notesOwnership: DiscussionOwnership;
+  ownership: DiscussionEffectiveOwnership;
   qnaStatus: string;
   qnaSort: string;
   notesSort: string;
@@ -164,22 +162,16 @@ interface DiscussionRestorationKeyInput {
 const getDiscussionRestorationKey = ({
   tab,
   courseId,
-  qnaOwnership,
-  commentsOwnership,
-  notesOwnership,
+  ownership,
   qnaStatus,
   qnaSort,
   notesSort,
   sort,
 }: DiscussionRestorationKeyInput) => {
-  const ownership =
-    tab === "q-and-a"
-      ? qnaOwnership
-      : tab === "comments"
-        ? commentsOwnership
-        : tab === "notes"
-          ? notesOwnership
-          : "all";
+  const effectiveTabOwnership =
+    tab === "q-and-a" || tab === "comments" || tab === "notes"
+      ? ownership
+      : "all";
   const status = tab === "q-and-a" ? qnaStatus : "all";
   const tabSort =
     tab === "q-and-a"
@@ -194,16 +186,11 @@ const getDiscussionRestorationKey = ({
     "discussions",
     `tab=${encodeDiscussionRestorationValue(tab)}`,
     `course=${encodeDiscussionRestorationValue(courseId)}`,
-    `ownership=${encodeDiscussionRestorationValue(ownership)}`,
+    `ownership=${encodeDiscussionRestorationValue(effectiveTabOwnership)}`,
     `status=${encodeDiscussionRestorationValue(status)}`,
     `sort=${encodeDiscussionRestorationValue(tabSort)}`,
   ].join("|");
 };
-
-const ownershipOptions: readonly (readonly [DiscussionOwnership, string])[] = [
-  ["all", "All authors"],
-  ["mine", "Mine"],
-];
 
 type PageTabTone = "blue" | "green" | "gold" | "rose" | "violet";
 
@@ -1565,6 +1552,7 @@ interface MobileDiscussionActionTarget {
 }
 
 export function DiscussionsWorkspace({
+  role,
   tab = "q-and-a",
   onNavigatePage,
   setNotice,
@@ -1589,11 +1577,6 @@ export function DiscussionsWorkspace({
   const [qnaStatus, setQnaStatus] = useState("all");
   const [qnaSort, setQnaSort] = useState("activity");
   const [notesSort, setNotesSort] = useState<"activity" | "latest">("activity");
-  const [qnaOwnership, setQnaOwnership] = useState<DiscussionOwnership>("mine");
-  const [commentsOwnership, setCommentsOwnership] =
-    useState<DiscussionOwnership>("mine");
-  const [notesOwnership, setNotesOwnership] =
-    useState<DiscussionOwnership>("mine");
   const [composer, setComposer] = useState<"question" | "discussion" | null>(
     null,
   );
@@ -1634,11 +1617,8 @@ export function DiscussionsWorkspace({
             : "Loading discussions";
   const workspaceStatus = isQnaTab ? qnaStatus : status;
   const workspaceSort = isQnaTab ? qnaSort : sort;
-  const workspaceOwnership = isQnaTab
-    ? qnaOwnership
-    : isCommentsTab
-      ? commentsOwnership
-      : notesOwnership;
+  const effectiveOwnership: DiscussionEffectiveOwnership =
+    role === "student" ? "mine" : "all";
 
   const workspaceQuery = (() => {
     const sharedQuery = {
@@ -1651,7 +1631,7 @@ export function DiscussionsWorkspace({
     if (isNotesTab) {
       return {
         ...sharedQuery,
-        ...(notesOwnership === "mine" ? { mine: true } : {}),
+        ...(effectiveOwnership === "mine" ? { mine: true } : {}),
         sort: notesSort,
       };
     }
@@ -1670,7 +1650,7 @@ export function DiscussionsWorkspace({
     return {
       ...sharedQuery,
       ...(isQnaTab || isCommentsTab
-        ? workspaceOwnership === "mine"
+        ? effectiveOwnership === "mine"
           ? { mine: true }
           : {}
         : {}),
@@ -1690,7 +1670,6 @@ export function DiscussionsWorkspace({
     tabId: DiscussionTab,
     overrides: {
       courseId?: string;
-      ownership?: DiscussionOwnership;
       sort?: string;
       status?: string;
     } = {},
@@ -1698,18 +1677,7 @@ export function DiscussionsWorkspace({
     getDiscussionRestorationKey({
       tab: tabId,
       courseId: overrides.courseId ?? selectedCourseId,
-      qnaOwnership:
-        tabId === "q-and-a" && overrides.ownership
-          ? overrides.ownership
-          : qnaOwnership,
-      commentsOwnership:
-        tabId === "comments" && overrides.ownership
-          ? overrides.ownership
-          : commentsOwnership,
-      notesOwnership:
-        tabId === "notes" && overrides.ownership
-          ? overrides.ownership
-          : notesOwnership,
+      ownership: effectiveOwnership,
       qnaStatus:
         tabId === "q-and-a" && overrides.status
           ? overrides.status
@@ -1859,22 +1827,6 @@ export function DiscussionsWorkspace({
     });
   };
 
-  const setOwnership = (ownership: DiscussionOwnership) => {
-    if (ownership === workspaceOwnership) return;
-
-    if (isQnaTab) {
-      setQnaOwnership(ownership);
-    } else if (isCommentsTab) {
-      setCommentsOwnership(ownership);
-    } else if (isNotesTab) {
-      setNotesOwnership(ownership);
-    }
-    transitionDiscussionScroll({
-      destinationKey: getRestorationKeyForTab(activeTab, { ownership }),
-      reset: effectiveSearch.length > 0,
-    });
-  };
-
   const setDiscussionStatus = (nextStatus: string) => {
     if (isQnaTab) {
       if (nextStatus === qnaStatus) return;
@@ -1916,9 +1868,7 @@ export function DiscussionsWorkspace({
     const destinationKey = getDiscussionRestorationKey({
       tab: activeTab,
       courseId: "all",
-      qnaOwnership: "mine",
-      commentsOwnership: "mine",
-      notesOwnership: "mine",
+      ownership: effectiveOwnership,
       qnaStatus: "all",
       qnaSort: "activity",
       notesSort: "activity",
@@ -1926,14 +1876,11 @@ export function DiscussionsWorkspace({
     });
 
     if (isQnaTab) {
-      setQnaOwnership("mine");
       setQnaStatus("all");
       setQnaSort("activity");
     } else if (isCommentsTab) {
-      setCommentsOwnership("mine");
       setSort("activity");
     } else if (isNotesTab) {
-      setNotesOwnership("mine");
       setNotesSort("activity");
     }
     onNavigatePage(nextPath, {
@@ -2040,7 +1987,6 @@ export function DiscussionsWorkspace({
     isQnaTab,
     notesSort,
     selectedCourseId,
-    workspaceOwnership,
     workspaceSort,
     workspaceStatus,
   ]);
@@ -2345,24 +2291,6 @@ export function DiscussionsWorkspace({
             />
           </div>,
         )}
-        {(isQnaTab || isCommentsTab || isNotesTab) &&
-          field(
-            "Ownership",
-            <div className="discussion-hub__select">
-              <ThemedSelect<DiscussionOwnership>
-                value={workspaceOwnership}
-                onValueChange={setOwnership}
-                ariaLabel="Filter discussions by ownership"
-                triggerClassName="discussion-hub__select-trigger"
-                contentClassName={selectContentClassName}
-                menuMaxWidth={inSheet ? Number.POSITIVE_INFINITY : undefined}
-                matchMenuToContainer={
-                  isQnaTab || isCommentsTab || isNotesTab
-                }
-                options={ownershipOptions}
-              />
-            </div>,
-          )}
         {!isCommentsTab &&
           !isNotesTab &&
           !isMentionsTab &&
