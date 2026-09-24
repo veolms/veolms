@@ -474,14 +474,17 @@ export function mergeThreadsWithCreationRecords(
   let addedLocalThreads = 0;
 
   for (const record of records) {
-    const localThread = record.optimisticThread;
+    const localThread =
+      record.status === "confirmed" && record.serverThreadEntity
+        ? record.serverThreadEntity
+        : record.optimisticThread;
     if (!threadMatchesQuery(localThread, query)) continue;
 
     const existingIndex = threads.findIndex(
       (thread) =>
         getClientEntityId(thread) === record.clientId ||
-        (record.optimisticThread.serverId !== undefined &&
-          getServerEntityId(thread) === record.optimisticThread.serverId),
+        (record.serverId !== undefined &&
+          getServerEntityId(thread) === record.serverId),
     );
     if (existingIndex >= 0) {
       threads[existingIndex] = localThread;

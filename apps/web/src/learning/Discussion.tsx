@@ -776,6 +776,18 @@ function DiscussionInner({
       ),
       nextCursor: null,
     };
+    interactionCreationCoordinator.consumeConfirmedThreadCreationsObservedByUnified(
+      { courseId, lessonId },
+      unifiedDiscussionItems
+        .filter((item) => item.sourceType === "thread")
+        .map((item) => item.entityId),
+    );
+    interactionCreationCoordinator.consumeConfirmedNoteCreationsObservedByUnified(
+      { courseId, lessonId },
+      unifiedDiscussionItems
+        .filter((item) => item.sourceType === "note")
+        .map((item) => item.entityId),
+    );
     const threadPage = mergeThreadsWithCreationRecords(
       threadResponse,
       threadQuery,

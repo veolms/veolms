@@ -19,6 +19,7 @@ import {
 } from "./interaction-entities";
 import { isClientEntityId } from "./interaction-entities";
 import {
+  mergeConfirmedInteractionAttachments,
   revokeLocalAttachmentPreview,
   type InteractionAttachment,
   type InteractionAttachmentPatch,
@@ -51,6 +52,9 @@ export interface ThreadCreationRecord {
   readonly authGeneration: number;
   readonly userId?: string;
   readonly optimisticThread: LearningThreadEntity;
+  readonly status: "pending" | "confirmed";
+  readonly serverId?: string;
+  readonly serverThreadEntity?: LearningThreadEntity;
   readonly localAttachments?: readonly LocalComposerAttachment[];
 }
 
@@ -234,6 +238,26 @@ export class InteractionCreationCoordinator {
       .sort((left, right) => left.localSequence - right.localSequence);
   }
 
+  consumeConfirmedNoteCreationsObservedByUnified(
+    context: NoteCacheContext,
+    serverIds: readonly string[],
+  ): void {
+    const observedServerIds = new Set(serverIds);
+    for (const [clientId, record] of this.noteRecords) {
+      if (
+        record.status !== "confirmed" ||
+        !record.serverId ||
+        record.context.courseId !== context.courseId ||
+        record.context.lessonId !== context.lessonId ||
+        !this.isCurrentAuth(record) ||
+        !observedServerIds.has(record.serverId)
+      ) {
+        continue;
+      }
+      this.noteRecords.delete(clientId);
+    }
+  }
+
   updateNoteAttachment(
     queryClient: QueryClient,
     clientId: string,
@@ -336,6 +360,7 @@ export class InteractionCreationCoordinator {
       authGeneration: authStore.getWriteGeneration(),
       userId: currentUser?.id,
       optimisticThread,
+      status: "pending",
       localAttachments,
     };
 
@@ -349,7 +374,9 @@ export class InteractionCreationCoordinator {
   }
 
   hasPendingClientId(clientId: string | undefined): boolean {
-    return Boolean(clientId && this.threadRecords.has(clientId));
+    return Boolean(
+      clientId && this.threadRecords.get(clientId)?.status === "pending",
+    );
   }
 
   getThreadRecord(clientId: string): ThreadCreationRecord | undefined {
@@ -370,6 +397,26 @@ export class InteractionCreationCoordinator {
       .sort((left, right) => left.optimisticThread.createdAt.localeCompare(right.optimisticThread.createdAt));
   }
 
+  consumeConfirmedThreadCreationsObservedByUnified(
+    context: LessonThreadCacheContext,
+    serverIds: readonly string[],
+  ): void {
+    const observedServerIds = new Set(serverIds);
+    for (const [clientId, record] of this.threadRecords) {
+      if (
+        record.status !== "confirmed" ||
+        !record.serverId ||
+        record.context.courseId !== context.courseId ||
+        record.context.lessonId !== context.lessonId ||
+        !this.isCurrentAuth(record) ||
+        !observedServerIds.has(record.serverId)
+      ) {
+        continue;
+      }
+      this.threadRecords.delete(clientId);
+    }
+  }
+
   getThreadResolution(clientId: string): ThreadResolution | undefined {
     const resolution = this.threadResolutions.get(clientId);
     return resolution?.authGeneration === authStore.getWriteGeneration()
@@ -384,7 +431,7 @@ export class InteractionCreationCoordinator {
     patch: InteractionAttachmentPatch,
   ): void {
     const record = this.threadRecords.get(clientId);
-    if (!record) return;
+    if (!record || record.status !== "pending") return;
     const optimisticThread = {
       ...record.optimisticThread,
       attachments: patchInteractionAttachments(
@@ -409,13 +456,30 @@ export class InteractionCreationCoordinator {
     serverThread: LearningThread,
   ): boolean {
     const record = this.threadRecords.get(clientId);
-    if (!record) return false;
-    this.threadRecords.delete(clientId);
+    if (!record || record.status !== "pending") return false;
 
     if (!this.isCurrentAuth(record)) {
+      this.threadRecords.delete(clientId);
       releaseLocalAttachmentPreviews(record.localAttachments);
       return false;
     }
+    const confirmedThreadEntity: LearningThreadEntity = {
+      ...serverThread,
+      attachments: mergeConfirmedInteractionAttachments(
+        serverThread.attachments,
+        record.optimisticThread.attachments,
+      ),
+      id: clientId,
+      clientId,
+      serverId: serverThread.id,
+      creationStatus: "confirmed",
+    };
+    this.threadRecords.set(clientId, {
+      ...record,
+      status: "confirmed",
+      serverId: serverThread.id,
+      serverThreadEntity: confirmedThreadEntity,
+    });
     this.threadResolutions.set(clientId, {
       clientId,
       status: "confirmed",
@@ -465,7 +529,7 @@ export class InteractionCreationCoordinator {
 
   failThread(queryClient: QueryClient, clientId: string): boolean {
     const record = this.threadRecords.get(clientId);
-    if (!record) return false;
+    if (!record || record.status !== "pending") return false;
     this.threadRecords.delete(clientId);
     releaseLocalAttachmentPreviews(record.localAttachments);
 
