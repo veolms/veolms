@@ -17,6 +17,11 @@ import { ADMIN_ROLE } from "../auth/index.ts";
 import { createAccessService } from "../access/index.ts";
 import * as mediaRepo from "./media.repository.ts";
 import { enqueueImageJob } from "@veolms/database";
+import { probeVideoSource } from "../../lib/video-prober.ts";
+import type {
+  MediaConvertWebhookPayload,
+  MediaConvertWebhookResponse,
+} from "./webhooks/mediaconvert-webhook.schema.ts";
 
 export interface MediaServiceOptions {
   database: Kysely<Database>;
@@ -235,15 +240,24 @@ export function createMediaService({
       );
     }
 
+    const presignedSize = Number(media.size_bytes);
     if (
       metadata.contentLength !== undefined &&
-      metadata.contentLength !== Number(media.size_bytes)
+      presignedSize > 0 &&
+      metadata.contentLength !== presignedSize
     ) {
       throw new AppError(
         400,
         "FILE_SIZE_MISMATCH",
         "Uploaded file size does not match presigned size.",
       );
+    }
+
+    if (presignedSize <= 0 && metadata.contentLength !== undefined && metadata.contentLength > 0) {
+      await mediaRepo.updateMediaAssetProbedDetails(database, mediaId, {
+        size_bytes: metadata.contentLength,
+      });
+      media.size_bytes = metadata.contentLength;
     }
 
     await mediaRepo.updateMediaAssetStatus(database, mediaId, "uploaded");
@@ -361,13 +375,92 @@ export function createMediaService({
     const now = new Date();
     const outputPrefix = `${resolveMediaVisibility(media.storage_key)}/transcoded/${media.id}`;
 
+    let videoSize = Number(media.size_bytes) || 0;
+    let width = media.width;
+    let height = media.height;
+    let durationSeconds = media.duration_seconds;
+    let videoMetadata: Record<string, unknown> | null = null;
+
+    // Check if probe is needed before dispatching (missing size, dimensions, or duration)
+    if (videoSize <= 0 || !width || !height || !durationSeconds) {
+      try {
+        const presignedUrl = await services.storage.getPresignedGetUrl(
+          media.storage_key,
+        );
+        logger?.info(
+          { mediaId: media.id, storageKey: media.storage_key },
+          "[media-service] Probing video source with ffprobe to extract size and dimensions before dispatch",
+        );
+        const probed = await probeVideoSource(presignedUrl);
+        if (probed) {
+          if (videoSize <= 0 && probed.sizeBytes > 0) {
+            videoSize = probed.sizeBytes;
+          }
+          if (!width && probed.width > 0) {
+            width = probed.width;
+          }
+          if (!height && probed.height > 0) {
+            height = probed.height;
+          }
+          if (!durationSeconds && probed.durationSeconds > 0) {
+            durationSeconds = probed.durationSeconds;
+          }
+          videoMetadata = {
+            width: width ?? undefined,
+            height: height ?? undefined,
+            durationSeconds: durationSeconds ?? undefined,
+            codec: probed.codec,
+            fps: probed.fps,
+            bitrate: probed.bitrate,
+          };
+
+          await mediaRepo.updateMediaAssetProbedDetails(database, media.id, {
+            size_bytes: videoSize,
+            width: width ?? null,
+            height: height ?? null,
+            duration_seconds: durationSeconds ?? null,
+            metadata: {
+              ...(typeof media.metadata === "object" && media.metadata !== null
+                ? media.metadata
+                : {}),
+              probed: {
+                codec: probed.codec,
+                fps: probed.fps,
+                bitrate: probed.bitrate,
+              },
+            },
+          });
+        }
+      } catch (probeErr) {
+        logger?.warn(
+          { err: probeErr, mediaId: media.id },
+          "[media-service] Video probe encountered error, continuing with available metadata",
+        );
+      }
+    }
+
+    if (videoSize <= 0) {
+      try {
+        const head = await services.storage.headObject(media.storage_key);
+        if (head?.contentLength && head.contentLength > 0) {
+          videoSize = head.contentLength;
+          await mediaRepo.updateMediaAssetProbedDetails(database, media.id, {
+            size_bytes: videoSize,
+          });
+        }
+      } catch {
+        // Ignore
+      }
+    }
+
     try {
       await mediaRepo.insertVideoJob(database, {
         id: jobId,
         video_id: media.id,
         video_key: media.storage_key,
         output_prefix: outputPrefix,
-        video_size: Number(media.size_bytes),
+        video_size: videoSize,
+        video_metadata: videoMetadata,
         qualities: VIDEO_QUALITIES,
         status: "queued",
         created_at: now,
@@ -398,7 +491,8 @@ export function createMediaService({
         videoKey: media.storage_key,
         outputPrefix,
         qualities: VIDEO_QUALITIES,
-        videoSize: Number(media.size_bytes),
+        videoSize,
+        videoMetadata: videoMetadata ?? undefined,
       });
       logger?.info(
         { jobId, mediaId: media.id },
@@ -459,6 +553,48 @@ export function createMediaService({
     });
     await mediaRepo.updateMediaAssetStatus(database, mediaId, "uploaded");
 
+    let retryVideoSize = Number(media.size_bytes) || job.video_size || 0;
+    let width = media.width;
+    let height = media.height;
+    let durationSeconds = media.duration_seconds;
+    let retryVideoMetadata: Record<string, unknown> | null =
+      (job.video_metadata as Record<string, unknown> | null) ?? null;
+
+    if (retryVideoSize <= 0 || !width || !height || !durationSeconds) {
+      try {
+        const presignedUrl = await services.storage.getPresignedGetUrl(
+          media.storage_key,
+        );
+        const probed = await probeVideoSource(presignedUrl);
+        if (probed) {
+          if (retryVideoSize <= 0 && probed.sizeBytes > 0) {
+            retryVideoSize = probed.sizeBytes;
+          }
+          if (!width && probed.width > 0) width = probed.width;
+          if (!height && probed.height > 0) height = probed.height;
+          if (!durationSeconds && probed.durationSeconds > 0) {
+            durationSeconds = probed.durationSeconds;
+          }
+          retryVideoMetadata = {
+            width: width ?? undefined,
+            height: height ?? undefined,
+            durationSeconds: durationSeconds ?? undefined,
+            codec: probed.codec,
+            fps: probed.fps,
+            bitrate: probed.bitrate,
+          };
+          await mediaRepo.updateMediaAssetProbedDetails(database, media.id, {
+            size_bytes: retryVideoSize,
+            width: width ?? null,
+            height: height ?? null,
+            duration_seconds: durationSeconds ?? null,
+          });
+        }
+      } catch {
+        // Ignore probe error on retry
+      }
+    }
+
     try {
       await services.videoDispatch.dispatch({
         action: "claim",
@@ -467,7 +603,8 @@ export function createMediaService({
         videoKey: media.storage_key,
         outputPrefix: job.output_prefix,
         qualities: job.qualities,
-        videoSize: Number(media.size_bytes),
+        videoSize: retryVideoSize,
+        videoMetadata: retryVideoMetadata ?? undefined,
       });
     } catch (error) {
       const message =
@@ -1083,6 +1220,186 @@ export function createMediaService({
     };
   }
 
+  async function handleMediaConvertWebhook({
+    headers,
+    rawBody,
+    body,
+    logger,
+  }: {
+    headers: Record<string, string | undefined>;
+    rawBody?: Buffer | string;
+    body: MediaConvertWebhookPayload;
+    logger?: FastifyBaseLogger;
+  }): Promise<MediaConvertWebhookResponse> {
+    const webhookSecret = services.config?.MEDIACONVERT_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const signatureHeader =
+        headers["x-fleet-signature"] ||
+        headers["x-hub-signature-256"] ||
+        headers["x-mediaconvert-signature"];
+      if (!signatureHeader) {
+        throw new AppError(
+          401,
+          "UNAUTHORIZED",
+          "Missing MediaConvert webhook signature header.",
+        );
+      }
+      const rawPayload = rawBody
+        ? typeof rawBody === "string"
+          ? rawBody
+          : rawBody.toString("utf-8")
+        : typeof body === "string"
+          ? body
+          : JSON.stringify(body);
+
+      const expectedSignature = `sha256=${crypto
+        .createHmac("sha256", webhookSecret)
+        .update(rawPayload)
+        .digest("hex")}`;
+
+      const sigBuf = Buffer.from(signatureHeader);
+      const expBuf = Buffer.from(expectedSignature);
+      if (
+        sigBuf.length !== expBuf.length ||
+        !crypto.timingSafeEqual(sigBuf, expBuf)
+      ) {
+        throw new AppError(
+          401,
+          "UNAUTHORIZED",
+          "Invalid MediaConvert webhook signature.",
+        );
+      }
+    }
+
+    const eventDetail = body?.detail || body;
+    const userMetadata = eventDetail?.userMetadata || body?.userMetadata || {};
+    const statusRaw = String(
+      eventDetail?.status || body?.status || "",
+    ).toUpperCase();
+    const jobId =
+      userMetadata.jobId || eventDetail?.jobId || body?.jobId || undefined;
+    const videoId =
+      userMetadata.videoId || eventDetail?.videoId || body?.videoId || undefined;
+    const errorMessage =
+      eventDetail?.errorMessage || body?.errorMessage || null;
+
+    if (!jobId && !videoId) {
+      throw new AppError(
+        400,
+        "BAD_REQUEST",
+        "Webhook payload must contain jobId or videoId.",
+      );
+    }
+
+    const job = jobId
+      ? await mediaRepo.findVideoJobById(database, jobId)
+      : await mediaRepo.findVideoJobByVideoId(database, videoId!);
+
+    if (!job) {
+      logger?.warn(
+        { jobId, videoId, status: statusRaw },
+        "[mediaconvert-webhook] Video job not found for webhook callback",
+      );
+      return { success: false, status: statusRaw.toLowerCase(), jobId };
+    }
+
+    if (statusRaw === "COMPLETE" || statusRaw === "COMPLETED") {
+      const outputGroupDetails = eventDetail?.outputGroupDetails;
+      const firstOutput = outputGroupDetails?.[0];
+      const playlistPaths = firstOutput?.playlistFilePaths;
+      const rawMasterPath =
+        playlistPaths?.[0] ||
+        body?.masterPlaylistPath ||
+        `${normalizeOutputPrefix(job.output_prefix)}/master.m3u8`;
+
+      let normalizedMaster = rawMasterPath;
+      if (normalizedMaster.startsWith("s3://")) {
+        const withoutS3 = normalizedMaster.slice(5);
+        const slashIdx = withoutS3.indexOf("/");
+        normalizedMaster =
+          slashIdx !== -1 ? withoutS3.slice(slashIdx + 1) : withoutS3;
+      }
+      normalizedMaster = normalizeOutputPrefix(normalizedMaster);
+
+      const durationMs = firstOutput?.outputDetails?.[0]?.durationInMs;
+      const durationSeconds =
+        body?.durationSeconds ||
+        (durationMs ? Math.round(durationMs / 1000) : undefined);
+
+      await mediaRepo.updateVideoJobStatus(database, job.id, {
+        status: "completed",
+        progress_percent: 100,
+        error_message: null,
+      });
+
+      await mediaRepo.updateMediaAssetStatus(database, job.video_id, "ready");
+
+      if (durationSeconds) {
+        await database
+          .updateTable("media_assets")
+          .set({ duration_seconds: durationSeconds, updated_at: new Date() })
+          .where("id", "=", job.video_id)
+          .execute();
+      }
+
+      await mediaRepo.insertVideoOutput(database, {
+        id: crypto.randomUUID(),
+        video_id: job.video_id,
+        master_playlist_path: normalizedMaster,
+        created_at: new Date(),
+      });
+
+      logger?.info(
+        {
+          jobId: job.id,
+          videoId: job.video_id,
+          masterPlaylist: normalizedMaster,
+        },
+        "[mediaconvert-webhook] Video job successfully marked as completed",
+      );
+      return { success: true, status: "completed", jobId: job.id };
+    }
+
+    if (statusRaw === "ERROR" || statusRaw === "FAILED") {
+      await mediaRepo.updateVideoJobStatus(database, job.id, {
+        status: "failed",
+        error_message: errorMessage || "MediaConvert transcoding failed.",
+        failed_at: new Date(),
+      });
+      await mediaRepo.updateMediaAssetStatus(database, job.video_id, "failed");
+      logger?.warn(
+        { jobId: job.id, videoId: job.video_id, error: errorMessage },
+        "[mediaconvert-webhook] Video job marked as failed",
+      );
+      return { success: true, status: "failed", jobId: job.id };
+    }
+
+    if (statusRaw === "PROGRESSING" || statusRaw === "PROCESSING") {
+      const progressPercent =
+        typeof eventDetail?.jobPercentComplete === "number"
+          ? eventDetail.jobPercentComplete
+          : typeof body?.progressPercent === "number"
+            ? body.progressPercent
+            : 50;
+
+      await mediaRepo.updateVideoJobStatus(database, job.id, {
+        status: "processing",
+        progress_percent: progressPercent,
+      });
+      return { success: true, status: "processing", jobId: job.id };
+    }
+
+    if (statusRaw === "CANCELED" || statusRaw === "CANCELLED") {
+      await mediaRepo.updateVideoJobStatus(database, job.id, {
+        status: "cancelled",
+      });
+      await mediaRepo.updateMediaAssetStatus(database, job.video_id, "failed");
+      return { success: true, status: "cancelled", jobId: job.id };
+    }
+
+    return { success: true, status: statusRaw.toLowerCase(), jobId: job.id };
+  }
+
   return {
     presignMediaUpload,
     confirmUpload,
@@ -1098,6 +1415,7 @@ export function createMediaService({
     getHlsStream,
     getMediaStream,
     getImageVariantStream,
+    handleMediaConvertWebhook,
   };
 }
 

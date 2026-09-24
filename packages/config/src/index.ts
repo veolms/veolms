@@ -191,6 +191,32 @@ const serverConfigSchema = z.object({
   STORAGE_FORCE_PATH_STYLE: booleanEnvironmentValueSchema.default(false),
 
   // Fleet Manager & Video Processing Dispatch
+  // 1. "mediaconvert" (inbuilt): Direct AWS MediaConvert SDK client
+  // 2. "direct": Processed directly on API server (stubbed for future extension)
+  // 3. "distributed": External worker VM / Lambda / Fleet Manager trigger
+  VIDEO_DISPATCH_STRATEGY: z
+    .enum([
+      "mediaconvert",
+      "inbuilt",
+      "direct",
+      "api-server",
+      "distributed",
+      "worker-vm",
+      "lambda",
+      "fleet",
+    ])
+    .default("mediaconvert"),
+
+  // AWS MediaConvert Configuration
+  MEDIACONVERT_ENDPOINT: z.string().optional(),
+  MEDIACONVERT_REGION: z.string().optional(),
+  MEDIACONVERT_ROLE_ARN: z.string().optional(),
+  MEDIACONVERT_QUEUE_ARN: z.string().optional(),
+  MEDIACONVERT_ACCESS_KEY_ID: z.string().optional(),
+  MEDIACONVERT_SECRET_ACCESS_KEY: z.string().optional(),
+  MEDIACONVERT_WEBHOOK_URL: z.string().url().optional(),
+  MEDIACONVERT_WEBHOOK_SECRET: z.string().optional(),
+
   FLEET_MANAGER_TRIGGER_URL: z.string().url().optional(),
   FLEET_MANAGER_LAMBDA_NAME: z.string().optional(),
   PROBE_LAMBDA_NAME: z.string().optional(),
