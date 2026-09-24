@@ -10,7 +10,7 @@ import type {
   LearningUploadResponse,
   LinkPreviewResponse,
 } from "@veolms/contracts";
-import { httpError } from "../../../../lib/errors.ts";
+import { AppError, httpError } from "../../../../lib/errors.ts";
 import {
   discussionUploadPublicUrl,
   isSupportedDiscussionUploadMimeType,
@@ -26,6 +26,61 @@ import {
   extractLinkMetadata,
 } from "./attachments.preview.ts";
 import type { AttachmentsRepository } from "./attachments.repository.ts";
+
+const LINK_PREVIEW_CACHE_TTL_MS = 5 * 60 * 1000;
+const LINK_PREVIEW_CACHE_MAX_ENTRIES = 500;
+const LINK_PREVIEW_FETCH_ATTEMPTS = 2;
+
+interface CachedLinkPreview {
+  expiresAt: number;
+  value: LinkPreviewResponse;
+}
+
+const linkPreviewCache = new Map<string, CachedLinkPreview>();
+const linkPreviewRequests = new Map<string, Promise<LinkPreviewResponse>>();
+
+function getCachedLinkPreview(url: string): LinkPreviewResponse | null {
+  const cached = linkPreviewCache.get(url);
+  if (!cached) return null;
+  if (cached.expiresAt > Date.now()) return cached.value;
+  linkPreviewCache.delete(url);
+  return null;
+}
+
+function cacheLinkPreview(url: string, value: LinkPreviewResponse): void {
+  const now = Date.now();
+  for (const [key, cached] of linkPreviewCache) {
+    if (cached.expiresAt <= now) linkPreviewCache.delete(key);
+  }
+  if (linkPreviewCache.size >= LINK_PREVIEW_CACHE_MAX_ENTRIES) {
+    const oldestKey = linkPreviewCache.keys().next().value;
+    if (oldestKey) linkPreviewCache.delete(oldestKey);
+  }
+  linkPreviewCache.set(url, {
+    value,
+    expiresAt: now + LINK_PREVIEW_CACHE_TTL_MS,
+  });
+}
+
+function createLinkPreviewFallback(url: string): LinkPreviewResponse {
+  const parsed = new URL(url);
+  return {
+    url,
+    title: parsed.hostname,
+    description: null,
+    siteName: parsed.hostname,
+    imageUrl: null,
+  };
+}
+
+function isRetryableLinkPreviewError(error: unknown): boolean {
+  return (
+    !(error instanceof AppError) ||
+    error.code === "TIMEOUT" ||
+    error.code === "FETCH_FAILED" ||
+    error.code === "DNS_LOOKUP_FAILED"
+  );
+}
 
 export interface AttachmentsService {
   initiateUpload(
@@ -72,6 +127,23 @@ export function createAttachmentsService(
   attachmentsRepo: AttachmentsRepository,
   uploadStore: DiscussionUploadStore,
 ): AttachmentsService {
+  async function resolveLinkPreview(url: string): Promise<LinkPreviewResponse> {
+    for (let attempt = 0; attempt < LINK_PREVIEW_FETCH_ATTEMPTS; attempt += 1) {
+      try {
+        const { html, finalUrl } = await fetchSafeHtml(url);
+        if (!html) return createLinkPreviewFallback(url);
+        return extractLinkMetadata(html, finalUrl);
+      } catch (error) {
+        if (!isRetryableLinkPreviewError(error)) throw error;
+        if (attempt === LINK_PREVIEW_FETCH_ATTEMPTS - 1) {
+          return createLinkPreviewFallback(url);
+        }
+      }
+    }
+
+    return createLinkPreviewFallback(url);
+  }
+
   function getAttachmentKind(
     mimetype: string,
     filename: string,
@@ -432,18 +504,20 @@ export function createAttachmentsService(
     },
 
     async fetchLinkPreview(url: string) {
-      const { html, finalUrl } = await fetchSafeHtml(url);
-      if (!html) {
-        const parsed = new URL(url);
-        return {
-          url,
-          title: parsed.hostname,
-          description: null,
-          siteName: parsed.hostname,
-          imageUrl: null,
-        };
-      }
-      return extractLinkMetadata(html, finalUrl);
+      const cached = getCachedLinkPreview(url);
+      if (cached) return cached;
+
+      const inFlight = linkPreviewRequests.get(url);
+      if (inFlight) return inFlight;
+
+      const request = resolveLinkPreview(url)
+        .then((preview) => {
+          cacheLinkPreview(url, preview);
+          return preview;
+        })
+        .finally(() => linkPreviewRequests.delete(url));
+      linkPreviewRequests.set(url, request);
+      return request;
     },
   };
 }

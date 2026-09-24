@@ -37,19 +37,6 @@ export async function listQuizzesByAcademy(
     .execute();
 }
 
-export async function listQuizzesByIds(
-  database: DatabaseExecutor,
-  quizIds: readonly string[],
-) {
-  if (quizIds.length === 0) return [];
-  return await database
-    .selectFrom("quizzes")
-    .selectAll()
-    .where("id", "in", quizIds)
-    .where("deleted_at", "is", null)
-    .execute();
-}
-
 export async function findVersion(
   database: DatabaseExecutor,
   versionId: string,

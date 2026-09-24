@@ -1,4 +1,4 @@
-import { api } from "../../lib/api-client";
+import { api, getApiBaseUrl } from "../../lib/api-client";
 import type {
   Order,
   OrdersListResponse,
@@ -22,7 +22,7 @@ export const ordersService = {
   },
 
   getInvoiceDownloadUrl: (orderId: string): string => {
-    const base = import.meta.env.VITE_API_BASE_URL || "/api/v1";
+    const base = getApiBaseUrl();
     return `${base}/orders/${orderId}/invoice/download`;
   },
 };

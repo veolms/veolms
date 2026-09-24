@@ -8,8 +8,10 @@ import {
   quizAnswerSyncResponseSchema,
   quizAssignmentSchema,
   quizAnalyticsSchema,
+  quizCoursePricingSchema,
   quizDeleteResponseSchema,
   quizHistoryResponseSchema,
+  quizPricingPreviewResponseSchema,
   quizResultSchema,
   quizSchema,
   studentQuizReportSchema,
@@ -18,6 +20,7 @@ import {
   type CreateQuizQuestionRequest,
   type CreateQuizRequest,
   type CreateQuizWithQuestionsRequest,
+  type SetQuizCoursePricingRequest,
   type UpdateQuizAssignmentRequest,
   type UpdateQuizQuestionRequest,
   type UpdateQuizRequest,
@@ -96,6 +99,23 @@ export const quizzesService = {
         payload,
       ),
     ),
+  /** One quiz price per course; every quiz attached to the course shares it. */
+  getCoursePricing: async (courseId: string) =>
+    quizCoursePricingSchema.parse(
+      await api.get<unknown>(
+        `/courses/${encodeURIComponent(courseId)}/quiz-pricing`,
+      ),
+    ),
+  setCoursePricing: async (
+    courseId: string,
+    payload: SetQuizCoursePricingRequest,
+  ) =>
+    quizCoursePricingSchema.parse(
+      await api.put<unknown>(
+        `/courses/${encodeURIComponent(courseId)}/quiz-pricing`,
+        payload,
+      ),
+    ),
   deleteAssignment: async (id: string) =>
     quizDeleteResponseSchema.parse(
       await api.delete<unknown>(
@@ -159,6 +179,12 @@ export const quizzesService = {
     studentQuizReportSchema.parse(
       await api.get<unknown>(
         `/students/${encodeURIComponent(studentId)}/quiz-report`,
+      ),
+    ),
+  getPricingPreview: async (courseId: string, assignmentId: string) =>
+    quizPricingPreviewResponseSchema.parse(
+      await api.get<unknown>(
+        `/courses/${encodeURIComponent(courseId)}/quiz-assignments/${encodeURIComponent(assignmentId)}/pricing-preview`,
       ),
     ),
 };

@@ -21,6 +21,7 @@ describe("packages/config", () => {
       assert.equal(config.NODE_ENV, "development");
       assert.equal(config.EMAIL_TRANSPORT, "console");
       assert.equal(config.RP_ID, "localhost");
+      assert.equal(config.SKIP_ADMIN_MFA, false);
       assert.ok(config.WEBAUTHN_ORIGINS.includes("http://localhost:3000"));
       assert.ok(config.WEBAUTHN_ORIGINS.includes("http://127.0.0.1:3000"));
       assert.ok(config.WEBAUTHN_ORIGINS.includes("http://localhost:4173"));
@@ -41,6 +42,16 @@ describe("packages/config", () => {
       assert.ok(config.WEBAUTHN_ORIGINS.includes("https://app.veolms.org"));
       assert.ok(config.WEBAUTHN_RP_IDS.includes("dev.veolms.org"));
       assert.ok(config.WEBAUTHN_RP_IDS.includes("app.veolms.org"));
+    });
+
+    it("should parse SKIP_ADMIN_MFA when enabled", () => {
+      const config = loadServerConfig({
+        SESSION_SECRET: "12345678901234567890123456789012",
+        MFA_ENCRYPTION_KEY: "12345678901234567890123456789012",
+        SETUP_TOKEN: "custom_setup_token",
+        SKIP_ADMIN_MFA: "true",
+      });
+      assert.equal(config.SKIP_ADMIN_MFA, true);
     });
 
     it("should load web configuration", () => {

@@ -13,8 +13,8 @@ export interface MfaGateUser {
 export function accountRequiresMfaEnrollment(
   user: Pick<MfaGateUser, "mfaMandatory" | "roles">,
 ): boolean {
-  if (user.mfaMandatory) {
-    return true;
+  if (typeof user.mfaMandatory === "boolean") {
+    return user.mfaMandatory;
   }
 
   return Boolean(
@@ -35,7 +35,7 @@ export function resolveMfaSetupView(
     return user.mfaVerified ? "done" : "verify";
   }
 
-  if (accountRequiresMfaEnrollment(user) || !user.mfaVerified) {
+  if (accountRequiresMfaEnrollment(user)) {
     return "enroll";
   }
 

@@ -40,11 +40,13 @@ function handleExpandedKeyDown(
 export interface LessonDescriptionProps {
   description?: string | null;
   isLoading?: boolean;
+  onSeekToTimestamp?: (seconds: number) => void;
 }
 
 export function LessonDescription({
   description,
   isLoading = false,
+  onSeekToTimestamp,
 }: LessonDescriptionProps = {}) {
   const contentId = useId();
   const sectionRef = useRef<HTMLElement>(null);
@@ -124,6 +126,8 @@ export function LessonDescription({
             <DiscussionMarkdown
               content={draftContent}
               label="Lesson description content"
+              enableInlineTimestamps={Boolean(onSeekToTimestamp)}
+              onSeekToTimestamp={onSeekToTimestamp}
               className="[&>:first-child]:mt-0"
             />
           ) : (

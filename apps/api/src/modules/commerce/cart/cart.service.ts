@@ -127,6 +127,13 @@ export function createCartService({
   }
 
   async function addItem(userId: string, item: CartItemInput): Promise<CartResponse> {
+    if (item.itemType === "quiz") {
+      throw new AppError(
+        400,
+        "CART_QUIZ_UNSUPPORTED",
+        "Quizzes are purchased directly, not through the cart.",
+      );
+    }
     const cart = await getOrCreateCart(userId);
 
     // 1. Check for duplicate cart item in student's active cart

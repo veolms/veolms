@@ -274,6 +274,14 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
     };
   }
 
+  async function getActiveLearnerCount(filters: {
+    courseId?: string | string[];
+    from?: Date;
+    to?: Date;
+  }) {
+    return await studentsRepo.getActiveLearnerCount(database, filters);
+  }
+
   async function getStudentByUsername(
     username: string,
   ): Promise<StudentDetailResponse> {
@@ -414,6 +422,7 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
   return {
     listStudents,
     getStudentByUsername,
+    getActiveLearnerCount,
   };
 }
 

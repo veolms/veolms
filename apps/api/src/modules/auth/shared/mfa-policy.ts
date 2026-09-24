@@ -5,7 +5,15 @@ const MANDATORY_MFA_ROLES = new Set([ADMIN_ROLE, INSTRUCTOR_ROLE]);
 export function isMfaMandatoryAccount(
   storedFlag: boolean,
   roles: readonly string[] | null | undefined,
+  options?: { skipAdminMfa?: boolean },
 ): boolean {
+  const isAdmin = Boolean(
+    roles?.some((role) => role.toLowerCase() === ADMIN_ROLE),
+  );
+  if (options?.skipAdminMfa && isAdmin) {
+    return false;
+  }
+
   if (storedFlag) {
     return true;
   }

@@ -138,6 +138,23 @@ export function createdAtIdDescSql(
   )`;
 }
 
+export function updatedAtIdDescSql(
+  alias: string,
+  cursor: DiscussionListCursor,
+) {
+  if (!cursor.updatedAt) {
+    throw httpError(400, "INVALID_CURSOR", "The pagination cursor is invalid.");
+  }
+
+  return sql<boolean>`(
+    ${sql.raw(`${alias}.updated_at`)} < ${cursor.updatedAt}
+    or (
+      ${sql.raw(`${alias}.updated_at`)} = ${cursor.updatedAt}
+      and ${sql.raw(`${alias}.id`)} < ${cursor.id}::uuid
+    )
+  )`;
+}
+
 export function createdAtIdAscSql(alias: string, cursor: DiscussionListCursor) {
   return sql<boolean>`(
     ${sql.raw(`${alias}.created_at`)} > ${cursor.createdAt}

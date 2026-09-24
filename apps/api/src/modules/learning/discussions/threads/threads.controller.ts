@@ -53,6 +53,12 @@ export interface ThreadsController {
     }>,
     reply: FastifyReply,
   ): Promise<void>;
+  getDiscussionsWorkspace(
+    request: FastifyRequest<{
+      Querystring: ListLearningThreadsQuery;
+    }>,
+    reply: FastifyReply,
+  ): Promise<void>;
 }
 
 export function createThreadsController({
@@ -147,6 +153,23 @@ export function createThreadsController({
       reply
         .status(200)
         .send({ message: "Discussion thread deleted successfully." });
+    },
+
+
+
+
+
+    async getDiscussionsWorkspace(request, reply) {
+      const user = request.user!;
+      const query = request.query;
+
+      const result = await service.getDiscussionsWorkspace(database, {
+        ...query,
+        currentUserId: user.id,
+        roles: user.roles,
+      });
+
+      return reply.status(200).send(result);
     },
   };
 }

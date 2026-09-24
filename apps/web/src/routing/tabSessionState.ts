@@ -8,7 +8,7 @@ export type SettingsTab =
   | "account";
 
 export type DiscussionTab =
-  "q-and-a" | "comments" | "mentions" | "following" | "saved";
+  "q-and-a" | "comments" | "notes" | "mentions" | "following" | "saved";
 
 export const SETTINGS_DEFAULT_TAB: SettingsTab = "profile";
 export const DISCUSSIONS_DEFAULT_TAB: DiscussionTab = "q-and-a";
@@ -28,6 +28,7 @@ const settingsTabs = new Set<SettingsTab>([
 const discussionTabs = new Set<DiscussionTab>([
   "q-and-a",
   "comments",
+  "notes",
   "mentions",
   "following",
   "saved",

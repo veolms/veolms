@@ -97,8 +97,8 @@ import {
   getRoleDisplayName,
 } from "./shell/workspaceRole";
 import {
-  SIDEBAR_DEFAULT_WIDTH,
   SIDEBAR_MIN_WIDTH,
+  applySidebarShellToDocument,
   clampSidebarMaxWidth,
   clampSidebarWidth,
   getDefaultSidebarPreferences,
@@ -302,6 +302,12 @@ const CouponsAccessDenied = lazy(() =>
     default: module.CouponsAccessDenied,
   })),
 );
+const AnalyticsDashboardPage = lazy(() =>
+  import("./analytics/AnalyticsDashboardPage").then((module) => ({
+    default: module.AnalyticsDashboardPage,
+  })),
+);
+
 
 type ThemePreference = "light" | "dark" | "device";
 type AppearanceOption = ThemePreference | "theme";
@@ -786,10 +792,12 @@ export function CoursesPage({
   >(null);
   const [navigationDropTarget, setNavigationDropTarget] =
     useState<NavigationDropTarget | null>(null);
-  const [compactNavigation, setCompactNavigation] = useState(() =>
-    typeof window === "undefined"
-      ? false
-      : window.matchMedia(COMPACT_NAVIGATION_QUERY).matches,
+  // Browser-only input capabilities are applied after startup so the loading
+  // boundary remains deterministic across the build and the first client pass.
+  const [compactNavigation, setCompactNavigation] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      Boolean(window.__VEO_BOOTSTRAP__?.navigation?.compact),
   );
   const [coarseNavigationInput, setCoarseNavigationInput] = useState(false);
   const [edgeSidebarOpen, setEdgeSidebarOpen] = useState(false);
@@ -1201,14 +1209,7 @@ export function CoursesPage({
       if (shellState.width !== sidebarWidth) setSidebarWidth(shellState.width);
     }
 
-    const root = document.documentElement;
-    root.dataset.sidebarState = shellState.mode;
-    root.style.setProperty("--sidebar-width", `${shellState.width}px`);
-    root.style.setProperty("--sidebar-expanded-width", `${shellState.width}px`);
-    window.__VEO_BOOTSTRAP__ = {
-      ...window.__VEO_BOOTSTRAP__,
-      sidebar: shellState,
-    };
+    applySidebarShellToDocument(shellState);
   }, [sidebarMode, sidebarWidth]);
 
   const navigationHydrationKey = [
@@ -1532,18 +1533,15 @@ export function CoursesPage({
   ]);
 
   useEffect(() => {
+    if (page === "course-create") return;
+    if (!authUserFetched) return;
     // The initial role is deterministic for SSR/hydration and may still be
     // "student" while the account-specific workspace role is being restored.
     // Do not redirect a valid creator route during that one render window.
     if (!isWorkspaceRoleHydrated || !isAuthenticated) return;
 
     if (effectiveRole !== "creator") {
-      const forbiddenPages = [
-        "students",
-        "student-details",
-        "course-create",
-        "quiz-builder",
-      ];
+      const forbiddenPages = ["students", "student-details", "quiz-builder"];
       if (
         (page && forbiddenPages.includes(page)) ||
         requestedSection === "Students" ||
@@ -1553,6 +1551,7 @@ export function CoursesPage({
       }
     }
   }, [
+    authUserFetched,
     effectiveRole,
     isAuthenticated,
     isWorkspaceRoleHydrated,
@@ -1562,7 +1561,7 @@ export function CoursesPage({
   ]);
 
   useEffect(() => {
-    if (!storedPreferencesReady) return;
+    if (!storedPreferencesReady || !sidebarShellHydratedRef.current) return;
     localStorage.setItem("veolms-sidebar-mode", sidebarMode);
     localStorage.setItem(
       "veolms-sidebar-collapsed",
@@ -2338,10 +2337,9 @@ export function CoursesPage({
 
   const navigationUsesCompactInteraction =
     compactNavigation || coarseNavigationInput;
-  // The first render is deterministic on both server and client. The layout
-  // effect above adopts the head bootstrap snapshot before the browser paints,
-  // so React owns the persisted shell mode and width without a hydration
-  // mismatch.
+  // The first client render of a prerendered document stays deterministic so
+  // hydration can match. SPA fallback and auth-gated remounts run this
+  // initializer in the browser and adopt the head bootstrap before paint.
   const renderedSidebarMode = sidebarMode;
   const renderedSidebarWidth = sidebarWidth;
   const { collapsed: sidebarCollapsed, hidden: sidebarHidden } =
@@ -3566,9 +3564,6 @@ export function CoursesPage({
       );
     }
     if (surfacePage === "course-create") {
-      if (effectiveRole !== "creator") {
-        return null;
-      }
       return (
         <Suspense fallback={<CourseCreateLoadingFallback />}>
           <CourseCreatePage
@@ -3691,6 +3686,18 @@ export function CoursesPage({
       }
       return (
         <StudentsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+      );
+    }
+    if (surfacePage === "analytics" || surfaceActiveSection === "Analytics") {
+      if (effectiveRole !== "creator") {
+        return null;
+      }
+      return (
+        <AnalyticsDashboardPage
+          role={role}
+          isAdmin={isAdmin}
+          onNavigatePage={onNavigatePage}
+        />
       );
     }
     if (surfacePage === "placeholder") {

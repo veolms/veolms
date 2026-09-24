@@ -16,7 +16,7 @@ export interface ListOrdersOptions {
 }
 
 export interface OrderStatsFilters {
-  courseId?: string;
+  courseId?: string | string[];
   couponId?: string;
   status?: OrderStatus;
   from?: Date;
@@ -29,6 +29,70 @@ export interface OrderStatsRow {
   uniqueBuyers: number;
   grossPaid: number;
   refundedAmount: number;
+}
+
+export interface RevenueTrendFilters {
+  courseId?: string | string[];
+  from?: Date;
+  to?: Date;
+  currency: string;
+}
+
+export interface RevenueTrendPoint {
+  date: string;
+  value: number;
+}
+
+function courseIdListFilter(courseId: string | string[] | undefined): string[] {
+  if (!courseId) return [];
+  return Array.isArray(courseId) ? courseId : [courseId];
+}
+
+/** Counts of orders by lifecycle bucket — a simple, honestly-derived stand-in
+ * for a page-view/checkout funnel, which VeoLMS doesn't currently track. */
+export async function getOrderStatusFunnel(
+  database: Executor,
+  scope: OrderScope,
+  filters: { from?: Date; to?: Date; courseId?: string | string[] },
+): Promise<{ created: number; paid: number; refunded: number }> {
+  let query = database
+    .selectFrom("orders as o")
+    .select([
+      sql<number>`count(*)::int`.as("created"),
+      sql<number>`count(*) filter (where o.status in ('paid','partially_refunded','refunded'))::int`.as(
+        "paid",
+      ),
+      sql<number>`count(*) filter (where o.status in ('partially_refunded','refunded'))::int`.as(
+        "refunded",
+      ),
+    ]);
+
+  if (scope.type === "user") {
+    query = query.where("o.user_id", "=", scope.id);
+  }
+  if (filters.from) {
+    query = query.where("o.created_at", ">=", filters.from);
+  }
+  if (filters.to) {
+    query = query.where("o.created_at", "<=", filters.to);
+  }
+  const courseIds = courseIdListFilter(filters.courseId);
+  if (courseIds.length > 0) {
+    query = query.where(
+      sql<boolean>`EXISTS (
+        SELECT 1 FROM order_items oi
+        WHERE oi.order_id = o.id
+          AND oi.course_id = ANY(${courseIds}::uuid[])
+      )`,
+    );
+  }
+
+  const row = await query.executeTakeFirst();
+  return {
+    created: Number(row?.created ?? 0),
+    paid: Number(row?.paid ?? 0),
+    refunded: Number(row?.refunded ?? 0),
+  };
 }
 
 export async function findOrderById(
@@ -210,13 +274,18 @@ export async function getOrderStatsByCurrency(
     query = query.where("o.created_at", "<=", filters.to);
   }
   if (filters.courseId) {
-    query = query.where(
-      sql<boolean>`EXISTS (
-        SELECT 1 FROM order_items oi
-        WHERE oi.order_id = o.id
-          AND oi.course_id = ${filters.courseId}::uuid
-      )`,
-    );
+    const courseIds = Array.isArray(filters.courseId)
+      ? filters.courseId
+      : [filters.courseId];
+    if (courseIds.length > 0) {
+      query = query.where(
+        sql<boolean>`EXISTS (
+          SELECT 1 FROM order_items oi
+          WHERE oi.order_id = o.id
+            AND oi.course_id = ANY(${courseIds}::uuid[])
+        )`,
+      );
+    }
   }
   if (filters.couponId) {
     query = query.where("o.coupon_id", "=", filters.couponId);
@@ -229,6 +298,67 @@ export async function getOrderStatsByCurrency(
     uniqueBuyers: Number(row.unique_buyers),
     grossPaid: Number(row.gross_paid),
     refundedAmount: Number(row.refunded_amount),
+  }));
+}
+
+/**
+ * Day-bucketed net revenue (gross paid minus processed refunds, same
+ * definition as getOrderStatsByCurrency) for a single currency — trend charts
+ * plot one currency at a time, so the caller resolves which one first (see
+ * order.service.ts's computeOrderStats for that selection logic).
+ */
+export async function getRevenueTrend(
+  database: Executor,
+  scope: OrderScope,
+  filters: RevenueTrendFilters,
+): Promise<RevenueTrendPoint[]> {
+  let query = database
+    .selectFrom("orders as o")
+    .select([
+      sql<string>`to_char(date_trunc('day', o.created_at at time zone 'UTC'), 'YYYY-MM-DD')`.as(
+        "date",
+      ),
+      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded', 'refunded') then o.total_amount else 0 end), 0)::bigint`.as(
+        "gross_paid",
+      ),
+      sql<number>`coalesce(sum((
+        select coalesce(sum(r.amount), 0)
+        from refunds r
+        where r.order_id = o.id and r.status = 'processed'
+      )), 0)::bigint`.as("refunded_amount"),
+    ])
+    .where("o.currency", "=", filters.currency)
+    .groupBy(sql`date_trunc('day', o.created_at at time zone 'UTC')`)
+    .orderBy(sql`date_trunc('day', o.created_at at time zone 'UTC')`);
+
+  if (scope.type === "user") {
+    query = query.where("o.user_id", "=", scope.id);
+  }
+  if (filters.from) {
+    query = query.where("o.created_at", ">=", filters.from);
+  }
+  if (filters.to) {
+    query = query.where("o.created_at", "<=", filters.to);
+  }
+  if (filters.courseId) {
+    const courseIds = Array.isArray(filters.courseId)
+      ? filters.courseId
+      : [filters.courseId];
+    if (courseIds.length > 0) {
+      query = query.where(
+        sql<boolean>`EXISTS (
+          SELECT 1 FROM order_items oi
+          WHERE oi.order_id = o.id
+            AND oi.course_id = ANY(${courseIds}::uuid[])
+        )`,
+      );
+    }
+  }
+
+  const rows = await query.execute();
+  return rows.map((row) => ({
+    date: row.date,
+    value: Number(row.gross_paid) - Number(row.refunded_amount),
   }));
 }
 

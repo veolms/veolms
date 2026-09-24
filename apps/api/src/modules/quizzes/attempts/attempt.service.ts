@@ -6,6 +6,8 @@ import type {
 import { AppError } from "../../../lib/errors.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 import * as repo from "../shared/quiz.repository.ts";
+import * as pricingRepo from "../shared/quiz-pricing.repository.ts";
+import { resolveQuizCharge } from "../../commerce/pricing/quiz-pricing.amount.ts";
 import { isAdmin, type QuizServiceOptions } from "../shared/quiz.types.ts";
 import { gradeQuizQuestion, hasQuizAnswer } from "../shared/quiz.grading.ts";
 
@@ -21,6 +23,22 @@ function assignmentDto(row: Awaited<ReturnType<typeof repo.findAssignment>>) {
 
 function toIso(value: Date | null | undefined) {
   return value?.toISOString() ?? null;
+}
+
+/** Read-only pricing joined from the course's shared quiz pricing row. */
+function presentPricing(
+  pricing: Awaited<ReturnType<typeof pricingRepo.findPricing>>,
+) {
+  return {
+    quizPricingId: pricing?.id ?? null,
+    pricingType: pricing?.pricing_type ?? ("free" as const),
+    price: Number(pricing?.price ?? 0),
+    currency: pricing?.currency ?? "INR",
+    salePrice:
+      pricing?.sale_price !== null && pricing?.sale_price !== undefined
+        ? Number(pricing.sale_price)
+        : null,
+  };
 }
 
 function stableHash(value: string) {
@@ -117,18 +135,62 @@ export function createAttemptService(options: QuizServiceOptions) {
     return assignmentDto(await repo.findAssignment(database, assignmentId));
   }
 
+  /**
+   * Paid course quizzes need the student's quiz pass for the course; one
+   * purchase unlocks every quiz in it. Free quizzes need no grant. Course
+   * owners and admins skip the check.
+   */
+  async function assertQuizPurchased(
+    assignment: NonNullable<Awaited<ReturnType<typeof repo.findAssignment>>>,
+    userId: string,
+    roles: readonly string[],
+  ) {
+    if (isAdmin({ id: userId, roles })) return;
+    const course = await courseService.findCourseById(assignment.course_id);
+    if (course?.creator_id === userId) return;
+    const charge = resolveQuizCharge(
+      await pricingRepo.findPricing(database, assignment.course_id),
+    );
+    if (!charge.isPaid) return;
+    const grant = await pricingRepo.findActiveGrant(database, {
+      userId,
+      courseId: assignment.course_id,
+      now: new Date(),
+    });
+    if (!grant)
+      throw new AppError(
+        403,
+        "QUIZ_ENROLLMENT_REQUIRED",
+        "Purchase the quiz pass for this course to start an attempt.",
+      );
+  }
+
   async function assertCanAttempt(
     assignmentId: string,
     userId: string,
     roles: readonly string[] = [],
   ) {
     const assignment = await getAssignment(assignmentId);
-    if (!(await hasCourseAccess(userId, assignment.course_id, roles)))
-      throw new AppError(
-        403,
-        "COURSE_ACCESS_REQUIRED",
-        "You need active course access to take this Quiz.",
+    let isPreviewLesson = false;
+    if (assignment.lesson_id) {
+      const lesson = await courseService.findLessonById(
+        assignment.course_id,
+        assignment.lesson_id,
       );
+      if (lesson?.is_preview) {
+        isPreviewLesson = true;
+      }
+    }
+
+    if (!isPreviewLesson) {
+      if (!(await hasCourseAccess(userId, assignment.course_id, roles)))
+        throw new AppError(
+          403,
+          "COURSE_ACCESS_REQUIRED",
+          "You need active course access to take this Quiz.",
+        );
+      await assertQuizPurchased(assignment, userId, roles);
+    }
     const version = await repo.findVersion(
       database,
       assignment.quiz_version_id,
@@ -295,12 +357,25 @@ export function createAttemptService(options: QuizServiceOptions) {
     if (!attempt || attempt.user_id !== userId)
       throw new AppError(404, "ATTEMPT_NOT_FOUND", "Quiz attempt not found.");
     const assignment = await getAssignment(attempt.assignment_id);
-    if (!(await hasCourseAccess(userId, assignment.course_id, roles)))
-      throw new AppError(
-        403,
-        "COURSE_ACCESS_REQUIRED",
-        "You need active course access to continue this Quiz.",
+    let isPreviewLesson = false;
+    if (assignment.lesson_id) {
+      const lesson = await courseService.findLessonById(
+        assignment.course_id,
+        assignment.lesson_id,
       );
+      if (lesson?.is_preview) {
+        isPreviewLesson = true;
+      }
+    }
+    if (!isPreviewLesson) {
+      if (!(await hasCourseAccess(userId, assignment.course_id, roles)))
+        throw new AppError(
+          403,
+          "COURSE_ACCESS_REQUIRED",
+          "You need active course access to continue this Quiz.",
+        );
+      await assertQuizPurchased(assignment, userId, roles);
+    }
     if (attempt.status !== "in_progress")
       throw new AppError(
         409,
@@ -766,20 +841,12 @@ export function createAttemptService(options: QuizServiceOptions) {
     return gradedResult ?? result(userId, attemptId);
   }
 
-  async function getAttempt(userId: string, attemptId: string) {
-    const attempt = await repo.findAttempt(database, attemptId);
-    if (!attempt || attempt.user_id !== userId)
-      throw new AppError(404, "ATTEMPT_NOT_FOUND", "Quiz attempt not found.");
-    if (
-      attempt.status === "in_progress" &&
-      attempt.expires_at &&
-      attempt.expires_at <= new Date()
-    ) {
-      const updated = await repo.updateAttempt(database, attemptId, {
-        status: "expired",
-      });
-      return buildAttempt(updated);
-    }
+  async function getAttempt(
+    userId: string,
+    attemptId: string,
+    roles: readonly string[] = [],
+  ) {
+    const attempt = await requireOwnedActiveAttempt(userId, attemptId, roles);
     return buildAttempt(attempt);
   }
 
@@ -815,21 +882,27 @@ export function createAttemptService(options: QuizServiceOptions) {
       database,
       courseIds,
     );
-    const userAttempts = await repo.listAttemptsForUser(database, userId);
+    const assignmentCourseIds = [
+      ...new Set(assignments.map((assignment) => assignment.course_id)),
+    ];
+    const assignmentLessonIds = [
+      ...new Set(assignments.map((assignment) => assignment.lesson_id)),
+    ];
+    const [userAttempts, courses, lessons, pricingRows] = await Promise.all([
+      repo.listAttemptsForUser(database, userId),
+      courseService.findCoursesByIds(assignmentCourseIds),
+      courseService.findLessonsByIds(assignmentLessonIds),
+      pricingRepo.listPricingForCourses(database, assignmentCourseIds),
+    ]);
+    const pricingByCourseId = new Map(
+      pricingRows.map((pricing) => [pricing.course_id, pricing] as const),
+    );
     const attemptsByAssignment = new Map<string, typeof userAttempts>();
     for (const attempt of userAttempts) {
       const current = attemptsByAssignment.get(attempt.assignment_id) ?? [];
       current.push(attempt);
       attemptsByAssignment.set(attempt.assignment_id, current);
     }
-    const [courses, lessons] = await Promise.all([
-      courseService.findCoursesByIds([
-        ...new Set(assignments.map((assignment) => assignment.course_id)),
-      ]),
-      courseService.findLessonsByIds([
-        ...new Set(assignments.map((assignment) => assignment.lesson_id)),
-      ]),
-    ]);
     const courseTitles = new Map(
       courses.map((course) => [course.id, course.title]),
     );
@@ -899,6 +972,7 @@ export function createAttemptService(options: QuizServiceOptions) {
         feedbackMode: item.feedback_mode,
         availableFrom: toIso(item.available_from),
         availableUntil: toIso(item.available_until),
+        ...presentPricing(pricingByCourseId.get(item.course_id)),
         quizTitle: item.quizTitle,
         lessonTitle: item.lessonTitle,
         courseTitle: item.courseTitle,

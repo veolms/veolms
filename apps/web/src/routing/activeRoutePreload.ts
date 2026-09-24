@@ -1,3 +1,5 @@
+import { isCourseEditorPath } from "../courses/courseEditorRouting";
+
 export type ShellRouteModuleKey =
   "settings" | "catalogue" | "placeholder" | "workspace";
 
@@ -53,7 +55,7 @@ export async function preloadActiveRouteForHydration(pathname: string) {
     return;
   }
 
-  if (pathname === "/courses/create") {
+  if (isCourseEditorPath(pathname)) {
     await loadShellRouteModule(
       "placeholder",
       () => import("../courses/PlaceholderPage"),

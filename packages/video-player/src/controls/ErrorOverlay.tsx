@@ -23,7 +23,7 @@ export function ErrorOverlay({ onClose }: { onClose?: () => void }) {
 
   return (
     <div
-      className="absolute inset-0 z-40 grid place-items-center bg-black/75 p-6 text-center text-white backdrop-blur-sm"
+      className="absolute inset-0 z-40 grid place-items-center overflow-hidden rounded-[inherit] bg-black/75 p-6 text-center text-white backdrop-blur-sm"
       role="alert"
     >
       {onClose ? (

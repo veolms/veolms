@@ -111,7 +111,7 @@ pnpm build:web -- --first-section
 pnpm --filter @veolms/web preview -- --first-section
 ```
 
-React Router writes the deployable client-only application to `apps/web/build/client`. `VITE_CDN_URL` is the browser-facing CDN value and accepts either a full CDN/Worker domain (for example `https://media.veolms.org`) or a same-origin path such as `/cdn`. `CDN_URL` is the corresponding API/Worker value; keep both values equal. The Vite development server uses `VITE_CDN_URL` (falling back to `CDN_URL`) to provide the `/cdn/*` proxy when it is an absolute URL. With `/cdn` in deployment, the host must route `/cdn/*` to the Worker; media bytes never pass through the API.
+React Router writes the deployable client-only application to `apps/web/build/client`. `VITE_CDN_URL` is the browser-facing CDN value and accepts either a full CDN/Worker domain (for example `https://media.veolms.org`) or a same-origin path such as `/cdn`. `VITE_COURSE_MEDIA_BASE_URL`, when set, overrides `VITE_CDN_URL` for the built-in course HLS/video and thumbnail assets. This is useful when local development reads those assets from a public R2 origin. `CDN_URL` is the corresponding API/Worker value; keep both values equal for API-delivered protected media. The Vite development server uses `VITE_CDN_URL` (falling back to `CDN_URL`) to provide the `/cdn/*` proxy when it is an absolute URL. With `/cdn` in deployment, the host must route `/cdn/*` to the Worker; media bytes never pass through the API.
 
 ## Direct media CDN Worker
 

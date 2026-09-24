@@ -16,6 +16,9 @@ import type {
   LearningReply,
   LearningThread,
   LearningThreadsListResponse,
+  LessonDiscussionsListResponse,
+  LessonDiscussionCountsResponse,
+  ListLessonDiscussionsQuery,
   LearningUploadResponse,
   LinkPreviewResponse,
   ListAuditLogsQuery,
@@ -28,6 +31,7 @@ import type {
   ModerateReplyRequest,
   ModerateThreadRequest,
   ReportsListResponse,
+  DiscussionsWorkspaceResponse,
   SuspendUserRequest,
   ToggleBookmarkResponse,
   ToggleFollowResponse,
@@ -50,6 +54,26 @@ export interface AttachmentUploadProgress {
 }
 
 export const learningInteractionsService = {
+  getLessonInteractionCounts(
+    courseId: string,
+    lessonId: string,
+  ): Promise<LessonDiscussionCountsResponse> {
+    return api.get<LessonDiscussionCountsResponse>(
+      `/courses/${courseId}/lessons/${lessonId}/discussions/counts`,
+    );
+  },
+
+  listLessonDiscussions(
+    courseId: string,
+    lessonId: string,
+    query?: ListLessonDiscussionsQuery,
+  ): Promise<LessonDiscussionsListResponse> {
+    return api.get<LessonDiscussionsListResponse>(
+      `/courses/${courseId}/lessons/${lessonId}/discussions`,
+      { params: query },
+    );
+  },
+
   // Threads (Lessons & Assignments)
   listLessonThreads(
     courseId: string,
@@ -88,6 +112,14 @@ export const learningInteractionsService = {
     query?: ListLearningThreadsQuery,
   ): Promise<LearningThreadsListResponse> {
     return api.get<LearningThreadsListResponse>("/threads", {
+      params: query,
+    });
+  },
+
+  listDiscussionsWorkspace(
+    query?: ListLearningThreadsQuery,
+  ): Promise<DiscussionsWorkspaceResponse> {
+    return api.get<DiscussionsWorkspaceResponse>("/discussions/workspace", {
       params: query,
     });
   },

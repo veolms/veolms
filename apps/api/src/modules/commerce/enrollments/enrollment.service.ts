@@ -2,9 +2,19 @@ import type { EnrolledCourse } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 import { sql } from "kysely";
 import { toEnrolledCourseContract } from "./enrollment.mapper.ts";
+import * as enrollmentRepo from "./enrollment.repository.ts";
 
 export interface EnrollmentService {
   listEnrolledCourses(userId: string): Promise<EnrolledCourse[]>;
+  getEnrollmentStats(
+    filters: enrollmentRepo.EnrollmentAnalyticsFilters,
+  ): Promise<{ totalEnrollments: number; activeEnrollments: number }>;
+  listTopCoursesByEnrollment(options: {
+    limit: number;
+    from?: Date;
+    to?: Date;
+    courseId?: string | string[];
+  }): Promise<Array<{ courseId: string; enrollmentCount: number }>>;
 }
 
 export function createEnrollmentService({
@@ -148,5 +158,24 @@ export function createEnrollmentService({
     );
   }
 
-  return { listEnrolledCourses };
+  async function getEnrollmentStats(
+    filters: enrollmentRepo.EnrollmentAnalyticsFilters,
+  ) {
+    return await enrollmentRepo.getEnrollmentStats(database, filters);
+  }
+
+  async function listTopCoursesByEnrollment(options: {
+    limit: number;
+    from?: Date;
+    to?: Date;
+    courseId?: string | string[];
+  }) {
+    return await enrollmentRepo.listTopCoursesByEnrollment(database, options);
+  }
+
+  return {
+    listEnrolledCourses,
+    getEnrollmentStats,
+    listTopCoursesByEnrollment,
+  };
 }

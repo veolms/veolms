@@ -47,6 +47,9 @@ export const learnerQuizQuestionSchema = z.strictObject({
   position: z.number().int().nonnegative(),
   options: z.array(quizOptionSchema),
 });
+export const quizPricingTypeSchema = z.enum(["free", "paid"]);
+export type QuizPricingType = z.infer<typeof quizPricingTypeSchema>;
+
 export const quizAssignmentSchema = z.strictObject({
   id: uuid,
   quizId: uuid,
@@ -62,6 +65,16 @@ export const quizAssignmentSchema = z.strictObject({
   feedbackMode: quizFeedbackModeSchema,
   availableFrom: z.string().nullable(),
   availableUntil: z.string().nullable(),
+  /**
+   * Pricing is read-only here: it is joined from the course's quiz pricing
+   * row and shared by every quiz attached to the course. Edit it through
+   * `setQuizCoursePricingRequestSchema`.
+   */
+  quizPricingId: uuid.nullable(),
+  pricingType: quizPricingTypeSchema.default("free"),
+  price: z.number().int().nonnegative().default(0),
+  currency: z.string().length(3).default("INR"),
+  salePrice: z.number().int().nonnegative().nullable().optional(),
 });
 export const instructorQuizAssignmentSchema = quizAssignmentSchema.extend({
   quizTitle: z.string().min(1),
@@ -159,6 +172,73 @@ export const assignQuizRequestSchema = z.strictObject({
 export const updateQuizAssignmentRequestSchema = assignQuizRequestSchema
   .omit({ quizVersionId: true })
   .extend({ quizVersionId: uuid.optional() });
+
+/** Highest quiz pass price, in whole major currency units. Keeps order totals well inside DB and gateway limits. */
+export const MAX_QUIZ_PRICE = 1_000_000;
+
+export const setQuizCoursePricingRequestSchema = z
+  .strictObject({
+    pricingType: quizPricingTypeSchema,
+    price: z.number().int().nonnegative().max(MAX_QUIZ_PRICE).default(0),
+    /** Optional: the server always uses the course's currency and rejects a different one. */
+    currency: z.string().length(3).optional(),
+    salePrice: z
+      .number()
+      .int()
+      .positive()
+      .max(MAX_QUIZ_PRICE)
+      .nullable()
+      .optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.pricingType !== "paid") return;
+    if (value.price <= 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["price"],
+        message: "A paid quiz pass needs a price greater than 0.",
+      });
+    }
+    if (
+      value.salePrice !== null &&
+      value.salePrice !== undefined &&
+      value.salePrice >= value.price
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["salePrice"],
+        message: "Sale price must be lower than the price.",
+      });
+    }
+  });
+
+/** `id` is null while the course has no pricing row (its quizzes are free). */
+export const quizCoursePricingSchema = z.strictObject({
+  id: uuid.nullable(),
+  courseId: uuid,
+  pricingType: quizPricingTypeSchema,
+  price: z.number().int().nonnegative(),
+  currency: z.string().length(3),
+  salePrice: z.number().int().positive().nullable(),
+});
+
+export const quizPricingPreviewResponseSchema = z.strictObject({
+  quizAssignmentId: uuid,
+  quizId: uuid,
+  quizPricingId: uuid.nullable(),
+  quizTitle: z.string(),
+  courseId: uuid,
+  lessonId: uuid,
+  pricingType: quizPricingTypeSchema,
+  catalogPrice: z.number().int().nonnegative(),
+  salePrice: z.number().int().nonnegative().nullable(),
+  effectivePrice: z.number().int().nonnegative(),
+  currency: z.string().length(3),
+  isEnrolled: z.boolean(),
+});
+export type QuizPricingPreviewResponse = z.infer<
+  typeof quizPricingPreviewResponseSchema
+>;
 export const learnerQuizAttemptSchema = z.strictObject({
   id: uuid,
   assignmentId: uuid,
@@ -314,6 +394,10 @@ export type UpdateQuizQuestionRequest = z.infer<
   typeof updateQuizQuestionRequestSchema
 >;
 export type AssignQuizRequest = z.infer<typeof assignQuizRequestSchema>;
+export type SetQuizCoursePricingRequest = z.infer<
+  typeof setQuizCoursePricingRequestSchema
+>;
+export type QuizCoursePricing = z.infer<typeof quizCoursePricingSchema>;
 export type UpdateQuizAssignmentRequest = z.infer<
   typeof updateQuizAssignmentRequestSchema
 >;

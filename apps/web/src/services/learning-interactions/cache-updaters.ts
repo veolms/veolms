@@ -1,8 +1,10 @@
-import type { QueryClient } from "@tanstack/react-query";
+import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import type {
+  DiscussionsWorkspaceResponse,
   LearningRepliesListResponse,
   LearningThread,
   LearningThreadsListResponse,
+  WorkspaceDiscussionItem,
 } from "@veolms/contracts";
 import { learningInteractionKeys } from "./learning-interactions.keys";
 import {
@@ -23,6 +25,356 @@ type NoteListCache =
 type ReplyListCache =
   | LearningRepliesCacheResponse
   | import("@tanstack/react-query").InfiniteData<LearningRepliesCacheResponse>;
+type DiscussionsWorkspaceCache = InfiniteData<DiscussionsWorkspaceResponse>;
+
+type DiscussionWorkspaceSourceType = "thread" | "note";
+
+function matchesDiscussionWorkspaceSource(
+  item: WorkspaceDiscussionItem,
+  sourceType: DiscussionWorkspaceSourceType,
+  sourceId: string,
+): boolean {
+  if (sourceType === "note") {
+    return item.itemType === "note" && item.id === sourceId;
+  }
+
+  return (
+    (item.itemType === "thread" && item.id === sourceId) ||
+    (item.itemType === "reply" && item.parentThreadId === sourceId)
+  );
+}
+
+interface DiscussionsWorkspaceQueryFilters {
+  tab?: string;
+  courseId?: string;
+  kind?: string;
+  search?: string;
+  visibility?: string;
+}
+
+export interface DiscussionsWorkspaceCacheSnapshot {
+  readonly entries: ReadonlyArray<{
+    queryKey: readonly unknown[];
+    data: DiscussionsWorkspaceCache;
+  }>;
+}
+
+export interface OptimisticDiscussionsWorkspaceMembership {
+  sourceType: DiscussionWorkspaceSourceType;
+  sourceId: string;
+  sourceItem: WorkspaceDiscussionItem;
+  bookmarked?: boolean;
+  following?: boolean;
+}
+
+function isDiscussionsWorkspaceQuery(queryKey: readonly unknown[]): boolean {
+  return (
+    queryKey[0] === learningInteractionKeys.all[0] &&
+    queryKey[1] === "discussions-workspace"
+  );
+}
+
+function getWorkspaceQueryFilters(
+  queryKey: readonly unknown[],
+): DiscussionsWorkspaceQueryFilters {
+  return (queryKey[3] as DiscussionsWorkspaceQueryFilters | undefined) ?? {};
+}
+
+function matchesWorkspaceFilters(
+  item: WorkspaceDiscussionItem,
+  filters: DiscussionsWorkspaceQueryFilters,
+): boolean {
+  if (filters.courseId && item.courseId !== filters.courseId) return false;
+  if (filters.kind && filters.kind !== "all") {
+    const isQuestionFilter =
+      filters.kind === "qna" || filters.kind === "question";
+    const matchesKind = isQuestionFilter
+      ? item.kind === "question" || item.kind === "qna"
+      : item.kind === filters.kind;
+    if (!matchesKind) return false;
+  }
+  if (filters.visibility && item.visibility !== filters.visibility) return false;
+  if (filters.search) {
+    const searchableText = [item.title, item.plainText, item.content]
+      .filter(Boolean)
+      .join(" ")
+      .toLocaleLowerCase();
+    if (!searchableText.includes(filters.search.toLocaleLowerCase())) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function withWorkspaceMembership(
+  item: WorkspaceDiscussionItem,
+  membership: OptimisticDiscussionsWorkspaceMembership,
+): WorkspaceDiscussionItem {
+  const isSource = matchesDiscussionWorkspaceSource(
+    item,
+    membership.sourceType,
+    membership.sourceId,
+  );
+  if (!isSource) return item;
+
+  const nextBookmarked = membership.bookmarked ?? item.isBookmarked;
+  const nextFollowing =
+    membership.following !== undefined && item.itemType !== "note"
+      ? membership.following
+      : item.isFollowing;
+  if (
+    nextBookmarked === item.isBookmarked &&
+    nextFollowing === item.isFollowing
+  ) {
+    return item;
+  }
+  return {
+    ...item,
+    isBookmarked: nextBookmarked,
+    isFollowing: nextFollowing,
+  };
+}
+
+function getSourceItemForDestination(
+  cacheEntries: readonly { data: DiscussionsWorkspaceCache }[],
+  membership: OptimisticDiscussionsWorkspaceMembership,
+): WorkspaceDiscussionItem | null {
+  if (membership.sourceType === "note") return membership.sourceItem;
+  if (membership.sourceItem.itemType === "thread") return membership.sourceItem;
+
+  for (const { data } of cacheEntries) {
+    for (const page of data.pages) {
+      const rootThread = page.items.find(
+        (item) => item.itemType === "thread" && item.id === membership.sourceId,
+      );
+      if (rootThread) return rootThread;
+    }
+  }
+
+  return null;
+}
+
+function compareThreadActivity(
+  left: WorkspaceDiscussionItem,
+  right: WorkspaceDiscussionItem,
+): number {
+  const leftTime = new Date(left.updatedAt).getTime();
+  const rightTime = new Date(right.updatedAt).getTime();
+  if (leftTime !== rightTime) return rightTime - leftTime;
+  return right.id.localeCompare(left.id);
+}
+
+function insertIntoSavedWorkspace(
+  data: DiscussionsWorkspaceCache,
+  item: WorkspaceDiscussionItem,
+): DiscussionsWorkspaceCache {
+  const firstPage = data.pages[0];
+  if (!firstPage) return data;
+  const bookmarkedItem = {
+    ...item,
+    isBookmarked: true,
+    bookmarkedAt: new Date().toISOString(),
+  };
+  return {
+    ...data,
+    pages: [
+      {
+        ...firstPage,
+        items: [bookmarkedItem, ...firstPage.items],
+        totalCount: firstPage.totalCount + 1,
+      },
+      ...data.pages.slice(1).map((page) => ({
+        ...page,
+        totalCount: page.totalCount + 1,
+      })),
+    ],
+  };
+}
+
+function insertIntoFollowingWorkspace(
+  data: DiscussionsWorkspaceCache,
+  item: WorkspaceDiscussionItem,
+): DiscussionsWorkspaceCache {
+  if (data.pages.length === 0) return data;
+  const followedItem = { ...item, isFollowing: true };
+  let insertionPageIndex = data.pages.length - 1;
+  let insertionItemIndex = data.pages[insertionPageIndex]!.items.length;
+
+  for (const [pageIndex, page] of data.pages.entries()) {
+    const itemIndex = page.items.findIndex(
+      (existing) => compareThreadActivity(followedItem, existing) < 0,
+    );
+    if (itemIndex >= 0) {
+      insertionPageIndex = pageIndex;
+      insertionItemIndex = itemIndex;
+      break;
+    }
+  }
+
+  return {
+    ...data,
+    pages: data.pages.map((page, pageIndex) => ({
+      ...page,
+      items:
+        pageIndex === insertionPageIndex
+          ? [
+              ...page.items.slice(0, insertionItemIndex),
+              followedItem,
+              ...page.items.slice(insertionItemIndex),
+            ]
+          : page.items,
+      totalCount: page.totalCount + 1,
+    })),
+  };
+}
+
+function removeFromWorkspaceMembership(
+  data: DiscussionsWorkspaceCache,
+  membership: OptimisticDiscussionsWorkspaceMembership,
+): DiscussionsWorkspaceCache {
+  let removed = false;
+  const pages = data.pages.map((page) => {
+    const items = page.items.filter((item) => {
+      const shouldRemove = matchesDiscussionWorkspaceSource(
+        item,
+        membership.sourceType,
+        membership.sourceId,
+      );
+      removed ||= shouldRemove;
+      return !shouldRemove;
+    });
+    return items.length === page.items.length ? page : { ...page, items };
+  });
+  if (!removed) return data;
+  return {
+    ...data,
+    pages: pages.map((page) => ({
+      ...page,
+      totalCount: Math.max(0, page.totalCount - 1),
+    })),
+  };
+}
+
+/**
+ * Applies a Workspace membership transition only to existing cached feeds and
+ * returns exact pre-transition data for coordinator-aware rollback.
+ */
+export function optimisticallyUpdateDiscussionsWorkspaceMembership(
+  queryClient: QueryClient,
+  membership: OptimisticDiscussionsWorkspaceMembership,
+): DiscussionsWorkspaceCacheSnapshot {
+  const cacheEntries = queryClient
+    .getQueryCache()
+    .findAll({ predicate: (query) => isDiscussionsWorkspaceQuery(query.queryKey) })
+    .flatMap((query) => {
+      const data = query.state.data as DiscussionsWorkspaceCache | undefined;
+      return data ? [{ queryKey: query.queryKey, data }] : [];
+    });
+  const destinationItem = getSourceItemForDestination(cacheEntries, membership);
+  const snapshots: Array<{
+    queryKey: readonly unknown[];
+    data: DiscussionsWorkspaceCache;
+  }> = [];
+
+  for (const cacheEntry of cacheEntries) {
+    const filters = getWorkspaceQueryFilters(cacheEntry.queryKey);
+    let membershipChanged = false;
+    const pagesWithMembership = cacheEntry.data.pages.map((page) => {
+      let pageChanged = false;
+      const items = page.items.map((item) => {
+        const nextItem = withWorkspaceMembership(item, membership);
+        pageChanged ||= nextItem !== item;
+        return nextItem;
+      });
+      membershipChanged ||= pageChanged;
+      return pageChanged ? { ...page, items } : page;
+    });
+    let nextData: DiscussionsWorkspaceCache = membershipChanged
+      ? { ...cacheEntry.data, pages: pagesWithMembership }
+      : cacheEntry.data;
+    const sourcePresent = nextData.pages.some((page) =>
+      page.items.some((item) =>
+        matchesDiscussionWorkspaceSource(
+          item,
+          membership.sourceType,
+          membership.sourceId,
+        ),
+      ),
+    );
+
+    if (filters.tab === "saved" && membership.bookmarked !== undefined) {
+      if (!membership.bookmarked && sourcePresent) {
+        nextData = removeFromWorkspaceMembership(nextData, membership);
+      } else if (
+        membership.bookmarked &&
+        !sourcePresent &&
+        destinationItem &&
+        matchesWorkspaceFilters(destinationItem, filters)
+      ) {
+        nextData = insertIntoSavedWorkspace(nextData, destinationItem);
+      }
+    }
+
+    if (filters.tab === "following" && membership.following !== undefined) {
+      if (!membership.following && sourcePresent) {
+        nextData = removeFromWorkspaceMembership(nextData, membership);
+      } else if (
+        membership.following &&
+        !sourcePresent &&
+        destinationItem &&
+        membership.sourceType === "thread" &&
+        matchesWorkspaceFilters(destinationItem, filters)
+      ) {
+        nextData = insertIntoFollowingWorkspace(nextData, destinationItem);
+      }
+    }
+
+    if (nextData !== cacheEntry.data) {
+      snapshots.push(cacheEntry);
+      queryClient.setQueryData(cacheEntry.queryKey, nextData);
+    }
+  }
+
+  return { entries: snapshots };
+}
+
+export function restoreDiscussionsWorkspaceCacheSnapshot(
+  queryClient: QueryClient,
+  snapshot: DiscussionsWorkspaceCacheSnapshot,
+): void {
+  for (const entry of snapshot.entries) {
+    queryClient.setQueryData(entry.queryKey, entry.data);
+  }
+}
+
+function updateDiscussionsWorkspaceSource(
+  queryClient: QueryClient,
+  sourceType: DiscussionWorkspaceSourceType,
+  sourceId: string,
+  update: (item: WorkspaceDiscussionItem) => WorkspaceDiscussionItem,
+): void {
+  for (const query of queryClient
+    .getQueryCache()
+    .findAll({ predicate: (entry) => isDiscussionsWorkspaceQuery(entry.queryKey) })) {
+    const old = query.state.data as DiscussionsWorkspaceCache | undefined;
+    if (!old) continue;
+    let changed = false;
+    const pages = old.pages.map((page) => {
+      let pageChanged = false;
+      const items = page.items.map((item) => {
+        if (!matchesDiscussionWorkspaceSource(item, sourceType, sourceId)) {
+          return item;
+        }
+        const nextItem = update(item);
+        changed ||= nextItem !== item;
+        pageChanged ||= nextItem !== item;
+        return nextItem;
+      });
+      return pageChanged ? { ...page, items } : page;
+    });
+    if (changed) queryClient.setQueryData(query.queryKey, { ...old, pages });
+  }
+}
 
 function setThreadQueriesData(
   queryClient: QueryClient,
@@ -355,6 +707,12 @@ export function updateNoteBookmarkInCache(
       },
     );
   }
+
+  updateDiscussionsWorkspaceSource(queryClient, "note", noteId, (item) =>
+    Boolean(item.isBookmarked) === desiredBookmarked
+      ? item
+      : { ...item, isBookmarked: desiredBookmarked },
+  );
 }
 
 /**
@@ -430,6 +788,12 @@ export function updateThreadBookmarkInCache(
       return hasChange ? { ...old, threads: nextThreads } : old;
     },
   );
+
+  updateDiscussionsWorkspaceSource(queryClient, "thread", threadId, (item) =>
+    Boolean(item.isBookmarked) === desiredBookmarked
+      ? item
+      : { ...item, isBookmarked: desiredBookmarked },
+  );
 }
 
 /**
@@ -504,6 +868,12 @@ export function updateThreadFollowInCache(
       });
       return hasChange ? { ...old, threads: nextThreads } : old;
     },
+  );
+
+  updateDiscussionsWorkspaceSource(queryClient, "thread", threadId, (item) =>
+    Boolean(item.isFollowing) === desiredFollowed
+      ? item
+      : { ...item, isFollowing: desiredFollowed },
   );
 }
 

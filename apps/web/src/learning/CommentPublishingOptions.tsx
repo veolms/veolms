@@ -16,6 +16,7 @@ interface CommentPublishingOptionsProps {
   entryKind: DiscussionEntryKind;
   visibility: DiscussionVisibility;
   capabilities?: InteractionCapabilities;
+  editing?: boolean;
   onEntryKindChange: (value: DiscussionEntryKind) => void;
   onVisibilityChange: (value: DiscussionVisibility) => void;
 }
@@ -73,17 +74,20 @@ export function CommentPublishingOptions({
   entryKind,
   visibility,
   capabilities,
+  editing = false,
   onEntryKindChange,
   onVisibilityChange,
 }: CommentPublishingOptionsProps) {
-  const availableEntryKindOptions = capabilities
-    ? entryKindOptions.filter((option) => {
-        if (option.value === "comment") return capabilities.allowComments;
-        if (option.value === "question") return capabilities.allowQa;
-        if (option.value === "note") return capabilities.allowNotes;
-        return false;
-      })
-    : entryKindOptions;
+  const availableEntryKindOptions = editing
+    ? entryKindOptions.filter((option) => option.value === entryKind)
+    : capabilities
+      ? entryKindOptions.filter((option) => {
+          if (option.value === "comment") return capabilities.allowComments;
+          if (option.value === "question") return capabilities.allowQa;
+          if (option.value === "note") return capabilities.allowNotes;
+          return false;
+        })
+      : entryKindOptions;
 
   const availableVisibilityOptions =
     entryKind === "note"
@@ -114,6 +118,7 @@ export function CommentPublishingOptions({
               option={option}
               selected={entryKind === option.value}
               separated={index > 0}
+              disabled={editing}
               onSelect={onEntryKindChange}
             />
           ))}
@@ -196,6 +201,7 @@ interface PublishingRowProps<
   Value extends string,
 > extends PublishingControlProps<Value> {
   separated: boolean;
+  disabled?: boolean;
 }
 
 function PublishingRow<Value extends string>({
@@ -203,11 +209,14 @@ function PublishingRow<Value extends string>({
   option,
   selected,
   separated,
+  disabled = false,
   onSelect,
 }: PublishingRowProps<Value>) {
   return (
     <label
-      className={`group relative grid min-h-14 cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-3 px-3.5 py-2.5 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-(--accent) sm:px-4 ${separated ? "shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_8%,transparent)]" : ""} ${selected ? "bg-(--accent-soft)" : "hover:bg-(--hover)"}`}
+      aria-disabled={disabled || undefined}
+      title={disabled ? "Interaction type cannot be changed while editing." : undefined}
+      className={`group relative grid min-h-14 ${disabled ? "cursor-default opacity-80" : "cursor-pointer"} grid-cols-[auto_1fr_auto] items-center gap-3 px-3.5 py-2.5 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-(--accent) sm:px-4 ${separated ? "shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_8%,transparent)]" : ""} ${selected ? "bg-(--accent-soft)" : "hover:bg-(--hover)"}`}
     >
       <input
         type="radio"
@@ -216,6 +225,7 @@ function PublishingRow<Value extends string>({
         aria-label={option.label}
         checked={selected}
         className="sr-only"
+        disabled={disabled}
         onChange={() => onSelect(option.value)}
       />
       <span

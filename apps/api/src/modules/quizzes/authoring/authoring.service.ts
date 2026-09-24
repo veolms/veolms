@@ -9,6 +9,7 @@ import type {
 } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import * as repo from "../shared/quiz.repository.ts";
+import * as pricingRepo from "../shared/quiz-pricing.repository.ts";
 import type { QuizActor, QuizServiceOptions } from "../shared/quiz.types.ts";
 import { isAdmin } from "../shared/quiz.types.ts";
 
@@ -187,16 +188,20 @@ export function createAuthoringService(options: QuizServiceOptions) {
     if (quizRows.length === 0) return [];
 
     const quizIds = quizRows.map((quiz) => quiz.id);
-    // Load the complete authoring graph in batches. The previous version did
-    // two queries per version and one detail load per quiz in listMine().
     const [versions, assignmentRows] = await Promise.all([
       repo.listVersionsForQuizzes(database, quizIds),
       repo.listAssignmentsForQuizzes(database, quizIds),
     ]);
-    const questions = await repo.listQuestionsForVersions(
-      database,
-      versions.map((version) => version.id),
-    );
+    const courseIds = [
+      ...new Set(assignmentRows.map((assignment) => assignment.course_id)),
+    ];
+    const [questions, pricingRows] = await Promise.all([
+      repo.listQuestionsForVersions(
+        database,
+        versions.map((version) => version.id),
+      ),
+      pricingRepo.listPricingForCourses(database, courseIds),
+    ]);
     const options = await repo.listOptions(
       database,
       questions.map((question) => question.id),
@@ -226,6 +231,9 @@ export function createAuthoringService(options: QuizServiceOptions) {
       current.push(assignment);
       assignmentsByQuiz.set(assignment.quiz_id, current);
     }
+    const pricingByCourseId = new Map(
+      pricingRows.map((pricing) => [pricing.course_id, pricing] as const),
+    );
 
     return quizRows.map((quiz) => ({
       id: quiz.id,
@@ -259,22 +267,33 @@ export function createAuthoringService(options: QuizServiceOptions) {
           }),
         ),
       })),
-      assignments: (assignmentsByQuiz.get(quiz.id) ?? []).map((row) => ({
-        id: row.id,
-        quizId: row.quiz_id,
-        quizVersionId: row.quiz_version_id,
-        courseId: row.course_id,
-        lessonId: row.lesson_id,
-        required: row.required,
-        passPercentage: Number(row.pass_percentage),
-        maxAttempts: row.max_attempts,
-        timeLimitSeconds: row.time_limit_seconds,
-        shuffleQuestions: row.shuffle_questions,
-        shuffleOptions: row.shuffle_options,
-        feedbackMode: row.feedback_mode,
-        availableFrom: row.available_from?.toISOString() ?? null,
-        availableUntil: row.available_until?.toISOString() ?? null,
-      })),
+      assignments: (assignmentsByQuiz.get(quiz.id) ?? []).map((row) => {
+        const pricing = pricingByCourseId.get(row.course_id);
+        return {
+          id: row.id,
+          quizId: row.quiz_id,
+          quizVersionId: row.quiz_version_id,
+          courseId: row.course_id,
+          lessonId: row.lesson_id,
+          required: row.required,
+          passPercentage: Number(row.pass_percentage),
+          maxAttempts: row.max_attempts,
+          timeLimitSeconds: row.time_limit_seconds,
+          shuffleQuestions: row.shuffle_questions,
+          shuffleOptions: row.shuffle_options,
+          feedbackMode: row.feedback_mode,
+          availableFrom: row.available_from?.toISOString() ?? null,
+          availableUntil: row.available_until?.toISOString() ?? null,
+          quizPricingId: pricing?.id ?? null,
+          pricingType: pricing?.pricing_type ?? ("free" as const),
+          price: Number(pricing?.price ?? 0),
+          currency: pricing?.currency ?? "INR",
+          salePrice:
+            pricing?.sale_price !== null && pricing?.sale_price !== undefined
+              ? Number(pricing.sale_price)
+              : null,
+        };
+      }),
     }));
   }
 

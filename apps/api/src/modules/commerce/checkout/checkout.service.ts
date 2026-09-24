@@ -199,6 +199,7 @@ export function createCheckoutService({
         item_type: it.itemType,
         course_id: it.itemType === "course" ? it.itemId : null,
         bundle_id: it.itemType === "bundle" ? it.itemId : null,
+        quiz_pricing_id: it.itemType === "quiz" ? it.itemId : null,
         title_snapshot: it.title,
         unit_price: it.unitPrice,
         discount_amount: it.discountAmount,

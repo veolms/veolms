@@ -5,6 +5,7 @@
   "exports": "./src/index.ts",
   "scripts": {
     "dev": "node --watch --env-file-if-exists=.env --env-file-if-exists=../../.env src/dev-image-worker.ts",
+    "dev:lan": "pnpm dev",
     "build": "tsc --noEmit",
     "build:bundle": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --external:sharp --log-override:empty-import-meta=silent --outfile=dist/media-worker.js && node -e \"fs.writeFileSync('dist/package.json', JSON.stringify({type:'commonjs'}))\"",
     "typecheck": "tsc --noEmit",

@@ -117,6 +117,8 @@ import type {
   QuizQuestionTable,
   QuizQuestionOptionTable,
   QuizAssignmentTable,
+  CourseQuizPricingTable,
+  CourseQuizAccessGrantTable,
   QuizAttemptTable,
   QuizAttemptAnswerTable,
 } from "./quizzes.schema.ts";
@@ -216,6 +218,8 @@ export interface Database {
   quiz_questions: QuizQuestionTable;
   quiz_question_options: QuizQuestionOptionTable;
   quiz_assignments: QuizAssignmentTable;
+  course_quiz_pricing: CourseQuizPricingTable;
+  course_quiz_access_grants: CourseQuizAccessGrantTable;
   quiz_attempts: QuizAttemptTable;
   quiz_attempt_answers: QuizAttemptAnswerTable;
   learning_progress: LearningProgressTable;

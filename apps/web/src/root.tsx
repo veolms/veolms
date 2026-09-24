@@ -5,7 +5,11 @@ import { fullAppStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
 import { getLearningPlayerBootstrapScript } from "./learning/learningPlayerPreferences";
-import { getLearningShellBootstrapScript } from "./learning/learningShellPreferences";
+import {
+  applyLearningShellToDocument,
+  getInitialLearningShellState,
+  getLearningShellBootstrapScript,
+} from "./learning/learningShellPreferences";
 import { getEarlyCourseCatalogueScript } from "./courses/courseCatalogueBootstrap";
 import {
   API_BASE_URL_ORIGIN,
@@ -26,6 +30,8 @@ import {
 } from "./settings/settingsPreferences";
 import { useCurrentUser } from "./services/auth";
 import {
+  applySidebarShellToDocument,
+  getInitialSidebarShellState,
   getSidebarPresentationBootstrapScript,
   getSidebarShellBootstrapScript,
 } from "./shell/sidebarPreferences";
@@ -328,7 +334,13 @@ function SessionInitializer({ children }: { children: ReactNode }) {
 
 function HydrationMarker() {
   useLayoutEffect(() => {
+    applySidebarShellToDocument(getInitialSidebarShellState());
+    applyLearningShellToDocument(getInitialLearningShellState());
     const root = document.documentElement;
+    const compactNavigation = window.__VEO_BOOTSTRAP__?.navigation?.compact;
+    if (typeof compactNavigation === "boolean") {
+      root.dataset.navigationLayout = compactNavigation ? "compact" : "wide";
+    }
     root.dataset.appHydrated = "true";
     const removeTabFocusListeners = installTabFocusVisibility(root);
 

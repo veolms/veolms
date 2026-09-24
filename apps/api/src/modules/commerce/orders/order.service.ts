@@ -25,6 +25,32 @@ export interface OrderService {
     scope: OrderScope,
     filters: OrderStatsQuery,
   ): Promise<OrderStatsResponse>;
+  /**
+   * Day-bucketed net revenue for the currency `getOrderStats` would resolve
+   * for the same filters — callers needing both a trend and its totals
+   * (dashboards) should call getOrderStats first and pass its `currency`
+   * here, so the two agree on which currency is being shown.
+   */
+  getRevenueTrend(
+    scope: OrderScope,
+    filters: orderRepo.RevenueTrendFilters,
+  ): Promise<orderRepo.RevenueTrendPoint[]>;
+  /** The raw per-currency row (exposes grossPaid, which the derived
+   * OrderStatsResponse above intentionally doesn't) for the currency that
+   * would be resolved for these filters. */
+  getRawStatsForCourses(
+    scope: OrderScope,
+    filters: {
+      courseId?: string | string[];
+      from?: Date;
+      to?: Date;
+      currency?: string;
+    },
+  ): Promise<orderRepo.OrderStatsRow>;
+  getOrderStatusFunnel(
+    scope: OrderScope,
+    filters: { from?: Date; to?: Date; courseId?: string | string[] },
+  ): Promise<{ created: number; paid: number; refunded: number }>;
   /** The scope admin-view requests run under (single academy per deployment). */
   getAcademyScope(): Promise<OrderScope>;
 }
@@ -293,6 +319,52 @@ export function createOrderService({
     }
   }
 
+  async function getRawStatsForCourses(
+    scope: OrderScope,
+    filters: {
+      courseId?: string | string[];
+      from?: Date;
+      to?: Date;
+      currency?: string;
+    },
+  ): Promise<orderRepo.OrderStatsRow> {
+    const rows = await orderRepo.getOrderStatsByCurrency(database, scope, {
+      courseId: filters.courseId,
+      from: filters.from,
+      to: filters.to,
+    });
+    const requestedCurrency = filters.currency?.toUpperCase();
+    const selected = requestedCurrency
+      ? rows.find((row) => row.currency === requestedCurrency)
+      : [...rows].sort(
+          (a, b) =>
+            b.totalOrders - a.totalOrders || a.currency.localeCompare(b.currency),
+        )[0];
+    return (
+      selected ?? {
+        currency: requestedCurrency ?? "INR",
+        totalOrders: 0,
+        uniqueBuyers: 0,
+        grossPaid: 0,
+        refundedAmount: 0,
+      }
+    );
+  }
+
+  async function getOrderStatusFunnel(
+    scope: OrderScope,
+    filters: { from?: Date; to?: Date; courseId?: string | string[] },
+  ) {
+    return await orderRepo.getOrderStatusFunnel(database, scope, filters);
+  }
+
+  async function getRevenueTrend(
+    scope: OrderScope,
+    filters: orderRepo.RevenueTrendFilters,
+  ): Promise<orderRepo.RevenueTrendPoint[]> {
+    return await orderRepo.getRevenueTrend(database, scope, filters);
+  }
+
   async function getAcademyScope(): Promise<OrderScope> {
     const academy = await setupRepo.findAcademy(database);
     if (!academy) {
@@ -305,6 +377,9 @@ export function createOrderService({
     getOrderById,
     listOrders,
     getOrderStats,
+    getRawStatsForCourses,
+    getOrderStatusFunnel,
+    getRevenueTrend,
     getAcademyScope,
   };
 }

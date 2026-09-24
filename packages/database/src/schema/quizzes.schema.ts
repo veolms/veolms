@@ -49,6 +49,10 @@ export interface QuizQuestionOptionTable {
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
+export type QuizPricingType = "free" | "paid";
+export type QuizAccessGrantStatus = "active" | "revoked" | "expired";
+export type QuizAccessGrantSource = "purchase" | "admin_grant";
+
 export interface QuizAssignmentTable {
   id: string;
   quiz_id: string;
@@ -64,6 +68,35 @@ export interface QuizAssignmentTable {
   feedback_mode: "after_submit" | "after_attempt" | "never";
   available_from: Date | null;
   available_until: Date | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+/**
+ * One quiz price per course, shared by every quiz attached to it. No row
+ * means the course's quizzes are free.
+ */
+export interface CourseQuizPricingTable {
+  id: string;
+  course_id: string;
+  pricing_type: Generated<QuizPricingType>;
+  price: Generated<number>;
+  currency: Generated<string>;
+  sale_price: number | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+/** One grant per (user, course); unlocks every quiz in that course. */
+export interface CourseQuizAccessGrantTable {
+  id: string;
+  user_id: string;
+  course_id: string;
+  order_id: string | null;
+  status: Generated<QuizAccessGrantStatus>;
+  source: Generated<QuizAccessGrantSource>;
+  valid_from: Generated<Date>;
+  valid_until: Date | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch --env-file-if-exists=../../.env src/index.ts",
+    "dev:lan": "node --watch --env-file-if-exists=../../.env --import=\"data:text/javascript,process.env.API_HOST='0.0.0.0'\" src/index.ts",
     "start": "node --env-file-if-exists=../../.env src/index.ts",
     "purge:course-deletions": "node --env-file-if-exists=../../.env src/jobs/course-retention.ts",
     "purge:sessions": "node --env-file-if-exists=../../.env src/jobs/session-retention.ts",

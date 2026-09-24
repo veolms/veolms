@@ -11,11 +11,14 @@ import {
   myQuizAssignmentsResponseSchema,
   quizAnalyticsSchema,
   quizAnswerSyncResponseSchema,
+  quizCoursePricingSchema,
   quizDeleteResponseSchema,
   quizHistoryResponseSchema,
+  quizPricingPreviewResponseSchema,
   quizResultSchema,
   quizAssignmentSchema,
   quizSchema,
+  setQuizCoursePricingRequestSchema,
   studentQuizReportSchema,
   updateQuizAssignmentRequestSchema,
   updateQuizQuestionRequestSchema,
@@ -25,6 +28,7 @@ import { createAuthContext } from "../auth/shared/auth.context.ts";
 import { ADMIN_ROLE, INSTRUCTOR_ROLE } from "../auth/index.ts";
 import { createCourseService } from "../courses/course/course.service.ts";
 import { createAccessService } from "../access/access.service.ts";
+import { createPricingService } from "../commerce/pricing/pricing.service.ts";
 import { errorResponse } from "../../lib/errors.ts";
 import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
@@ -42,6 +46,7 @@ const quizRoutes: RoutePlugin = async (app, options) => {
     database: options.database,
     services: options.services,
   });
+  const pricingService = createPricingService({ database: options.database });
   const shared = {
     database: options.database,
     getAcademyId: async () =>
@@ -55,6 +60,7 @@ const quizRoutes: RoutePlugin = async (app, options) => {
     assignments: createAssignmentService(shared),
     attempts: createAttemptService(shared),
     analytics: createAnalyticsService(shared),
+    pricingService,
   });
   const author = [
     ...auth.mfaVerified,
@@ -257,6 +263,58 @@ const quizRoutes: RoutePlugin = async (app, options) => {
       preHandler: learner,
     },
     controller.listCourseAssignments,
+  );
+  app.get(
+    "/courses/:courseId/quiz-assignments/:assignmentId/pricing-preview",
+    {
+      schema: {
+        operationId: "getQuizPricingPreview",
+        tags: ["Quizzes"],
+        params: z.object({ courseId: z.uuid(), assignmentId: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Quiz pricing preview",
+            quizPricingPreviewResponseSchema,
+          ),
+          ...errors,
+        },
+      },
+      preHandler: auth.middleware.requireMfaVerifiedIfAuthenticated,
+    },
+    controller.getPricingPreview,
+  );
+  app.get(
+    "/courses/:courseId/quiz-pricing",
+    {
+      schema: {
+        operationId: "getQuizCoursePricing",
+        tags: ["Quizzes"],
+        params: z.object({ courseId: z.uuid() }),
+        response: {
+          200: jsonResponse("Quiz course pricing", quizCoursePricingSchema),
+          ...errors,
+        },
+      },
+      preHandler: author,
+    },
+    controller.getCoursePricing,
+  );
+  app.put(
+    "/courses/:courseId/quiz-pricing",
+    {
+      schema: {
+        operationId: "setQuizCoursePricing",
+        tags: ["Quizzes"],
+        params: z.object({ courseId: z.uuid() }),
+        body: setQuizCoursePricingRequestSchema,
+        response: {
+          200: jsonResponse("Quiz course pricing", quizCoursePricingSchema),
+          ...errors,
+        },
+      },
+      preHandler: author,
+    },
+    controller.setPricing,
   );
   app.patch(
     "/quiz-assignments/:assignmentId",

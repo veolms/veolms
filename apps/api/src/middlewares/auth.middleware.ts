@@ -1,5 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { config } from "../config.ts";
 import { httpError } from "../lib/errors.ts";
+import { ADMIN_ROLE } from "../modules/auth/shared/auth.constants.ts";
 import { sessionNeedsMfaChallenge } from "../modules/auth/shared/mfa-policy.ts";
 import type { SessionService } from "../modules/auth/index.ts";
 
@@ -28,6 +30,13 @@ export function createAuthMiddleware(
 ): AuthMiddleware {
   function sessionHasPendingMfa(request: FastifyRequest): boolean {
     if (!request.user || !request.session) {
+      return false;
+    }
+
+    if (
+      config.SKIP_ADMIN_MFA &&
+      request.user.roles?.some((role) => role.toLowerCase() === ADMIN_ROLE)
+    ) {
       return false;
     }
 

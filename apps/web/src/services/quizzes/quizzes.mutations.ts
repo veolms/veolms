@@ -6,6 +6,7 @@ import type {
   CreateQuizQuestionRequest,
   CreateQuizRequest,
   CreateQuizWithQuestionsRequest,
+  SetQuizCoursePricingRequest,
   UpdateQuizAssignmentRequest,
   UpdateQuizQuestionRequest,
   UpdateQuizRequest,
@@ -252,6 +253,26 @@ export function useDeleteQuizAssignment() {
         },
       );
       void qc.invalidateQueries({ queryKey: quizKeys.all });
+    },
+  });
+}
+
+/** Sets the quiz price for a whole course; every quiz attached to it shares it. */
+export function useSetQuizCoursePricing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      courseId,
+      payload,
+    }: {
+      courseId: string;
+      payload: SetQuizCoursePricingRequest;
+    }) => quizzesService.setCoursePricing(courseId, payload),
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: quizKeys.all });
+      void qc.invalidateQueries({
+        queryKey: quizKeys.coursePricing(vars.courseId),
+      });
     },
   });
 }
