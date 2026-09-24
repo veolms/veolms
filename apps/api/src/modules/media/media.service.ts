@@ -203,6 +203,7 @@ export function createMediaService({
     jobId?: string | null;
     deliveryUrl?: string;
     deliveryUrlExpiresAt?: number;
+    thumbnailUrl?: string;
   }> {
     const isAdmin = userRoles?.includes(ADMIN_ROLE);
     const media = await mediaRepo.findMediaAssetById(
@@ -222,11 +223,22 @@ export function createMediaService({
         existingJobId = job ? job.id : null;
       }
       const delivery = getDirectDelivery(media.storage_key);
+      let thumbnailUrl: string | undefined;
+      if (media.type === "video") {
+        try {
+          thumbnailUrl = getDirectDelivery(
+            `public/thumbnails/${media.id}/original.webp`,
+          ).url;
+        } catch {
+          // Ignore
+        }
+      }
       return {
         status: media.status,
         jobId: existingJobId,
         deliveryUrl: delivery.url,
         deliveryUrlExpiresAt: delivery.expiresAt,
+        ...(thumbnailUrl ? { thumbnailUrl } : {}),
       };
     }
 
@@ -282,11 +294,22 @@ export function createMediaService({
     }
 
     const delivery = getDirectDelivery(media.storage_key);
+    let thumbnailUrl: string | undefined;
+    if (media.type === "video") {
+      try {
+        thumbnailUrl = getDirectDelivery(
+          `public/thumbnails/${media.id}/original.webp`,
+        ).url;
+      } catch {
+        // Ignore
+      }
+    }
     return {
       status: "uploaded",
       jobId,
       deliveryUrl: delivery.url,
       deliveryUrlExpiresAt: delivery.expiresAt,
+      ...(thumbnailUrl ? { thumbnailUrl } : {}),
     };
   }
 
@@ -493,6 +516,7 @@ export function createMediaService({
         qualities: VIDEO_QUALITIES,
         videoSize,
         videoMetadata: videoMetadata ?? undefined,
+        thumbnailDestination: `public/thumbnails/${media.id}/original.webp`,
       });
       logger?.info(
         { jobId, mediaId: media.id },
@@ -605,6 +629,7 @@ export function createMediaService({
         qualities: job.qualities,
         videoSize: retryVideoSize,
         videoMetadata: retryVideoMetadata ?? undefined,
+        thumbnailDestination: `public/thumbnails/${mediaId}/original.webp`,
       });
     } catch (error) {
       const message =
@@ -912,9 +937,20 @@ export function createMediaService({
     }
 
     const delivery = getDirectDelivery(media.storage_key);
+    let thumbnailUrl: string | undefined;
+    if (media.type === "video") {
+      try {
+        thumbnailUrl = getDirectDelivery(
+          `public/thumbnails/${media.id}/original.webp`,
+        ).url;
+      } catch {
+        // Ignore
+      }
+    }
     return {
       url: delivery.url,
       ...(delivery.expiresAt ? { expiresAt: delivery.expiresAt } : {}),
+      ...(thumbnailUrl ? { thumbnailUrl } : {}),
     };
   }
 

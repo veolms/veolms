@@ -126,6 +126,10 @@ export function createMediaConvertDispatcher(options: {
       if (payload.videoMetadata.fps) userMetadata.fps = String(payload.videoMetadata.fps);
     }
 
+    if (payload.thumbnailDestination) {
+      userMetadata.thumbnailDestination = payload.thumbnailDestination;
+    }
+
     if (config.MEDIACONVERT_WEBHOOK_URL) {
       userMetadata.webhookUrl = config.MEDIACONVERT_WEBHOOK_URL;
     }
@@ -178,6 +182,59 @@ export function createMediaConvertDispatcher(options: {
     const baseDest = destination.replace(/\/+$/, "");
     const hlsDestination = baseDest;
 
+    const outputGroups: NonNullable<
+      CreateJobCommandInput["Settings"]
+    >["OutputGroups"] = [
+      {
+        Name: "HLS_Group",
+        OutputGroupSettings: {
+          Type: "HLS_GROUP_SETTINGS",
+          HlsGroupSettings: {
+            Destination: hlsDestination,
+            SegmentLength: 2,
+            MinSegmentLength: 0,
+          },
+        },
+        Outputs: outputs,
+      },
+    ];
+
+    if (payload.thumbnailDestination) {
+      const rawDest = payload.thumbnailDestination.startsWith("s3://")
+        ? payload.thumbnailDestination
+        : `s3://${bucket}/${payload.thumbnailDestination}`;
+
+      const thumbDestDir = rawDest.endsWith(".webp")
+        ? rawDest.slice(0, rawDest.lastIndexOf("/") + 1)
+        : rawDest.endsWith("/")
+          ? rawDest
+          : `${rawDest}/`;
+
+      outputGroups.push({
+        Name: "Thumbnail_Group",
+        OutputGroupSettings: {
+          Type: "FILE_GROUP_SETTINGS",
+          FileGroupSettings: {
+            Destination: thumbDestDir,
+          },
+        },
+        Outputs: [
+          {
+            ContainerSettings: {
+              Container: "RAW",
+            },
+            VideoDescription: {
+              CodecSettings: {
+                Codec: "FRAME_CAPTURE",
+              },
+            },
+            Extension: "webp",
+            NameModifier: "original",
+          },
+        ],
+      });
+    }
+
     const jobInput: CreateJobCommandInput = {
       Role: roleArn,
       Queue: config.MEDIACONVERT_QUEUE_ARN || undefined,
@@ -193,20 +250,7 @@ export function createMediaConvertDispatcher(options: {
             },
           },
         ],
-        OutputGroups: [
-          {
-            Name: "HLS_Group",
-            OutputGroupSettings: {
-              Type: "HLS_GROUP_SETTINGS",
-              HlsGroupSettings: {
-                Destination: hlsDestination,
-                SegmentLength: 2,
-                MinSegmentLength: 0,
-              },
-            },
-            Outputs: outputs,
-          },
-        ],
+        OutputGroups: outputGroups,
       },
     };
 

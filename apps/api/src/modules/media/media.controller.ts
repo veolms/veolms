@@ -31,6 +31,7 @@ export function createMediaController({ service }: { service: MediaService }) {
       ...(result.deliveryUrlExpiresAt
         ? { deliveryUrlExpiresAt: result.deliveryUrlExpiresAt }
         : {}),
+      ...(result.thumbnailUrl ? { thumbnailUrl: result.thumbnailUrl } : {}),
     };
   }
 
