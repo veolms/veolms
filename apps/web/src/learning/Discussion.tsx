@@ -112,7 +112,7 @@ import {
   applyLessonInteractionCountDelta,
   restoreLessonInteractionCounts,
   type LessonInteractionCountKind,
-  type LessonInteractionCountsSnapshot,
+  type LessonInteractionCountChange,
 } from "../services/learning-interactions/interaction-counts-cache";
 import {
   getClientEntityId,
@@ -639,7 +639,7 @@ function DiscussionInner({
     () =>
       unifiedDiscussionItems.filter((item) => {
         const entity = item.sourceType === "thread" ? item.thread : item.note;
-        return !optimisticDeletionCoordinator.isTombstoned(
+        return !optimisticDeletionCoordinator.isCommittedTombstoned(
           item.sourceType,
           entity,
         );
@@ -825,7 +825,7 @@ function DiscussionInner({
         },
       ),
       (thread) =>
-        optimisticDeletionCoordinator.isTombstoned(
+        optimisticDeletionCoordinator.isCommittedTombstoned(
           "thread",
           thread as unknown as LearningThreadEntity,
         ),
@@ -841,7 +841,7 @@ function DiscussionInner({
         },
       ),
       (note) =>
-        optimisticDeletionCoordinator.isTombstoned(
+        optimisticDeletionCoordinator.isCommittedTombstoned(
           "note",
           note as unknown as LearningNoteCacheItem,
         ),
@@ -2020,7 +2020,7 @@ function DiscussionInner({
             ? "question"
             : "comment"
         : undefined;
-    let countsSnapshot: LessonInteractionCountsSnapshot | undefined;
+    let countsChange: LessonInteractionCountChange | undefined;
     if (
       isBackendMode &&
       optimisticEditCoordinator.isEditing(deletionKind, clientId)
@@ -2042,7 +2042,7 @@ function DiscussionInner({
         onBegin: () => {
           if (!queryClient || !courseId || !lessonId || !interactionCountKind)
             return;
-          countsSnapshot = applyLessonInteractionCountDelta(queryClient, {
+          countsChange = applyLessonInteractionCountDelta(queryClient, {
             courseId,
             lessonId,
             kind: interactionCountKind,
@@ -2050,13 +2050,13 @@ function DiscussionInner({
           });
         },
         onRollback: () => {
-          if (!queryClient || !courseId || !lessonId || !countsSnapshot)
+          if (!queryClient || !courseId || !lessonId || !countsChange)
             return;
           restoreLessonInteractionCounts(
             queryClient,
             courseId,
             lessonId,
-            countsSnapshot,
+            countsChange,
           );
         },
         onFailure: () =>

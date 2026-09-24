@@ -166,6 +166,24 @@ export class OptimisticDeletionCoordinator {
     );
   }
 
+  /**
+   * Returns true only once deletion has entered the committed lifecycle.
+   * Undoable records must remain in the normal feed so their existing Undo UI
+   * can stay mounted.
+   */
+  isCommittedTombstoned(
+    kind: OptimisticDeletionKind,
+    entity: { id: string | number; clientId?: string; serverId?: string },
+  ): boolean {
+    this.pruneStaleGenerations();
+    return Array.from(this.records.values()).some(
+      (record) =>
+        record.kind === kind &&
+        record.phase !== "undoable" &&
+        matchesEntity(entity, record),
+    );
+  }
+
   hasUndoableReplyForParent(
     parentClientId: string,
     parentServerId?: string,

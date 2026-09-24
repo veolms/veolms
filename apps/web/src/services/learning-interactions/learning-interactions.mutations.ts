@@ -37,7 +37,7 @@ import { uploadInteractionAttachments } from "./interaction-attachment-upload";
 import {
   applyLessonInteractionCountDelta,
   restoreLessonInteractionCounts,
-  type LessonInteractionCountsSnapshot,
+  type LessonInteractionCountChange,
 } from "./interaction-counts-cache";
 
 export interface OptimisticEditMutationMeta {
@@ -124,7 +124,7 @@ export function useCreateLessonThread(courseId: string, lessonId: string) {
     CreateThreadMutationInput,
     {
       clientId: string;
-      countsSnapshot: LessonInteractionCountsSnapshot | undefined;
+      countsChange: LessonInteractionCountChange | undefined;
     }
   >({
     mutationFn: async (input) => {
@@ -163,14 +163,14 @@ export function useCreateLessonThread(courseId: string, lessonId: string) {
         },
         localAttachments: __localAttachments,
       });
-      const countsSnapshot = applyLessonInteractionCountDelta(queryClient, {
+      const countsChange = applyLessonInteractionCountDelta(queryClient, {
         courseId,
         lessonId,
         kind:
           threadPayload.kind === "qna" ? "question" : threadPayload.kind,
         delta: 1,
       });
-      return { clientId: record.clientId, countsSnapshot };
+      return { clientId: record.clientId, countsChange };
     },
     onSuccess: (serverThread, _payload, context) => {
       interactionCreationCoordinator.confirmThread(
@@ -191,7 +191,7 @@ export function useCreateLessonThread(courseId: string, lessonId: string) {
           queryClient,
           courseId,
           lessonId,
-          context.countsSnapshot,
+          context.countsChange,
         );
         interactionCreationCoordinator.failThread(
           queryClient,
@@ -427,7 +427,7 @@ export function useCreateNote() {
     CreateNoteMutationInput,
     {
       clientId: string;
-      countsSnapshot: LessonInteractionCountsSnapshot | undefined;
+      countsChange: LessonInteractionCountChange | undefined;
     }
   >({
     mutationFn: async (input) => {
@@ -482,13 +482,13 @@ export function useCreateNote() {
         dispatch: (notePayload) =>
           learningInteractionsService.createNote(notePayload),
       });
-      const countsSnapshot = applyLessonInteractionCountDelta(queryClient, {
+      const countsChange = applyLessonInteractionCountDelta(queryClient, {
         courseId: notePayload.courseId,
         lessonId: notePayload.lessonId,
         kind: "note",
         delta: 1,
       });
-      return { clientId: record.clientId, countsSnapshot };
+      return { clientId: record.clientId, countsChange };
     },
     onSuccess: (serverNote, payload, context) => {
       interactionCreationCoordinator.confirmNote(
@@ -509,7 +509,7 @@ export function useCreateNote() {
           queryClient,
           payload.courseId,
           payload.lessonId,
-          context.countsSnapshot,
+          context.countsChange,
         );
         interactionCreationCoordinator.failNote(queryClient, context.clientId);
       }
