@@ -106,9 +106,9 @@ interface InlineTimestampRenderOptions {
 }
 
 const INLINE_TIMESTAMP_LINK_CLASS_NAME =
-  "inline cursor-pointer border-0 bg-transparent p-0 font-medium text-(--accent-ink,var(--accent)) underline decoration-[color-mix(in_srgb,var(--accent)_45%,transparent)] underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)";
+  "inline cursor-pointer border-0 bg-transparent p-0 font-medium text-blue-400 no-underline transition-colors duration-150 hover:text-blue-300 active:text-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)";
 const INLINE_TIMESTAMP_TEXT_CLASS_NAME =
-  "inline font-medium text-(--accent-ink,var(--accent)) underline decoration-[color-mix(in_srgb,var(--accent)_45%,transparent)] underline-offset-2";
+  "inline font-medium text-blue-400 no-underline";
 
 function renderInlineTimestampsInNode(
   node: React.ReactNode,

@@ -4,3 +4,4 @@ export * from "./engagements.ts";
 export * from "./notes.ts";
 export * from "./attachments.ts";
 export * from "./moderation.ts";
+export * from "./lesson-discussions.ts";
