@@ -51,7 +51,7 @@ export function LinkPreviewCard({
         href={preview.url}
         target="_blank"
         rel="noopener noreferrer"
-        className={`flex ${compact ? "flex-row items-center gap-3 p-2.5" : "flex-col"} text-inherit no-underline focus-visible:outline-2 focus-visible:outline-(--accent)`}
+        className={`flex ${compact ? "flex-row items-center gap-3 px-2.5" : "flex-col"} text-inherit no-underline focus-visible:outline-2 focus-visible:outline-(--accent)`}
       >
         {preview.imageUrl && (
           <div

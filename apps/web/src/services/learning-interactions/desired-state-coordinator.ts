@@ -72,6 +72,7 @@ export interface SetBookmarkedOptions {
   lessonContext?: { courseId: string; lessonId: string };
   debounceMs?: number;
   onFailure?: (error: unknown) => void;
+  onSuccess?: (bookmarked: boolean) => void;
   queryClient?: QueryClient;
   pendingTarget?: boolean;
 }
@@ -83,6 +84,7 @@ export interface SetFollowedOptions {
   lessonContext?: { courseId: string; lessonId: string };
   debounceMs?: number;
   onFailure?: (error: unknown) => void;
+  onSuccess?: (followed: boolean) => void;
   queryClient?: QueryClient;
   pendingTarget?: boolean;
 }
@@ -109,6 +111,7 @@ interface ThreadBooleanState {
   lessonContext?: { courseId: string; lessonId: string };
   dispatchTimer: ReturnType<typeof setTimeout> | null;
   onFailure?: (error: unknown) => void;
+  onSuccess?: (value: boolean) => void;
   queryClient: QueryClient;
 }
 
@@ -807,6 +810,7 @@ export class DesiredStateCoordinator {
     lessonContext,
     debounceMs = 30,
     onFailure,
+    onSuccess,
     queryClient,
     pendingTarget,
   }: SetBookmarkedOptions): void {
@@ -819,6 +823,7 @@ export class DesiredStateCoordinator {
       lessonContext,
       debounceMs,
       onFailure,
+      onSuccess,
       queryClient,
     });
   }
@@ -833,6 +838,7 @@ export class DesiredStateCoordinator {
     lessonContext,
     debounceMs = 30,
     onFailure,
+    onSuccess,
     queryClient,
     pendingTarget,
   }: SetFollowedOptions): void {
@@ -845,6 +851,7 @@ export class DesiredStateCoordinator {
       lessonContext,
       debounceMs,
       onFailure,
+      onSuccess,
       queryClient,
     });
   }
@@ -885,6 +892,7 @@ export class DesiredStateCoordinator {
     lessonContext,
     debounceMs = 30,
     onFailure,
+    onSuccess,
     queryClient,
     pendingTarget,
   }: {
@@ -895,6 +903,7 @@ export class DesiredStateCoordinator {
     lessonContext?: { courseId: string; lessonId: string };
     debounceMs?: number;
     onFailure?: (error: unknown) => void;
+    onSuccess?: (value: boolean) => void;
     queryClient?: QueryClient;
     pendingTarget?: boolean;
   }): void {
@@ -916,6 +925,7 @@ export class DesiredStateCoordinator {
         lessonContext,
         dispatchTimer: null,
         onFailure,
+        onSuccess,
         queryClient: activeClient,
       };
       this.booleanEntries.set(key, state);
@@ -925,6 +935,7 @@ export class DesiredStateCoordinator {
       state.queryClient = activeClient;
       if (lessonContext) state.lessonContext = lessonContext;
       if (onFailure) state.onFailure = onFailure;
+      state.onSuccess = onSuccess;
     }
 
     // 1. Instantly apply transition to TanStack Query cache
@@ -1064,6 +1075,12 @@ export class DesiredStateCoordinator {
             state.lessonContext,
           );
         }
+
+        if (state.desiredState === state.serverBaseline) {
+          const onSuccess = state.onSuccess;
+          state.onSuccess = undefined;
+          onSuccess?.(state.serverBaseline);
+        }
       })
       .catch((error) => {
         if (
@@ -1100,6 +1117,7 @@ export class DesiredStateCoordinator {
         // retains its existing failure semantics in this phase.
         const rollbackValue = state.serverBaseline;
         state.desiredState = rollbackValue;
+        state.onSuccess = undefined;
         this.applyBooleanCacheUpdate(
           state.targetType,
           state.threadId,

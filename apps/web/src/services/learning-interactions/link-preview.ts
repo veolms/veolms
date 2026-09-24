@@ -3,7 +3,10 @@ import type { LinkPreviewResponse } from "@veolms/contracts";
 import { learningInteractionsService } from "./learning-interactions.service";
 import { learningInteractionKeys } from "./learning-interactions.keys";
 
-export function useLinkPreview(url?: string | null) {
+export function useLinkPreview(
+  url?: string | null,
+  options?: { enabled?: boolean },
+) {
   const normalizedUrl = url?.trim();
   const isValidUrl = Boolean(
     normalizedUrl &&
@@ -14,10 +17,13 @@ export function useLinkPreview(url?: string | null) {
   return useQuery<LinkPreviewResponse>({
     queryKey: learningInteractionKeys.linkPreview(normalizedUrl || ""),
     queryFn: () => learningInteractionsService.getLinkPreview(normalizedUrl!),
-    enabled: isValidUrl,
+    enabled: isValidUrl && (options?.enabled ?? true),
     staleTime: 1000 * 60 * 30, // 30 minutes
     gcTime: 1000 * 60 * 60, // 1 hour
-    retry: 1,
+    // The API already makes its bounded retry and caches its fallback result.
+    // Retrying here would repeat it every time an expanded Hub card remounts.
+    retry: false,
+    retryOnMount: false,
   });
 }
 

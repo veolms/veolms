@@ -248,7 +248,7 @@ function earlyHlsPreloadPlugin(): Plugin {
   };
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   const environment = {
     ...process.env,
     ...loadEnv(mode, workspaceRoot, ""),
@@ -260,6 +260,8 @@ export default defineConfig(({ mode }) => {
   return {
     envDir: workspaceRoot,
     optimizeDeps: {
+      // Avoid blocking the first request on a crawl of the full app graph.
+      holdUntilCrawlEnd: false,
       include: [
         "react",
         "react-dom/client",
@@ -339,8 +341,9 @@ export default defineConfig(({ mode }) => {
       // lets Vite resolve those imports for the build-time SSG renderer.
       noExternal: [
         "@atomic-editor/editor",
-        "@phosphor-icons/react",
-        /^@phosphor-icons\/react\//,
+        ...(command === "build"
+          ? ["@phosphor-icons/react", /^@phosphor-icons\/react\//]
+          : []),
       ],
     },
     build: {
@@ -369,6 +372,9 @@ export default defineConfig(({ mode }) => {
         clientFiles: [
           "./src/entry.client.tsx",
           "./src/root.tsx",
+          "./src/routes/academy-layout.tsx",
+          "./src/CoursesPage.tsx",
+          "./src/StudentPages.tsx",
         ],
       },
       proxy: {

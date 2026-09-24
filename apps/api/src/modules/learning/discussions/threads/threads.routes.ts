@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   createLearningThreadRequestSchema,
+  discussionsWorkspaceResponseSchema,
   learningThreadSchema,
   learningThreadsListResponseSchema,
   listLearningThreadsQuerySchema,
@@ -10,6 +11,8 @@ import { errorResponse } from "../../../../lib/errors.ts";
 import { jsonResponse } from "../../../../lib/responses.ts";
 import type { RoutePlugin } from "../../../../lib/route-plugin.ts";
 import { createDiscussionPermissions } from "../shared/discussion.permissions.ts";
+import { createAttachmentsRepository } from "../attachments/attachments.repository.ts";
+import { createBookmarksRepository } from "../bookmarks/bookmarks.repository.ts";
 import { createThreadsController } from "./threads.controller.ts";
 import { createThreadsRepository } from "./threads.repository.ts";
 import { createThreadsService } from "./threads.service.ts";
@@ -17,7 +20,14 @@ import { createThreadsService } from "./threads.service.ts";
 const threadsRoutes: RoutePlugin = async (app, options) => {
   const permissions = createDiscussionPermissions(options);
   const repository = createThreadsRepository();
-  const service = createThreadsService(repository);
+  const attachmentsRepository = createAttachmentsRepository();
+  const bookmarksRepository = createBookmarksRepository();
+  const service = createThreadsService(
+    repository,
+    attachmentsRepository,
+    undefined,
+    bookmarksRepository,
+  );
   const controller = createThreadsController({
     database: options.database,
     service,
@@ -98,6 +108,29 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.listHubThreads,
+  );
+
+  // 3b. GET /discussions/workspace - Unified discussions workspace feed
+  app.get(
+    "/discussions/workspace",
+    {
+      preHandler: permissions.requireAuthenticated,
+      schema: {
+        operationId: "getDiscussionsWorkspace",
+        tags: ["Learning Discussions"],
+        summary:
+          "Unified discussions workspace feed with filtered threads, activity stats, mentions, and available courses",
+        querystring: listLearningThreadsQuerySchema,
+        response: {
+          200: jsonResponse(
+            "Unified discussions workspace feed",
+            discussionsWorkspaceResponseSchema,
+          ),
+          401: errorResponse("Unauthorized"),
+        },
+      },
+    },
+    controller.getDiscussionsWorkspace,
   );
 
   // 6. GET /threads/:threadId - Get thread details

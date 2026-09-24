@@ -5,7 +5,11 @@ import axios, {
   type AxiosResponse,
 } from "axios";
 import { getApiError, type ApiError } from "./api-error";
-import { API_BASE_URL, getApiRequestUrl } from "./apiBaseUrl";
+import {
+  API_BASE_URL,
+  getApiBaseUrl,
+  getApiRequestUrl,
+} from "./apiBaseUrl";
 import { authStore } from "../store/auth.store";
 import { resetLoadedLearningInteractions } from "../services/learning-interactions/lifecycle";
 import {
@@ -15,7 +19,7 @@ import {
 import { isReactRouterBuildRequest } from "./react-router-build";
 
 export { getApiError, type ApiError };
-export { getApiRequestUrl };
+export { getApiBaseUrl, getApiRequestUrl };
 
 const BACKEND_URL = API_BASE_URL;
 

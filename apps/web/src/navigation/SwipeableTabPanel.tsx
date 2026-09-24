@@ -63,10 +63,12 @@ const getEditableTarget = (target: EventTarget | null) =>
 const syncAdjacentSlideSpacing = (
   swiper: SwiperInstance,
   customSpaceBetween?: number,
+  spaceBetweenOffset = 0,
 ) => {
   if (customSpaceBetween !== undefined) {
-    const changed = swiper.params.spaceBetween !== customSpaceBetween;
-    swiper.params.spaceBetween = customSpaceBetween;
+    const effectiveSpaceBetween = customSpaceBetween + spaceBetweenOffset;
+    const changed = swiper.params.spaceBetween !== effectiveSpaceBetween;
+    swiper.params.spaceBetween = effectiveSpaceBetween;
     return changed;
   }
   const slide = swiper.el.querySelector<HTMLElement>(".swiper-slide");
@@ -81,7 +83,8 @@ const syncAdjacentSlideSpacing = (
     0,
     Number.parseFloat(style.paddingInlineEnd || style.paddingRight) || 0,
   );
-  const spaceBetween = -Math.min(inlineStart, inlineEnd);
+  const spaceBetween =
+    -Math.min(inlineStart, inlineEnd) + spaceBetweenOffset;
   const changed = swiper.params.spaceBetween !== spaceBetween;
 
   swiper.params.spaceBetween = spaceBetween;
@@ -122,6 +125,7 @@ interface SwipeableTabPanelProps<T extends string> {
   stateAttribute?: `data-${string}`;
   disabled?: boolean;
   spaceBetween?: number;
+  spaceBetweenOffset?: number;
   onSwipeStart?: (tab: T) => void;
   onSwipeEnd?: () => void;
   nativeOnFinePointer?: boolean;
@@ -240,6 +244,7 @@ export function SwipeableTabPanel<T extends string>({
   stateAttribute,
   disabled = false,
   spaceBetween,
+  spaceBetweenOffset = 0,
   onSwipeStart,
   onSwipeEnd,
   nativeOnFinePointer = false,
@@ -282,7 +287,11 @@ export function SwipeableTabPanel<T extends string>({
 
   const handleSwiperReady = useCallback(
     (swiper: SwiperInstance) => {
-      const spacingChanged = syncAdjacentSlideSpacing(swiper);
+      const spacingChanged = syncAdjacentSlideSpacing(
+        swiper,
+        spaceBetween,
+        spaceBetweenOffset,
+      );
       syncSwipeCompletionRatio(swiper);
       swiperRef.current = swiper;
       if (spacingChanged) swiper.updateSlides();
@@ -293,7 +302,7 @@ export function SwipeableTabPanel<T extends string>({
       swiper.el.dataset.slidesReady = "true";
       updateIndicatorForTab(activeTabRef.current);
     },
-    [tabs, updateIndicatorForTab],
+    [spaceBetween, spaceBetweenOffset, tabs, updateIndicatorForTab],
   );
 
   const handleSlideChange = useCallback(
@@ -511,10 +520,11 @@ export function SwipeableTabPanel<T extends string>({
 
   useEffect(() => {
     if (isUsableSwiper(swiperRef.current) && spaceBetween !== undefined) {
-      swiperRef.current.params.spaceBetween = spaceBetween;
+      swiperRef.current.params.spaceBetween =
+        spaceBetween + spaceBetweenOffset;
       swiperRef.current.update();
     }
-  }, [spaceBetween]);
+  }, [spaceBetween, spaceBetweenOffset]);
 
   const dataState = stateAttribute
     ? ({ [stateAttribute]: activeTab } as Record<string, string>)
@@ -578,10 +588,14 @@ export function SwipeableTabPanel<T extends string>({
           threshold={0}
           initialSlide={initialSlide}
           onBeforeInit={(swiper) => {
-            syncAdjacentSlideSpacing(swiper, spaceBetween);
+            syncAdjacentSlideSpacing(
+              swiper,
+              spaceBetween,
+              spaceBetweenOffset,
+            );
           }}
           onBeforeResize={(swiper) =>
-            syncAdjacentSlideSpacing(swiper, spaceBetween)
+            syncAdjacentSlideSpacing(swiper, spaceBetween, spaceBetweenOffset)
           }
           onSwiper={handleSwiperReady}
           onTouchStart={handleTouchStart}

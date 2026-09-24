@@ -28,4 +28,9 @@ export * from "./shared/discussion.permissions.ts";
 export * from "./shared/discussion.access.ts";
 export * from "./shared/discussion.constants.ts";
 export * from "./shared/discussion.utils.ts";
+export * from "./shared/discussion.visibility.ts";
+
+export * from "./counts/counts.repository.ts";
+export * from "./counts/counts.service.ts";
+export * from "./counts/counts.controller.ts";
 export * from "./shared/discussion.mentions.ts";

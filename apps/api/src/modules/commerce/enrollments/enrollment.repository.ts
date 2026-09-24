@@ -1,5 +1,17 @@
+import { sql } from "kysely";
 import type { EnrollmentStatus, EnrollmentSource } from "@veolms/database";
 import type { Executor } from "../shared/repository.types.ts";
+
+export interface EnrollmentAnalyticsFilters {
+  courseId?: string | string[];
+  from?: Date;
+  to?: Date;
+}
+
+function toCourseIdList(courseId: string | string[] | undefined): string[] {
+  if (!courseId) return [];
+  return Array.isArray(courseId) ? courseId : [courseId];
+}
 
 export async function findEnrollment(
   database: Executor,
@@ -68,6 +80,73 @@ export async function listActiveUserIdsByCourseId(
     )
     .execute();
   return rows.map((row) => row.user_id);
+}
+
+export async function getEnrollmentStats(
+  database: Executor,
+  filters: EnrollmentAnalyticsFilters,
+): Promise<{ totalEnrollments: number; activeEnrollments: number }> {
+  const courseIds = toCourseIdList(filters.courseId);
+
+  let query = database
+    .selectFrom("enrollments")
+    .select([
+      sql<number>`count(*)::int`.as("total"),
+      sql<number>`count(*) filter (where status = 'active')::int`.as("active"),
+    ]);
+
+  if (courseIds.length > 0) {
+    query = query.where("course_id", "in", courseIds);
+  }
+  if (filters.from) {
+    query = query.where("created_at", ">=", filters.from);
+  }
+  if (filters.to) {
+    query = query.where("created_at", "<=", filters.to);
+  }
+
+  const row = await query.executeTakeFirst();
+  return {
+    totalEnrollments: Number(row?.total ?? 0),
+    activeEnrollments: Number(row?.active ?? 0),
+  };
+}
+
+export async function listTopCoursesByEnrollment(
+  database: Executor,
+  options: {
+    limit: number;
+    from?: Date;
+    to?: Date;
+    courseId?: string | string[];
+  },
+): Promise<Array<{ courseId: string; enrollmentCount: number }>> {
+  let query = database
+    .selectFrom("enrollments")
+    .select([
+      "course_id",
+      sql<number>`count(*)::int`.as("enrollment_count"),
+    ])
+    .groupBy("course_id")
+    .orderBy(sql`count(*)`, "desc")
+    .limit(options.limit);
+
+  if (options.from) {
+    query = query.where("created_at", ">=", options.from);
+  }
+  if (options.to) {
+    query = query.where("created_at", "<=", options.to);
+  }
+  const courseIds = toCourseIdList(options.courseId);
+  if (courseIds.length > 0) {
+    query = query.where("course_id", "in", courseIds);
+  }
+
+  const rows = await query.execute();
+  return rows.map((row) => ({
+    courseId: row.course_id,
+    enrollmentCount: Number(row.enrollment_count),
+  }));
 }
 
 export async function insertEnrollment(

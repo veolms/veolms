@@ -157,20 +157,22 @@ export const CourseCatalogue = memo(function CourseCatalogue({
   );
   const handleEditCourse = useCallback(
     (selected: Course) =>
-      onNavigatePage(`/courses/create?edit=${encodeURIComponent(selected.id)}`),
+      onNavigatePage(
+        `/courses/${encodeURIComponent(selected.id)}/edit/basics`,
+      ),
     [onNavigatePage],
   );
   const handleManageCourse = useCallback(
     (selected: Course) =>
       onNavigatePage(
-        `/courses/create?edit=${encodeURIComponent(selected.id)}&tab=curriculum`,
+        `/courses/${encodeURIComponent(selected.id)}/edit/curriculum`,
       ),
     [onNavigatePage],
   );
   const handlePublishCourse = useCallback(
     (selected: Course) =>
       onNavigatePage(
-        `/courses/create?edit=${encodeURIComponent(selected.id)}&tab=publish`,
+        `/courses/${encodeURIComponent(selected.id)}/edit/publish`,
       ),
     [onNavigatePage],
   );

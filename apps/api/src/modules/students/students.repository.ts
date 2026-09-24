@@ -364,6 +364,35 @@ export async function countTotalStudents(
   return Number(result?.total ?? 0);
 }
 
+function toIdList(courseId: string | string[] | undefined): string[] {
+  if (!courseId) return [];
+  return Array.isArray(courseId) ? courseId : [courseId];
+}
+
+/** Distinct users with learning-progress activity in the range. */
+export async function getActiveLearnerCount(
+  database: StudentsExecutor,
+  options: { courseId?: string | string[]; from?: Date; to?: Date },
+): Promise<number> {
+  let query = database
+    .selectFrom("learning_progress")
+    .select(sql<number>`count(distinct user_id)::int`.as("count"));
+
+  const courseIds = toIdList(options.courseId);
+  if (courseIds.length > 0) {
+    query = query.where("course_id", "in", courseIds);
+  }
+  if (options.from) {
+    query = query.where("updated_at", ">=", options.from);
+  }
+  if (options.to) {
+    query = query.where("updated_at", "<=", options.to);
+  }
+
+  const row = await query.executeTakeFirst();
+  return Number(row?.count ?? 0);
+}
+
 /**
  * Batch loads enrollments for a list of student user IDs.
  */

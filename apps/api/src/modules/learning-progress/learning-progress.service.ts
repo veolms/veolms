@@ -41,6 +41,20 @@ export interface LearningProgressService {
     courseKey: string,
     input: LearningProgressBatchRequest,
   ): Promise<LearningProgressSyncResponse>;
+  getAverageProgressAndCompletionRate(filters?: {
+    courseId?: string | string[];
+    asOf?: Date;
+  }): Promise<{ averageProgressPercent: number; completionRate: number }>;
+  getStartedAndCompletedCounts(filters: {
+    courseId?: string | string[];
+    from?: Date;
+    to?: Date;
+  }): Promise<{ started: number; completed: number }>;
+  getEstimatedWatchHours(filters: {
+    courseId?: string | string[];
+    from?: Date;
+    to?: Date;
+  }): Promise<number>;
 }
 
 export function createLearningProgressService({
@@ -244,5 +258,42 @@ export function createLearningProgressService({
     return { synced: true };
   }
 
-  return { getProgress, syncProgress };
+  async function getAverageProgressAndCompletionRate(
+    filters: { courseId?: string | string[]; asOf?: Date } = {},
+  ) {
+    return await learningProgressRepository.getAverageProgressAndCompletionRate(
+      database,
+      filters,
+    );
+  }
+
+  async function getStartedAndCompletedCounts(filters: {
+    courseId?: string | string[];
+    from?: Date;
+    to?: Date;
+  }) {
+    return await learningProgressRepository.getStartedAndCompletedCounts(
+      database,
+      filters,
+    );
+  }
+
+  async function getEstimatedWatchHours(filters: {
+    courseId?: string | string[];
+    from?: Date;
+    to?: Date;
+  }) {
+    return await learningProgressRepository.getEstimatedWatchHours(
+      database,
+      filters,
+    );
+  }
+
+  return {
+    getProgress,
+    syncProgress,
+    getAverageProgressAndCompletionRate,
+    getStartedAndCompletedCounts,
+    getEstimatedWatchHours,
+  };
 }

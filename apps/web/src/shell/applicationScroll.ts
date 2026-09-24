@@ -3,7 +3,7 @@ export interface ApplicationScrollPosition {
   top: number;
 }
 
-const desktopFramedLayout = "(min-width: 821px)";
+const desktopFramedLayout = "(min-width: 641px)";
 
 export const getApplicationScrollElement = (): HTMLElement | null => {
   if (typeof document === "undefined" || typeof window === "undefined") {

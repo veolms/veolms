@@ -10,7 +10,11 @@ import type {
   ListLearningRepliesQuery,
   ListLearningThreadsQuery,
   ListReportsQuery,
+  DiscussionsWorkspaceResponse,
   LearningThreadsListResponse,
+  LessonDiscussionsListResponse,
+  LessonDiscussionCountsResponse,
+  ListLessonDiscussionsQuery,
   ReportsListResponse,
   UserAutocompleteQuery,
   UserAutocompleteResponse,
@@ -50,11 +54,16 @@ import {
   flattenReplyPages,
   getReplyTotalCount,
 } from "./reply-pagination";
-import type { InteractionCapabilities } from "../../learning/discussionFeed";
 
 export { flattenReplyPages, getReplyTotalCount } from "./reply-pagination";
 
 type LessonThreadsQuery = Partial<Omit<ListLearningThreadsQuery, "cursor">>;
+type LessonDiscussionsQuery = Partial<
+  Omit<ListLessonDiscussionsQuery, "cursor">
+>;
+type DiscussionsWorkspaceQuery = Partial<
+  Omit<ListLearningThreadsQuery, "cursor">
+>;
 type UserNotesQuery = Partial<Omit<ListLearningNotesQuery, "cursor">>;
 type RepliesQuery = Partial<Omit<ListLearningRepliesQuery, "cursor">>;
 type RepliesInfiniteData = InfiniteData<LearningRepliesCacheResponse>;
@@ -67,68 +76,24 @@ export interface LessonInteractionCounts {
 }
 
 export type LessonInteractionCountsOptions = {
-  capabilities: InteractionCapabilities;
-  mine?: boolean;
   enabled?: boolean;
 };
-
-function readAuthoritativeTotalCount(
-  response: { totalCount?: number },
-  interactionType: string,
-): number {
-  if (typeof response.totalCount !== "number") {
-    throw new Error(`Missing authoritative ${interactionType} totalCount.`);
-  }
-  return response.totalCount;
-}
 
 async function fetchLessonInteractionCounts(
   courseId: string,
   lessonId: string,
-  { capabilities, mine = false }: LessonInteractionCountsOptions,
 ): Promise<LessonInteractionCounts> {
-  const [comments, qna, notes] = await Promise.all([
-    capabilities.allowComments
-      ? learningInteractionsService
-          .listLessonThreads(courseId, lessonId, {
-            kind: "comment",
-            status: "all",
-            sort: "latest",
-            ...(mine ? { mine: true } : {}),
-            limit: 1,
-          })
-          .then((response) =>
-            readAuthoritativeTotalCount(response, "comments"),
-          )
-      : Promise.resolve(0),
-    capabilities.allowQa
-      ? learningInteractionsService
-          .listLessonThreads(courseId, lessonId, {
-            kind: "question",
-            status: "all",
-            sort: "latest",
-            ...(mine ? { mine: true } : {}),
-            limit: 1,
-          })
-          .then((response) => readAuthoritativeTotalCount(response, "Q&A"))
-      : Promise.resolve(0),
-    capabilities.allowNotes
-      ? learningInteractionsService
-          .listNotes({
-            courseId,
-            lessonId,
-            ...(mine ? { mine: true } : {}),
-            limit: 1,
-          })
-          .then((response) => readAuthoritativeTotalCount(response, "Notes"))
-      : Promise.resolve(0),
-  ]);
+  const response: LessonDiscussionCountsResponse =
+    await learningInteractionsService.getLessonInteractionCounts(
+      courseId,
+      lessonId,
+    );
 
   return {
-    comments,
-    qna,
-    notes,
-    total: comments + qna + notes,
+    comments: response.comments,
+    qna: response.questions,
+    notes: response.notes,
+    total: response.total,
   };
 }
 
@@ -137,32 +102,18 @@ export function useLessonInteractionCounts(
   lessonId: string | undefined,
   options: LessonInteractionCountsOptions,
 ) {
-  const { capabilities, mine = false } = options;
-  const queryFilters = {
-    allowComments: capabilities.allowComments,
-    allowNotes: capabilities.allowNotes,
-    allowQa: capabilities.allowQa,
-    mine,
-  };
-  const hasEnabledCapability =
-    capabilities.allowComments || capabilities.allowNotes || capabilities.allowQa;
-
   return useQuery<LessonInteractionCounts, ApiError>({
     queryKey: learningInteractionKeys.lessonInteractionCounts(
       courseId ?? "",
       lessonId ?? "",
-      queryFilters,
     ),
     queryFn: () => {
       if (!courseId || !lessonId) {
         throw new Error("Course and lesson IDs are required for interaction counts.");
       }
-      return fetchLessonInteractionCounts(courseId, lessonId, options);
+      return fetchLessonInteractionCounts(courseId, lessonId);
     },
-    enabled:
-      (options.enabled ?? true) &&
-      Boolean(courseId && lessonId) &&
-      hasEnabledCapability,
+    enabled: (options.enabled ?? true) && Boolean(courseId && lessonId),
     retry: false,
     staleTime: 30 * 1000,
   });
@@ -453,7 +404,22 @@ export function mergeNotesWithCreationRecords(
     );
 
     if (existingIndex >= 0) {
-      notes[existingIndex] = localNote;
+      if (
+        record.status === "confirmed" &&
+        record.serverId !== undefined &&
+        getServerEntityId(notes[existingIndex]!) === record.serverId
+      ) {
+        const existingNote = notes[existingIndex]!;
+        notes[existingIndex] = {
+          ...existingNote,
+          id: record.clientId,
+          clientId: record.clientId,
+          serverId: record.serverId,
+          creationStatus: "confirmed",
+        };
+      } else {
+        notes[existingIndex] = localNote;
+      }
     } else {
       notes.push(localNote);
       addedLocalNotes += 1;
@@ -523,17 +489,35 @@ export function mergeThreadsWithCreationRecords(
   let addedLocalThreads = 0;
 
   for (const record of records) {
-    const localThread = record.optimisticThread;
+    const localThread =
+      record.status === "confirmed" && record.serverThreadEntity
+        ? record.serverThreadEntity
+        : record.optimisticThread;
     if (!threadMatchesQuery(localThread, query)) continue;
 
     const existingIndex = threads.findIndex(
       (thread) =>
         getClientEntityId(thread) === record.clientId ||
-        (record.optimisticThread.serverId !== undefined &&
-          getServerEntityId(thread) === record.optimisticThread.serverId),
+        (record.serverId !== undefined &&
+          getServerEntityId(thread) === record.serverId),
     );
     if (existingIndex >= 0) {
-      threads[existingIndex] = localThread;
+      if (
+        record.status === "confirmed" &&
+        record.serverId !== undefined &&
+        getServerEntityId(threads[existingIndex]!) === record.serverId
+      ) {
+        const existingThread = threads[existingIndex]!;
+        threads[existingIndex] = {
+          ...existingThread,
+          id: record.clientId,
+          clientId: record.clientId,
+          serverId: record.serverId,
+          creationStatus: "confirmed",
+        };
+      } else {
+        threads[existingIndex] = localThread;
+      }
     } else {
       threads.push(localThread);
       addedLocalThreads += 1;
@@ -665,6 +649,39 @@ export function useLessonThreads(
   };
 }
 
+export function useLessonDiscussions(
+  courseId: string,
+  lessonId: string,
+  query?: LessonDiscussionsQuery,
+  options?: { enabled?: boolean },
+) {
+  const queryKey = learningInteractionKeys.lessonDiscussions(
+    courseId,
+    lessonId,
+    query,
+  );
+  return useInfiniteQuery<
+    LessonDiscussionsListResponse,
+    ApiError,
+    InfiniteData<LessonDiscussionsListResponse>,
+    typeof queryKey,
+    string | null
+  >({
+    queryKey,
+    queryFn: ({ pageParam }) =>
+      learningInteractionsService.listLessonDiscussions(courseId, lessonId, {
+        ...query,
+        limit: 20,
+        ...(pageParam ? { cursor: pageParam } : {}),
+      } as ListLessonDiscussionsQuery),
+    initialPageParam: null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: options?.enabled ?? Boolean(courseId && lessonId),
+    retry: false,
+    staleTime: 30 * 1000,
+  });
+}
+
 export function useHubThreads(
   query?: ListLearningThreadsQuery,
   options?: { enabled?: boolean },
@@ -706,6 +723,31 @@ export function useHubThreads(
   };
 }
 
+export function useDiscussionsWorkspace(
+  query?: DiscussionsWorkspaceQuery,
+  options?: { enabled?: boolean },
+) {
+  const queryKey = learningInteractionKeys.discussionsWorkspace(query);
+  return useInfiniteQuery<
+    DiscussionsWorkspaceResponse,
+    ApiError,
+    InfiniteData<DiscussionsWorkspaceResponse>,
+    typeof queryKey,
+    string | null
+  >({
+    queryKey,
+    queryFn: ({ pageParam }) =>
+      learningInteractionsService.listDiscussionsWorkspace({
+        ...query,
+        ...(pageParam ? { cursor: pageParam } : {}),
+      } as ListLearningThreadsQuery),
+    initialPageParam: null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: options?.enabled ?? true,
+    staleTime: 30 * 1000,
+  });
+}
+
 export function useThreadDetails(
   threadId: string | undefined,
   options?: { enabled?: boolean },
@@ -738,6 +780,40 @@ export function useThreadDetails(
       data && optimisticDeletionCoordinator.isTombstoned("thread", data)
         ? undefined
         : data,
+  };
+}
+
+export function useNoteDetails(
+  noteId: string | undefined,
+  options?: { enabled?: boolean },
+) {
+  const isPendingClientId =
+    isClientEntityId(noteId) ||
+    interactionCreationCoordinator.hasPendingClientId(noteId);
+  const result = useQuery<LearningNoteCacheItem, ApiError>({
+    queryKey: learningInteractionKeys.noteDetails(noteId ?? ""),
+    queryFn: async () => {
+      if (!noteId || isPendingClientId) {
+        throw new Error("A confirmed server note ID is required.");
+      }
+      return projectNoteLocalState(
+        await learningInteractionsService.getNote(noteId),
+      );
+    },
+    enabled:
+      (options?.enabled ?? Boolean(noteId)) &&
+      Boolean(noteId) &&
+      !isPendingClientId,
+    staleTime: 30 * 1000,
+  });
+  useOptimisticDeletionRevision();
+  return {
+    ...result,
+    data:
+      result.data &&
+      !optimisticDeletionCoordinator.isTombstoned("note", result.data)
+        ? result.data
+        : undefined,
   };
 }
 
