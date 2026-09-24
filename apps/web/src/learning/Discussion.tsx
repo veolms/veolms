@@ -109,6 +109,12 @@ import {
   useOptimisticDeletionRevision,
 } from "../services/learning-interactions/optimistic-deletion-coordinator";
 import {
+  applyLessonInteractionCountDelta,
+  restoreLessonInteractionCounts,
+  type LessonInteractionCountKind,
+  type LessonInteractionCountsSnapshot,
+} from "../services/learning-interactions/interaction-counts-cache";
+import {
   getClientEntityId,
   getServerEntityId,
   isClientEntityId,
@@ -524,8 +530,6 @@ function DiscussionInner({
     courseId,
     lessonId,
     {
-      capabilities,
-      mine: feedSort === "mine",
       enabled: !isInteractionCapabilitiesLoading && enabledKinds.length > 0,
     },
   );
@@ -541,7 +545,6 @@ function DiscussionInner({
           : "all" as const,
       status: "all" as const,
       sort: feedSort === "top" ? ("popular" as const) : ("latest" as const),
-      ...(feedSort === "mine" ? { mine: true } : {}),
       limit: 20,
     }),
     [entryFilter, feedSort],
@@ -550,10 +553,9 @@ function DiscussionInner({
     () => ({
       courseId: courseId ?? "",
       lessonId: lessonId ?? "",
-      ...(feedSort === "mine" ? { mine: true } : {}),
       limit: 20,
     }),
-    [courseId, feedSort, lessonId],
+    [courseId, lessonId],
   );
 
   const {
@@ -609,7 +611,6 @@ function DiscussionInner({
           ? entryFilter
           : ("all" as const),
       sort: feedSort === "top" ? ("top" as const) : ("newest" as const),
-      ...(feedSort === "mine" ? { mine: true } : {}),
     }),
     [entryFilter, feedSort],
   );
@@ -820,11 +821,7 @@ function DiscussionInner({
         (thread) => {
           const candidate = thread as unknown as LearningThreadEntity;
           const requestedKind = threadQuery.kind;
-          return (
-            (requestedKind === "all" || candidate.kind === requestedKind) &&
-            (threadQuery.mine === undefined ||
-              Boolean(threadQuery.mine) === Boolean(candidate.isOwn))
-          );
+          return requestedKind === "all" || candidate.kind === requestedKind;
         },
       ),
       (thread) =>
@@ -840,10 +837,7 @@ function DiscussionInner({
         (note) => noteIdentity(note as unknown as LearningNoteCacheItem),
         (note) => {
           const candidate = note as unknown as LearningNoteCacheItem;
-          return (
-            (entryFilter === "all" || entryFilter === "note") &&
-            (feedSort !== "mine" || Boolean(candidate.isOwn))
-          );
+          return entryFilter === "all" || entryFilter === "note";
         },
       ),
       (note) =>
@@ -891,7 +885,6 @@ function DiscussionInner({
     courseId,
     currentUser?.id,
     entryFilter,
-    feedSort,
     lessonId,
     notesQuery,
     queryClient,
@@ -919,9 +912,7 @@ function DiscussionInner({
       .filter((note) => {
         const serverId = getServerEntityId(note);
         return (
-          (!serverId ||
-            (isClientEntityId(getClientEntityId(note)) &&
-              (feedSort !== "mine" || Boolean(note.isOwn)))) ||
+          (!serverId || isClientEntityId(getClientEntityId(note))) ||
           unifiedNoteIdentities.has(`note:${serverId}`)
         );
       })
@@ -988,7 +979,6 @@ function DiscussionInner({
     currentUser?.id,
     directNoteData,
     entryFilter,
-    feedSort,
     hasNoteDeepLink,
     lessonId,
     legacyNotes,
@@ -1247,7 +1237,6 @@ function DiscussionInner({
   const filteredEntries = useMemo(
     () =>
       applyDiscussionFeed({
-        currentUserName: authorName,
         entries: isBackendMode ? dedupedBackendEntries : combinedEntries,
         filter: entryFilter,
         sort: feedSort,
@@ -1255,7 +1244,6 @@ function DiscussionInner({
         preserveOrder: isBackendMode,
       }),
     [
-      authorName,
       combinedEntries,
       dedupedBackendEntries,
       entryFilter,
@@ -2024,6 +2012,15 @@ function DiscussionInner({
     }
     const clientId = entry ? getClientEntityId(entry) : String(id);
     const deletionKind = isBackendNote ? "note" : "thread";
+    const interactionCountKind: LessonInteractionCountKind | undefined =
+      entry
+        ? isBackendNote
+          ? "note"
+          : entry.entryKind === "question" || entry.isQuestion
+            ? "question"
+            : "comment"
+        : undefined;
+    let countsSnapshot: LessonInteractionCountsSnapshot | undefined;
     if (
       isBackendMode &&
       optimisticEditCoordinator.isEditing(deletionKind, clientId)
@@ -2042,6 +2039,26 @@ function DiscussionInner({
           isBackendNote
             ? deleteNoteMutation.mutateAsync(serverId!)
             : deleteThreadMutation.mutateAsync(serverId!),
+        onBegin: () => {
+          if (!queryClient || !courseId || !lessonId || !interactionCountKind)
+            return;
+          countsSnapshot = applyLessonInteractionCountDelta(queryClient, {
+            courseId,
+            lessonId,
+            kind: interactionCountKind,
+            delta: -1,
+          });
+        },
+        onRollback: () => {
+          if (!queryClient || !courseId || !lessonId || !countsSnapshot)
+            return;
+          restoreLessonInteractionCounts(
+            queryClient,
+            courseId,
+            lessonId,
+            countsSnapshot,
+          );
+        },
         onFailure: () =>
           setNotice(
             isBackendNote

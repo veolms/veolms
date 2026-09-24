@@ -37,6 +37,7 @@ interface InternalDeletionRecord extends OptimisticDeletionRecord {
   ticker: ReturnType<typeof setInterval> | null;
   commit: () => Promise<unknown>;
   onFailure?: () => void;
+  onRollback?: () => void;
   queryClient: QueryClient;
 }
 
@@ -48,6 +49,10 @@ export interface BeginOptimisticDeletionArgs {
   parentServerId?: string;
   parentRepliesCount?: number;
   commit: () => Promise<unknown>;
+  /** Called once when a new deletion transaction is registered. */
+  onBegin?: () => void;
+  /** Called when an undoable/deleting transaction is rolled back. */
+  onRollback?: () => void;
   onFailure?: () => void;
   queryClient?: QueryClient | null;
 }
@@ -114,6 +119,7 @@ export class OptimisticDeletionCoordinator {
       queryClient: args.queryClient ?? defaultQueryClient,
     };
     this.records.set(key, record);
+    args.onBegin?.();
     record.timer = setTimeout(
       () => this.commit(key, record.authGeneration),
       UNDO_DELETE_TIMEOUT_MS,
@@ -131,6 +137,7 @@ export class OptimisticDeletionCoordinator {
     if (!record || record.phase !== "undoable") return false;
     this.clearTimers(record);
     this.records.delete(key);
+    record.onRollback?.();
     this.notify();
     return true;
   }
@@ -218,7 +225,10 @@ export class OptimisticDeletionCoordinator {
   }
 
   reset(): void {
-    for (const record of this.records.values()) this.clearTimers(record);
+    for (const record of this.records.values()) {
+      this.clearTimers(record);
+      if (record.phase !== "deleted") record.onRollback?.();
+    }
     this.records.clear();
     this.notify();
   }
@@ -257,6 +267,7 @@ export class OptimisticDeletionCoordinator {
       .catch(() => {
         if (!this.isCurrentRecord(key, record, generation)) return;
         this.records.delete(key);
+        record.onRollback?.();
         record.onFailure?.();
         this.notify();
       });
@@ -409,6 +420,7 @@ export class OptimisticDeletionCoordinator {
       if (record.authGeneration === authStore.getWriteGeneration()) continue;
       this.clearTimers(record);
       this.records.delete(key);
+      if (record.phase !== "deleted") record.onRollback?.();
       changed = true;
     }
     if (changed) this.notify();

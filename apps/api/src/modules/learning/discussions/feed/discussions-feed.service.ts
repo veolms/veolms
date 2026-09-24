@@ -34,6 +34,7 @@ import {
   type NotesService,
 } from "../notes/notes.service.ts";
 import { createNotesRepository } from "../notes/notes.repository.ts";
+import { discussionVisibilityPredicate } from "../shared/discussion.visibility.ts";
 
 const SOURCE_RANK = {
   note: 1,
@@ -166,19 +167,6 @@ function encodeFeedCursor(candidate: FeedCandidate, context: FeedContext) {
   });
 }
 
-function visibilityPredicate(alias: "t" | "n", userId: string, mine: boolean) {
-  const userColumn = sql.ref(`${alias}.user_id`);
-  const visibilityColumn = sql.ref(`${alias}.visibility`);
-  if (mine) return sql`${userColumn} = ${userId}`;
-  return sql`(
-    ${visibilityColumn} = 'public'
-    or (
-      ${visibilityColumn} in ('private', 'unlisted')
-      and ${userColumn} = ${userId}
-    )
-  )`;
-}
-
 function threadKinds(
   context: FeedContext,
 ): readonly ("comment" | "question")[] {
@@ -224,7 +212,7 @@ async function listCandidates(
         and t.lesson_id = ${context.lessonId}
         and t.status = 'active'
         and ${kindPredicate}
-        and ${visibilityPredicate("t", actor.userId, context.mine)}
+        and ${discussionVisibilityPredicate("t", actor.userId, context.mine)}
     `);
   }
 
@@ -244,7 +232,7 @@ async function listCandidates(
       where n.academy_id = ${academyId}
         and n.course_id = ${context.courseId}
         and n.lesson_id = ${context.lessonId}
-        and ${visibilityPredicate("n", actor.userId, context.mine)}
+        and ${discussionVisibilityPredicate("n", actor.userId, context.mine)}
     `);
   }
 

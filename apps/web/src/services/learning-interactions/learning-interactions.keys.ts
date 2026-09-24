@@ -22,15 +22,8 @@ export const learningInteractionKeys = {
     courseId && lessonId
       ? [...learningInteractionKeys.all, "lesson-interaction-counts", courseId, lessonId] as const
       : [...learningInteractionKeys.all, "lesson-interaction-counts"] as const,
-  lessonInteractionCounts: (
-    courseId: string,
-    lessonId: string,
-    filters?: Record<string, unknown>,
-  ) =>
-    [
-      ...learningInteractionKeys.lessonInteractionCountsRoot(courseId, lessonId),
-      filters,
-    ] as const,
+  lessonInteractionCounts: (courseId: string, lessonId: string) =>
+    [...learningInteractionKeys.lessonInteractionCountsRoot(courseId, lessonId)] as const,
   hubThreads: (filters?: Record<string, unknown>) =>
     [...learningInteractionKeys.all, "hub-threads", "infinite", filters] as const,
   discussionsWorkspace: (filters?: Record<string, unknown>) =>

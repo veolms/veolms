@@ -53,3 +53,13 @@ export const lessonDiscussionsListResponseSchema = z.object({
 export type LessonDiscussionsListResponse = z.infer<
   typeof lessonDiscussionsListResponseSchema
 >;
+
+export const lessonDiscussionCountsResponseSchema = z.object({
+  comments: z.number().int().nonnegative(),
+  questions: z.number().int().nonnegative(),
+  notes: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+});
+export type LessonDiscussionCountsResponse = z.infer<
+  typeof lessonDiscussionCountsResponseSchema
+>;

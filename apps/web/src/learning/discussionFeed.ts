@@ -4,23 +4,15 @@ import { getClientEntityId } from "../services/learning-interactions/interaction
 import type { LessonInteractionCounts } from "../services/learning-interactions";
 
 export type DiscussionEntryFilter = "all" | DiscussionEntryKind;
-export type DiscussionFeedSort = "newest" | "top" | "mine";
+export type DiscussionFeedSort = "newest" | "top";
 
 export const DISCUSSION_FEED_SORT_OPTIONS = [
   ["newest", "Newest"],
   ["top", "Top"],
-  ["mine", "Mine"],
 ] as const satisfies readonly (readonly [DiscussionFeedSort, string])[];
 
 export function getDiscussionEntryKind(entry: Comment): DiscussionEntryKind {
   return entry.entryKind ?? (entry.isQuestion ? "question" : "comment");
-}
-
-export function isOwnDiscussionEntry(
-  entry: Comment,
-  currentUserName: string,
-): boolean {
-  return Boolean(entry.isOwn) || entry.name === currentUserName;
 }
 
 export interface InteractionCapabilities {
@@ -58,14 +50,12 @@ export function compareEntriesNewest(left: Comment, right: Comment): number {
 }
 
 export function applyDiscussionFeed({
-  currentUserName,
   entries,
   filter,
   sort,
   capabilities,
   preserveOrder = false,
 }: {
-  currentUserName: string;
   entries: readonly Comment[];
   filter: DiscussionEntryFilter;
   sort: DiscussionFeedSort;
@@ -90,12 +80,7 @@ export function applyDiscussionFeed({
       : capabilityFiltered.filter(
           (entry) => getDiscussionEntryKind(entry) === filter,
         );
-  const visibleEntries =
-    sort === "mine"
-      ? typedEntries.filter((entry) =>
-          isOwnDiscussionEntry(entry, currentUserName),
-        )
-      : typedEntries;
+  const visibleEntries = typedEntries;
 
   if (preserveOrder) return visibleEntries;
 

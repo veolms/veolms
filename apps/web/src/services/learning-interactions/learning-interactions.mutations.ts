@@ -34,6 +34,11 @@ import {
   type LocalComposerAttachment,
 } from "./attachment-model";
 import { uploadInteractionAttachments } from "./interaction-attachment-upload";
+import {
+  applyLessonInteractionCountDelta,
+  restoreLessonInteractionCounts,
+  type LessonInteractionCountsSnapshot,
+} from "./interaction-counts-cache";
 
 export interface OptimisticEditMutationMeta {
   clientId: string;
@@ -117,7 +122,10 @@ export function useCreateLessonThread(courseId: string, lessonId: string) {
     LearningThread,
     ApiError,
     CreateThreadMutationInput,
-    { clientId: string }
+    {
+      clientId: string;
+      countsSnapshot: LessonInteractionCountsSnapshot | undefined;
+    }
   >({
     mutationFn: async (input) => {
       const { __clientId, __localAttachments = [], ...payload } = input;
@@ -155,7 +163,14 @@ export function useCreateLessonThread(courseId: string, lessonId: string) {
         },
         localAttachments: __localAttachments,
       });
-      return { clientId: record.clientId };
+      const countsSnapshot = applyLessonInteractionCountDelta(queryClient, {
+        courseId,
+        lessonId,
+        kind:
+          threadPayload.kind === "qna" ? "question" : threadPayload.kind,
+        delta: 1,
+      });
+      return { clientId: record.clientId, countsSnapshot };
     },
     onSuccess: (serverThread, _payload, context) => {
       interactionCreationCoordinator.confirmThread(
@@ -172,6 +187,12 @@ export function useCreateLessonThread(courseId: string, lessonId: string) {
     },
     onError: (_error, _payload, context) => {
       if (context) {
+        restoreLessonInteractionCounts(
+          queryClient,
+          courseId,
+          lessonId,
+          context.countsSnapshot,
+        );
         interactionCreationCoordinator.failThread(
           queryClient,
           context.clientId,
@@ -404,7 +425,10 @@ export function useCreateNote() {
     LearningNote,
     ApiError,
     CreateNoteMutationInput,
-    { clientId: string }
+    {
+      clientId: string;
+      countsSnapshot: LessonInteractionCountsSnapshot | undefined;
+    }
   >({
     mutationFn: async (input) => {
       const {
@@ -458,7 +482,13 @@ export function useCreateNote() {
         dispatch: (notePayload) =>
           learningInteractionsService.createNote(notePayload),
       });
-      return { clientId: record.clientId };
+      const countsSnapshot = applyLessonInteractionCountDelta(queryClient, {
+        courseId: notePayload.courseId,
+        lessonId: notePayload.lessonId,
+        kind: "note",
+        delta: 1,
+      });
+      return { clientId: record.clientId, countsSnapshot };
     },
     onSuccess: (serverNote, payload, context) => {
       interactionCreationCoordinator.confirmNote(
@@ -473,8 +503,14 @@ export function useCreateNote() {
         ),
       });
     },
-    onError: (_error, _payload, context) => {
+    onError: (_error, payload, context) => {
       if (context) {
+        restoreLessonInteractionCounts(
+          queryClient,
+          payload.courseId,
+          payload.lessonId,
+          context.countsSnapshot,
+        );
         interactionCreationCoordinator.failNote(queryClient, context.clientId);
       }
     },
