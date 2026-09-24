@@ -2265,6 +2265,8 @@ function DiscussionScrollportVirtualFeed(
     return () => window.removeEventListener("resize", syncScrollMargin);
   }, [props.entries.length, props.layoutKey, syncScrollMargin]);
 
+  // TanStack Virtual's mutable virtualizer API is intentionally not compiler-memoized.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: props.entries.length,
     getScrollElement: getApplicationScrollElement,
@@ -2598,6 +2600,7 @@ function ThreadSurface({
   const protectedEntryIndices = useMemo(() => {
     const indices = new Set<number>();
 
+    void deletionRevision;
     entries.forEach((entry, index) => {
       const clientId = getClientEntityId(entry);
       const serverId = getServerEntityId(entry);

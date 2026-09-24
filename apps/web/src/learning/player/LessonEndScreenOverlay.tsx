@@ -255,7 +255,7 @@ export function LessonEndScreenOverlay({
               </div>
               <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-(--text)">Course Completed!</h3>
               <p className="mt-2 text-sm sm:text-base text-(--text-secondary) max-w-sm leading-relaxed">
-                You've watched all available lectures in this course.
+                You&apos;ve watched all available lectures in this course.
               </p>
             </div>
 

@@ -11,26 +11,22 @@ export function usePlayerState<Selected>(
   isEqual: (left: Selected, right: Selected) => boolean = Object.is,
 ): Selected {
   const controller = usePlayerController();
-  const selectorRef = useRef(selector);
-  const equalityRef = useRef(isEqual);
   const selectedRef = useRef<Selected | undefined>(undefined);
   const hasSelectionRef = useRef(false);
-  selectorRef.current = selector;
-  equalityRef.current = isEqual;
 
   const getSelectedSnapshot = useCallback(() => {
-    const next = selectorRef.current(controller.getSnapshot());
+    const next = selector(controller.getSnapshot());
     if (
       hasSelectionRef.current &&
       selectedRef.current !== undefined &&
-      equalityRef.current(selectedRef.current, next)
+      isEqual(selectedRef.current, next)
     ) {
       return selectedRef.current;
     }
     hasSelectionRef.current = true;
     selectedRef.current = next;
     return next;
-  }, [controller]);
+  }, [controller, isEqual, selector]);
 
   return useSyncExternalStore(
     controller.subscribe,

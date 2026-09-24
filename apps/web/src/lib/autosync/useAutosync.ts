@@ -53,13 +53,14 @@ export function useAutosync<TValue, TServerValue = TValue>({
   onSynced,
 }: AutosyncOptions<TValue, TServerValue>): AutosyncResult<TValue> {
   const queryClient = useQueryClient();
+  const { entity, entityId, scope } = key;
   const draftKey = useMemo(
-    () => getAutosyncDraftKey(key),
-    [key.entity, key.entityId, key.scope],
+    () => getAutosyncDraftKey({ entity, entityId, scope }),
+    [entity, entityId, scope],
   );
   const mutationKey = useMemo(
-    () => getAutosyncMutationKey(key),
-    [key.entity, key.entityId, key.scope],
+    () => getAutosyncMutationKey({ entity, entityId, scope }),
+    [entity, entityId, scope],
   );
   const keyRef = useRef(key);
   const syncRef = useRef(sync);
@@ -123,7 +124,7 @@ export function useAutosync<TValue, TServerValue = TValue>({
     valueVersionRef.current += 1;
     valueRef.current = nextValue;
     setValue(nextValue);
-  }, []);
+  }, [setValue]);
 
   const flush = useCallback(async (): Promise<void> => {
     clearTimers();

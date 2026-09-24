@@ -175,6 +175,7 @@ export function PopoverMenu({
   const isControlled = controlledOpen !== undefined;
   const isOpen = controlledOpen ?? internalOpen;
   const isMobileSheet = mobilePresentation === "sheet" && mobileInteraction;
+  const activePanelLayout = isOpen && !isMobileSheet ? panelLayout : null;
   const isContainedMobileSheet =
     isMobileSheet && Boolean(mobileSheetPortalTarget);
 
@@ -224,10 +225,7 @@ export function PopoverMenu({
   }, [getItems, isMobileSheet, isOpen]);
 
   useLayoutEffect(() => {
-    if (!isOpen || isMobileSheet) {
-      setPanelLayout(null);
-      return;
-    }
+    if (!isOpen || isMobileSheet) return;
     const trigger = triggerRef.current;
     if (!trigger) return;
 
@@ -404,13 +402,13 @@ export function PopoverMenu({
       data-player-theme={theme.id}
       style={{
         ...getPlayerThemeStyle(theme),
-        ...(panelLayout
+        ...(activePanelLayout
           ? {
-              top: panelLayout.top,
-              bottom: panelLayout.bottom,
-              left: panelLayout.left,
-              right: panelLayout.right,
-              maxHeight: panelLayout.maxHeight,
+              top: activePanelLayout.top,
+              bottom: activePanelLayout.bottom,
+              left: activePanelLayout.left,
+              right: activePanelLayout.right,
+              maxHeight: activePanelLayout.maxHeight,
             }
           : {}),
         transform:
@@ -429,7 +427,7 @@ export function PopoverMenu({
             )
           : classNames(
               panelClass,
-              panelLayout ? "pointer-events-auto" : positionClass,
+              activePanelLayout ? "pointer-events-auto" : positionClass,
             ),
         panelClassName,
       )}
@@ -493,8 +491,8 @@ export function PopoverMenu({
           </>,
           mobileSheetPortalTarget ?? document.body,
         )
-      : isOpen && panelLayout && typeof document !== "undefined"
-        ? createPortal(panel, panelLayout.host)
+      : isOpen && activePanelLayout && typeof document !== "undefined"
+        ? createPortal(panel, activePanelLayout.host)
         : panel;
 
   return (
