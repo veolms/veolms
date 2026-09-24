@@ -3464,6 +3464,7 @@ function ThreadSurface({
     <LessonDescription
       description={lessonDescription}
       isLoading={isLessonDescriptionLoading}
+      onSeekToTimestamp={onSeekToTimestamp}
     />
   );
   const hasDescriptionSurface =
@@ -3475,6 +3476,7 @@ function ThreadSurface({
         <LessonDescription
           description={lessonDescription}
           isLoading={isLessonDescriptionLoading}
+          onSeekToTimestamp={onSeekToTimestamp}
         />
         <div
           className="py-8 text-center"
