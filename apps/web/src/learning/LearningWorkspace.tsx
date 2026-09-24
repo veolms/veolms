@@ -347,20 +347,17 @@ export function LearningWorkspace({
   const isInteractionCapabilitiesLoading =
     isApiRoute && isCourseOverviewLoading && !courseOverview;
 
-  const interactionCapabilities: InteractionCapabilities = useMemo(() => {
-    if (courseOverview?.settings) {
-      return {
+  const interactionCapabilities: InteractionCapabilities = courseOverview?.settings
+    ? {
         allowComments: courseOverview.settings.allowComments,
         allowNotes: courseOverview.settings.allowNotes,
         allowQa: courseOverview.settings.allowQa,
+      }
+    : {
+        allowComments: true,
+        allowNotes: true,
+        allowQa: true,
       };
-    }
-    return {
-      allowComments: true,
-      allowNotes: true,
-      allowQa: true,
-    };
-  }, [courseOverview?.settings]);
   const publicPreviewLessonNumbers = useMemo(
     () => getPublicPreviewLessonNumbers(courseOverview),
     [courseOverview],

@@ -2035,7 +2035,7 @@ export function CoursesPage({
         });
       }
     },
-    [deleteCourseMutation.mutateAsync],
+    [deleteCourseMutation, setNotice],
   );
 
   const handleRestoreCourse = useCallback(
@@ -2052,7 +2052,7 @@ export function CoursesPage({
         throw err;
       }
     },
-    [restoreCourseMutation.mutateAsync],
+    [restoreCourseMutation, setNotice],
   );
 
   const visibleCourses = useMemo(

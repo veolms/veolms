@@ -556,7 +556,17 @@ export function LessonVideoPlayer({
         playerRef.current?.setMuted(true);
       },
     });
-  }, [lessonTitle, mediaKey, muted, onMinimize, persistResumePosition, source]);
+  }, [
+    courseTitle,
+    lessonIndex,
+    lessonTitle,
+    mediaKey,
+    muted,
+    onMinimize,
+    persistResumePosition,
+    source,
+    totalLessons,
+  ]);
 
   const minimizeGesture = useLessonPlayerMinimizeGesture({
     enabled: presentation === "full" && Boolean(onMinimize),

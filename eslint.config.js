@@ -73,4 +73,20 @@ export default [
       "no-console": "error",
     },
   },
+  {
+    // CLI commands print user-facing progress and results directly to the terminal.
+    files: ["apps/api/src/cli/**/*.ts"],
+    rules: {
+      "no-console": "off",
+    },
+  },
+  {
+    // Node's test runner owns async test registration; these files also use
+    // partial mocks for fluent query builders rather than production DTOs.
+    files: ["apps/api/src/**/*.test.ts"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-floating-promises": "off",
+    },
+  },
 ];

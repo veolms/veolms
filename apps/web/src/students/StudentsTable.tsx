@@ -482,6 +482,8 @@ function ScrollportVirtualizedStudentList(props: VirtualizedStudentListProps) {
     false,
     props.students.length,
   );
+  // TanStack Virtual's mutable virtualizer API is intentionally not compiler-memoized.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: props.students.length,
     getScrollElement: getApplicationScrollElement,

@@ -1,5 +1,6 @@
 import "../styles/features/course-wizard.css";
 import {
+  useCallback,
   useState,
   useEffect,
   useRef,
@@ -3296,12 +3297,13 @@ export function CourseCreatePage({
   };
 
   useEffect(() => {
+    const basicsFieldTimers = basicsFieldTimersRef.current;
     return () => {
       if (titleCreationDebounceTimerRef.current) {
         clearTimeout(titleCreationDebounceTimerRef.current);
         titleCreationDebounceTimerRef.current = null;
       }
-      Object.values(basicsFieldTimersRef.current).forEach((timer) => {
+      Object.values(basicsFieldTimers).forEach((timer) => {
         if (timer) clearTimeout(timer);
       });
       if (basicsSavedBrieflyTimerRef.current) {
@@ -3427,7 +3429,7 @@ export function CourseCreatePage({
     ) {
       setActiveStep(tabFromUrl);
     }
-  }, [searchParams, isDownstreamUnlocked, activeEditId]);
+  }, [searchParams, isDownstreamUnlocked, activeEditId, activeStep]);
 
   const {
     data: serverCategories = EMPTY_CATEGORIES,
@@ -3672,8 +3674,8 @@ export function CourseCreatePage({
   };
 
   // Curriculum Data interfaces
-  const getLessonInitialState = (les: CurriculumLessonItem): LessonSnapshot => {
-    return (
+  const getLessonInitialState = useCallback(
+    (les: CurriculumLessonItem): LessonSnapshot =>
       les.initialState || {
         title: les.title,
         description: les.description || "",
@@ -3681,26 +3683,29 @@ export function CourseCreatePage({
         contentMediaId: les.contentMediaId ?? null,
         isPublished: les.isPublished !== undefined ? les.isPublished : true,
         isPreview: les.isPreview !== undefined ? les.isPreview : false,
-      }
-    );
-  };
+      },
+    [],
+  );
 
-  const isLessonDirty = (les: CurriculumLessonItem): boolean => {
-    const init = getLessonInitialState(les);
-    const isPub = les.isPublished !== undefined ? les.isPublished : true;
-    const isPrev = les.isPreview !== undefined ? les.isPreview : false;
-    const initPub = init.isPublished !== undefined ? init.isPublished : true;
-    const initPrev = init.isPreview !== undefined ? init.isPreview : false;
+  const isLessonDirty = useCallback(
+    (les: CurriculumLessonItem): boolean => {
+      const init = getLessonInitialState(les);
+      const isPub = les.isPublished !== undefined ? les.isPublished : true;
+      const isPrev = les.isPreview !== undefined ? les.isPreview : false;
+      const initPub = init.isPublished !== undefined ? init.isPublished : true;
+      const initPrev = init.isPreview !== undefined ? init.isPreview : false;
 
-    return (
-      les.title.trim() !== init.title.trim() ||
-      (les.description || "") !== (init.description || "") ||
-      les.contentType !== init.contentType ||
-      (les.contentMediaId ?? null) !== (init.contentMediaId ?? null) ||
-      isPub !== initPub ||
-      isPrev !== initPrev
-    );
-  };
+      return (
+        les.title.trim() !== init.title.trim() ||
+        (les.description || "") !== (init.description || "") ||
+        les.contentType !== init.contentType ||
+        (les.contentMediaId ?? null) !== (init.contentMediaId ?? null) ||
+        isPub !== initPub ||
+        isPrev !== initPrev
+      );
+    },
+    [getLessonInitialState],
+  );
 
   // Curriculum Step state
   const [sections, setSections] = useState<CurriculumSectionItem[]>([]);
@@ -3753,8 +3758,9 @@ export function CourseCreatePage({
   };
 
   useEffect(() => {
+    const curriculumItemTimers = curriculumItemTimersRef.current;
     return () => {
-      Object.values(curriculumItemTimersRef.current).forEach((timer) => {
+      Object.values(curriculumItemTimers).forEach((timer) => {
         if (timer) clearTimeout(timer);
       });
       if (curriculumSavedBrieflyTimerRef.current) {
@@ -3954,8 +3960,9 @@ export function CourseCreatePage({
   };
 
   useEffect(() => {
+    const accessControlTimers = accessControlTimersRef.current;
     return () => {
-      Object.values(accessControlTimersRef.current).forEach((timer) => {
+      Object.values(accessControlTimers).forEach((timer) => {
         if (timer) clearTimeout(timer);
       });
       if (accessRulesSavedBrieflyTimerRef.current) {
@@ -4179,8 +4186,9 @@ export function CourseCreatePage({
   };
 
   useEffect(() => {
+    const pricingControlTimers = pricingControlTimersRef.current;
     return () => {
-      Object.values(pricingControlTimersRef.current).forEach((timer) => {
+      Object.values(pricingControlTimers).forEach((timer) => {
         if (timer) clearTimeout(timer);
       });
       if (pricingSavedBrieflyTimerRef.current) {
@@ -4374,8 +4382,9 @@ export function CourseCreatePage({
   };
 
   useEffect(() => {
+    const publishControlTimers = publishControlTimersRef.current;
     return () => {
-      Object.values(publishControlTimersRef.current).forEach((timer) => {
+      Object.values(publishControlTimers).forEach((timer) => {
         if (timer) clearTimeout(timer);
       });
       if (publishSavedBrieflyTimerRef.current) {
@@ -4452,8 +4461,9 @@ export function CourseCreatePage({
   };
 
   useEffect(() => {
+    const extrasControlTimers = extrasControlTimersRef.current;
     return () => {
-      Object.values(extrasControlTimersRef.current).forEach((timer) => {
+      Object.values(extrasControlTimers).forEach((timer) => {
         if (timer) clearTimeout(timer);
       });
       if (extrasSavedBrieflyTimerRef.current) {
@@ -4973,7 +4983,7 @@ export function CourseCreatePage({
     } else {
       setIsPublished(false);
     }
-  }, [editorData, serverCategories]);
+  }, [editorData, isLessonDirty, serverCategories]);
 
   // Extras Inclusions Handlers
   const [draggedInclusionIndex, setDraggedInclusionIndex] = useState<

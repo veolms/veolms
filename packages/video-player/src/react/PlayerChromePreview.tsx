@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { VideoEngineEventMap } from "../core/events";
 import {
   createInitialVideoEngineSnapshot,
@@ -123,13 +123,12 @@ export function PlayerChromePreview({
   theme = "youtube",
   volume = 1,
 }: PlayerChromePreviewProps) {
-  const controllerRef = useRef<PlayerController | null>(null);
-  if (!controllerRef.current) {
-    controllerRef.current = new PlayerController(
+  const [controller] = useState(
+    () =>
+      new PlayerController(
       new PreviewVideoEngine({ muted, playbackRate, volume }),
-    );
-  }
-  const controller = controllerRef.current;
+      ),
+  );
   const mobileInteraction =
     useResolvedPlayerMobileInteraction(interactionMode);
   const resolvedTheme = resolvePlayerTheme(theme);
