@@ -2294,6 +2294,7 @@ export function LearningWorkspace({
   const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
     () => ({
       media: getCourseVideoForLesson(currentLesson[0]),
+      description: selectedLessonDescription,
       playbackBootstrap,
       refreshPlaybackToken,
       protectedPlayback,
@@ -2367,6 +2368,7 @@ export function LearningWorkspace({
       playerCourseLessonsSidePanel,
       previousLessonId,
       selectedLesson,
+      selectedLessonDescription,
       showingQuiz,
       theaterMode,
       toggleLessonDrawerFromPlayer,

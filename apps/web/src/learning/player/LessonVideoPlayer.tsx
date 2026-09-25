@@ -85,6 +85,7 @@ type FullscreenCoursePanelStyle = CSSProperties & {
 
 export interface LessonVideoPlayerProps {
   media: CourseVideo;
+  description?: string | null;
   lessonTitle: string;
   courseTitle?: string;
   lessonIndex?: number;
@@ -159,6 +160,7 @@ export function LessonVideoPlayer({
   courseLessonsVideoWidthPercent = 60,
   courseTitle,
   engineFactory,
+  description,
   lessonIndex,
   lessonTitle,
   media,
@@ -777,6 +779,7 @@ export function LessonVideoPlayer({
     <VeoVideoPlayer
       ref={playerRef}
       source={source}
+      description={description ?? undefined}
       theme={playerTheme}
       engine="shaka"
       engineFactory={engineFactory}

@@ -1,12 +1,23 @@
-import type {
-  Chapter,
-  ChapterInput,
-  ParseChaptersOptions,
-} from "./chapterTypes.ts";
-import { normalizeChapters } from "./normalizeChapters.ts";
+import { toString as mdastToString } from "mdast-util-to-string";
+import remarkGfm from "remark-gfm";
+import remarkParse from "remark-parse";
+import { unified } from "unified";
+import type { ChapterInput, ParseChaptersOptions } from "./chapterTypes.ts";
 
-const CHAPTER_LINE_PATTERN =
-  /^\s*(?:(?:[-*\u2022]|\d+[.)])\s+)?(\d+:\d{2}(?::\d{2})?)\s+(\S(?:.*\S)?)\s*$/;
+interface MarkdownNode {
+  type: string;
+  children?: readonly MarkdownNode[];
+  position?: {
+    start?: { offset?: number };
+    end?: { offset?: number };
+  };
+  value?: string;
+}
+
+const SEMANTIC_CHAPTER_PATTERN =
+  /^\s*(\d+:\d{2}(?::\d{2})?)\s+([\s\S]*?\S)\s*$/;
+
+const markdownParser = unified().use(remarkParse).use(remarkGfm);
 
 /** Parses a chapter timestamp in MM:SS or HH:MM:SS form. */
 export function parseChapterTimestamp(timestamp: string): number | null {
@@ -53,36 +64,161 @@ export function parseChapterTimestamp(timestamp: string): number | null {
   return hours * 3_600 + minutes * 60 + seconds;
 }
 
+function isEligibleBlock(node: MarkdownNode | undefined): boolean {
+  return node?.type === "paragraph" || node?.type === "heading";
+}
+
+function leadingEligibleBlock(node: MarkdownNode | undefined): MarkdownNode | null {
+  if (!node) return null;
+  if (isEligibleBlock(node)) return node;
+
+  if (node.type === "list") {
+    return null;
+  }
+
+  if (node.type === "blockquote") {
+    const firstChild = node.children?.[0];
+    return firstChild && isEligibleBlock(firstChild) ? firstChild : null;
+  }
+
+  return null;
+}
+
+function eligibleBlocks(root: MarkdownNode): MarkdownNode[] {
+  const blocks: MarkdownNode[] = [];
+
+  for (const node of root.children ?? []) {
+    if (isEligibleBlock(node)) {
+      blocks.push(node);
+      continue;
+    }
+
+    if (node.type === "list") {
+      for (const item of node.children ?? []) {
+        if (item.type !== "listItem") continue;
+        const leading = leadingEligibleBlock(item.children?.[0]);
+        if (leading) blocks.push(leading);
+      }
+      continue;
+    }
+
+    const leading = leadingEligibleBlock(node);
+    if (leading) blocks.push(leading);
+  }
+
+  return blocks;
+}
+
+function firstSemanticInline(node: MarkdownNode): MarkdownNode | null {
+  for (const child of node.children ?? []) {
+    if (child.type === "text") {
+      if (child.value?.trim()) return child;
+      continue;
+    }
+
+    if (
+      child.type === "strong" ||
+      child.type === "emphasis" ||
+      child.type === "delete"
+    ) {
+      const nested = firstSemanticInline(child);
+      if (nested) return nested;
+      continue;
+    }
+
+    return child;
+  }
+
+  return null;
+}
+
+function containsUnsafeOrAmbiguousContent(node: MarkdownNode): boolean {
+  if (node.type === "html" || node.type === "break" || node.type === "image") {
+    return true;
+  }
+
+  return (node.children ?? []).some(containsUnsafeOrAmbiguousContent);
+}
+
+function startsWithLinkOrInlineCode(node: MarkdownNode): boolean {
+  const firstInline = firstSemanticInline(node);
+  return (
+    firstInline?.type === "link" || firstInline?.type === "inlineCode"
+  );
+}
+
+function extractChapterCandidate(semanticText: string): ChapterInput | null {
+  const match = SEMANTIC_CHAPTER_PATTERN.exec(semanticText);
+  if (!match) return null;
+
+  const timestamp = match[1];
+  const title = match[2]?.trim();
+  if (!timestamp || !title || /^[\s*_~`]+$/.test(title)) return null;
+
+  const startTime = parseChapterTimestamp(timestamp);
+  if (startTime === null) return null;
+
+  return { title, startTime };
+}
+
+function extractChapterCandidates(
+  block: MarkdownNode,
+  description: string,
+): ChapterInput[] {
+  const startOffset = block.position?.start?.offset;
+  const endOffset = block.position?.end?.offset;
+  const sourceText =
+    startOffset !== undefined && endOffset !== undefined
+      ? description.slice(startOffset, endOffset)
+      : mdastToString(block as Parameters<typeof mdastToString>[0]);
+
+  return sourceText
+    .split(/\r?\n/)
+    .map((line) => {
+      let lineRoot: MarkdownNode;
+      try {
+        lineRoot = markdownParser.parse(line) as unknown as MarkdownNode;
+      } catch {
+        return null;
+      }
+
+      const lineBlock = eligibleBlocks(lineRoot)[0];
+      if (
+        !lineBlock ||
+        containsUnsafeOrAmbiguousContent(lineBlock) ||
+        startsWithLinkOrInlineCode(lineBlock)
+      ) {
+        return null;
+      }
+
+      const semanticText = mdastToString(
+        lineBlock as Parameters<typeof mdastToString>[0],
+      ).trim();
+      return extractChapterCandidate(semanticText);
+    })
+    .filter((candidate): candidate is ChapterInput => candidate !== null);
+}
+
 /**
- * Parses only lines that begin with a complete timestamp followed by a title.
- * Incidental numbers, URLs, negative values, and malformed timestamps are
- * intentionally ignored.
+ * Parses Markdown blocks into unnormalized chapter candidates.
+ *
+ * Only eligible leading block content is considered. Markdown formatting in
+ * the timestamp and title is resolved semantically, while linked or inline
+ * code timestamps remain non-chapter content by design.
  */
 export function parseChaptersFromDescription(
   description: string,
-  options: ParseChaptersOptions = {},
-): Chapter[] {
-  const parsed: ChapterInput[] = [];
+  _options: ParseChaptersOptions = {},
+): ChapterInput[] {
+  let root: MarkdownNode;
 
-  for (const line of description.split(/\r?\n/)) {
-    const match = CHAPTER_LINE_PATTERN.exec(line);
-    if (!match) {
-      continue;
-    }
-
-    const timestamp = match[1];
-    const title = match[2];
-    if (timestamp === undefined || title === undefined) {
-      continue;
-    }
-
-    const startTime = parseChapterTimestamp(timestamp);
-    if (startTime === null) {
-      continue;
-    }
-
-    parsed.push({ title, startTime });
+  try {
+    root = markdownParser.parse(description) as unknown as MarkdownNode;
+  } catch {
+    return [];
   }
 
-  return normalizeChapters(parsed, options);
+  return eligibleBlocks(root).flatMap((block) =>
+    extractChapterCandidates(block, description),
+  );
 }
