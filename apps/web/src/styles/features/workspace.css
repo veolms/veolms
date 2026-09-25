@@ -886,6 +886,36 @@
 .discussion-thread__open--overview {
   cursor: default;
 }
+.discussion-thread--workspace-card.is-navigable
+  .discussion-thread__open--overview {
+  cursor: pointer;
+}
+.discussion-thread--workspace-card.is-navigable.is-collapsed
+  .discussion-thread__open--overview
+  :where(*):not(
+    a,
+    button,
+    input,
+    textarea,
+    select,
+    summary,
+    [contenteditable],
+    [role="button"],
+    [role="link"]
+  ) {
+  cursor: pointer;
+}
+.discussion-thread--workspace-card.is-navigable.is-expanded
+  :is(.discussion-thread__author, .discussion-thread__meta) {
+  cursor: pointer;
+  user-select: none;
+}
+.discussion-thread--workspace-card.is-navigable.is-expanded
+  .discussion-hub__card-content-expanded
+  [role="document"]
+  :is(a, button, input, textarea, select, [role="button"], [role="link"]) {
+  cursor: pointer;
+}
 
 .discussion-thread__avatar {
   position: relative;
@@ -4139,8 +4169,6 @@
   position: relative;
   z-index: 1;
   pointer-events: auto;
-  user-select: text;
-  cursor: text;
 }
 
 @media (min-width: 781px) {

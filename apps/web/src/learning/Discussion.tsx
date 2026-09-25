@@ -2807,9 +2807,17 @@ export function shouldShowDiscussionEnd({
   return entryFilter === "note" ? !isNotesLoading : !isThreadsLoading;
 }
 
+type DiscussionVirtualItem = {
+  index: number;
+  start: number;
+  size: number;
+  end: number;
+};
+
 type DiscussionVirtualizer = {
   getTotalSize: () => number;
-  getVirtualItems: () => Array<{ index: number; start: number }>;
+  getVirtualItems: () => DiscussionVirtualItem[];
+  scrollOffset: number | null;
   measureElement: (element: HTMLDivElement | null) => void;
 };
 
@@ -2896,6 +2904,10 @@ function DiscussionViewportVirtualFeed({
     props.protectedEntryIndices,
   );
   const feedRef = useRef<HTMLDivElement>(null);
+  const phoneScrollMargin = useDiscussionPhoneVirtualFeedScrollMargin(
+    feedRef,
+    viewportRef,
+  );
 
   const virtualizer = useVirtualizer({
     count: props.entries.length,
@@ -2905,19 +2917,22 @@ function DiscussionViewportVirtualFeed({
     initialRect: { width: 1024, height: 768 },
     overscan: DISCUSSION_VIRTUAL_OVERSCAN,
     rangeExtractor,
+    scrollMargin: phoneScrollMargin,
   });
 
   return (
-    <DiscussionVirtualFeedRows
-      {...props}
-      feedRef={feedRef}
-      virtualizer={{
-        ...virtualizer,
-        measureElement: (element) =>
-          virtualizer.measureElement(element),
-      }}
-      scrollMargin={0}
-    />
+    <>
+      <DiscussionVirtualFeedRows
+        {...props}
+        feedRef={feedRef}
+        virtualizer={{
+          ...virtualizer,
+          measureElement: (element) =>
+            virtualizer.measureElement(element),
+        }}
+        scrollMargin={phoneScrollMargin}
+      />
+    </>
   );
 }
 
@@ -2937,6 +2952,46 @@ function getDiscussionVirtualFeedScrollMargin(
   }
 
   return feedRect.top + window.scrollY;
+}
+
+function useDiscussionPhoneVirtualFeedScrollMargin(
+  feedRef: React.RefObject<HTMLDivElement | null>,
+  viewportRef: React.RefObject<HTMLDivElement | null>,
+) {
+  const [phoneScrollMargin, setPhoneScrollMargin] = useState(0);
+
+  useLayoutEffect(() => {
+    const scrollport = viewportRef.current;
+    const header = scrollport?.querySelector<HTMLElement>(
+      "[data-discussion-scroll-header]",
+    );
+    if (!scrollport || !header) return undefined;
+
+    const syncScrollMargin = () => {
+      const nextScrollMargin = getDiscussionVirtualFeedScrollMargin(
+        feedRef.current,
+        scrollport,
+      );
+      setPhoneScrollMargin((current) =>
+        Math.abs(current - nextScrollMargin) > 1 ? nextScrollMargin : current,
+      );
+    };
+
+    syncScrollMargin();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", syncScrollMargin);
+      return () => window.removeEventListener("resize", syncScrollMargin);
+    }
+
+    const resizeObserver = new ResizeObserver(syncScrollMargin);
+    resizeObserver.observe(header);
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [feedRef, viewportRef]);
+
+  return phoneScrollMargin;
 }
 
 function useDiscussionScrollMode() {

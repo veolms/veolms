@@ -10,14 +10,14 @@ export type InlineTimestampPart =
   | { type: "text"; value: string }
   | ({ type: "timestamp"; value: string } & ParsedInlineTimestamp);
 
-const TIMESTAMP_CANDIDATE_PATTERN = /~\d+(?::\d+){1,2}/g;
+const TIMESTAMP_CANDIDATE_PATTERN = /\d+(?::\d+){1,2}/g;
 
 export function parseInlineTimestampToken(
   token: string,
 ): ParsedInlineTimestamp | null {
-  if (!/^~\d+(?::\d+){1,2}$/.test(token)) return null;
+  if (!/^\d+(?::\d+){1,2}$/.test(token)) return null;
 
-  const segments = token.slice(1).split(":");
+  const segments = token.split(":");
   if (segments.length !== 2 && segments.length !== 3) return null;
 
   const [first, second, third] = segments;
@@ -68,7 +68,7 @@ function hasTimestampBoundary(
   const previous = text[start - 1];
   const next = text[end];
 
-  if (previous && /[A-Za-z0-9_~]/.test(previous)) return false;
+  if (previous && /[A-Za-z0-9_~:=/?&#]/.test(previous)) return false;
   if (next && /[A-Za-z0-9_:~]/.test(next)) return false;
   return true;
 }

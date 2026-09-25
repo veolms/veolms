@@ -853,6 +853,7 @@ function DiscussionWorkspaceCardShell({
       className={[
         "discussion-thread",
         "discussion-thread--workspace-card",
+        "select-none",
         className,
         navigation ? "is-navigable" : "is-static",
         expanded ? "is-expanded" : "is-collapsed",
