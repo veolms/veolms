@@ -886,6 +886,24 @@
 .discussion-thread__open--overview {
   cursor: default;
 }
+.discussion-thread--workspace-card.is-navigable .discussion-thread__open--overview {
+  cursor: pointer;
+}
+.discussion-thread--workspace-card.is-navigable
+  .discussion-thread__open--overview
+  :where(*):not(
+    a,
+    button,
+    input,
+    textarea,
+    select,
+    summary,
+    [contenteditable],
+    [role="button"],
+    [role="link"]
+  ) {
+  cursor: pointer;
+}
 
 .discussion-thread__avatar {
   position: relative;
