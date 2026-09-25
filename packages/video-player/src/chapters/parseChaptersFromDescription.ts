@@ -156,7 +156,10 @@ function extractChapterCandidate(semanticText: string): ChapterInput | null {
   if (!match) return null;
 
   const timestamp = match[1];
-  const title = match[2]?.trim();
+  const title = match[2]
+    ?.trim()
+    .replace(/^(?:-|–|—)(?=\s|$)\s*/, "")
+    .trim();
   if (!timestamp || !title || /^[\s*_~`]+$/.test(title)) return null;
 
   const startTime = parseChapterTimestamp(timestamp);
