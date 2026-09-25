@@ -237,6 +237,15 @@ export function LessonVideoPlayer({
       if (!player) return;
 
       try {
+        const duration = player.getSnapshot().media.duration;
+        if (
+          Number.isFinite(duration) &&
+          duration > 0 &&
+          seconds > duration
+        ) {
+          return;
+        }
+
         player.seekTo(seconds);
       } catch {
         // The player may be between media lifecycles; a later click can retry.
