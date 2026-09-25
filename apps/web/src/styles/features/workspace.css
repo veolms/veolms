@@ -906,13 +906,6 @@
   cursor: pointer;
 }
 .discussion-thread--workspace-card.is-navigable.is-expanded
-  :is(
-    .discussion-hub__card-content-title,
-    .discussion-hub__card-content-expanded > [role="document"]
-  ) {
-  cursor: text;
-}
-.discussion-thread--workspace-card.is-navigable.is-expanded
   :is(.discussion-thread__author, .discussion-thread__meta) {
   cursor: pointer;
   user-select: none;
@@ -4176,8 +4169,6 @@
   position: relative;
   z-index: 1;
   pointer-events: auto;
-  user-select: text;
-  cursor: text;
 }
 
 @media (min-width: 781px) {
