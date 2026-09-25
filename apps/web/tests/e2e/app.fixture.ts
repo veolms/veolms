@@ -15,7 +15,7 @@ export const test = base.extend({
       if (message.type() !== "error") return;
       const isExpectedUnauthenticatedResponse =
         message.text().includes("status of 401") &&
-        /\/api\/v1\/auth\//.test(message.location().url);
+        /\/v1\/auth\//.test(message.location().url);
       if (!isExpectedUnauthenticatedResponse) {
         runtimeErrors.push(`console.error: ${message.text()}`);
       }

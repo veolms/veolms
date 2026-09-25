@@ -17,8 +17,7 @@ import { isReactRouterBuildRequest } from "./react-router-build";
 
 export { getApiError, type ApiError };
 
-const CONFIGURED_BACKEND_URL =
-  import.meta.env.VITE_API_BASE_URL || "/api/v1";
+const CONFIGURED_BACKEND_URL = import.meta.env.VITE_API_BASE_URL || "/v1";
 
 function isPrivateIpv4Address(hostname: string): boolean {
   const octets = hostname.split(".").map(Number);
@@ -48,7 +47,10 @@ export function getApiBaseUrl(): string {
   }
 
   try {
-    const configuredUrl = new URL(CONFIGURED_BACKEND_URL, window.location.origin);
+    const configuredUrl = new URL(
+      CONFIGURED_BACKEND_URL,
+      window.location.origin,
+    );
     if (
       (configuredUrl.hostname === "localhost" ||
         configuredUrl.hostname === "127.0.0.1") &&
@@ -163,30 +165,59 @@ function shouldClearAuthOnUnauthorized(
   return isExplicitSessionFailure || url.endsWith("/auth/me");
 }
 
-axiosInstance.interceptors.response.use(
-  (response: AxiosResponse) => {
-    if (
-      response.data &&
-      typeof response.data === "object" &&
-      "data" in response.data &&
-      "success" in response.data
-    ) {
-      return response.data.data;
-    }
-    return response.data;
-  },
-  (error: AxiosError) => {
-    const apiError = getApiError(error);
-    redirectToMfaSetup(apiError);
-    if (shouldClearAuthOnUnauthorized(error, apiError)) {
-      authStore.clearAuth();
-      desiredStateCoordinator.reset();
-      interactionCreationCoordinator.reset();
-      optimisticDeletionCoordinator.reset();
-    }
-    return Promise.reject(apiError);
-  },
-);
+function isHtmlDocumentResponse(response: AxiosResponse): boolean {
+  return (
+    typeof response.data === "string" &&
+    /^\s*(?:<!doctype\s+html|<html(?:\s|>))/iu.test(response.data)
+  );
+}
+
+function normalizeApiResponse(response: AxiosResponse) {
+  if (isHtmlDocumentResponse(response)) {
+    const error = Object.assign(
+      new Error("The API endpoint returned an HTML document instead of JSON."),
+      {
+        isAxiosError: true,
+        config: response.config,
+        response: {
+          ...response,
+          status: 502,
+          statusText: "Bad Gateway",
+          data: {
+            code: "INVALID_API_RESPONSE",
+            message:
+              "The API endpoint returned an HTML document instead of JSON.",
+          },
+        },
+      },
+    ) as AxiosError;
+    throw error;
+  }
+
+  if (
+    response.data &&
+    typeof response.data === "object" &&
+    "data" in response.data &&
+    "success" in response.data
+  ) {
+    return response.data.data;
+  }
+  return response.data;
+}
+
+axiosInstance.interceptors.response.use(normalizeApiResponse);
+
+axiosInstance.interceptors.response.use(undefined, (error: AxiosError) => {
+  const apiError = getApiError(error);
+  redirectToMfaSetup(apiError);
+  if (shouldClearAuthOnUnauthorized(error, apiError)) {
+    authStore.clearAuth();
+    desiredStateCoordinator.reset();
+    interactionCreationCoordinator.reset();
+    optimisticDeletionCoordinator.reset();
+  }
+  return Promise.reject(apiError);
+});
 
 export const api = {
   get<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
