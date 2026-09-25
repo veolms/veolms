@@ -886,10 +886,11 @@
 .discussion-thread__open--overview {
   cursor: default;
 }
-.discussion-thread--workspace-card.is-navigable .discussion-thread__open--overview {
+.discussion-thread--workspace-card.is-navigable
+  .discussion-thread__open--overview {
   cursor: pointer;
 }
-.discussion-thread--workspace-card.is-navigable
+.discussion-thread--workspace-card.is-navigable.is-collapsed
   .discussion-thread__open--overview
   :where(*):not(
     a,
@@ -902,6 +903,24 @@
     [role="button"],
     [role="link"]
   ) {
+  cursor: pointer;
+}
+.discussion-thread--workspace-card.is-navigable.is-expanded
+  :is(
+    .discussion-hub__card-content-title,
+    .discussion-hub__card-content-expanded > [role="document"]
+  ) {
+  cursor: text;
+}
+.discussion-thread--workspace-card.is-navigable.is-expanded
+  :is(.discussion-thread__author, .discussion-thread__meta) {
+  cursor: pointer;
+  user-select: none;
+}
+.discussion-thread--workspace-card.is-navigable.is-expanded
+  .discussion-hub__card-content-expanded
+  [role="document"]
+  :is(a, button, input, textarea, select, [role="button"], [role="link"]) {
   cursor: pointer;
 }
 
