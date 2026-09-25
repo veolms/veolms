@@ -7,12 +7,6 @@ export const videoPlaybackTrackSchema = z.strictObject({
   kind: z.string().min(1).optional(),
 });
 
-export const videoPlaybackChapterSchema = z.strictObject({
-  id: z.uuid(),
-  title: z.string().min(1),
-  startSeconds: z.number().int().nonnegative(),
-});
-
 /**
  * Minimal runtime data needed to start a lesson video. Keep this separate
  * from course and lesson responses so it can be embedded or fetched without
@@ -27,7 +21,6 @@ export const videoPlaybackBootstrapSchema = z.strictObject({
   segmentToken: z.string().min(1).optional(),
   segmentTokenExpiresAt: z.number().int().positive().optional(),
   duration: z.number().nonnegative().optional(),
-  chapters: z.array(videoPlaybackChapterSchema),
   title: z.string().min(1).optional(),
   posterUrl: z.string().min(1).optional(),
   resumeAt: z.number().nonnegative().optional(),
@@ -48,4 +41,3 @@ export type VideoPlaybackBootstrap = z.infer<
 export type VideoPlaybackToken = z.infer<typeof videoPlaybackTokenSchema>;
 
 export type VideoPlaybackTrack = z.infer<typeof videoPlaybackTrackSchema>;
-export type VideoPlaybackChapter = z.infer<typeof videoPlaybackChapterSchema>;

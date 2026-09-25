@@ -15,7 +15,6 @@ import { AppError } from "../../lib/errors.ts";
 import type { AppServices } from "../../services/index.ts";
 import { ADMIN_ROLE } from "../auth/index.ts";
 import { createAccessService } from "../access/index.ts";
-import { listLessonChaptersForPlayback } from "../courses/chapters/chapters.playback.service.ts";
 import * as mediaRepo from "./media.repository.ts";
 import { enqueueImageJob } from "@veolms/database";
 
@@ -897,25 +896,6 @@ export function createMediaService({
       );
     }
     const playbackToken = createPlaybackSegmentToken(manifestKey);
-    const durationSeconds =
-      media.duration_seconds !== null && media.duration_seconds !== undefined
-        ? Number(media.duration_seconds)
-        : null;
-    const chapters =
-      durationSeconds !== null && Number.isFinite(durationSeconds)
-        ? (await listLessonChaptersForPlayback(database, context.lesson_id))
-            .filter(
-              (chapter) =>
-                chapter.start_seconds >= 0 &&
-                chapter.start_seconds < durationSeconds,
-            )
-            .map((chapter) => ({
-              id: chapter.id,
-              title: chapter.title,
-              startSeconds: chapter.start_seconds,
-            }))
-        : [];
-
     return {
       version: 1,
       courseSlug: context.course_slug,
@@ -932,7 +912,6 @@ export function createMediaService({
       media.duration_seconds !== undefined
         ? { duration: Number(media.duration_seconds) }
         : {}),
-      chapters,
       title: context.lesson_title,
       source: "paid-bootstrap-api",
     };

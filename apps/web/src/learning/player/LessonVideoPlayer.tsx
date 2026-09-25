@@ -256,18 +256,6 @@ export function LessonVideoPlayer({
     [media, playbackBootstrap],
   );
 
-  const playerChapters = useMemo(
-    () =>
-      (playbackBootstrap?.chapters ?? []).map(
-        ({ id, title, startSeconds }) => ({
-          id,
-          title,
-          startTime: startSeconds,
-        }),
-      ),
-    [playbackBootstrap?.chapters],
-  );
-
   const source = useMemo<VideoSource>(() => {
     const resumeFromLastPosition =
       readLearningPreferences().resumeFromLastPosition;
@@ -789,7 +777,6 @@ export function LessonVideoPlayer({
     <VeoVideoPlayer
       ref={playerRef}
       source={source}
-      chapters={playerChapters}
       theme={playerTheme}
       engine="shaka"
       engineFactory={engineFactory}
