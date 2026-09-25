@@ -2,14 +2,18 @@ import { toString as mdastToString } from "mdast-util-to-string";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
-import type { ChapterInput, ParseChaptersOptions } from "./chapterTypes.ts";
+import type {
+  ChapterInput,
+  DescriptionChapterDeclaration,
+  ParseChaptersOptions,
+} from "./chapterTypes.ts";
 
 interface MarkdownNode {
   type: string;
   children?: readonly MarkdownNode[];
   position?: {
-    start?: { offset?: number };
-    end?: { offset?: number };
+    start?: { line?: number; offset?: number };
+    end?: { line?: number; offset?: number };
   };
   value?: string;
 }
@@ -197,6 +201,121 @@ function extractChapterCandidates(
       return extractChapterCandidate(semanticText);
     })
     .filter((candidate): candidate is ChapterInput => candidate !== null);
+}
+
+function isPlainTextChapterLine(
+  root: MarkdownNode,
+  block: MarkdownNode,
+): boolean {
+  return (
+    root.children?.length === 1 &&
+    root.children[0] === block &&
+    block.type === "paragraph" &&
+    (block.children ?? []).every((child) => child.type === "text")
+  );
+}
+
+function extractChapterDeclarations(
+  block: MarkdownNode,
+  description: string,
+): DescriptionChapterDeclaration[] {
+  const startOffset = block.position?.start?.offset;
+  const endOffset = block.position?.end?.offset;
+  const startLine = block.position?.start?.line;
+  const sourceText =
+    startOffset !== undefined && endOffset !== undefined
+      ? description.slice(startOffset, endOffset)
+      : mdastToString(block as Parameters<typeof mdastToString>[0]);
+  const lines = sourceText.split(/\r?\n/);
+  const declarations: DescriptionChapterDeclaration[] = [];
+  let lineOffset = 0;
+
+  const advanceLineOffset = (line: string) => {
+    const newlineOffset = lineOffset + line.length;
+    const newlineLength = sourceText.startsWith("\r\n", newlineOffset)
+      ? 2
+      : sourceText[newlineOffset] === "\n"
+        ? 1
+        : 0;
+    lineOffset += line.length + newlineLength;
+  };
+
+  for (const [lineIndex, line] of lines.entries()) {
+    let lineRoot: MarkdownNode;
+    try {
+      lineRoot = markdownParser.parse(line) as unknown as MarkdownNode;
+    } catch {
+      advanceLineOffset(line);
+      continue;
+    }
+
+    const lineBlock = eligibleBlocks(lineRoot)[0];
+    if (
+      !lineBlock ||
+      containsUnsafeOrAmbiguousContent(lineBlock) ||
+      startsWithLinkOrInlineCode(lineBlock)
+    ) {
+      advanceLineOffset(line);
+      continue;
+    }
+
+    const semanticText = mdastToString(
+      lineBlock as Parameters<typeof mdastToString>[0],
+    ).trim();
+    const candidate = extractChapterCandidate(semanticText);
+    const firstInline = firstSemanticInline(lineBlock);
+    const timestamp = SEMANTIC_CHAPTER_PATTERN.exec(semanticText)?.[1];
+    const timestampOffset = timestamp
+      ? (firstInline?.value ?? "").indexOf(timestamp)
+      : -1;
+    const lineStart = (startOffset ?? 0) + lineOffset;
+    const inlineStart = firstInline?.position?.start?.offset ?? 0;
+
+    if (
+      candidate &&
+      timestamp &&
+      startOffset !== undefined &&
+      startLine !== undefined &&
+      timestampOffset >= 0
+    ) {
+      const timestampStart = lineStart + inlineStart + timestampOffset;
+      declarations.push({
+        ...candidate,
+        declarationId: `description-${lineStart}-${lineStart + line.length}`,
+        sourceStart: lineStart,
+        sourceEnd: lineStart + line.length,
+        timestampStart,
+        timestampEnd: timestampStart + timestamp.length,
+        lineStart: startLine + lineIndex,
+        lineEnd: startLine + lineIndex,
+        isPlainText: isPlainTextChapterLine(lineRoot, lineBlock),
+      });
+    }
+
+    advanceLineOffset(line);
+  }
+
+  return declarations;
+}
+
+/**
+ * Returns source metadata using the same Markdown interpretation as the
+ * production chapter parser. The existing parser output remains unchanged.
+ */
+export function parseChapterDeclarationsFromDescription(
+  description: string,
+): DescriptionChapterDeclaration[] {
+  let root: MarkdownNode;
+
+  try {
+    root = markdownParser.parse(description) as unknown as MarkdownNode;
+  } catch {
+    return [];
+  }
+
+  return eligibleBlocks(root).flatMap((block) =>
+    extractChapterDeclarations(block, description),
+  );
 }
 
 /**
