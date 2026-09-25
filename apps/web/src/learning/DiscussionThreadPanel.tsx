@@ -1481,7 +1481,7 @@ function ThreadReplyEntry({
     <article
       data-thread-reply-entry
       data-deletion-pending={deletion.hidden || undefined}
-      className={`relative px-3 py-2.5 sm:px-8 ${deletion.hidden ? "min-h-9" : ""}`}
+      className={`relative px-3 py-2.5 sm:px-8 ${deletion.hidden ? "min-h-10" : ""}`}
     >
       <div
         inert={deletion.hidden ? true : undefined}
@@ -1683,6 +1683,7 @@ function ThreadReplyEntry({
           name={reply.name}
           seconds={deletion.seconds}
           onUndo={deletion.undo}
+          compact
           className="absolute top-2 right-2"
         />
       )}

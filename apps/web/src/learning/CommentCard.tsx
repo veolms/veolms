@@ -966,7 +966,7 @@ function ReplyCard({
     <article
       id={`discussion-entry-${reply.id}`}
       data-deletion-pending={deletion.hidden || undefined}
-      className={`relative pl-8 sm:pl-14 ${deletion.hidden ? "min-h-9" : ""}`}
+      className={`relative pl-8 sm:pl-14 ${deletion.hidden ? "min-h-10" : ""}`}
     >
       <div
         inert={deletion.hidden ? true : undefined}
@@ -1186,7 +1186,8 @@ function ReplyCard({
           name={reply.name}
           seconds={deletion.seconds}
           onUndo={deletion.undo}
-          className="absolute top-0 right-0"
+          compact
+          className="absolute top-0 right-2"
         />
       )}
     </article>
