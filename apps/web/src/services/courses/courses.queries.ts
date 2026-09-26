@@ -4,6 +4,7 @@ import type {
   CourseListResponse,
   CourseEditorDataResponse,
   CourseOverviewResponse,
+  CourseStaticPageRefreshStatus,
   CourseValidationResponse,
   DeletedCoursesListResponse,
   DeletedCoursesQuery,
@@ -44,6 +45,7 @@ const DEFAULT_COURSE_PAGE_SIZE = 15;
 export function useInfiniteCourses(options?: {
   enabled?: boolean;
   limit?: number;
+  initialData?: CourseListResponse;
 }) {
   const limit = options?.limit ?? DEFAULT_COURSE_PAGE_SIZE;
   const query = useInfiniteQuery<CourseListResponse, ApiError>({
@@ -58,6 +60,13 @@ export function useInfiniteCourses(options?: {
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    initialData: options?.initialData
+      ? {
+          pages: [options.initialData],
+          pageParams: [undefined],
+        }
+      : undefined,
+    initialDataUpdatedAt: options?.initialData ? Date.now() : undefined,
     enabled: options?.enabled ?? true,
     staleTime: 5 * 60 * 1000,
   });
@@ -126,6 +135,20 @@ export function useCourseEditor(courseId: string | null) {
     queryFn: () => coursesService.getCourseEditor(courseId!),
     enabled: Boolean(courseId),
     staleTime: 30 * 1000,
+  });
+}
+
+export function usePublicCoursePageRefreshStatus(courseId: string | null) {
+  return useQuery<CourseStaticPageRefreshStatus, ApiError>({
+    queryKey: courseId
+      ? courseKeys.publicPageRefresh(courseId)
+      : [...courseKeys.all, "public-page-refresh", null],
+    queryFn: () => coursesService.getPublicPageRefreshStatus(courseId!),
+    enabled: Boolean(courseId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "queued" || status === "running" ? 5_000 : false;
+    },
   });
 }
 

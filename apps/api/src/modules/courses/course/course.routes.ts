@@ -11,6 +11,7 @@ import {
   myCoursesListResponseSchema,
   courseOverviewSchema,
   courseDeleteResponseSchema,
+  courseStaticPageRefreshStatusSchema,
 } from "@veolms/contracts";
 
 import { errorResponse } from "../../../lib/errors.ts";
@@ -217,6 +218,48 @@ const courseRoutes: RoutePlugin = async (app, options) => {
       preHandler: ctx.authorize("course.read", "course"),
     },
     controller.getCourseEditor,
+  );
+
+  app.get(
+    "/courses/:id/public-page-refresh",
+    {
+      schema: {
+        operationId: "getPublicCoursePageRefreshStatus",
+        tags: ["Course Authoring"],
+        summary: "Get the public course page refresh status",
+        params: z.object({ id: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Public page refresh status",
+            courseStaticPageRefreshStatusSchema,
+          ),
+          404: errorResponse("Course not found"),
+        },
+      },
+      preHandler: ctx.authorize("course.read", "course"),
+    },
+    controller.getPublicPageRefreshStatus,
+  );
+
+  app.post(
+    "/courses/:id/public-page-refresh/retry",
+    {
+      schema: {
+        operationId: "retryPublicCoursePageRefresh",
+        tags: ["Course Authoring"],
+        summary: "Retry publishing the public course pages",
+        params: z.object({ id: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Public page refresh queued",
+            courseStaticPageRefreshStatusSchema,
+          ),
+          404: errorResponse("Course not found"),
+        },
+      },
+      preHandler: ctx.authorize("course.details.update", "course"),
+    },
+    controller.retryPublicPageRefresh,
   );
 
   app.patch(

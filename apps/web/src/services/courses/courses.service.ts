@@ -10,6 +10,7 @@ import type {
   CourseOverviewResponse,
   CoursePricing,
   CourseSettings,
+  CourseStaticPageRefreshStatus,
   CourseValidationResponse,
   CourseIncludeItem,
   CourseIncludesListResponse,
@@ -74,6 +75,22 @@ export const coursesService = {
 
   getCourseEditor: (courseId: string): Promise<CourseEditorDataResponse> => {
     return api.get<CourseEditorDataResponse>(`/courses/${courseId}/editor`);
+  },
+
+  getPublicPageRefreshStatus: (
+    courseId: string,
+  ): Promise<CourseStaticPageRefreshStatus> => {
+    return api.get<CourseStaticPageRefreshStatus>(
+      `/courses/${courseId}/public-page-refresh`,
+    );
+  },
+
+  retryPublicPageRefresh: (
+    courseId: string,
+  ): Promise<CourseStaticPageRefreshStatus> => {
+    return api.post<CourseStaticPageRefreshStatus>(
+      `/courses/${courseId}/public-page-refresh/retry`,
+    );
   },
 
   getPreview: (courseId: string): Promise<CourseEditorDataResponse> => {

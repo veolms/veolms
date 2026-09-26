@@ -59,6 +59,28 @@ export function NotificationsPage({
   } = useNotificationsFilter(setNotice);
 
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const loadMoreSentinelRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (
+      !sentinel ||
+      !hasNextPage ||
+      isFetchingNextPage ||
+      typeof IntersectionObserver === "undefined"
+    ) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadMore();
+      },
+      { rootMargin: "320px 0px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, loadMore]);
 
   // Keyboard shortcut listener (/ or Cmd+K to search)
   useEffect(() => {
@@ -294,6 +316,7 @@ export function NotificationsPage({
               {hasNextPage && (
                 <button
                   type="button"
+                  ref={loadMoreSentinelRef}
                   onClick={loadMore}
                   disabled={isFetchingNextPage}
                   className="self-center rounded-xl border border-(--border) bg-(--card-surface) px-4 py-2 text-sm font-semibold text-(--text) disabled:cursor-wait disabled:opacity-60"
@@ -304,16 +327,23 @@ export function NotificationsPage({
             </>
           ) : (
             <div
-              className="flex flex-col items-center justify-center rounded-[18px] bg-(--card-surface) p-12 text-center"
-              style={{ boxShadow: "var(--card-shadow)" }}
+              className="relative flex min-h-85 sm:min-h-96 flex-col items-center justify-center overflow-hidden rounded-2xl sm:rounded-[22px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] p-8 sm:p-12 text-center shadow-(--card-shadow)"
+              style={{
+                background:
+                  "radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in srgb, var(--accent) 18%, transparent) 0%, color-mix(in srgb, var(--accent) 6%, transparent) 50%, transparent 75%), linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, var(--card-surface)) 0%, var(--card-surface) 48%, var(--card-surface) 100%)",
+                boxShadow: "var(--card-shadow)",
+              }}
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-(--hover) text-(--muted) mb-3">
-                <Bell size={24} />
+              <div
+                className="mb-4 flex size-14 sm:size-16 items-center justify-center rounded-2xl sm:rounded-[20px] border border-[color-mix(in_srgb,var(--accent)_22%,transparent)] bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface-strong))] text-(--accent) shadow-[0_12px_24px_color-mix(in_srgb,var(--accent-shadow)_22%,transparent)]"
+                aria-hidden="true"
+              >
+                <Bell size={30} weight="duotone" />
               </div>
-              <h3 className="text-base font-semibold text-(--text)">
+              <h2 className="text-base sm:text-lg font-bold tracking-tight text-(--text)">
                 No notifications found
-              </h3>
-              <p className="mt-1 max-w-sm text-xs md:text-sm text-(--muted)">
+              </h2>
+              <p className="mt-1.5 max-w-sm text-xs sm:text-sm text-(--muted) leading-relaxed">
                 {searchQuery ||
                 categoryFilter !== "all" ||
                 statusFilter !== "all"
@@ -323,7 +353,7 @@ export function NotificationsPage({
               <button
                 type="button"
                 onClick={resetFilters}
-                className="mt-4 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90 cursor-pointer"
+                className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-(--accent) px-4 py-2 text-xs sm:text-sm font-semibold text-(--on-accent,#ffffff) shadow-sm transition-all hover:opacity-90 active:scale-[0.98] cursor-pointer"
               >
                 Reset filters
               </button>

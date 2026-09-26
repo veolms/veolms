@@ -1,15 +1,13 @@
-import {
-  CloudArrowUpIcon as CloudArrowUp,
-  FileTextIcon as FileText,
-  HeadphonesIcon as Headphones,
-  ImageIcon as Image,
-  InfoIcon as Info,
-  MusicNotesIcon as MusicNotes,
-  PlayCircleIcon as PlayCircle,
-  UploadSimpleIcon as UploadSimple,
-  VideoIcon as Video,
-  XIcon as X,
-} from "@phosphor-icons/react";
+import { CloudArrowUpIcon as CloudArrowUp } from "@phosphor-icons/react/CloudArrowUp";
+import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
+import { HeadphonesIcon as Headphones } from "@phosphor-icons/react/Headphones";
+import { ImageIcon as Image } from "@phosphor-icons/react/Image";
+import { InfoIcon as Info } from "@phosphor-icons/react/Info";
+import { MusicNotesIcon as MusicNotes } from "@phosphor-icons/react/MusicNotes";
+import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
+import { UploadSimpleIcon as UploadSimple } from "@phosphor-icons/react/UploadSimple";
+import { VideoIcon as Video } from "@phosphor-icons/react/Video";
+import { XIcon as X } from "@phosphor-icons/react/X";
 import {
   useCallback,
   useEffect,

@@ -570,7 +570,8 @@ export function ProfileSettings({
   const verificationSubmitButtonRef = useRef<HTMLButtonElement>(null);
   const displayName = draftProfile.displayName.trim() || "Your name";
   const username = draftProfile.username?.trim() || "username";
-  const showAvatar = Boolean(draftProfile.avatarDataUrl) && !avatarFailed;
+  const displayedAvatarUrl = draftProfile.avatarDataUrl ?? null;
+  const showAvatar = Boolean(displayedAvatarUrl) && !avatarFailed;
   const activeEmail = activeUser?.email || "";
   const isEmailVerified =
     Boolean(activeUser?.emailVerified) || emailVerifiedLocally;
@@ -994,20 +995,22 @@ export function ProfileSettings({
   };
 
   const isDicebearAvatar = Boolean(
-    draftProfile.avatarDataUrl?.startsWith(DICEBEAR_BASE_URL),
+    displayedAvatarUrl?.startsWith(DICEBEAR_BASE_URL),
   );
+
+  const handleAvatarImageError = () => setAvatarFailed(true);
 
   const avatar = (className: string) => (
     <span className={className} aria-hidden="true">
       {showAvatar && isDicebearAvatar ? (
         <DicebearAvatar
-          url={draftProfile.avatarDataUrl!}
+          url={displayedAvatarUrl!}
           size={160}
           onError={() => setAvatarFailed(true)}
         />
       ) : showAvatar ? (
         <ResponsiveAvatar
-          src={draftProfile.avatarDataUrl ?? undefined}
+          src={displayedAvatarUrl ?? undefined}
           srcSet={draftProfile.avatarSrcSet}
           sizes="116px"
           alt=""
@@ -1015,7 +1018,7 @@ export function ProfileSettings({
           height={160}
           loading="eager"
           fetchPriority="high"
-          onError={() => setAvatarFailed(true)}
+          onError={handleAvatarImageError}
         />
       ) : (
         <User

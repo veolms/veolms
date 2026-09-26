@@ -1,6 +1,7 @@
 import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
 import type { S3StorageService } from "@veolms/storage";
+import type { AppServices } from "../../../services/index.ts";
 import {
   createCourseDeletionService,
   type CourseDeletionService,
@@ -9,12 +10,14 @@ import {
 export interface CourseBinServiceOptions {
   database: Kysely<Database>;
   storage: S3StorageService;
+  services: AppServices;
   deletionService?: CourseDeletionService;
 }
 
 export function createCourseBinService({
   database,
   storage,
+  services,
   deletionService = createCourseDeletionService({ database, storage }),
 }: CourseBinServiceOptions) {
   async function listDeletedCourses(limit: number, cursor?: string) {
@@ -22,7 +25,14 @@ export function createCourseBinService({
   }
 
   async function restoreCourse(courseId: string) {
-    return await deletionService.restoreCourse(courseId);
+    const result = await deletionService.restoreCourse(courseId);
+    if (result.course.status === "published") {
+      services.courseStaticPages.requestRefresh({
+        courseId: result.course.id,
+        courseSlug: result.course.slug,
+      });
+    }
+    return result;
   }
 
   return { listDeletedCourses, restoreCourse };

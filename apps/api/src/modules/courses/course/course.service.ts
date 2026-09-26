@@ -204,8 +204,8 @@ export function createCourseService({
   authService = createAuthService({ database }),
   categoryService = createCategoryService({ database }),
   curriculumService = createCurriculumService({ database, services }),
-  configurationService = createConfigurationService({ database }),
-  includesService = createIncludesService({ database }),
+  configurationService = createConfigurationService({ database, services }),
+  includesService = createIncludesService({ database, services }),
   mediaService = createMediaService({ database, services }),
   deletionService = createCourseDeletionService({
     database,
@@ -728,6 +728,13 @@ export function createCourseService({
     );
     assertOptimisticUpdate(updateResult);
 
+    if (course.status === "published") {
+      services.courseStaticPages.requestRefresh({
+        courseId: course.id,
+        courseSlug: course.slug,
+      });
+    }
+
     let transcodeJobInfo: {
       should202: boolean;
       jobId: string | null;
@@ -1207,11 +1214,19 @@ export function createCourseService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    return await deletionService.scheduleCourseDeletion(
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const result = await deletionService.scheduleCourseDeletion(
       courseId,
       creatorId,
       userRoles,
     );
+    if (course.status === "published") {
+      services.courseStaticPages.requestRefresh({
+        courseId: course.id,
+        courseSlug: course.slug,
+      });
+    }
+    return result;
   }
 
   async function findLessonById(courseId: string, lessonId: string) {
@@ -1287,6 +1302,12 @@ export function createCourseService({
     });
 
     const updated = await courseRepo.findCourseById(database, courseId);
+    if (updated?.status === "published") {
+      services.courseStaticPages.requestRefresh({
+        courseId: updated.id,
+        courseSlug: updated.slug,
+      });
+    }
     return await formatCourseDto(updated!);
   }
 
@@ -1320,6 +1341,12 @@ export function createCourseService({
 
     await courseRepo.updateCourseDirect(database, courseId, updates);
     const updated = await courseRepo.findCourseById(database, courseId);
+    if (updated?.status === "published") {
+      services.courseStaticPages.requestRefresh({
+        courseId: updated.id,
+        courseSlug: updated.slug,
+      });
+    }
     return await formatCourseDto(updated!);
   }
 
@@ -1333,8 +1360,30 @@ export function createCourseService({
       status: "archived",
     });
 
+    if (course.status === "published") {
+      services.courseStaticPages.requestRefresh({
+        courseId: course.id,
+        courseSlug: course.slug,
+      });
+    }
+
     const updated = await courseRepo.findCourseById(database, courseId);
     return await formatCourseDto(updated!);
+  }
+
+  function getStaticPageRefreshStatus(courseId: string) {
+    return services.courseStaticPages.getStatus(courseId);
+  }
+
+  async function retryStaticPageRefresh(courseId: string) {
+    const course = await courseRepo.findCourseById(database, courseId);
+    if (!course) {
+      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    }
+    return services.courseStaticPages.requestRefresh({
+      courseId: course.id,
+      courseSlug: course.slug,
+    });
   }
 
   return {
@@ -1347,6 +1396,8 @@ export function createCourseService({
     updateCourseBasics,
     updateCourseThumbnail,
     updateCourseDetails,
+    getStaticPageRefreshStatus,
+    retryStaticPageRefresh,
     archiveCourse,
     getCourseEditorData,
     getCourseOverviewData,

@@ -22,6 +22,8 @@ export const courseKeys = {
   editor: (id: string) => [...courseKeys.all, "editor", id] as const,
   preview: (id: string) => [...courseKeys.all, "preview", id] as const,
   validation: (id: string) => [...courseKeys.all, "validation", id] as const,
+  publicPageRefresh: (id: string) =>
+    [...courseKeys.all, "public-page-refresh", id] as const,
   categories: () => [...courseKeys.all, "categories"] as const,
   bin: () => [...courseKeys.all, "bin"] as const,
 };

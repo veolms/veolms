@@ -5,6 +5,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
 } from "react";
 import {
   useLocation,
@@ -164,8 +165,19 @@ export default function LearningRoute() {
   const routeLessonId = hasExplicitLectureSlug
     ? (resolvedExplicitLessonId ?? 1)
     : courseSlug
-      ? getStoredCourseLessonId(courseSlug)
+      ? getStoredCourseLessonId(courseSlug, undefined, {
+          userId: activeUser?.id,
+          courseId: courseOverview?.course.id,
+        })
       : 1;
+  const launchedCourseWithoutLectureRef = useRef<string | null>(null);
+  if (courseSlug && !hasExplicitLectureSlug) {
+    launchedCourseWithoutLectureRef.current = courseSlug;
+  } else if (launchedCourseWithoutLectureRef.current !== courseSlug) {
+    launchedCourseWithoutLectureRef.current = null;
+  }
+  const restoreContinueLesson =
+    launchedCourseWithoutLectureRef.current === courseSlug;
 
   const allApiLessons = useMemo<CourseLesson[]>(() => {
     if (!courseOverview?.sections) return [];
@@ -366,6 +378,7 @@ export default function LearningRoute() {
         courseSlug={courseSlug}
         userId={activeUser?.id}
         lessonId={lessonId}
+        restoreContinueLesson={restoreContinueLesson}
         initialLessonView={isQuizViewRequested ? "quiz" : "video"}
         mobileBottomNavigation={mobileBottomNavigation}
         mobileBottomNavigationHidden={mobileBottomNavigationHidden}

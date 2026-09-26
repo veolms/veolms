@@ -1,5 +1,8 @@
 import "../styles/features/course-wizard.css";
 import {
+  forwardRef,
+  lazy,
+  Suspense,
   useCallback,
   useState,
   useEffect,
@@ -10,32 +13,32 @@ import {
 } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { createPortal } from "react-dom";
-import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
-import { LessonVideoUpload } from "./lesson-video-upload/LessonVideoUpload";
-import { QuizAuthoringPanel } from "../quizzes/QuizAuthoringPanel";
 import { CourseQuizPricingCard } from "./CourseQuizPricingCard";
 import {
-  LessonResourceManager,
   toLessonResourceItem,
   type LessonResourceItem,
-} from "./lesson-resources/LessonResourceManager";
+} from "./lesson-resources/lessonResourceItem";
 import {
   CourseDescriptionEditor,
   LessonDescriptionEditor,
 } from "./CourseDescriptionEditor";
 import {
   LessonContentTypeIcon,
-  LessonStudioEditor,
   lessonContentTypeIconSvg,
-  type LessonStudioEditorHandle,
-  type LessonEditorDraft,
-  type StudioLessonContentType,
-} from "./curriculum";
+} from "./curriculum/LessonContentTypeIcon";
+import type {
+  LessonStudioEditorHandle,
+  LessonStudioEditorProps,
+  LessonEditorDraft,
+} from "./curriculum/LessonStudioEditor";
+import type { StudioLessonContentType } from "./curriculum/LessonContentTypeSelector";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { ToastNotification } from "../ToastNotification";
+import { CourseStaticPageRefreshStatus } from "./CourseStaticPageRefreshStatus";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/ArrowUpRight";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretLeftIcon as CaretLeft } from "@phosphor-icons/react/CaretLeft";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
@@ -52,7 +55,8 @@ import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { EyeSlashIcon as EyeSlash } from "@phosphor-icons/react/EyeSlash";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { HeadphonesIcon as Headphones } from "@phosphor-icons/react/Headphones";
-import { ImageIcon, ImageIcon as Image } from "@phosphor-icons/react/Image";
+import { ImageIcon } from "@phosphor-icons/react/Image";
+import { ImageIcon as Image } from "@phosphor-icons/react/Image";
 import { InfoIcon as Info } from "@phosphor-icons/react/Info";
 import { LightningIcon as Lightning } from "@phosphor-icons/react/Lightning";
 import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullets";
@@ -71,7 +75,6 @@ import { VideoIcon as Video } from "@phosphor-icons/react/Video";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { XCircleIcon as XCircle } from "@phosphor-icons/react/XCircle";
-import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import type { ComponentType } from "react";
 import ISO6391 from "iso-639-1";
 import { ThemedSelect } from "../ThemedSelect";
@@ -129,10 +132,6 @@ import type {
   LessonResource,
 } from "@veolms/contracts";
 import { MEDIA_MAX_SIZES } from "@veolms/contracts";
-import {
-  CourseOverviewPage,
-  CourseOverviewSkeleton,
-} from "./CourseOverviewPage";
 import type {
   CourseInclude,
   CourseOverviewPricingProps,
@@ -141,6 +140,95 @@ import type { Course, CourseLevel, CourseCategory } from "./catalogue";
 import type { Lesson } from "../learning/courseContent";
 import { formatDuration, resolveCourseDurationSeconds } from "./courseAdapter";
 import { mediaService } from "../services/media";
+import { VirtualizedLessonList } from "./curriculum/VirtualizedLessonList";
+
+const AsyncDiscussionMarkdown = lazy(() =>
+  import("../learning/discussion-editor/DiscussionMarkdown").then(
+    (module) => ({ default: module.DiscussionMarkdown }),
+  ),
+);
+const AsyncQuizAuthoringPanel = lazy(() =>
+  import("../quizzes/QuizAuthoringPanel").then((module) => ({
+    default: module.QuizAuthoringPanel,
+  })),
+);
+const AsyncLessonResourceManager = lazy(() =>
+  import("./lesson-resources/LessonResourceManager").then((module) => ({
+    default: module.LessonResourceManager,
+  })),
+);
+const AsyncLessonStudioEditor = lazy(() =>
+  import("./curriculum/LessonStudioEditor").then((module) => ({
+    default: module.LessonStudioEditor,
+  })),
+);
+const AsyncCourseOverviewPage = lazy(() =>
+  import("./CourseOverviewPage").then((module) => ({
+    default: module.CourseOverviewPage,
+  })),
+);
+const AsyncCourseOverviewSkeleton = lazy(() =>
+  import("./CourseOverviewPage").then((module) => ({
+    default: module.CourseOverviewSkeleton,
+  })),
+);
+const AsyncLessonVideoUpload = lazy(() =>
+  import("./lesson-video-upload/LessonVideoUpload").then((module) => ({
+    default: module.LessonVideoUpload,
+  })),
+);
+
+function CourseCreateChunkFallback({ className }: { className: string }) {
+  return (
+    <div
+      className={`grid place-items-center ${className}`}
+      role="status"
+      aria-label="Loading"
+    >
+      <span className="size-6 animate-spin rounded-full border-2 border-(--border) border-t-(--accent) motion-reduce:animate-none" />
+    </div>
+  );
+}
+
+function DeferredQuizAuthoringPanel(
+  props: React.ComponentProps<typeof AsyncQuizAuthoringPanel>,
+) {
+  return (
+    <Suspense
+      fallback={<CourseCreateChunkFallback className="min-h-40" />}
+    >
+      <AsyncQuizAuthoringPanel {...props} />
+    </Suspense>
+  );
+}
+
+function DeferredLessonResourceManager({
+  enabled,
+  ...props
+}: React.ComponentProps<typeof AsyncLessonResourceManager> & {
+  enabled: boolean;
+}) {
+  if (!enabled) return null;
+
+  return (
+    <Suspense fallback={<CourseCreateChunkFallback className="min-h-24" />}>
+      <AsyncLessonResourceManager {...props} />
+    </Suspense>
+  );
+}
+
+const DeferredLessonStudioEditor = forwardRef<
+  LessonStudioEditorHandle,
+  LessonStudioEditorProps
+>(function DeferredLessonStudioEditor(props, ref) {
+  return (
+    <Suspense
+      fallback={<CourseCreateChunkFallback className="min-h-60" />}
+    >
+      <AsyncLessonStudioEditor {...props} ref={ref} />
+    </Suspense>
+  );
+});
 
 const EMPTY_CATEGORIES: Category[] = [];
 
@@ -331,6 +419,8 @@ interface DraggedLessonState {
   lessonId: string;
 }
 
+const getCurriculumLessonId = (lesson: CurriculumLessonItem) => lesson.id;
+
 interface LessonDropTarget {
   sectionId: string;
   lessonId: string;
@@ -360,6 +450,7 @@ interface MemoizedLessonCardProps {
   isLessonEditorMounted: boolean;
   isUrlFocused: boolean;
   onLessonEditorOpen: (lessonId: string) => void;
+  onVirtualPinChange: (lessonId: string, pinned: boolean) => void;
   render: (state: {
     isExpanded: boolean;
     setExpanded: React.Dispatch<React.SetStateAction<boolean>>;
@@ -379,6 +470,7 @@ const MemoizedLessonCard = memo(
     isLessonEditorMounted,
     isUrlFocused,
     onLessonEditorOpen,
+    onVirtualPinChange,
     render,
   }: MemoizedLessonCardProps) {
     const [isExpanded, setExpanded] = useState(lesson.isExpanded);
@@ -403,6 +495,30 @@ const MemoizedLessonCard = memo(
       }
       wasUrlFocusedRef.current = isUrlFocused;
     }, [isUrlFocused, lesson.id, onLessonEditorOpen]);
+
+    useEffect(() => {
+      onVirtualPinChange(
+        lesson.id,
+        isExpanded ||
+          isEditorOpen ||
+          isQuizOpen ||
+          isLessonEditorMounted ||
+          isUrlFocused,
+      );
+    }, [
+      isEditorOpen,
+      isExpanded,
+      isLessonEditorMounted,
+      isQuizOpen,
+      isUrlFocused,
+      lesson.id,
+      onVirtualPinChange,
+    ]);
+
+    useEffect(
+      () => () => onVirtualPinChange(lesson.id, false),
+      [lesson.id, onVirtualPinChange],
+    );
 
     return render({
       isExpanded,
@@ -429,7 +545,8 @@ const MemoizedLessonCard = memo(
     previous.isResourceBusy === next.isResourceBusy &&
     previous.isLessonEditorMounted === next.isLessonEditorMounted &&
     previous.isUrlFocused === next.isUrlFocused &&
-    previous.onLessonEditorOpen === next.onLessonEditorOpen,
+    previous.onLessonEditorOpen === next.onLessonEditorOpen &&
+    previous.onVirtualPinChange === next.onVirtualPinChange,
 );
 
 export type CourseWizardStepId =
@@ -2782,6 +2899,12 @@ export function CourseCreatePage({
   const [mountedLessonEditorIds, setMountedLessonEditorIds] = useState<string[]>(
     [],
   );
+  const [pinnedLessonStateIds, setPinnedLessonStateIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [focusedLessonIds, setFocusedLessonIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [editingLessonTarget, setEditingLessonTarget] = useState<{
     sectionId: string;
     lessonId: string;
@@ -2792,11 +2915,16 @@ export function CourseCreatePage({
   useEffect(() => {
     if (activeStep !== "curriculum") {
       setEditingLessonTarget(null);
+      setFocusedLessonIds((previous) =>
+        previous.size === 0 ? previous : new Set(),
+      );
     }
   }, [activeStep]);
 
   useEffect(() => {
     setMountedLessonEditorIds([]);
+    setPinnedLessonStateIds(new Set());
+    setFocusedLessonIds(new Set());
   }, [activeEditId]);
 
   const rememberLessonEditor = useCallback((lessonId: string) => {
@@ -2809,9 +2937,36 @@ export function CourseCreatePage({
     });
   }, []);
 
+  const handleLessonVirtualPinChange = useCallback(
+    (lessonId: string, pinned: boolean) => {
+      setPinnedLessonStateIds((previous) => {
+        if (previous.has(lessonId) === pinned) return previous;
+        const next = new Set(previous);
+        if (pinned) next.add(lessonId);
+        else next.delete(lessonId);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleLessonFocusChange = useCallback(
+    (lessonId: string, focused: boolean) => {
+      setFocusedLessonIds((previous) => {
+        if (previous.has(lessonId) === focused) return previous;
+        const next = new Set(previous);
+        if (focused) next.add(lessonId);
+        else next.delete(lessonId);
+        return next;
+      });
+    },
+    [],
+  );
+
   const navigateToStepRef = useRef<
     (destination: CourseWizardStepId) => Promise<void>
   >((async () => {}) as any);
+  const wizardActionInFlightRef = useRef(false);
   const [isNavMouseDown, setIsNavMouseDown] = useState(false);
   const [navStartX, setNavStartX] = useState(0);
   const [navScrollLeft, setNavScrollLeft] = useState(0);
@@ -3901,6 +4056,12 @@ export function CourseCreatePage({
   const [sections, setSections] = useState<CurriculumSectionItem[]>([]);
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
+  const shouldVirtualizeCurriculum = useMemo(
+    () =>
+      sections.reduce((total, section) => total + section.lessons.length, 0) >=
+      80,
+    [sections],
+  );
   const lessonTitleDraftsRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
@@ -6282,6 +6443,22 @@ export function CourseCreatePage({
   const [dragEnabledLessonId, setDragEnabledLessonId] = useState<string | null>(
     null,
   );
+  const virtualPinnedLessonIds = useMemo(() => {
+    const pinned = new Set([
+      ...pinnedLessonStateIds,
+      ...focusedLessonIds,
+      ...mountedLessonEditorIds,
+    ]);
+    if (requestedLessonId) pinned.add(requestedLessonId);
+    if (draggedLessonState) pinned.add(draggedLessonState.lessonId);
+    return pinned;
+  }, [
+    draggedLessonState,
+    focusedLessonIds,
+    mountedLessonEditorIds,
+    pinnedLessonStateIds,
+    requestedLessonId,
+  ]);
 
   // Reusable Delete Confirmation Modal state
   const [deleteModalState, setDeleteModalState] = useState<{
@@ -9108,92 +9285,101 @@ export function CourseCreatePage({
 
   const navigateToStep = async (destination: CourseWizardStepId) => {
     cancelTitleCreationDebounce();
-    if (actionLoading !== null || isSavingAllDirtyLessonsRef.current) {
+    if (
+      actionLoading !== null ||
+      wizardActionInFlightRef.current ||
+      isSavingAllDirtyLessonsRef.current
+    ) {
       return;
     }
     if (destination === activeStep) {
       return;
     }
 
+    wizardActionInFlightRef.current = true;
+    let backgroundSaveStarted = false;
     const leavingStep = activeStep;
 
-    if (
-      leavingStep === "basics" &&
-      !currentCourseIdRef.current &&
-      !currentCourseId
-    ) {
-      const flushed = await flushBasicsPersistence();
-      if (!flushed) {
+    try {
+      if (
+        leavingStep === "basics" &&
+        !currentCourseIdRef.current &&
+        !currentCourseId
+      ) {
+        const flushed = await flushBasicsPersistence();
+        if (!flushed) {
+          setShowTitleTooltip(true);
+          titleInputRef.current?.focus();
+          setToastMessage("Add a course title to continue.");
+          return;
+        }
+      }
+
+      if (
+        !currentCourseIdRef.current &&
+        !isDownstreamUnlocked &&
+        destination !== "basics"
+      ) {
         setShowTitleTooltip(true);
         titleInputRef.current?.focus();
         setToastMessage("Add a course title to continue.");
         return;
       }
-    }
 
-    if (
-      !currentCourseIdRef.current &&
-      !isDownstreamUnlocked &&
-      destination !== "basics"
-    ) {
-      setShowTitleTooltip(true);
-      titleInputRef.current?.focus();
-      setToastMessage("Add a course title to continue.");
-      return;
-    }
+      const wasDirty = isStepDirty(leavingStep);
+      const needsPersistence =
+        wasDirty ||
+        leavingStep === "basics" ||
+        leavingStep === "access-rules" ||
+        leavingStep === "pricing";
 
-    const wasDirty = isStepDirty(leavingStep);
+      // Activate the destination immediately, while the synchronous ref lock
+      // prevents another click from starting a second save in the same tick.
+      setMountedTabs((current) => {
+        const next = getAdjacentWizardSteps(destination);
+        next.add(leavingStep);
+        const hasSameTabs =
+          next.size === current.size && [...next].every((id) => current.has(id));
+        return hasSameTabs ? current : next;
+      });
+      pendingWizardNavigationRef.current = destination;
+      setActiveStep(destination);
 
-    // Prepare and activate the destination before persisting the previous
-    // step. This keeps the tab and panel responsive while draft persistence
-    // continues in the background.
-    setMountedTabs((current) => {
-      const next = getAdjacentWizardSteps(destination);
-      next.add(leavingStep);
-      const hasSameTabs =
-        next.size === current.size && [...next].every((id) => current.has(id));
-      return hasSameTabs ? current : next;
-    });
-    pendingWizardNavigationRef.current = destination;
-    setActiveStep(destination);
+      if (!needsPersistence) return;
 
-    const persistPreviousStep = async () => {
-      if (wasDirty) setActionLoading("save");
+      backgroundSaveStarted = true;
+      setActionLoading("save");
 
-      try {
-        if (leavingStep === "basics") {
-          await flushBasicsPersistence();
-        } else if (leavingStep === "access-rules") {
-          await flushFixedDurationPersistence();
-        } else if (leavingStep === "pricing") {
-          await flushPricingPersistence();
+      void (async () => {
+        try {
+          if (leavingStep === "basics") {
+            await flushBasicsPersistence();
+          } else if (leavingStep === "access-rules") {
+            await flushFixedDurationPersistence();
+          } else if (leavingStep === "pricing") {
+            await flushPricingPersistence();
+          }
+
+          if (!wasDirty) return;
+
+          if (leavingStep === "curriculum") {
+            await saveCurriculumStep();
+          } else {
+            await saveCurrentStep();
+          }
+        } catch (err: unknown) {
+          const stepLabel =
+            WIZARD_STEPS.find((s) => s.id === leavingStep)?.label || leavingStep;
+          setToastMessage(
+            `Failed to save ${stepLabel}. Your changes are kept locally.`,
+          );
+        } finally {
+          wizardActionInFlightRef.current = false;
+          setActionLoading(null);
         }
-
-        if (!wasDirty) return;
-
-        if (leavingStep === "curriculum") {
-          await saveCurriculumStep();
-        } else {
-          await saveCurrentStep();
-        }
-      } catch (err: unknown) {
-        const stepLabel =
-          WIZARD_STEPS.find((s) => s.id === leavingStep)?.label || leavingStep;
-        setToastMessage(
-          `Failed to save ${stepLabel}. Your changes are kept locally.`,
-        );
-      } finally {
-        setActionLoading(null);
-      }
-    };
-
-    if (
-      wasDirty ||
-      leavingStep === "basics" ||
-      leavingStep === "access-rules" ||
-      leavingStep === "pricing"
-    ) {
-      void persistPreviousStep();
+      })();
+    } finally {
+      if (!backgroundSaveStarted) wizardActionInFlightRef.current = false;
     }
   };
 
@@ -9261,7 +9447,8 @@ export function CourseCreatePage({
   };
 
   const handleValidateCourseAction = async () => {
-    if (actionLoading || isValidating) return;
+    if (actionLoading || isValidating || wizardActionInFlightRef.current) return;
+    wizardActionInFlightRef.current = true;
     setActionLoading("validate");
     try {
       await reconcileDirtyState();
@@ -9284,12 +9471,14 @@ export function CourseCreatePage({
         "Failed to save changes or validate course.";
       setToastMessage(errorMsg);
     } finally {
+      wizardActionInFlightRef.current = false;
       setActionLoading(null);
     }
   };
 
   const handleFinalPublishCourse = async () => {
-    if (actionLoading || isValidating) return;
+    if (actionLoading || isValidating || wizardActionInFlightRef.current) return;
+    wizardActionInFlightRef.current = true;
     setActionLoading("publish");
     setPublishValidationError(null);
 
@@ -9330,12 +9519,20 @@ export function CourseCreatePage({
       setPublishValidationError(errorMsg);
       setToastMessage(errorMsg);
     } finally {
+      wizardActionInFlightRef.current = false;
       setActionLoading(null);
     }
   };
 
   const handleConfirmUnpublishCourse = async () => {
-    if (!currentCourseId || actionLoading) return;
+    if (
+      !currentCourseId ||
+      actionLoading ||
+      wizardActionInFlightRef.current
+    ) {
+      return;
+    }
+    wizardActionInFlightRef.current = true;
     setActionLoading("unpublish");
     try {
       const draftCourse =
@@ -9349,6 +9546,7 @@ export function CourseCreatePage({
         (err as { message?: string })?.message || "Failed to unpublish course.";
       setToastMessage(errorMsg);
     } finally {
+      wizardActionInFlightRef.current = false;
       setActionLoading(null);
     }
   };
@@ -9482,6 +9680,10 @@ export function CourseCreatePage({
           </div>
         )}
       </header>
+
+      {isEditing ? (
+        <CourseStaticPageRefreshStatus courseId={currentCourseId} />
+      ) : null}
 
       {/* Wizard Steps Navigation */}
       <nav
@@ -10078,20 +10280,26 @@ export function CourseCreatePage({
                             <PlayCircle size={30} weight="light" />
                           </div>
                           <div className="flex items-center justify-center gap-2.5 flex-wrap">
-                            <LessonVideoUpload
-                              disabled={!isDownstreamUnlocked || isBasicsSaving}
-                              mediaAssetId={editorData?.course?.trailerMediaId}
-                              visibility="public"
-                              hideUploadWhenAttached={Boolean(
-                                editorData?.course?.trailerMediaId,
-                              )}
-                              attachedActionLabel="Replace trailer"
-                              stackStatusBelow
-                              onMediaAttached={handleTrailerMediaAttached}
-                              onProcessingComplete={() => {
-                                void refetchEditor();
-                              }}
-                            />
+                            <Suspense
+                              fallback={
+                                <CourseCreateChunkFallback className="h-9 w-40" />
+                              }
+                            >
+                              <AsyncLessonVideoUpload
+                                disabled={!isDownstreamUnlocked || isBasicsSaving}
+                                mediaAssetId={editorData?.course?.trailerMediaId}
+                                visibility="public"
+                                hideUploadWhenAttached={Boolean(
+                                  editorData?.course?.trailerMediaId,
+                                )}
+                                attachedActionLabel="Replace trailer"
+                                stackStatusBelow
+                                onMediaAttached={handleTrailerMediaAttached}
+                                onProcessingComplete={() => {
+                                  void refetchEditor();
+                                }}
+                              />
+                            </Suspense>
                           </div>
                           <p className="m-0 mt-2 text-(--muted) text-[0.74rem]">
                             Recommended: 16:9 video
@@ -10181,13 +10389,21 @@ export function CourseCreatePage({
                         About this course
                       </h4>
                       {courseDescription.trim() ? (
-                        <DiscussionMarkdown
-                          content={createDiscussionDraft(
-                            courseDescription.trim(),
-                          )}
-                          label="Course description preview"
-                          className="[&>:first-child]:mt-0 max-w-none"
-                        />
+                        <Suspense
+                          fallback={
+                            <p className="m-0 text-(--muted) text-[0.82rem] leading-normal wrap-anywhere wrap-break-word">
+                              {courseDescription}
+                            </p>
+                          }
+                        >
+                          <AsyncDiscussionMarkdown
+                            content={createDiscussionDraft(
+                              courseDescription.trim(),
+                            )}
+                            label="Course description preview"
+                            className="[&>:first-child]:mt-0 max-w-none"
+                          />
+                        </Suspense>
                       ) : (
                         <p className="m-0 text-(--muted) text-[0.82rem] leading-normal wrap-anywhere wrap-break-word">
                           This is a short description of your course. It will
@@ -10220,7 +10436,7 @@ export function CourseCreatePage({
 
                 return (
                   <div className="course-wizard-curriculum-panel flex flex-col gap-4 w-full flex-1 min-h-0">
-                    <LessonStudioEditor
+                    <DeferredLessonStudioEditor
                       sectionNumber={secIdx + 1}
                       sectionTitle={activeSection.title}
                       lessonNumber={lesIdx + 1}
@@ -10443,7 +10659,7 @@ export function CourseCreatePage({
                         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
                           activeLesson.id,
                         ) ? (
-                          <QuizAuthoringPanel
+                          <DeferredQuizAuthoringPanel
                             courseId={currentCourseId}
                             lessonId={activeLesson.id}
                             lessonTitle={activeLesson.title}
@@ -10831,8 +11047,13 @@ export function CourseCreatePage({
                         }`}
                       >
                         {sec.isExpanded && (
-                          <div className="flex flex-col gap-2.5">
-                            {sec.lessons.map((les, lesIndex) => {
+                          <VirtualizedLessonList
+                            items={sec.lessons}
+                            forceVirtualized={shouldVirtualizeCurriculum}
+                            getItemKey={getCurriculumLessonId}
+                            pinnedItemIds={virtualPinnedLessonIds}
+                            onItemFocusChange={handleLessonFocusChange}
+                            renderItem={(les, lesIndex) => {
                               const isDraggedLesson =
                                 draggedLessonState?.sectionId === sec.id &&
                                 draggedLessonState.lessonId === les.id;
@@ -10878,6 +11099,7 @@ export function CourseCreatePage({
                                   requestedLessonId === les.id
                                 }
                                 onLessonEditorOpen={rememberLessonEditor}
+                                onVirtualPinChange={handleLessonVirtualPinChange}
                                 render={({
                                   isExpanded,
                                   setExpanded,
@@ -11232,7 +11454,7 @@ export function CourseCreatePage({
                                   </div>
                                 ) : shouldKeepEditorMounted ? (
                                   <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-5 max-[768px]:p-[14px_12px_16px]">
-                                    <LessonStudioEditor
+                                    <DeferredLessonStudioEditor
                                       ref={lessonEditorRef}
                                       hideHeader
                                       sectionNumber={sections.findIndex((item) => item.id === sec.id) + 1}
@@ -11378,7 +11600,8 @@ export function CourseCreatePage({
                                         />
                                       }
                                       resourcesSection={
-                                        <LessonResourceManager
+                                        <DeferredLessonResourceManager
+                                          enabled={panelStep === activeStep}
                                           courseId={currentCourseId}
                                           lessonId={les.id}
                                           resources={les.resources}
@@ -11414,7 +11637,7 @@ export function CourseCreatePage({
                                         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
                                           les.id,
                                         ) ? (
-                                          <QuizAuthoringPanel
+                                          <DeferredQuizAuthoringPanel
                                             courseId={currentCourseId}
                                             lessonId={les.id}
                                             lessonTitle={les.title}
@@ -11642,26 +11865,32 @@ export function CourseCreatePage({
                                                   </span>
                                                 </label>
                                                 {les.contentType === "video" ? (
-                                                  <LessonVideoUpload
-                                                    mediaAssetId={
-                                                      les.contentMediaId
+                                                  <Suspense
+                                                    fallback={
+                                                      <CourseCreateChunkFallback className="min-h-34" />
                                                     }
-                                                    disabled={
-                                                      les.isPendingCreation
-                                                    }
-                                                    onMediaAttached={(
-                                                      mediaAssetId,
-                                                    ) =>
-                                                      handleLessonMediaAttached(
-                                                        sec.id,
-                                                        les.id,
+                                                  >
+                                                    <AsyncLessonVideoUpload
+                                                      mediaAssetId={
+                                                        les.contentMediaId
+                                                      }
+                                                      disabled={
+                                                        les.isPendingCreation
+                                                      }
+                                                      onMediaAttached={(
                                                         mediaAssetId,
-                                                      )
-                                                    }
-                                                    onProcessingComplete={() =>
-                                                      handleLessonProcessingComplete()
-                                                    }
-                                                  />
+                                                      ) =>
+                                                        handleLessonMediaAttached(
+                                                          sec.id,
+                                                          les.id,
+                                                          mediaAssetId,
+                                                        )
+                                                      }
+                                                      onProcessingComplete={() =>
+                                                        handleLessonProcessingComplete()
+                                                      }
+                                                    />
+                                                  </Suspense>
                                                 ) : (
                                                 <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:flex max-[768px]:gap-2">
                                                   <button
@@ -11775,7 +12004,8 @@ export function CourseCreatePage({
                                           </div>
 
                                           {/* Lesson Resources */}
-                                          <LessonResourceManager
+                                          <DeferredLessonResourceManager
+                                            enabled={panelStep === activeStep}
                                             courseId={currentCourseId}
                                             lessonId={les.id}
                                             resources={les.resources}
@@ -11838,7 +12068,7 @@ export function CourseCreatePage({
                                               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
                                                 les.id,
                                               ) ? (
-                                                <QuizAuthoringPanel
+                                                <DeferredQuizAuthoringPanel
                                                   courseId={currentCourseId}
                                                   lessonId={les.id}
                                                   lessonTitle={les.title}
@@ -11877,8 +12107,8 @@ export function CourseCreatePage({
                                 {isDropAfter && <LessonDropIndicator />}
                               </Fragment>
                               );
-                            })}
-                          </div>
+                            }}
+                          />
                         )}
 
                         {/* Add Lesson Action */}
@@ -14761,18 +14991,30 @@ export function CourseCreatePage({
                       <span>Back to Editor</span>
                     </button>
                   </div>
-                ) : activePreviewData ? (
-                  <CourseOverviewPage
+              ) : activePreviewData ? (
+                <Suspense
+                  fallback={
+                    <CourseCreateChunkFallback className="flex-1 min-h-[420px]" />
+                  }
+                >
+                  <AsyncCourseOverviewPage
                     previewData={activePreviewData}
                     categories={serverCategories}
                     isReadOnlyPreview={true}
                     onNavigateCourses={() => setIsPreviewModalOpen(false)}
                   />
+                </Suspense>
                 ) : isPreviewLoading ? (
                   <div className="p-6 max-[640px]:p-3 w-full">
-                    <CourseOverviewSkeleton
-                      onNavigateCourses={() => setIsPreviewModalOpen(false)}
-                    />
+                    <Suspense
+                      fallback={
+                        <CourseCreateChunkFallback className="min-h-[420px]" />
+                      }
+                    >
+                      <AsyncCourseOverviewSkeleton
+                        onNavigateCourses={() => setIsPreviewModalOpen(false)}
+                      />
+                    </Suspense>
                   </div>
                 ) : isPreviewError ? (
                   <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-12 text-center text-(--muted) my-auto">

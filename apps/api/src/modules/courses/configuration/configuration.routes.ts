@@ -20,6 +20,7 @@ const configurationRoutes: RoutePlugin = async (app, options) => {
   const ctx = createCoursesContext(options);
   const service = createConfigurationService({
     database: options.database,
+    services: options.services,
   });
   const controller = createConfigurationController({ service });
 

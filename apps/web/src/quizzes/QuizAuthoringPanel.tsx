@@ -4,24 +4,22 @@ import type {
   QuizQuestionType,
 } from "@veolms/contracts";
 import { Button } from "../components/Button";
-import {
-  ArrowLeft,
-  BookOpen,
-  CaretDown,
-  Check,
-  CheckCircle,
-  CircleNotch,
-  DotsSixVertical,
-  FileText,
-  Info,
-  ListBullets,
-  PencilSimple,
-  Plus,
-  Question,
-  Trash,
-  WarningCircle,
-  X,
-} from "@phosphor-icons/react";
+import { ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { BookOpen } from "@phosphor-icons/react/BookOpen";
+import { CaretDown } from "@phosphor-icons/react/CaretDown";
+import { Check } from "@phosphor-icons/react/Check";
+import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { DotsSixVertical } from "@phosphor-icons/react/DotsSixVertical";
+import { FileText } from "@phosphor-icons/react/FileText";
+import { Info } from "@phosphor-icons/react/Info";
+import { ListBullets } from "@phosphor-icons/react/ListBullets";
+import { PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { Plus } from "@phosphor-icons/react/Plus";
+import { Question } from "@phosphor-icons/react/Question";
+import { Trash } from "@phosphor-icons/react/Trash";
+import { WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import { X } from "@phosphor-icons/react/X";
 import { useQueryClient } from "@tanstack/react-query";
 import { quizKeys } from "../services/quizzes/quizzes.keys";
 import {

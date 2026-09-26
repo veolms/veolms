@@ -5,6 +5,8 @@
 # React Router
 /.react-router/
 /build/
+/.build-staging-*/
+/.build-swap-*/
 /bundle-stats.html
 /playwright-report/
 /test-results/

@@ -133,3 +133,23 @@ export async function listActiveUserIdsForCourse(
     .execute();
   return rows.map((row) => row.user_id);
 }
+
+export async function listActiveUserIdsForCourses(
+  database: Executor,
+  courseIds: readonly string[],
+): Promise<Array<{ courseId: string; userId: string }>> {
+  if (courseIds.length === 0) return [];
+
+  const now = new Date();
+  const rows = await database
+    .selectFrom("access_grants")
+    .select(["course_id as courseId", "user_id as userId"])
+    .where("course_id", "in", courseIds)
+    .where("status", "=", "active")
+    .where((eb) =>
+      eb.or([eb("valid_until", "is", null), eb("valid_until", ">", now)]),
+    )
+    .execute();
+
+  return rows;
+}

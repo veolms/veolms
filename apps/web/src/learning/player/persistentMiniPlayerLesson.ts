@@ -93,7 +93,11 @@ export function applyPersistentMiniPlayerLessonChange(
     search,
     lessonNumber,
   );
-  const resumePersistenceKey = `${registration.courseRouteKey}-lesson-${lessonNumber}`;
+  const resumePersistenceKey = `${encodeURIComponent(registration.courseRouteKey)}-lesson-${lessonNumber}`;
+  const resumePersistenceKeys = [
+    resumePersistenceKey,
+    `${registration.courseRouteKey}-lesson-${lessonNumber}`,
+  ];
   const previousLessonId =
     lessonIndex > 0 ? lessonSequence[lessonIndex - 1] : undefined;
   const nextLessonId =
@@ -146,6 +150,7 @@ export function applyPersistentMiniPlayerLessonChange(
       canGoPrevious: previousLessonId !== undefined,
       autoPlayOnMediaChange: true,
       resumePersistenceKey,
+      resumePersistenceKeys,
     },
   };
 }

@@ -219,6 +219,123 @@ export function createAnalyticsService(options: QuizServiceOptions) {
     };
   }
 
+  async function overview(actor: QuizActor, courseIds: readonly string[]) {
+    const uniqueCourseIds = [...new Set(courseIds)];
+    if (uniqueCourseIds.length === 0) {
+      return {
+        totalQuizzes: 0,
+        students: 0,
+        averageQuizScore: null,
+        passRate: null,
+      };
+    }
+
+    if (!isAdmin(actor)) {
+      await Promise.all(
+        uniqueCourseIds.map((courseId) =>
+          courseService.getCourseAndVerifyOwner(courseId, actor.id),
+        ),
+      );
+    }
+
+    const [assignments, activeGrantRows] = await Promise.all([
+      repo.listAssignmentsForCoursesWithQuiz(database, uniqueCourseIds),
+      accessService.listActiveUserIdsForCourses(database, uniqueCourseIds),
+    ]);
+
+    if (
+      !isAdmin(actor) &&
+      assignments.some((item) => item.quiz_creator_id !== actor.id)
+    ) {
+      throw new AppError(403, "FORBIDDEN", "You do not own this Quiz.");
+    }
+
+    const assignmentIds = assignments.map((item) => item.id);
+    const attempts = await repo.listAnalyticsAttemptsForAssignments(
+      database,
+      assignmentIds,
+    );
+    const activeStudentsByCourse = new Map<string, string[]>();
+    for (const grant of activeGrantRows) {
+      const students = activeStudentsByCourse.get(grant.courseId);
+      if (students) students.push(grant.userId);
+      else activeStudentsByCourse.set(grant.courseId, [grant.userId]);
+    }
+    const assignmentsByCourse = new Map<string, typeof assignments>();
+    for (const assignment of assignments) {
+      const courseAssignments = assignmentsByCourse.get(assignment.course_id);
+      if (courseAssignments) courseAssignments.push(assignment);
+      else assignmentsByCourse.set(assignment.course_id, [assignment]);
+    }
+    const attemptsByAssignment = new Map<string, BulkAnalyticsRow[]>();
+    for (const attempt of attempts) {
+      const records = attemptsByAssignment.get(attempt.assignmentId);
+      if (records) records.push(attempt);
+      else attemptsByAssignment.set(attempt.assignmentId, [attempt]);
+    }
+
+    let totalQuizzes = 0;
+    let students = 0;
+    const scoredCourseAverages: number[] = [];
+    const scoredCoursePassRates: number[] = [];
+
+    for (const courseId of uniqueCourseIds) {
+      const activeStudents = activeStudentsByCourse.get(courseId) ?? [];
+      students = Math.max(students, activeStudents.length);
+      const courseAssignments = assignmentsByCourse.get(courseId) ?? [];
+      totalQuizzes += courseAssignments.length;
+      if (courseAssignments.length === 0) continue;
+
+      const reports = courseAssignments.map((assignment) =>
+        buildReport(
+          assignment,
+          activeStudents,
+          attemptsByAssignment.get(assignment.id) ?? [],
+        ),
+      );
+      const latestScores = reports.flatMap((report) =>
+        report.students
+          .filter((student) => student.latestScore !== null)
+          .map((student) => student.latestScore!),
+      );
+      const attempted = reports.reduce((sum, report) => sum + report.attempted, 0);
+      const passed = reports.reduce((sum, report) => sum + report.passed, 0);
+      const completionRate = pct(
+        attempted,
+        courseAssignments.length * activeStudents.length,
+      );
+      const hasAttempts =
+        completionRate > 0 ||
+        reports.some(
+          (report) =>
+            report.averageScore > 0 ||
+            pct(report.attempted, report.assignedStudents) > 0,
+        );
+
+      if (!hasAttempts) continue;
+
+      const averageScore = latestScores.length
+        ? latestScores.reduce((sum, score) => sum + score, 0) /
+          latestScores.length
+        : 0;
+      scoredCourseAverages.push(averageScore);
+      scoredCoursePassRates.push(pct(passed, attempted));
+    }
+
+    return {
+      totalQuizzes,
+      students,
+      averageQuizScore: scoredCourseAverages.length
+        ? scoredCourseAverages.reduce((sum, score) => sum + score, 0) /
+          scoredCourseAverages.length
+        : null,
+      passRate: scoredCoursePassRates.length
+        ? scoredCoursePassRates.reduce((sum, rate) => sum + rate, 0) /
+          scoredCoursePassRates.length
+        : null,
+    };
+  }
+
   async function student(actor: QuizActor, studentId: string) {
     const quizzes = await listVisibleQuizzes(actor);
     const assignments = await repo.listAssignmentsForQuizzes(
@@ -286,6 +403,6 @@ export function createAnalyticsService(options: QuizServiceOptions) {
       quizzes: items,
     };
   }
-  return { assignment, course, student };
+  return { assignment, course, overview, student };
 }
 export type AnalyticsService = ReturnType<typeof createAnalyticsService>;

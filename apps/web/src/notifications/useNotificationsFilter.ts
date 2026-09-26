@@ -1,5 +1,5 @@
 import type { NotificationCategory } from "@veolms/contracts";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
   DEFAULT_DEBOUNCE_DELAY_MS,
@@ -88,8 +88,15 @@ export function useNotificationsFilter(
   }, [activeTab, categoryFilter, debouncedSearch, statusFilter]);
 
   const feed = useNotifications(filters);
+  const {
+    fetchNextPage,
+    hasNextPage,
+    isFetching,
+    isFetchingNextPage,
+  } = feed;
   const mentions = useNotifications({ type: "user.mentioned", limit: 3 });
   const summary = useNotificationSummary();
+  const nextPageInFlightRef = useRef(false);
   const markReadMutation = useMarkNotificationRead();
   const markAllReadMutation = useMarkAllNotificationsRead();
   const archiveMutation = useArchiveNotification();
@@ -147,6 +154,21 @@ export function useNotificationsFilter(
     setSortBy("latest");
   };
 
+  const loadMore = useCallback(() => {
+    if (
+      !hasNextPage ||
+      isFetching ||
+      nextPageInFlightRef.current
+    ) {
+      return;
+    }
+
+    nextPageInFlightRef.current = true;
+    void fetchNextPage().finally(() => {
+      nextPageInFlightRef.current = false;
+    });
+  }, [fetchNextPage, hasNextPage, isFetching]);
+
   return {
     notifications,
     groupedNotifications,
@@ -175,9 +197,9 @@ export function useNotificationsFilter(
     resetFilters,
     isLoading: feed.isPending,
     isError: feed.isError,
-    hasNextPage: Boolean(feed.hasNextPage),
-    isFetchingNextPage: feed.isFetchingNextPage,
-    loadMore: () => void feed.fetchNextPage(),
+    hasNextPage: Boolean(hasNextPage),
+    isFetchingNextPage,
+    loadMore,
     refetch: () => void feed.refetch(),
   };
 }
