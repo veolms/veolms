@@ -140,6 +140,7 @@ import type { Course, CourseLevel, CourseCategory } from "./catalogue";
 import type { Lesson } from "../learning/courseContent";
 import { formatDuration, resolveCourseDurationSeconds } from "./courseAdapter";
 import { mediaService } from "../services/media";
+import { VirtualizedLessonList } from "./curriculum/VirtualizedLessonList";
 
 const EMPTY_CATEGORIES: Category[] = [];
 
@@ -330,6 +331,12 @@ interface DraggedLessonState {
   lessonId: string;
 }
 
+const getCurriculumLessonId = (lesson: CurriculumLessonItem) => lesson.id;
+const getCourseWizardScrollElement = (): HTMLElement | null =>
+  typeof document === "undefined"
+    ? null
+    : document.getElementById("course-wizard-tab-panel");
+
 interface LessonDropTarget {
   sectionId: string;
   lessonId: string;
@@ -359,6 +366,7 @@ interface MemoizedLessonCardProps {
   isLessonEditorMounted: boolean;
   isUrlFocused: boolean;
   onLessonEditorOpen: (lessonId: string) => void;
+  onVirtualPinChange: (lessonId: string, pinned: boolean) => void;
   render: (state: {
     isExpanded: boolean;
     setExpanded: React.Dispatch<React.SetStateAction<boolean>>;
@@ -378,6 +386,7 @@ const MemoizedLessonCard = memo(
     isLessonEditorMounted,
     isUrlFocused,
     onLessonEditorOpen,
+    onVirtualPinChange,
     render,
   }: MemoizedLessonCardProps) {
     const [isExpanded, setExpanded] = useState(lesson.isExpanded);
@@ -402,6 +411,30 @@ const MemoizedLessonCard = memo(
       }
       wasUrlFocusedRef.current = isUrlFocused;
     }, [isUrlFocused, lesson.id, onLessonEditorOpen]);
+
+    useEffect(() => {
+      onVirtualPinChange(
+        lesson.id,
+        isExpanded ||
+          isEditorOpen ||
+          isQuizOpen ||
+          isLessonEditorMounted ||
+          isUrlFocused,
+      );
+    }, [
+      isEditorOpen,
+      isExpanded,
+      isLessonEditorMounted,
+      isQuizOpen,
+      isUrlFocused,
+      lesson.id,
+      onVirtualPinChange,
+    ]);
+
+    useEffect(
+      () => () => onVirtualPinChange(lesson.id, false),
+      [lesson.id, onVirtualPinChange],
+    );
 
     return render({
       isExpanded,
@@ -428,7 +461,8 @@ const MemoizedLessonCard = memo(
     previous.isResourceBusy === next.isResourceBusy &&
     previous.isLessonEditorMounted === next.isLessonEditorMounted &&
     previous.isUrlFocused === next.isUrlFocused &&
-    previous.onLessonEditorOpen === next.onLessonEditorOpen,
+    previous.onLessonEditorOpen === next.onLessonEditorOpen &&
+    previous.onVirtualPinChange === next.onVirtualPinChange,
 );
 
 export type CourseWizardStepId =
@@ -2781,6 +2815,12 @@ export function CourseCreatePage({
   const [mountedLessonEditorIds, setMountedLessonEditorIds] = useState<string[]>(
     [],
   );
+  const [pinnedLessonStateIds, setPinnedLessonStateIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [focusedLessonIds, setFocusedLessonIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [editingLessonTarget, setEditingLessonTarget] = useState<{
     sectionId: string;
     lessonId: string;
@@ -2796,6 +2836,8 @@ export function CourseCreatePage({
 
   useEffect(() => {
     setMountedLessonEditorIds([]);
+    setPinnedLessonStateIds(new Set());
+    setFocusedLessonIds(new Set());
   }, [activeEditId]);
 
   const rememberLessonEditor = useCallback((lessonId: string) => {
@@ -2807,6 +2849,32 @@ export function CourseCreatePage({
       return next.slice(-3);
     });
   }, []);
+
+  const handleLessonVirtualPinChange = useCallback(
+    (lessonId: string, pinned: boolean) => {
+      setPinnedLessonStateIds((previous) => {
+        if (previous.has(lessonId) === pinned) return previous;
+        const next = new Set(previous);
+        if (pinned) next.add(lessonId);
+        else next.delete(lessonId);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleLessonFocusChange = useCallback(
+    (lessonId: string, focused: boolean) => {
+      setFocusedLessonIds((previous) => {
+        if (previous.has(lessonId) === focused) return previous;
+        const next = new Set(previous);
+        if (focused) next.add(lessonId);
+        else next.delete(lessonId);
+        return next;
+      });
+    },
+    [],
+  );
 
   const navigateToStepRef = useRef<
     (destination: CourseWizardStepId) => Promise<void>
@@ -3896,18 +3964,76 @@ export function CourseCreatePage({
   const [sections, setSections] = useState<CurriculumSectionItem[]>([]);
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
+  const shouldVirtualizeCurriculum = useMemo(
+    () =>
+      sections.reduce((total, section) => total + section.lessons.length, 0) >=
+      80,
+    [sections],
+  );
+  const pendingSectionAnchorRef = useRef<{
+    sectionId: string;
+    collapsingSectionId: string;
+    header: HTMLElement;
+    scrollPanel: HTMLElement;
+    top: number;
+    timerId: number;
+    cleanupUserInput: () => void;
+  } | null>(null);
+  useEffect(
+    () => () => {
+      const pendingAnchor = pendingSectionAnchorRef.current;
+      if (!pendingAnchor) return;
+      window.clearTimeout(pendingAnchor.timerId);
+      pendingAnchor.cleanupUserInput();
+      pendingSectionAnchorRef.current = null;
+    },
+    [],
+  );
+  const restoreSectionAnchorAfterCollapse = (collapsingSectionId: string) => {
+    const pendingAnchor = pendingSectionAnchorRef.current;
+    if (
+      !pendingAnchor ||
+      pendingAnchor.collapsingSectionId !== collapsingSectionId
+    ) {
+      return;
+    }
+
+    window.clearTimeout(pendingAnchor.timerId);
+    pendingAnchor.cleanupUserInput();
+    pendingSectionAnchorRef.current = null;
+    if (
+      !pendingAnchor.header.isConnected ||
+      !pendingAnchor.scrollPanel.isConnected ||
+      !sectionsRef.current.some(
+        (section) =>
+          section.id === pendingAnchor.sectionId && section.isExpanded,
+      )
+    ) {
+      return;
+    }
+
+    const currentTop =
+      pendingAnchor.header.getBoundingClientRect().top -
+      pendingAnchor.scrollPanel.getBoundingClientRect().top;
+    const offsetDelta = currentTop - pendingAnchor.top;
+    if (Math.abs(offsetDelta) > 1) {
+      pendingAnchor.scrollPanel.scrollTop += offsetDelta;
+    }
+  };
   const lessonTitleDraftsRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (activeStep !== "curriculum" || !requestedSectionId) return;
     setSections((previous) => {
+      if (!previous.some((section) => section.id === requestedSectionId)) {
+        return previous;
+      }
       let changed = false;
       const next = previous.map((section) => {
-        if (section.id !== requestedSectionId || section.isExpanded) {
-          return section;
-        }
+        const isExpanded = section.id === requestedSectionId;
+        if (section.isExpanded === isExpanded) return section;
         changed = true;
-        return { ...section, isExpanded: true };
+        return { ...section, isExpanded };
       });
       return changed ? next : previous;
     });
@@ -5076,6 +5202,9 @@ export function CourseCreatePage({
       if (editorData.sections && editorData.sections.length > 0) {
         setSections((prev) => {
           const prevMap = new Map(prev.map((s) => [s.id, s]));
+          const expandedSectionId = prev.find(
+            (section) => section.isExpanded,
+          )?.id;
           const mappedServerSections = editorData.sections.map(
             (sec, secIdx) => {
               const existing = prevMap.get(sec.id);
@@ -5170,7 +5299,9 @@ export function CourseCreatePage({
               return {
                 id: sec.id,
                 title: sec.title,
-                isExpanded: existing ? existing.isExpanded : secIdx === 0,
+                isExpanded: existing
+                  ? existing.isExpanded && existing.id === expandedSectionId
+                  : !expandedSectionId && secIdx === 0,
                 isEditingTitle: existing ? existing.isEditingTitle : false,
                 lessons: [...serverLessons, ...pendingLessons],
               };
@@ -5185,7 +5316,14 @@ export function CourseCreatePage({
             (s) => s.isPendingCreation || !serverSectionIds.has(s.id),
           );
 
-          return [...mappedServerSections, ...pendingSections];
+          const nextSections = [...mappedServerSections, ...pendingSections];
+          const nextExpandedSectionId = nextSections.find(
+            (section) => section.isExpanded,
+          )?.id;
+          return nextSections.map((section) => ({
+            ...section,
+            isExpanded: section.id === nextExpandedSectionId,
+          }));
         });
       }
     } else {
@@ -6266,6 +6404,22 @@ export function CourseCreatePage({
   const [draggedLessonState, setDraggedLessonState] =
     useState<DraggedLessonState | null>(null);
   const draggedLessonStateRef = useRef<DraggedLessonState | null>(null);
+  const virtualPinnedLessonIds = useMemo(() => {
+    const pinned = new Set([
+      ...pinnedLessonStateIds,
+      ...focusedLessonIds,
+      ...mountedLessonEditorIds,
+    ]);
+    if (requestedLessonId) pinned.add(requestedLessonId);
+    if (draggedLessonState) pinned.add(draggedLessonState.lessonId);
+    return pinned;
+  }, [
+    draggedLessonState,
+    focusedLessonIds,
+    mountedLessonEditorIds,
+    pinnedLessonStateIds,
+    requestedLessonId,
+  ]);
   const [lessonDropTarget, setLessonDropTarget] =
     useState<LessonDropTarget | null>(null);
   const lessonDropTargetRef = useRef<LessonDropTarget | null>(null);
@@ -6306,8 +6460,17 @@ export function CourseCreatePage({
       lessons: [],
     };
 
-    // Show temporary section immediately
-    setSections((prev) => [...prev, optimisticSection]);
+    // Show the new section immediately and release the previous lesson list.
+    setSections((prev) => {
+      const next = [
+        ...prev.map((section) =>
+          section.isExpanded ? { ...section, isExpanded: false } : section,
+        ),
+        optimisticSection,
+      ];
+      sectionsRef.current = next;
+      return next;
+    });
     setIsCreatingSection(true);
 
     let targetCourseId = currentCourseId;
@@ -7200,32 +7363,153 @@ export function CourseCreatePage({
     sectionId?: string | null,
     lessonId?: string | null,
   ) => {
-    void navigate(
-      getCourseEditorPath({
-        mode: isEditing ? "edit" : "create",
-        courseId: activeEditId,
-        step: "curriculum",
-        sectionId,
-        lessonId,
-      }),
-    );
+    const destination = getCourseEditorPath({
+      mode: isEditing ? "edit" : "create",
+      courseId: activeEditId,
+      step: "curriculum",
+      sectionId,
+      lessonId,
+    });
+    if (`${location.pathname}${location.search}` === destination) return;
+    void navigate(destination, { preventScrollReset: true });
   };
 
-  const handleToggleSectionExpand = async (sectionId: string) => {
+  const handleToggleSectionExpand = async (
+    sectionId: string,
+    clickedSectionHeader?: HTMLElement | null,
+  ) => {
+    const previousAnchor = pendingSectionAnchorRef.current;
+    if (previousAnchor) {
+      window.clearTimeout(previousAnchor.timerId);
+      previousAnchor.cleanupUserInput();
+      pendingSectionAnchorRef.current = null;
+    }
+
     const currentSections = sectionsRef.current || sections;
     const sec = currentSections.find((s) => s.id === sectionId);
     if (!sec) return;
 
     // 1. When the section is being EXPANDED:
     if (!sec.isExpanded) {
-      setSections((prev) => {
-        const next = prev.map((s) =>
-          s.id === sectionId ? { ...s, isExpanded: true } : s,
+      const previouslyExpandedSection = currentSections.find(
+        (section) => section.id !== sectionId && section.isExpanded,
+      );
+      const dirtyLessons = currentSections
+        .filter((section) => section.id !== sectionId && section.isExpanded)
+        .flatMap((section) =>
+          section.lessons
+            .filter(
+              (lesson) =>
+                isLessonDirty(lesson) && !lesson.isPendingCreation,
+            )
+            .map((lesson) => ({ sectionId: section.id, lessonId: lesson.id })),
         );
+
+      if (
+        dirtyLessons.length > 0 &&
+        (isCollapsingSectionRef.current || isSavingAllDirtyLessonsRef.current)
+      ) {
+        return;
+      }
+
+      if (dirtyLessons.length > 0) {
+        isCollapsingSectionRef.current = true;
+        try {
+          for (const dirtyLesson of dirtyLessons) {
+            const success = await persistLesson(
+              dirtyLesson.sectionId,
+              dirtyLesson.lessonId,
+              { collapseOnSuccess: true },
+            );
+            if (!success) return;
+          }
+        } finally {
+          isCollapsingSectionRef.current = false;
+        }
+      }
+
+      const scrollPanel = getCourseWizardScrollElement();
+      const header = clickedSectionHeader ?? null;
+      let pendingAnchor:
+        | NonNullable<typeof pendingSectionAnchorRef.current>
+        | null = null;
+
+      if (scrollPanel && header && previouslyExpandedSection) {
+        const removeUserInputListeners = () => {
+          scrollPanel.removeEventListener("wheel", cancelOnUserInput);
+          scrollPanel.removeEventListener("touchstart", cancelOnUserInput);
+          scrollPanel.removeEventListener("pointerdown", cancelOnUserInput);
+          scrollPanel.removeEventListener("keydown", cancelOnUserInput);
+        };
+        const cancelOnUserInput = () => {
+          const currentAnchor = pendingSectionAnchorRef.current;
+          if (currentAnchor !== pendingAnchor) return;
+          if (currentAnchor) window.clearTimeout(currentAnchor.timerId);
+          removeUserInputListeners();
+          pendingSectionAnchorRef.current = null;
+        };
+        pendingAnchor = {
+          sectionId,
+          collapsingSectionId: previouslyExpandedSection.id,
+          header,
+          scrollPanel,
+          top:
+            header.getBoundingClientRect().top -
+            scrollPanel.getBoundingClientRect().top,
+          timerId: 0,
+          cleanupUserInput: removeUserInputListeners,
+        };
+        pendingSectionAnchorRef.current = pendingAnchor;
+        scrollPanel.addEventListener("wheel", cancelOnUserInput, {
+          passive: true,
+        });
+        scrollPanel.addEventListener("touchstart", cancelOnUserInput, {
+          passive: true,
+        });
+        scrollPanel.addEventListener("pointerdown", cancelOnUserInput);
+        scrollPanel.addEventListener("keydown", cancelOnUserInput);
+        pendingAnchor.timerId = window.setTimeout(
+          () =>
+            restoreSectionAnchorAfterCollapse(
+              previouslyExpandedSection.id,
+            ),
+          500,
+        );
+      }
+
+      setSections((prev) => {
+        const next = prev.map((section) => ({
+          ...section,
+          isExpanded: section.id === sectionId,
+        }));
         sectionsRef.current = next;
         return next;
       });
       navigateToCurriculumFocus(sectionId);
+
+      if (pendingAnchor && previouslyExpandedSection) {
+        window.requestAnimationFrame(() => {
+          const collapsingBody = Array.from(
+            document.querySelectorAll<HTMLElement>(
+              "[data-curriculum-section-body]",
+            ),
+          ).find(
+            (body) =>
+              body.dataset.curriculumSectionBody ===
+              previouslyExpandedSection.id,
+          );
+          const duration = collapsingBody
+            ? Number.parseFloat(
+                window.getComputedStyle(collapsingBody).transitionDuration,
+              )
+            : 0;
+          if (duration <= 0) {
+            restoreSectionAnchorAfterCollapse(
+              previouslyExpandedSection.id,
+            );
+          }
+        });
+      }
       return;
     }
 
@@ -10590,8 +10874,11 @@ export function CourseCreatePage({
                   >
                     {/* Section Header */}
                     <div
+                      data-curriculum-section-header={sec.id}
                       className="flex items-center justify-between px-[18px] py-3.5 bg-[color-mix(in_srgb,var(--text)_2%,transparent)] select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]"
-                      onClick={() => handleToggleSectionExpand(sec.id)}
+                      onClick={(event) =>
+                        handleToggleSectionExpand(sec.id, event.currentTarget)
+                      }
                       title="Click to toggle section"
                     >
                       <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
@@ -10797,7 +11084,12 @@ export function CourseCreatePage({
                           }
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleToggleSectionExpand(sec.id);
+                            handleToggleSectionExpand(
+                              sec.id,
+                              e.currentTarget.closest<HTMLElement>(
+                                "[data-curriculum-section-header]",
+                              ),
+                            );
                           }}
                         >
                           <CaretDown size={15} />
@@ -10807,6 +11099,16 @@ export function CourseCreatePage({
 
                     {/* Section Body with CSS expand transition */}
                     <div
+                      data-curriculum-section-body={sec.id}
+                      onTransitionEnd={(event) => {
+                        if (
+                          event.target !== event.currentTarget ||
+                          event.propertyName !== "grid-template-rows"
+                        ) {
+                          return;
+                        }
+                        restoreSectionAnchorAfterCollapse(sec.id);
+                      }}
                       className={`grid transition-[grid-template-rows] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                         sec.isExpanded
                           ? "is-open grid-rows-[1fr]"
@@ -10822,7 +11124,14 @@ export function CourseCreatePage({
                       >
                         {sec.isExpanded && (
                           <div className="flex flex-col gap-2.5">
-                            {sec.lessons.map((les, lesIndex) => {
+                            <VirtualizedLessonList
+                              items={sec.lessons}
+                              forceVirtualized={shouldVirtualizeCurriculum}
+                              getScrollElement={getCourseWizardScrollElement}
+                              getItemKey={getCurriculumLessonId}
+                              pinnedItemIds={virtualPinnedLessonIds}
+                              onItemFocusChange={handleLessonFocusChange}
+                              renderItem={(les, lesIndex) => {
                               const isDraggedLesson =
                                 draggedLessonState?.sectionId === sec.id &&
                                 draggedLessonState.lessonId === les.id;
@@ -10868,6 +11177,7 @@ export function CourseCreatePage({
                                   requestedLessonId === les.id
                                 }
                                 onLessonEditorOpen={rememberLessonEditor}
+                                onVirtualPinChange={handleLessonVirtualPinChange}
                                 render={({
                                   isExpanded,
                                   setExpanded,
@@ -11867,7 +12177,8 @@ export function CourseCreatePage({
                                 {isDropAfter && <LessonDropIndicator />}
                               </Fragment>
                               );
-                            })}
+                              }}
+                            />
                           </div>
                         )}
 
