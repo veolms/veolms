@@ -1944,37 +1944,59 @@ export function CoursesPage({
         for (const ec of enrolledCoursesData?.courses || []) {
           try {
             const courseKey = encodeURIComponent(ec.courseSlug);
+            const serverProgress =
+              typeof ec.progress === "number" && Number.isFinite(ec.progress)
+                ? Math.max(0, Math.min(100, Math.round(ec.progress)))
+                : null;
+            const total = ec.totalLessons > 0 ? ec.totalLessons : 84;
+            let localEstimate: number | null = null;
+
             const detailedProgStr = localStorage.getItem(
               `veolms-learning-${courseKey}-progress`,
             );
-            const total = ec.totalLessons > 0 ? ec.totalLessons : 84;
             if (detailedProgStr) {
               const progMap = JSON.parse(detailedProgStr) as Record<
                 string,
                 number
               >;
-              const vals = Object.values(progMap);
-              if (vals.length > 0) {
+              const vals = Object.values(progMap).filter(
+                (value) => typeof value === "number" && Number.isFinite(value),
+              );
+              // Sparse session maps (often 1 lesson) must not replace server %.
+              // Only trust local when it covers a meaningful share of the course.
+              if (vals.length > 0 && vals.length >= Math.min(10, total * 0.05)) {
                 const sum = vals.reduce((a, b) => a + b, 0);
-                const calc = Math.min(100, Math.round(sum / total));
-                progressMap.set(ec.courseId, calc);
-                if (ec.courseSlug) progressMap.set(ec.courseSlug, calc);
-                continue;
+                localEstimate = Math.min(100, Math.round(sum / total));
               }
             }
-            const lastLessonStr = localStorage.getItem(
-              `veolms-last-lesson-${courseKey}`,
-            );
-            if (lastLessonStr) {
-              const lessonNum = parseInt(lastLessonStr, 10);
-              if (!isNaN(lessonNum) && lessonNum > 0) {
-                const calc = Math.min(
-                  100,
-                  Math.round((lessonNum / total) * 100),
-                );
-                progressMap.set(ec.courseId, calc);
-                if (ec.courseSlug) progressMap.set(ec.courseSlug, calc);
+
+            if (localEstimate == null) {
+              const lastLessonStr = localStorage.getItem(
+                `veolms-last-lesson-${courseKey}`,
+              );
+              if (lastLessonStr) {
+                const lessonNum = parseInt(lastLessonStr, 10);
+                // last-lesson is a resume pointer, not completion — never let it
+                // drop below the enrolled-courses API progress.
+                if (!isNaN(lessonNum) && lessonNum > 0) {
+                  localEstimate = Math.min(
+                    100,
+                    Math.round((lessonNum / total) * 100),
+                  );
+                }
               }
+            }
+
+            const nextProgress =
+              serverProgress == null
+                ? localEstimate
+                : localEstimate == null
+                  ? serverProgress
+                  : Math.max(serverProgress, localEstimate);
+
+            if (nextProgress != null) {
+              progressMap.set(ec.courseId, nextProgress);
+              if (ec.courseSlug) progressMap.set(ec.courseSlug, nextProgress);
             }
           } catch {
             // Ignore storage errors
