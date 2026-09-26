@@ -896,7 +896,6 @@ export function createMediaService({
       );
     }
     const playbackToken = createPlaybackSegmentToken(manifestKey);
-
     return {
       version: 1,
       courseSlug: context.course_slug,

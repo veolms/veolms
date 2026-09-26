@@ -18,11 +18,7 @@ export const STAFF_ROLES = new Set([
   "super_admin",
 ]);
 
-export const CREATOR_ROLES = new Set([
-  "creator",
-  "instructor",
-  ...ADMIN_ROLES,
-]);
+export const CREATOR_ROLES = new Set(["creator", "instructor", ...ADMIN_ROLES]);
 
 export function normalizeRoles(
   roles: readonly string[] | null | undefined,
@@ -75,11 +71,14 @@ export function resolveWorkspaceRole(
     : (visible[0] ?? "student");
 }
 
-export function getUserRoles(
-  user: { roles?: readonly string[] } | null | undefined,
-): readonly string[] | undefined {
-  return user && "roles" in user && Array.isArray(user.roles)
-    ? user.roles
+export function getUserRoles(user: unknown): readonly string[] | undefined {
+  if (typeof user !== "object" || user === null || !("roles" in user)) {
+    return undefined;
+  }
+
+  const roles = user.roles;
+  return Array.isArray(roles) && roles.every((role) => typeof role === "string")
+    ? roles
     : undefined;
 }
 
@@ -113,4 +112,3 @@ export function getRoleDisplayName(
   }
   return "Instructor";
 }
-

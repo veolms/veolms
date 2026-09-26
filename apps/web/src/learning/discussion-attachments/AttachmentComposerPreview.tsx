@@ -46,7 +46,7 @@ export function AttachmentComposerPreview({
           <div
             key={attachment.id}
             data-testid="composer-attachment-item"
-            className="flex max-w-full items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] py-1.5 pr-2 pl-2.5 text-xs text-(--text) shadow-xs transition-colors"
+            className="flex min-w-0 max-w-full items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] py-1.5 pr-2 pl-2.5 text-xs text-(--text) shadow-xs transition-colors"
           >
             {category === "image" && visualUrl ? (
               <img

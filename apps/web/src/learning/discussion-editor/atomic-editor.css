@@ -46,6 +46,14 @@
   caret-color: var(--text);
 }
 
+@media (max-width: 640px) {
+  .learning-comment-editor[data-editor-presentation="drawer"]
+    .learning-discussion-atomic-editor
+    .cm-content {
+    font-size: 1rem;
+  }
+}
+
 .learning-discussion-atomic-editor .cm-line {
   padding-inline: 0;
 }

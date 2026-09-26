@@ -49,11 +49,17 @@ export function resolveChapters(
     return metadata;
   }
 
-  const parsed = parseChaptersFromDescription(options.description ?? "", {
+  const parsed = parseChaptersFromDescription(options.description ?? "");
+  const normalizedDescription = normalizeChapters(parsed, {
     duration: options.duration,
   });
 
-  return parsed.length > 0
-    ? { source: "description", chapters: parsed }
-    : { source: null, chapters: [] };
+  if (
+    normalizedDescription.length === 0 ||
+    normalizedDescription[0]?.startTime !== 0
+  ) {
+    return { source: null, chapters: [] };
+  }
+
+  return { source: "description", chapters: normalizedDescription };
 }

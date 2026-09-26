@@ -164,14 +164,14 @@ test("discussion tabs use canonical routes and per-tab browser history", async (
 });
 
 test("comments workspace uses mine-only body cards", async ({ page }) => {
-  await page.route("**/api/v1/enrollments/courses", async (route) => {
+  await page.route("**/v1/enrollments/courses", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({ courses: [] }),
     });
   });
 
-  await page.route("**/api/v1/auth/me", async (route) => {
+  await page.route("**/v1/auth/me", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -195,7 +195,7 @@ test("comments workspace uses mine-only body cards", async ({ page }) => {
       }),
     });
   });
-  await page.route("**/api/v1/navigation/sidenav", async (route) => {
+  await page.route("**/v1/navigation/sidenav", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -207,7 +207,7 @@ test("comments workspace uses mine-only body cards", async ({ page }) => {
   });
 
   const workspaceRequests: URL[] = [];
-  await page.route("**/api/v1/discussions/workspace**", async (route) => {
+  await page.route("**/v1/discussions/workspace**", async (route) => {
     const requestUrl = new URL(route.request().url());
     workspaceRequests.push(requestUrl);
     if (requestUrl.searchParams.get("tab") !== "comments") {

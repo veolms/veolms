@@ -1,4 +1,8 @@
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import {
+  parseChapterDeclarationsFromDescription,
+  resolveChapters,
+} from "@veolms/video-player";
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "./discussion-editor/types";
 import { SurfaceTopRightAccentGlow } from "./SurfaceTopRightAccentGlow";
@@ -40,11 +44,13 @@ function handleExpandedKeyDown(
 export interface LessonDescriptionProps {
   description?: string | null;
   isLoading?: boolean;
+  onSeekToTimestamp?: (seconds: number) => void;
 }
 
 export function LessonDescription({
   description,
   isLoading = false,
+  onSeekToTimestamp,
 }: LessonDescriptionProps = {}) {
   const contentId = useId();
   const sectionRef = useRef<HTMLElement>(null);
@@ -56,6 +62,22 @@ export function LessonDescription({
     () => createDiscussionDraft(rawMarkdown),
     [rawMarkdown],
   );
+  const chapterDeclarations = useMemo(() => {
+    const resolved = resolveChapters({ description: rawMarkdown });
+    if (resolved.source !== "description") return [];
+
+    const accepted = new Set(
+      resolved.chapters.map(
+        (chapter) => `${chapter.startTime}\u0000${chapter.title}`,
+      ),
+    );
+
+    return parseChapterDeclarationsFromDescription(rawMarkdown).filter(
+      (declaration) =>
+        declaration.isPlainText &&
+        accepted.has(`${declaration.startTime}\u0000${declaration.title}`),
+    );
+  }, [rawMarkdown]);
   const hasDescription = rawMarkdown.length > 0;
 
   if (!isLoading && !hasDescription) {
@@ -124,6 +146,8 @@ export function LessonDescription({
             <DiscussionMarkdown
               content={draftContent}
               label="Lesson description content"
+              chapterDeclarations={chapterDeclarations}
+              onSeekToTimestamp={onSeekToTimestamp}
               className="[&>:first-child]:mt-0"
             />
           ) : (

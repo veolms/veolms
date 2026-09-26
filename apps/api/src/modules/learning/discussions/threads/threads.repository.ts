@@ -393,6 +393,7 @@ export type ThreadFilterOptions = ListLearningThreadsQuery & {
   currentUserId?: string;
   accessibleCourseIds?: readonly string[];
   pageCursor?: DiscussionListCursor;
+  ids?: readonly string[];
 };
 
 export interface ThreadsRepository {
@@ -478,7 +479,6 @@ export interface ThreadsRepository {
     threadId: string,
     status: InteractionStatus,
   ): Promise<void>;
-
 }
 
 function applyThreadFilters<O>(
@@ -500,6 +500,10 @@ function applyThreadFilters<O>(
 
   if (options.lessonId) {
     q = q.where("t.lesson_id", "=", options.lessonId);
+  }
+
+  if (options.ids) {
+    q = q.where("t.id", "in", [...options.ids]);
   }
 
   if (options.kind && options.kind !== "all") {
@@ -1061,6 +1065,5 @@ export function createThreadsRepository(): ThreadsRepository {
         .where("id", "=", threadId)
         .execute();
     },
-
   };
 }

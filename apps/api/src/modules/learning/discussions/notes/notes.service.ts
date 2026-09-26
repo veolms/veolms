@@ -41,6 +41,10 @@ interface NoteAttachmentItem {
   metadata: unknown;
 }
 
+export type NotesListQuery = ListLearningNotesQuery & {
+  ids?: readonly string[];
+};
+
 // Links caller-owned, ready attachments to a note in two batched queries
 // (one lookup + one update) instead of one round trip per attachment id.
 async function linkOwnedAttachments(
@@ -96,7 +100,7 @@ export interface NotesService {
   listNotes(
     db: DatabaseExecutor,
     actor: DiscussionActor,
-    query: ListLearningNotesQuery,
+    query: NotesListQuery,
   ): Promise<LearningNotesListResponse>;
 
   getCourseNotesOverview(

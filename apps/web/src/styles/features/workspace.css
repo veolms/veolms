@@ -542,7 +542,7 @@
   display: grid;
   grid-template-columns:
     minmax(210px, 1.55fr) minmax(122px, 0.66fr) minmax(112px, 0.52fr)
-    minmax(112px, 0.52fr) minmax(150px, 0.75fr);
+    minmax(150px, 0.75fr);
   gap: 10px;
   padding: 10px;
   border-radius: 14px;
@@ -664,8 +664,7 @@
 
 .discussion-hub__filters--comments {
   grid-template-columns:
-    minmax(210px, 1.7fr) minmax(122px, 0.66fr) minmax(112px, 0.52fr)
-    minmax(150px, 0.75fr);
+    minmax(210px, 1.7fr) minmax(122px, 0.66fr) minmax(150px, 0.75fr);
 }
 
 .discussion-hub__filters--mentions {
@@ -886,6 +885,36 @@
 }
 .discussion-thread__open--overview {
   cursor: default;
+}
+.discussion-thread--workspace-card.is-navigable
+  .discussion-thread__open--overview {
+  cursor: pointer;
+}
+.discussion-thread--workspace-card.is-navigable.is-collapsed
+  .discussion-thread__open--overview
+  :where(*):not(
+    a,
+    button,
+    input,
+    textarea,
+    select,
+    summary,
+    [contenteditable],
+    [role="button"],
+    [role="link"]
+  ) {
+  cursor: pointer;
+}
+.discussion-thread--workspace-card.is-navigable.is-expanded
+  :is(.discussion-thread__author, .discussion-thread__meta) {
+  cursor: pointer;
+  user-select: none;
+}
+.discussion-thread--workspace-card.is-navigable.is-expanded
+  .discussion-hub__card-content-expanded
+  [role="document"]
+  :is(a, button, input, textarea, select, [role="button"], [role="link"]) {
+  cursor: pointer;
 }
 
 .discussion-thread__avatar {
@@ -4140,8 +4169,6 @@
   position: relative;
   z-index: 1;
   pointer-events: auto;
-  user-select: text;
-  cursor: text;
 }
 
 @media (min-width: 781px) {

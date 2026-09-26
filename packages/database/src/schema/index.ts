@@ -52,7 +52,6 @@ import type {
   CourseDeletionJobTable,
   CourseDeletionStorageItemTable,
 } from "./courses.schema.ts";
-
 import type {
   ImageJobTable,
   MediaAssetTable,

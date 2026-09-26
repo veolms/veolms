@@ -60,11 +60,14 @@ jobs:
       - name: Build web application without an external CDN URL
         if: ${{ vars.VITE_CDN_URL == '' && vars.CDN_URL == '' }}
         run: pnpm build:web
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'https://api.procodrr.dev/v1' }}
 
       - name: Build web application with the configured CDN URL
         if: ${{ vars.VITE_CDN_URL != '' || vars.CDN_URL != '' }}
         run: pnpm build:web
         env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'https://api.procodrr.dev/v1' }}
           VITE_CDN_URL: ${{ vars.VITE_CDN_URL || vars.CDN_URL }}
 
       - name: Configure AWS credentials

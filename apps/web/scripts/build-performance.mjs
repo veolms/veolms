@@ -11,10 +11,14 @@ const reactRouterCli = path.resolve(
 );
 const workspaceRoot = path.resolve(scriptDirectory, "../../..");
 
-try {
-  process.loadEnvFile(path.join(workspaceRoot, ".env"));
-} catch (error) {
-  if (error?.code !== "ENOENT") throw error;
+for (const environmentFile of [".env.production", ".env"]) {
+  try {
+    // Node does not overwrite an existing process.env value, so an explicit
+    // CI/deployment variable still wins over the checked-in production URL.
+    process.loadEnvFile(path.join(workspaceRoot, environmentFile));
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
 }
 
 export const runPerformanceBuild = async (args = process.argv.slice(2)) => {

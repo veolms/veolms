@@ -8,10 +8,10 @@ test.beforeEach(async ({ page }) => {
 test("first visible shell uses the persisted layout geometry", async ({
   page,
 }) => {
-  await page.route("**/api/v1/auth/me", (route) =>
+  await page.route("**/v1/auth/me", (route) =>
     route.fulfill({ status: 401, json: { message: "Unauthenticated" } }),
   );
-  await page.route("**/api/v1/courses", (route) =>
+  await page.route("**/v1/courses", (route) =>
     route.fulfill({ status: 200, json: { courses: [] } }),
   );
 
@@ -86,13 +86,13 @@ test("static mobile learning shell places navigation and composer before hydrati
 }) => {
   const scriptAssetPattern = /\/assets\/.*\.js(?:\?.*)?$/;
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.route("**/api/v1/auth/me", (route) =>
+  await page.route("**/v1/auth/me", (route) =>
     route.fulfill({ status: 401, json: { message: "Unauthenticated" } }),
   );
-  await page.route("**/api/v1/courses", (route) =>
+  await page.route("**/v1/courses", (route) =>
     route.fulfill({ status: 200, json: { courses: [] } }),
   );
-  await page.route("**/api/v1/courses/backend-nodejs/overview", (route) =>
+  await page.route("**/v1/courses/backend-nodejs/overview", (route) =>
     route.fulfill({
       status: 200,
       json: { course: { slug: "backend-nodejs" }, sections: [] },
@@ -185,13 +185,13 @@ test("static mobile learning shell places navigation and composer before hydrati
 test("each deep-linked settings tab is the only visible static slide", async ({
   page,
 }) => {
-  await page.route("**/api/v1/auth/me", (route) =>
+  await page.route("**/v1/auth/me", (route) =>
     route.fulfill({ status: 401, json: { message: "Unauthenticated" } }),
   );
-  await page.route("**/api/v1/courses", (route) =>
+  await page.route("**/v1/courses", (route) =>
     route.fulfill({ status: 200, json: { courses: [] } }),
   );
-  await page.route("**/api/v1/notification-preferences", (route) =>
+  await page.route("**/v1/notification-preferences", (route) =>
     route.fulfill({ status: 200, json: { preferences: [] } }),
   );
   await page.addInitScript(() => {
@@ -238,10 +238,10 @@ test("each deep-linked settings tab is the only visible static slide", async ({
 test("desktop settings tab navigation never paints an empty active slide", async ({
   page,
 }) => {
-  await page.route("**/api/v1/auth/me", (route) =>
+  await page.route("**/v1/auth/me", (route) =>
     route.fulfill({ status: 401, json: { message: "Unauthenticated" } }),
   );
-  await page.route("**/api/v1/courses", (route) =>
+  await page.route("**/v1/courses", (route) =>
     route.fulfill({ status: 200, json: { courses: [] } }),
   );
   await openApp(page, "/settings/profile");
@@ -354,13 +354,13 @@ test("deep-linked settings tabs stay visible throughout hydration", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.route("**/api/v1/auth/me", (route) =>
+  await page.route("**/v1/auth/me", (route) =>
     route.fulfill({ status: 401, json: { message: "Unauthenticated" } }),
   );
-  await page.route("**/api/v1/courses", (route) =>
+  await page.route("**/v1/courses", (route) =>
     route.fulfill({ status: 200, json: { courses: [] } }),
   );
-  await page.route("**/api/v1/notification-preferences", (route) =>
+  await page.route("**/v1/notification-preferences", (route) =>
     route.fulfill({ status: 200, json: { preferences: [] } }),
   );
   await page.addInitScript(() => {
@@ -527,13 +527,13 @@ test("compiled learning document contains the complete static workspace", async 
   expect(canonicalLearningHtml).toContain("learning-workspace");
   expect(canonicalLearningHtml).not.toContain("Application Error");
 
-  await page.route("**/api/v1/auth/me", (route) =>
+  await page.route("**/v1/auth/me", (route) =>
     route.fulfill({ status: 401, json: { message: "Unauthenticated" } }),
   );
-  await page.route("**/api/v1/courses", (route) =>
+  await page.route("**/v1/courses", (route) =>
     route.fulfill({ status: 200, json: { courses: [] } }),
   );
-  await page.route("**/api/v1/courses/backend-nodejs/overview", (route) =>
+  await page.route("**/v1/courses/backend-nodejs/overview", (route) =>
     route.fulfill({
       status: 200,
       json: { course: { slug: "backend-nodejs" }, sections: [] },
