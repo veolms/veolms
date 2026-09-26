@@ -1,11 +1,19 @@
-import type { EnrolledCourse } from "@veolms/contracts";
+import type {
+  AcademyEnrollmentListItem,
+  EnrolledCourse,
+} from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 import { sql } from "kysely";
 import { toEnrolledCourseContract } from "./enrollment.mapper.ts";
 import * as enrollmentRepo from "./enrollment.repository.ts";
+import {
+  createStudentsService,
+  type StudentsService,
+} from "../../students/index.ts";
 
 export interface EnrollmentService {
   listEnrolledCourses(userId: string): Promise<EnrolledCourse[]>;
+  listAcademyEnrollments(limit: number): Promise<AcademyEnrollmentListItem[]>;
   getEnrollmentStats(
     filters: enrollmentRepo.EnrollmentAnalyticsFilters,
   ): Promise<{ totalEnrollments: number; activeEnrollments: number }>;
@@ -25,9 +33,41 @@ export interface EnrollmentService {
 
 export function createEnrollmentService({
   database,
+  studentsService = createStudentsService({ database }),
 }: {
   database: Executor;
+  studentsService?: Pick<StudentsService, "resolveStudentAvatars">;
 }): EnrollmentService {
+  async function listAcademyEnrollments(
+    limit: number,
+  ): Promise<AcademyEnrollmentListItem[]> {
+    const rows = await enrollmentRepo.listAcademyEnrollments(database, limit);
+    const avatarUrls = await studentsService.resolveStudentAvatars(
+      rows.map((row) => ({
+        id: row.student_id,
+        avatarDataUrl: row.student_avatar_data_url,
+      })),
+    );
+
+    return rows.map((row) => ({
+      enrollmentId: row.enrollment_id,
+      student: {
+        id: row.student_id,
+        displayName: row.student_display_name,
+        avatarUrl: avatarUrls.get(row.student_id) ?? null,
+      },
+      course: {
+        id: row.course_id,
+        title: row.course_title,
+      },
+      averageProgressPercent:
+        row.average_progress_percent === null
+          ? null
+          : Number(row.average_progress_percent),
+      enrolledAt: row.enrolled_at,
+    }));
+  }
+
   async function listEnrolledCourses(
     userId: string,
   ): Promise<EnrolledCourse[]> {
@@ -192,6 +232,7 @@ export function createEnrollmentService({
   }
 
   return {
+    listAcademyEnrollments,
     listEnrolledCourses,
     getEnrollmentStats,
     getEnrollmentActivityBuckets,

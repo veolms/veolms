@@ -527,12 +527,28 @@
 }
 
 .creator-student-cell img {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.creator-student-avatar {
+  display: grid;
+  place-items: center;
   width: 31px;
   height: 31px;
   flex: 0 0 31px;
-  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
   border-radius: 50%;
-  object-fit: cover;
+  background: color-mix(in srgb, var(--surface-strong) 78%, var(--canvas));
+  color: var(--muted);
+}
+
+.creator-student-avatar-icon {
+  width: 68%;
+  height: 68%;
 }
 
 .creator-course-cell strong,
@@ -675,6 +691,11 @@
 
 .creator-enrollment-table .creator-table-row {
   min-height: 49px;
+}
+
+.creator-enrollment-table .creator-table-state > span {
+  grid-column: 1 / -1;
+  color: var(--muted);
 }
 
 @media (max-width: 1180px) {

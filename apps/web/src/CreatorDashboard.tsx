@@ -22,8 +22,10 @@ import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import type { Icon } from "@phosphor-icons/react";
 import { handleRovingTabKeyDown } from "./accessibility/rovingTabFocus";
 import { useDashboard } from "./services/analytics";
+import { useRecentEnrollments } from "./services/enrollments";
 import { useDashboardRecentDiscussions } from "./services/learning-interactions";
 import { adaptDiscussionWorkspaceItem } from "./workspace/discussions-workspace.adapter";
+import { formatRelativeTime } from "./learning/learning-notes.adapter";
 import typescriptThumbnail from "./assets/course-thumbnails/typescript-960.webp";
 import nodeThumbnail from "./assets/course-thumbnails/nodejs-960.webp";
 import veolmsThumbnail from "./assets/learning-thumbnails/veolms-course.webp";
@@ -52,13 +54,6 @@ const creatorCourses = [
   },
 ];
 
-type EnrollmentRow = readonly [
-  student: string,
-  course: string,
-  amount: string,
-  time: string,
-  avatar: string,
-];
 type ActivityRow = readonly [
   label: string,
   value: string,
@@ -96,44 +91,6 @@ interface NavigateProps {
 interface CreatorDashboardProps extends NavigateProps {
   academyTheme?: string;
 }
-
-const recentEnrollments: readonly EnrollmentRow[] = [
-  [
-    "Aman Yadav",
-    "The Ultimate TypeScript Course",
-    "₹999",
-    "15m ago",
-    "/assets/ethan-avatar-160.webp",
-  ],
-  [
-    "Pooja Sharma",
-    "Complete Backend with Node.js",
-    "₹1,299",
-    "1h ago",
-    "/assets/sofia-avatar-160.webp",
-  ],
-  [
-    "Vivek Reddy",
-    "The Ultimate TypeScript Course",
-    "₹999",
-    "2h ago",
-    "/assets/ethan-avatar-160.webp",
-  ],
-  [
-    "Neha Patel",
-    "Building VeoLMS: Idea to Production",
-    "₹1,499",
-    "3h ago",
-    "/assets/sofia-avatar-160.webp",
-  ],
-  [
-    "Arjun Mehta",
-    "Complete Backend with Node.js",
-    "₹1,299",
-    "4h ago",
-    "/assets/ethan-avatar-160.webp",
-  ],
-];
 
 const metricCards = [
   {
@@ -912,7 +869,38 @@ function DiscussionsPanel({ onNavigatePage }: NavigateProps) {
   );
 }
 
+function CreatorStudentAvatar({ src }: { src?: string | null }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [src]);
+
+  return (
+    <span className="creator-student-avatar" aria-hidden="true">
+      {src && !imageFailed ? (
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={() => setImageFailed(true)}
+        />
+      ) : (
+        <UserCircle className="creator-student-avatar-icon" weight="duotone" />
+      )}
+    </span>
+  );
+}
+
 function EnrollmentsPanel({ onNavigatePage }: NavigateProps) {
+  const {
+    data: enrollmentsResponse,
+    isLoading,
+    isError,
+  } = useRecentEnrollments({ limit: 10 });
+  const enrollments = enrollmentsResponse?.items ?? [];
+
   return (
     <DashboardPanel
       className="creator-enrollments-panel"
@@ -924,20 +912,40 @@ function EnrollmentsPanel({ onNavigatePage }: NavigateProps) {
         <div className="creator-table-head">
           <span>Student</span>
           <span>Course</span>
-          <span>Amount</span>
-          <span>Time</span>
+          <span>Progress</span>
+          <span>Enrolled</span>
         </div>
-        {recentEnrollments.map(([student, course, amount, time, avatar]) => (
-          <div className="creator-table-row" key={`${student}-${time}`}>
-            <span className="creator-student-cell">
-              <img src={avatar} alt="" />
-              <strong>{student}</strong>
-            </span>
-            <span>{course}</span>
-            <span>{amount}</span>
-            <span>{time}</span>
+        {isLoading ? (
+          <div className="creator-table-row creator-table-state" role="status">
+            <span>Loading recent enrollments…</span>
           </div>
-        ))}
+        ) : isError ? (
+          <div className="creator-table-row creator-table-state" role="alert">
+            <span>Unable to load recent enrollments.</span>
+          </div>
+        ) : enrollments.length === 0 ? (
+          <div className="creator-table-row creator-table-state">
+            <span>No recent enrollments.</span>
+          </div>
+        ) : (
+          enrollments.map((item) => (
+            <div className="creator-table-row" key={item.enrollmentId}>
+              <span className="creator-student-cell">
+                <CreatorStudentAvatar src={item.student.avatarUrl} />
+                <strong>{item.student.displayName}</strong>
+              </span>
+              <span>{item.course.title}</span>
+              <span>
+                {item.averageProgressPercent === null
+                  ? "Not started"
+                  : `${Math.round(item.averageProgressPercent)}%`}
+              </span>
+              <time dateTime={new Date(item.enrolledAt).toISOString()}>
+                {formatRelativeTime(item.enrolledAt)}
+              </time>
+            </div>
+          ))
+        )}
       </div>
     </DashboardPanel>
   );

@@ -8,6 +8,48 @@ export interface EnrollmentAnalyticsFilters {
   to?: Date;
 }
 
+export async function listAcademyEnrollments(
+  database: Executor,
+  limit: number,
+) {
+  return await database
+    .selectFrom("enrollments as e")
+    .innerJoin("users as u", "u.id", "e.user_id")
+    .innerJoin("courses as c", "c.id", "e.course_id")
+    .leftJoin("learning_progress as lp", (join) =>
+      join
+        .onRef("lp.user_id", "=", "e.user_id")
+        .onRef("lp.course_id", "=", "e.course_id"),
+    )
+    .select([
+      "e.id as enrollment_id",
+      "e.created_at as enrolled_at",
+      "u.id as student_id",
+      "u.display_name as student_display_name",
+      "u.avatar_data_url as student_avatar_data_url",
+      "c.id as course_id",
+      "c.title as course_title",
+      sql<number | null>`avg(lp.progress_percent)`.as(
+        "average_progress_percent",
+      ),
+    ])
+    .where("u.is_deleted", "=", false)
+    .where("c.deleted_at", "is", null)
+    .groupBy([
+      "e.id",
+      "e.created_at",
+      "u.id",
+      "u.display_name",
+      "u.avatar_data_url",
+      "c.id",
+      "c.title",
+    ])
+    .orderBy("e.created_at", "desc")
+    .orderBy("e.id", "desc")
+    .limit(limit)
+    .execute();
+}
+
 function toCourseIdList(courseId: string | string[] | undefined): string[] {
   if (!courseId) return [];
   return Array.isArray(courseId) ? courseId : [courseId];
