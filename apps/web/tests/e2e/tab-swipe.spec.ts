@@ -1091,7 +1091,7 @@ test("desktop screen halves route swipes to the sidebar and curriculum outside l
   page,
 }) => {
   await page.setViewportSize({ width: 1600, height: 779 });
-  await page.route("**/api/v1/courses/backend-nodejs/overview", (route) =>
+  await page.route("**/v1/courses/backend-nodejs/overview", (route) =>
     route.fulfill({
       json: { course: { slug: "backend-nodejs" }, sections: [] },
     }),
@@ -1187,7 +1187,7 @@ test("tablet video halves keep both side menus swipeable behind the course drawe
   page,
 }) => {
   await page.setViewportSize({ width: 900, height: 700 });
-  await page.route("**/api/v1/courses/backend-nodejs/overview", (route) =>
+  await page.route("**/v1/courses/backend-nodejs/overview", (route) =>
     route.fulfill({
       json: { course: { slug: "backend-nodejs" }, sections: [] },
     }),

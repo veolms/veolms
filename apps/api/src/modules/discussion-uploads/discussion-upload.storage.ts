@@ -9,7 +9,7 @@ import { config } from "../../config.ts";
 
 const UPLOAD_DIRECTORY = join(process.cwd(), ".data", "discussion-uploads");
 const OBJECT_PREFIX = "protected/discussion-uploads";
-export const DISCUSSION_UPLOAD_URL_PREFIX = "/api/v1/discussion-uploads";
+export const DISCUSSION_UPLOAD_URL_PREFIX = "/v1/discussion-uploads";
 
 export const DISCUSSION_ALLOWED_MIME_TYPES = [
   "image/gif",

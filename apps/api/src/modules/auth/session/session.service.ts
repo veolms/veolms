@@ -3,8 +3,9 @@ import crypto from "node:crypto";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
+import { config } from "../../../config.ts";
 import { AppError } from "../../../lib/errors.ts";
-import { SESSION_TTL_MS } from "../shared/auth.constants.ts";
+import { ADMIN_ROLE, SESSION_TTL_MS } from "../shared/auth.constants.ts";
 import { isMfaMandatoryAccount } from "../shared/mfa-policy.ts";
 import type {
   AuthenticatedRequestContext,
@@ -29,7 +30,20 @@ export function createSessionService({ database }: SessionServiceOptions) {
   async function resolveMfaState(
     userId: string,
     mfaMandatory: boolean,
+    roles?: readonly string[] | null,
   ): Promise<MfaState> {
+    const isAdmin = Boolean(
+      roles?.some((role) => role.toLowerCase() === ADMIN_ROLE),
+    );
+    if (config.SKIP_ADMIN_MFA && isAdmin) {
+      return {
+        totpEnabled: false,
+        passkeyEnabled: false,
+        mfaMandatory: false,
+        mfaRequired: false,
+      };
+    }
+
     const [totpEnabled, passkeyCount] = await Promise.all([
       mfaRepository.isTotpEnabled(database, userId),
       mfaRepository.countUserPasskeys(database, userId),
@@ -69,7 +83,10 @@ export function createSessionService({ database }: SessionServiceOptions) {
     const roles = await userRepository.listUserRoleNames(database, user.id);
     const mfa = await resolveMfaState(
       user.id,
-      isMfaMandatoryAccount(Boolean(user.mfa_mandatory), roles),
+      isMfaMandatoryAccount(Boolean(user.mfa_mandatory), roles, {
+        skipAdminMfa: config.SKIP_ADMIN_MFA,
+      }),
+      roles,
     );
 
     const token = generateRandomToken();
@@ -207,6 +224,9 @@ export function createSessionService({ database }: SessionServiceOptions) {
       mfaRepository.countUserPasskeys(database, user.id),
     ]);
 
+    const isAdmin = roles.some((role) => role.toLowerCase() === ADMIN_ROLE);
+    const skipAdminMfa = Boolean(config.SKIP_ADMIN_MFA && isAdmin);
+
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
     if (session.last_used_at < fifteenMinutesAgo) {
       await sessionRepository.touchSession(database, session.id, new Date());
@@ -237,15 +257,17 @@ export function createSessionService({ database }: SessionServiceOptions) {
         phoneNo: user.phone_no,
         mobileVerified: Boolean(user.phone_verified_at),
         roles,
-        totpEnabled,
-        passkeyEnabled: passkeyCount > 0,
-        mfaMandatory: isMfaMandatoryAccount(Boolean(user.mfa_mandatory), roles),
+        totpEnabled: skipAdminMfa ? false : totpEnabled,
+        passkeyEnabled: skipAdminMfa ? false : passkeyCount > 0,
+        mfaMandatory: skipAdminMfa
+          ? false
+          : isMfaMandatoryAccount(Boolean(user.mfa_mandatory), roles),
       },
       session: {
         id: session.id,
         user_id: session.user_id,
         token_hash: session.token_hash,
-        mfa_verified: session.mfa_verified,
+        mfa_verified: skipAdminMfa ? true : session.mfa_verified,
         revoked_at: session.revoked_at,
         expires_at: session.expires_at,
       },

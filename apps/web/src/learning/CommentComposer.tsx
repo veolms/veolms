@@ -211,10 +211,12 @@ export function CommentComposer({
               onAttachmentError={setAttachmentError}
               onAttachmentSelected={handleAttachmentSelected}
             />
-            <AttachmentComposerPreview
-              attachments={effectiveAttachments}
-              onRemove={handleRemoveAttachment}
-            />
+            {presentation !== "drawer" && (
+              <AttachmentComposerPreview
+                attachments={effectiveAttachments}
+                onRemove={handleRemoveAttachment}
+              />
+            )}
             {linkPreview && (
               <div className="px-3 pb-2.5">
                 <LinkPreviewCard
@@ -230,6 +232,14 @@ export function CommentComposer({
               </p>
             )}
           </div>
+
+          {presentation === "drawer" && (
+            <AttachmentComposerPreview
+              attachments={effectiveAttachments}
+              onRemove={handleRemoveAttachment}
+              className="min-w-0 shrink-0"
+            />
+          )}
 
           <div
             data-comment-toolbar

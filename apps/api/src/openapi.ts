@@ -11,7 +11,7 @@ import type { OpenAPIV3_1 } from "openapi-types";
 
 import { config } from "./config.ts";
 
-export const DOCS_ROUTE_PREFIX = "/api/docs";
+export const DOCS_ROUTE_PREFIX = "/docs";
 
 const OPENAPI_TAGS = [
   {
@@ -68,7 +68,7 @@ const OPENAPI_TAGS = [
  * anyone can call, and a TLS-terminating ingress serves the docs on a scheme,
  * hostname and port the process never sees.
  *
- * Since every documented path already carries the `/api/v1` prefix, `/` is the
+ * Since every documented path already carries the `/v1` prefix, `/` is the
  * correct base. Set `API_PUBLIC_URL` for the cases a relative base cannot cover:
  * docs hosted on a different origin than the API, or a proxy that mounts the API
  * beneath a path prefix.

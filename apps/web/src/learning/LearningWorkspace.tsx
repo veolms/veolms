@@ -1020,6 +1020,9 @@ export function LearningWorkspace({
     isCourseOverviewError &&
     !isCourseOverviewFetching &&
     !courseOverview;
+  const isLearningBootstrapLoading =
+    isInteractionCapabilitiesLoading ||
+    (!isLearningDeepLinkReady && !isLearningDeepLinkError);
   useEffect(() => {
     if (deepLinkLessonUuid) {
       setDeepLinkInitializationPending(true);
@@ -2291,6 +2294,7 @@ export function LearningWorkspace({
   const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
     () => ({
       media: getCourseVideoForLesson(currentLesson[0]),
+      description: selectedLessonDescription,
       playbackBootstrap,
       refreshPlaybackToken,
       protectedPlayback,
@@ -2364,6 +2368,7 @@ export function LearningWorkspace({
       playerCourseLessonsSidePanel,
       previousLessonId,
       selectedLesson,
+      selectedLessonDescription,
       showingQuiz,
       theaterMode,
       toggleLessonDrawerFromPlayer,
@@ -2417,6 +2422,70 @@ export function LearningWorkspace({
     selectLesson,
     selectedLesson,
   ]);
+
+  const lessonHeader = (contained = false, titleLoading = false) => (
+    <header className="learning-workspace__lesson-header">
+      <button
+        id="learning-course-content-trigger"
+        ref={lessonTriggerRef}
+        type="button"
+        className="learning-workspace__lesson-heading"
+        style={
+          contained
+            ? {
+                width: "100%",
+                minWidth: 0,
+                marginInline: 0,
+                paddingInline: 0,
+              }
+            : undefined
+        }
+        aria-label={`Open course lessons for ${currentLesson[1]}`}
+        aria-expanded={lessonDrawer}
+        onClick={openLessonDrawer}
+      >
+        <div className="min-w-0">
+          {titleLoading ? (
+            <span
+              className="block h-5 w-40 max-w-full animate-pulse rounded-md bg-[color-mix(in_srgb,var(--text)_12%,transparent)]"
+              data-testid="learning-lesson-title-loading"
+              aria-hidden="true"
+            />
+          ) : (
+            <h1 id="learning-lesson-title">{currentLesson[1]}</h1>
+          )}
+        </div>
+      </button>
+      {hasLessonQuiz(selectedLesson) ? (
+        <button
+          type="button"
+          onClick={() => {
+            if (activeLessonView === "quiz") {
+              resumeLessonVideoPlayback();
+            } else {
+              handleOpenLessonQuiz(selectedLesson);
+            }
+          }}
+          className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer shadow-(--card-compact-shadow) shrink-0 ${
+            activeLessonView === "quiz"
+              ? "border border-(--accent) bg-[color-mix(in_srgb,var(--accent)_15%,var(--surface))] text-(--accent)"
+              : "border border-[color-mix(in_srgb,var(--text)_15%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] text-(--text) hover:border-(--accent) hover:text-(--accent)"
+          }`}
+          aria-label={`Open quiz for lesson ${selectedLesson}: ${currentLesson[1]}`}
+          title={
+            activeLessonView === "quiz"
+              ? "Return to video lesson"
+              : "Open lesson quiz"
+          }
+        >
+          <Exam size={12} weight="bold" className="text-(--accent)" />
+          <span>
+            {activeLessonView === "quiz" ? "Back to video" : "Quiz"}
+          </span>
+        </button>
+      ) : null}
+    </header>
+  );
 
   return (
     <div
@@ -2570,50 +2639,9 @@ export function LearningWorkspace({
                     }
               }
             >
-              <header className="learning-workspace__lesson-header">
-                <button
-                  id="learning-course-content-trigger"
-                  ref={lessonTriggerRef}
-                  type="button"
-                  className="learning-workspace__lesson-heading"
-                  aria-label={`Open course lessons for ${currentLesson[1]}`}
-                  aria-expanded={lessonDrawer}
-                  onClick={openLessonDrawer}
-                >
-                  <div className="min-w-0">
-                    <h1 id="learning-lesson-title">{currentLesson[1]}</h1>
-                  </div>
-                </button>
-                {hasLessonQuiz(selectedLesson) ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (activeLessonView === "quiz") {
-                        resumeLessonVideoPlayback();
-                      } else {
-                        handleOpenLessonQuiz(selectedLesson);
-                      }
-                    }}
-                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer shadow-(--card-compact-shadow) shrink-0 ${
-                      activeLessonView === "quiz"
-                        ? "border border-(--accent) bg-[color-mix(in_srgb,var(--accent)_15%,var(--surface))] text-(--accent)"
-                        : "border border-[color-mix(in_srgb,var(--text)_15%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] text-(--text) hover:border-(--accent) hover:text-(--accent)"
-                    }`}
-                    aria-label={`Open quiz for lesson ${selectedLesson}: ${currentLesson[1]}`}
-                    title={
-                      activeLessonView === "quiz"
-                        ? "Return to video lesson"
-                        : "Open lesson quiz"
-                    }
-                  >
-                    <Exam size={12} weight="bold" className="text-(--accent)" />
-                    <span>
-                      {activeLessonView === "quiz" ? "Back to video" : "Quiz"}
-                    </span>
-                  </button>
-                ) : null}
-              </header>
-              {isLearningDeepLinkReady ? (
+              {!phoneLessonDrawerViewport &&
+                lessonHeader(false, isLearningBootstrapLoading)}
+              {isLearningDeepLinkReady || isLearningBootstrapLoading ? (
                 <Discussion
                   key={discussionPersistenceKey}
                   persistenceKey={discussionPersistenceKey}
@@ -2621,47 +2649,60 @@ export function LearningWorkspace({
                   courseId={courseId}
                   lessonId={backendLessonId}
                   noteDeepLinkId={noteDeepLinkId}
-                  isThreadDeepLinkReady
+                  isThreadDeepLinkReady={isLearningDeepLinkReady}
                   mobileBottomNavigation={mobileBottomNavigation}
                   mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+                  mobileLessonHeader={lessonHeader(
+                    true,
+                    isLearningBootstrapLoading,
+                  )}
                   lessonDescription={selectedLessonDescription}
                   isLessonDescriptionLoading={
-                    isApiRoute && isCourseOverviewLoading
+                    (isApiRoute && isCourseOverviewLoading) ||
+                    isLearningBootstrapLoading
                   }
                   interactionCapabilities={interactionCapabilities}
                   isInteractionCapabilitiesLoading={
-                    isInteractionCapabilitiesLoading
+                    isLearningBootstrapLoading
                   }
                   onSeekToTimestamp={seekCurrentLessonToTimestamp}
                 />
               ) : isLearningDeepLinkError ? (
-                <div
-                  className="py-12 text-center"
-                  data-testid="learning-discussion-error"
-                >
-                  <p className="font-semibold text-(--text)">
-                    Failed to load discussion
-                  </p>
-                  <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
-                    There was a problem loading the course for this discussion.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => void refetchCourseOverview()}
-                    className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+                <div>
+                  {phoneLessonDrawerViewport &&
+                    lessonHeader(true, isLearningBootstrapLoading)}
+                  <div
+                    className="py-12 text-center"
+                    data-testid="learning-discussion-error"
                   >
-                    Retry
-                  </button>
+                    <p className="font-semibold text-(--text)">
+                      Failed to load discussion
+                    </p>
+                    <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
+                      There was a problem loading the course for this discussion.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void refetchCourseOverview()}
+                      className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+                    >
+                      Retry
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <div
-                  className="flex min-h-48 flex-col items-center justify-center py-12 text-sm text-(--text-secondary)"
-                  data-testid="learning-discussion-loading"
-                  role="status"
-                  aria-label="Loading discussion"
-                >
-                  <div className="mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-                  Loading discussion…
+                <div>
+                  {phoneLessonDrawerViewport &&
+                    lessonHeader(true, isLearningBootstrapLoading)}
+                  <div
+                    className="flex min-h-48 flex-col items-center justify-center py-12 text-sm text-(--text-secondary)"
+                    data-testid="learning-discussion-loading"
+                    role="status"
+                    aria-label="Loading discussion"
+                  >
+                    <div className="mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
+                    Loading discussion…
+                  </div>
                 </div>
               )}
             </article>
