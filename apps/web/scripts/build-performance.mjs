@@ -66,10 +66,15 @@ const publishBuild = async (stagingBuildDirectory) => {
   }
 };
 
-for (const environmentFile of [".env.production", ".env"]) {
+const firstSectionRequested = process.argv.includes(FIRST_SECTION_FLAG);
+const environmentFiles = firstSectionRequested
+  ? [".env", ".env.production"]
+  : [".env.production", ".env"];
+
+for (const environmentFile of environmentFiles) {
   try {
-    // Node does not overwrite an existing process.env value, so an explicit
-    // CI/deployment variable still wins over the checked-in production URL.
+    // Preview builds use the local API target first; release builds use the
+    // production API target first. Explicit CI/deployment env still wins.
     process.loadEnvFile(path.join(workspaceRoot, environmentFile));
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
@@ -81,10 +86,11 @@ const readCourseLcpPreload = async (apiBase) => {
   try {
     const url = new URL(apiBase);
     if (url.hostname === "localhost") url.hostname = "127.0.0.1";
-    const pathName = url.pathname.replace(/\/+$/, "");
-    const prefix = pathName.endsWith("/api/v1")
-      ? pathName
-      : `${pathName}/api/v1`;
+    const pathName = url.pathname
+      .replace(/\/+$/, "")
+      .replace(/\/api(?=\/v1$|$)/u, "");
+    const hasApiVersion = /(?:^|\/)v1$/u.test(pathName);
+    const prefix = hasApiVersion ? pathName : `${pathName}/v1`;
     url.pathname = `${prefix}/courses`.replace(/\/{2,}/g, "/");
     url.search = "limit=50";
     requestUrl = url.toString();
@@ -153,7 +159,7 @@ export const runPerformanceBuild = async (args = process.argv.slice(2)) => {
   );
   const scope = firstSectionOnly ? "first-section" : "all-lectures";
   const courseLcpPreload = await readCourseLcpPreload(
-    process.env.STATIC_BUILD_API_URL || "http://127.0.0.1:4000/api/v1",
+    process.env.STATIC_BUILD_API_URL || "http://127.0.0.1:4000/v1",
   );
   const stagingBuildDirectory = await mkdtemp(
     path.join(appRoot, ".build-staging-"),
@@ -173,7 +179,7 @@ export const runPerformanceBuild = async (args = process.argv.slice(2)) => {
     VEO_LEARNING_PRERENDER_SCOPE: scope,
     VEO_BUILD_DIRECTORY: stagingBuildDirectoryName,
     VEO_COURSE_LCP_PRELOAD: courseLcpPreload,
-    ...(firstSectionOnly ? { VITE_API_BASE_URL: "/api/v1" } : {}),
+    ...(firstSectionOnly ? { VITE_API_BASE_URL: "/v1" } : {}),
   };
   if (courseLcpPreload) {
     console.log("Baked the first course thumbnail into the courses document.");
@@ -186,7 +192,7 @@ export const runPerformanceBuild = async (args = process.argv.slice(2)) => {
   console.log("Build environment: NODE_ENV=production");
   console.log(`Learning prerender scope: ${scope}`);
   if (firstSectionOnly) {
-    console.log("Preview API base: same-origin /api/v1 proxy");
+    console.log("Preview API base: same-origin /v1 proxy");
   }
 
   try {

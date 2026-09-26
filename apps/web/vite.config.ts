@@ -330,7 +330,7 @@ export default defineConfig(({ command, mode }) => {
         ],
       },
       proxy: {
-        "/api": {
+        "/v1": {
           target: config.STATIC_BUILD_API_URL
             ? new URL(config.STATIC_BUILD_API_URL).origin.replace(
                 "localhost",

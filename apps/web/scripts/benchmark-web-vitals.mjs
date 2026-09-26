@@ -320,7 +320,7 @@ for (const route of benchmarkRoutes) {
         longTaskCount: window.__veolmsVitals.longTaskCount,
         requestCount: resources.length + 1,
         apiResources: resourceSummary.filter((resource) =>
-          new URL(resource.path).pathname.startsWith("/api/"),
+          /^\/v1(?:\/|$)/u.test(new URL(resource.path).pathname),
         ),
         largestResources: [...resourceSummary]
           .sort((left, right) => right.transferBytes - left.transferBytes)

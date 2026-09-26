@@ -39,7 +39,7 @@ export async function getPreviewBuildFingerprint(
   relevantEnvironment.NODE_ENV = "production";
   relevantEnvironment.VEO_LEARNING_PRERENDER_SCOPE = learningPrerenderScope;
   if (learningPrerenderScope === "first-section") {
-    relevantEnvironment.VITE_API_BASE_URL = "/api/v1";
+    relevantEnvironment.VITE_API_BASE_URL = "/v1";
   }
 
   hash.update(JSON.stringify(relevantEnvironment));
