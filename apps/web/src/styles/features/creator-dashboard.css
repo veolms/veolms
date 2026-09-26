@@ -337,6 +337,18 @@
   height: 145px;
   margin-top: 8px;
 }
+.creator-activity-toolbar {
+  margin-top: 16px;
+}
+.creator-activity-toolbar > .creator-trend {
+  white-space: nowrap;
+}
+.creator-activity-meta {
+  margin: 1px 0 0;
+  color: var(--muted);
+  font-size: 0.64rem;
+  text-align: right;
+}
 .creator-chart-canvas {
   display: block;
   width: 100%;

@@ -107,7 +107,7 @@ const analyticsRoutes: RoutePlugin = async (app, options) => {
         tags: ["Analytics"],
         summary: "Get the dashboard summary",
         description:
-          "Returns the top dashboard card metrics plus the range-aware Revenue Overview. Requires analytics.revenue.read or analytics.course.read and scopes the data to the caller's authorized analytics surface.",
+          "Returns the top dashboard card metrics, Learning Activity, and the range-aware Revenue Overview. Requires analytics.revenue.read or analytics.course.read and scopes the data to the caller's authorized analytics surface.",
         querystring: dashboardQuerySchema,
         response: {
           200: jsonResponse(

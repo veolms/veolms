@@ -33,6 +33,36 @@ export type DashboardRevenueOverview = z.infer<
   typeof dashboardRevenueOverviewSchema
 >;
 
+const dashboardLearningActivityMetricSchema = z.strictObject({
+  value: z.number().nonnegative(),
+});
+
+const dashboardEnrollmentActivityBucketSchema = z.strictObject({
+  start: z.iso.datetime(),
+  end: z.iso.datetime(),
+  value: z.number().int().nonnegative(),
+});
+
+export const dashboardLearningActivitySchema = z.strictObject({
+  averageCourseProgress: dashboardLearningActivityMetricSchema,
+  courseCompletionRate: dashboardLearningActivityMetricSchema,
+  newEnrollments: dashboardLearningActivityMetricSchema,
+  enrollmentActivity: z.strictObject({
+    currentTotal: z.number().int().nonnegative(),
+    previousTotal: z.number().int().nonnegative(),
+    changePercent: z.number().nullable(),
+    from: z.iso.datetime(),
+    to: z.iso.datetime(),
+    bucketHours: z.literal(8),
+    timeZone: z.literal("UTC"),
+    buckets: z.array(dashboardEnrollmentActivityBucketSchema).length(21),
+  }),
+});
+
+export type DashboardLearningActivity = z.infer<
+  typeof dashboardLearningActivitySchema
+>;
+
 export const dashboardSummaryResponseSchema = z.strictObject({
   revenue: z.strictObject({
     value: z.number(),
@@ -47,6 +77,7 @@ export const dashboardSummaryResponseSchema = z.strictObject({
   activeLearners: dashboardKpiSchema,
   watchHours: dashboardKpiSchema,
   revenueOverview: dashboardRevenueOverviewSchema,
+  learningActivity: dashboardLearningActivitySchema,
 });
 
 export type DashboardSummaryResponse = z.infer<

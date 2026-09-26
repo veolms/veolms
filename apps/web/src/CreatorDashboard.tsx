@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type {
   DashboardRange,
   DashboardRevenueOverview,
+  DashboardSummaryResponse,
 } from "@veolms/contracts";
 import { ArrowDownRightIcon as ArrowDownRight } from "@phosphor-icons/react/ArrowDownRight";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
@@ -69,7 +70,6 @@ type EnrollmentRow = readonly [
 type ActivityRow = readonly [
   label: string,
   value: string,
-  change: string,
   icon: Icon,
   tone: string,
 ];
@@ -98,9 +98,13 @@ interface DataCanvasProps {
   revenueTrend?: DashboardRevenueOverview["trend"];
   revenueCurrency?: string;
   revenueStatus?: "loading" | "empty" | "error";
+  activityBuckets?: DashboardSummaryResponse["learningActivity"]["enrollmentActivity"]["buckets"];
+  activityStatus?: "loading" | "empty" | "error";
 }
 
 const EMPTY_REVENUE_TREND: DashboardRevenueOverview["trend"] = [];
+const EMPTY_ACTIVITY_BUCKETS: DashboardSummaryResponse["learningActivity"]["enrollmentActivity"]["buckets"] =
+  [];
 
 interface NavigateProps {
   onNavigatePage?: (page: string) => void;
@@ -286,6 +290,40 @@ function RevenueMetricTrend({
   );
 }
 
+function EnrollmentActivityComparison({
+  changePercent,
+  unavailable,
+}: {
+  changePercent: number | null;
+  unavailable: boolean;
+}) {
+  if (unavailable) {
+    return <span className="creator-trend is-neutral">—</span>;
+  }
+  if (changePercent === null) {
+    return (
+      <span className="creator-trend is-neutral">
+        No comparison vs previous 7 days
+      </span>
+    );
+  }
+
+  if (changePercent === 0) {
+    return (
+      <span className="creator-trend is-neutral">0.0% vs previous 7 days</span>
+    );
+  }
+
+  const isNegative = changePercent < 0;
+  const Icon = isNegative ? ArrowDownRight : ArrowUpRight;
+  return (
+    <span className={`creator-trend ${isNegative ? "is-negative" : ""}`}>
+      <Icon size={14} weight="bold" /> {Math.abs(changePercent).toFixed(1)}% vs
+      previous 7 days
+    </span>
+  );
+}
+
 function formatDashboardCurrency(value: number, currency: string) {
   return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
     style: "currency",
@@ -296,6 +334,12 @@ function formatDashboardCurrency(value: number, currency: string) {
 
 function formatDashboardNumber(value: number) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
+}
+
+function formatDashboardPercent(value: number) {
+  return `${new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 0,
+  }).format(value)}%`;
 }
 
 function DashboardPanel({
@@ -344,6 +388,8 @@ function DataCanvas({
   revenueTrend = EMPTY_REVENUE_TREND,
   revenueCurrency = "INR",
   revenueStatus,
+  activityBuckets = EMPTY_ACTIVITY_BUCKETS,
+  activityStatus,
 }: DataCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -489,18 +535,32 @@ function DataCanvas({
         context.fill();
         context.restore();
       } else {
-        const values = [
-          62, 88, 71, 110, 52, 65, 42, 84, 58, 104, 60, 35, 41, 128, 74, 49,
-          104, 63, 111, 94, 99, 66, 137, 57, 119, 71,
-        ];
+        if (activityBuckets.length === 0) {
+          context.fillStyle = muted;
+          context.textAlign = "center";
+          context.fillText(
+            activityStatus === "loading"
+              ? "Loading enrollment activity…"
+              : activityStatus === "error"
+                ? "Unable to load enrollment activity."
+                : "No enrollment activity for this period.",
+            width / 2,
+            height / 2,
+          );
+          return;
+        }
+
+        const values = activityBuckets.map((bucket) => bucket.value);
         const left = 20;
         const right = width - 8;
         const top = 12;
         const bottom = height - 22;
-        const max = 150;
+        const maxValue = Math.max(...values, 0);
+        const max = maxValue > 0 ? Math.ceil(maxValue / 4) * 4 : 1;
         context.strokeStyle = track;
         context.lineWidth = 1;
-        [0, 50, 100, 150].forEach((mark) => {
+        [0, 0.25, 0.5, 0.75, 1].forEach((ratio) => {
+          const mark = max * ratio;
           const y = bottom - (mark / max) * (bottom - top);
           context.beginPath();
           context.moveTo(left, y);
@@ -521,25 +581,30 @@ function DataCanvas({
         });
         context.fillStyle = muted;
         context.textAlign = "right";
-        [150, 100, 50, 0].forEach((mark) =>
+        [1, 0.75, 0.5, 0.25, 0].forEach((ratio) => {
+          const mark = max * ratio;
           context.fillText(
-            String(mark),
+            String(Math.round(mark)),
             left - 5,
             bottom - (mark / max) * (bottom - top) + 3,
-          ),
-        );
-        const dateLabels: readonly (readonly [number, string])[] = [
-          [0, "May 6"],
-          [5, "May 11"],
-          [9, "May 16"],
-          [13, "May 21"],
-          [17, "May 26"],
-          [21, "May 31"],
-          [25, "Jun 4"],
-        ];
+          );
+        });
+        const dateLabels = activityBuckets
+          .map((bucket, index) => ({
+            index,
+            text: new Intl.DateTimeFormat(undefined, {
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+              timeZone: "UTC",
+            }).format(new Date(bucket.start)),
+          }))
+          .filter(({ index }) => index % 3 === 0);
         const gap = (right - left) / values.length;
         context.globalAlpha = 0.84;
-        dateLabels.forEach(([index, text], labelIndex) => {
+        dateLabels.forEach(({ index, text }, labelIndex) => {
           const center = left + index * gap + gap / 2;
           context.textAlign =
             labelIndex === 0
@@ -554,7 +619,15 @@ function DataCanvas({
     });
     observer.observe(canvas);
     return () => observer.disconnect();
-  }, [kind, revenueCurrency, revenueStatus, revenueTrend, themeKey]);
+  }, [
+    activityBuckets,
+    activityStatus,
+    kind,
+    revenueCurrency,
+    revenueStatus,
+    revenueTrend,
+    themeKey,
+  ]);
 
   return (
     <canvas
@@ -687,13 +760,60 @@ function RevenuePanel({
   );
 }
 
-function LearningActivityPanel({ themeKey }: { themeKey: string }) {
+function LearningActivityPanel({
+  themeKey,
+  learningActivity,
+  isLoading,
+  isError,
+}: {
+  themeKey: string;
+  learningActivity?: DashboardSummaryResponse["learningActivity"];
+  isLoading: boolean;
+  isError: boolean;
+}) {
+  const summaryUnavailable = isLoading || isError;
   const rows: readonly ActivityRow[] = [
-    ["Active Learners", "327", "8.1%", Users, "violet"],
-    ["Avg. Course Progress", "61%", "3.6%", ChartLineUp, "blue"],
-    ["Lecture Completion Rate", "68%", "5.2%", CheckCircle, "green"],
-    ["Watch Time (This Month)", "1,284 hrs", "10.2%", Clock, "gold"],
+    [
+      "Avg. Course Progress",
+      summaryUnavailable
+        ? "—"
+        : formatDashboardPercent(
+            learningActivity?.averageCourseProgress.value ?? 0,
+          ),
+      ChartLineUp,
+      "blue",
+    ],
+    [
+      "Course Completion Rate",
+      summaryUnavailable
+        ? "—"
+        : formatDashboardPercent(
+            learningActivity?.courseCompletionRate.value ?? 0,
+          ),
+      CheckCircle,
+      "green",
+    ],
+    [
+      "New Enrollments",
+      summaryUnavailable
+        ? "—"
+        : formatDashboardNumber(learningActivity?.newEnrollments.value ?? 0),
+      PlusCircle,
+      "violet",
+    ],
   ];
+  const activityBuckets = summaryUnavailable
+    ? []
+    : (learningActivity?.enrollmentActivity.buckets ?? []);
+  const activityStatus = isLoading
+    ? "loading"
+    : isError
+      ? "error"
+      : activityBuckets.length === 0
+        ? "empty"
+        : undefined;
+  const activityComparison = learningActivity?.enrollmentActivity;
+
   return (
     <DashboardPanel
       className="creator-activity-panel"
@@ -701,24 +821,35 @@ function LearningActivityPanel({ themeKey }: { themeKey: string }) {
       infoLabel="About learning activity"
     >
       <div className="creator-activity-list">
-        {rows.map(([label, value, change, Icon, tone]) => (
+        {rows.map(([label, value, Icon, tone]) => (
           <div className="creator-activity-row" key={label}>
             <span className={`creator-icon-circle tone-${tone}`}>
               <Icon size={18} weight="duotone" />
             </span>
             <span>{label}</span>
             <strong>{value}</strong>
-            <Trend value={change} />
           </div>
         ))}
+      </div>
+      <div className="creator-chart-toolbar creator-activity-toolbar">
+        <span>
+          <i /> Enrollment Activity
+        </span>
+        <EnrollmentActivityComparison
+          changePercent={activityComparison?.changePercent ?? null}
+          unavailable={summaryUnavailable}
+        />
       </div>
       <div className="creator-chart creator-chart--activity">
         <DataCanvas
           kind="activity"
           themeKey={themeKey}
-          label="Learning activity bar chart"
+          label="New enrollments over the last 7 days in UTC 8-hour buckets"
+          activityBuckets={activityBuckets}
+          activityStatus={activityStatus}
         />
       </div>
+      <p className="creator-activity-meta">Last 7 days · 8h buckets · UTC</p>
     </DashboardPanel>
   );
 }
@@ -1015,7 +1146,12 @@ export function CreatorDashboard({
           isLoading={isDashboardLoading}
           isError={isDashboardError}
         />
-        <LearningActivityPanel themeKey={academyTheme} />
+        <LearningActivityPanel
+          themeKey={academyTheme}
+          learningActivity={dashboardResponse?.learningActivity}
+          isLoading={isDashboardLoading}
+          isError={isDashboardError}
+        />
         <CoursesPanel onNavigatePage={onNavigatePage} />
         <DiscussionsPanel onNavigatePage={onNavigatePage} />
         <EnrollmentsPanel onNavigatePage={onNavigatePage} />

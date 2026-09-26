@@ -9,6 +9,9 @@ export interface EnrollmentService {
   getEnrollmentStats(
     filters: enrollmentRepo.EnrollmentAnalyticsFilters,
   ): Promise<{ totalEnrollments: number; activeEnrollments: number }>;
+  getEnrollmentActivityBuckets(
+    filters: enrollmentRepo.EnrollmentAnalyticsFilters,
+  ): Promise<Array<{ start: Date; value: number }>>;
   listTopCoursesByEnrollment(options: {
     limit: number;
     from?: Date;
@@ -164,6 +167,12 @@ export function createEnrollmentService({
     return await enrollmentRepo.getEnrollmentStats(database, filters);
   }
 
+  async function getEnrollmentActivityBuckets(
+    filters: enrollmentRepo.EnrollmentAnalyticsFilters,
+  ) {
+    return await enrollmentRepo.getEnrollmentActivityBuckets(database, filters);
+  }
+
   async function listTopCoursesByEnrollment(options: {
     limit: number;
     from?: Date;
@@ -176,6 +185,7 @@ export function createEnrollmentService({
   return {
     listEnrolledCourses,
     getEnrollmentStats,
+    getEnrollmentActivityBuckets,
     listTopCoursesByEnrollment,
   };
 }

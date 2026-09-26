@@ -112,6 +112,45 @@ export async function getEnrollmentStats(
   };
 }
 
+/**
+ * Counts enrollment-row creation events in UTC 8-hour buckets. `to` is an
+ * exclusive upper bound so the returned buckets compose cleanly into the
+ * adjacent current and previous seven-day windows.
+ */
+export async function getEnrollmentActivityBuckets(
+  database: Executor,
+  filters: EnrollmentAnalyticsFilters,
+): Promise<Array<{ start: Date; value: number }>> {
+  const courseIds = toCourseIdList(filters.courseId);
+  const bucketStart = sql<string>`date_trunc('day', created_at at time zone 'UTC') + floor(extract(hour from created_at at time zone 'UTC') / 8) * interval '8 hours'`;
+  const bucketLabel = sql<string>`to_char(${bucketStart}, 'YYYY-MM-DD"T"HH24:MI:SS.MS')`;
+
+  let query = database
+    .selectFrom("enrollments")
+    .select([
+      bucketLabel.as("bucket_start"),
+      sql<number>`count(*)::int`.as("value"),
+    ])
+    .groupBy(bucketStart)
+    .orderBy(bucketStart);
+
+  if (courseIds.length > 0) {
+    query = query.where("course_id", "in", courseIds);
+  }
+  if (filters.from) {
+    query = query.where("created_at", ">=", filters.from);
+  }
+  if (filters.to) {
+    query = query.where("created_at", "<", filters.to);
+  }
+
+  const rows = await query.execute();
+  return rows.map((row) => ({
+    start: new Date(`${row.bucket_start}Z`),
+    value: Number(row.value),
+  }));
+}
+
 export async function listTopCoursesByEnrollment(
   database: Executor,
   options: {
