@@ -1,8 +1,8 @@
 # @veolms/api
 
 Fastify API for VEOLMS. Interactive docs are served at
-<http://127.0.0.1:4000/api/docs>, with the raw document at `/api/docs/json` and
-`/api/docs/yaml`.
+<http://127.0.0.1:4000/docs>, with the raw document at `/docs/json` and
+`/docs/yaml`.
 
 ## Adding an endpoint
 
@@ -78,7 +78,7 @@ export default lessonRoutes;
 
 Notes:
 
-- Paths are relative to the `/api/v1` prefix that
+- Paths are relative to the `/v1` prefix that
   [src/app.ts](src/app.ts) applies.
 - `request.params`, `request.query` and `request.body` are typed from the Zod
   schemas, and responses are serialised through them — returning a field a route
@@ -112,7 +112,7 @@ ensure that concurrent workers do not process the same course or storage item
 at the same time. Failed work remains in the database for retry.
 
 Set `API_DOCS_ENABLED=false` to keep the API running without exposing Swagger UI.
-`/api/docs/json` goes away with it.
+`/docs/json` goes away with it.
 
 The document's `servers` entry is the relative `/`, resolved against the origin
 the document was fetched from, so the docs stay callable behind a reverse proxy

@@ -17,4 +17,24 @@
     "CDN_PRIVATE_FOLDERS": "protected,media,transcoded",
     "AVATAR_IMAGE_WIDTHS": "45,96,160",
   },
+  "env": {
+    "local": {
+      "name": "veolms-cdn-local",
+      "r2_buckets": [
+        {
+          "binding": "MEDIA_BUCKET",
+          "bucket_name": "veolms-test",
+          "remote": true,
+        },
+      ],
+      "vars": {
+        "CDN_URL": "http://127.0.0.1:8787",
+        "CDN_PUBLIC_FOLDERS": "public,thumbnails,course-hls,course-videos",
+        "CDN_PRIVATE_FOLDERS": "protected,media,transcoded",
+        "AVATAR_IMAGE_WIDTHS": "45,96,160",
+        "CORS_ORIGINS": "http://localhost:3000,http://127.0.0.1:3000",
+      },
+    },
+  },
 }
+// pnpm exec wrangler dev --config wrangler.cdn.jsonc --env local --ip 127.0.0.1 --port 8787

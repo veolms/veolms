@@ -135,6 +135,7 @@ export type {
   Chapter,
   ChapterInput,
   ChapterSource,
+  DescriptionChapterDeclaration,
   NormalizeChaptersOptions,
   ParseChaptersOptions,
   ResolveChaptersOptions,
@@ -143,6 +144,7 @@ export type {
 export { normalizeChapters } from "./chapters/normalizeChapters";
 export {
   parseChapterTimestamp,
+  parseChapterDeclarationsFromDescription,
   parseChaptersFromDescription,
 } from "./chapters/parseChaptersFromDescription";
 export { resolveChapters } from "./chapters/resolveChapters";

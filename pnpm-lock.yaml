@@ -570,9 +570,21 @@ importers:
       '@phosphor-icons/react':
         specifier: ^2.1.10
         version: 2.1.10(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      mdast-util-to-string:
+        specifier: 4.0.0
+        version: 4.0.0
+      remark-gfm:
+        specifier: 4.0.1
+        version: 4.0.1(supports-color@10.2.2)
+      remark-parse:
+        specifier: 11.0.0
+        version: 11.0.0(supports-color@10.2.2)
       shaka-player:
         specifier: 5.2.7
         version: 5.2.7
+      unified:
+        specifier: 11.0.5
+        version: 11.0.5
     devDependencies:
       '@testing-library/jest-dom':
         specifier: ^7.0.0

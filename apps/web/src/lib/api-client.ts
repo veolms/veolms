@@ -116,32 +116,61 @@ function shouldClearAuthOnUnauthorized(
   return isExplicitSessionFailure || url.endsWith("/auth/me");
 }
 
-axiosInstance.interceptors.response.use(
-  (response: AxiosResponse) => {
-    if (
-      response.data &&
-      typeof response.data === "object" &&
-      "data" in response.data &&
-      "success" in response.data
-    ) {
-      return response.data.data;
+function isHtmlDocumentResponse(response: AxiosResponse): boolean {
+  return (
+    typeof response.data === "string" &&
+    /^\s*(?:<!doctype\s+html|<html(?:\s|>))/iu.test(response.data)
+  );
+}
+
+function normalizeApiResponse(response: AxiosResponse) {
+  if (isHtmlDocumentResponse(response)) {
+    const error = Object.assign(
+      new Error("The API endpoint returned an HTML document instead of JSON."),
+      {
+        isAxiosError: true,
+        config: response.config,
+        response: {
+          ...response,
+          status: 502,
+          statusText: "Bad Gateway",
+          data: {
+            code: "INVALID_API_RESPONSE",
+            message:
+              "The API endpoint returned an HTML document instead of JSON.",
+          },
+        },
+      },
+    ) as AxiosError;
+    throw error;
+  }
+
+  if (
+    response.data &&
+    typeof response.data === "object" &&
+    "data" in response.data &&
+    "success" in response.data
+  ) {
+    return response.data.data;
+  }
+  return response.data;
+}
+
+axiosInstance.interceptors.response.use(normalizeApiResponse);
+
+axiosInstance.interceptors.response.use(undefined, (error: AxiosError) => {
+  const apiError = getApiError(error);
+  redirectToMfaSetup(apiError);
+  if (shouldClearAuthOnUnauthorized(error, apiError)) {
+    authStore.clearAuth();
+    try {
+      resetLoadedLearningInteractions();
+    } catch {
+      // Keep the original API error if learning interaction cleanup fails.
     }
-    return response.data;
-  },
-  async (error: AxiosError) => {
-    const apiError = getApiError(error);
-    redirectToMfaSetup(apiError);
-    if (shouldClearAuthOnUnauthorized(error, apiError)) {
-      authStore.clearAuth();
-      try {
-        resetLoadedLearningInteractions();
-      } catch {
-        // Keep the original API error if lazy auth cleanup cannot be loaded.
-      }
-    }
-    return Promise.reject(apiError);
-  },
-);
+  }
+  return Promise.reject(apiError);
+});
 
 export const api = {
   get<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {

@@ -81,7 +81,7 @@ export function formatCoursePricing(
 }
 
 /**
- * Adapts an enriched CourseSummary from GET /api/v1/courses into the frontend Course model
+ * Adapts an enriched CourseSummary from GET /v1/courses into the frontend Course model
  * consumed by CourseCatalogue and CourseCard for student exploration.
  */
 export function adaptCourseSummaryToCatalogueCourse(
@@ -146,7 +146,7 @@ export function adaptCourseSummaryToCatalogueCourse(
 }
 
 /**
- * Adapts an API course from GET /api/v1/courses/mine into the frontend Course model
+ * Adapts an API course from GET /v1/courses/mine into the frontend Course model
  * consumed by CourseCatalogue and CourseCard.
  */
 export function adaptApiCourseToCatalogueCourse(
@@ -217,7 +217,7 @@ export function adaptApiCourseToCatalogueCourse(
 }
 
 /**
- * Adapts a deleted course from GET /api/v1/bin/courses into the frontend Course model
+ * Adapts a deleted course from GET /v1/bin/courses into the frontend Course model
  * consumed by CourseCatalogue and CourseCard when viewing the Bin.
  */
 export function adaptDeletedCourseToCatalogueCourse(
