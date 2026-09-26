@@ -1,5 +1,5 @@
 import type { FastifyRequest } from "fastify";
-import type { AnalyticsFilterQuery } from "@veolms/contracts";
+import type { AnalyticsFilterQuery, DashboardQuery } from "@veolms/contracts";
 import type { AnalyticsService } from "./analytics.service.ts";
 import type { AnalyticsDashboardScope } from "./analytics.types.ts";
 
@@ -31,8 +31,9 @@ export function createAnalyticsController({
     instructorOverview: async (
       request: FastifyRequest<{ Querystring: AnalyticsFilterQuery }>,
     ) => service.instructorOverview(actor(request), request.query),
-    dashboard: async (request: FastifyRequest) =>
-      service.dashboard(actor(request), dashboardScope(request)),
+    dashboard: async (
+      request: FastifyRequest<{ Querystring: DashboardQuery }>,
+    ) => service.dashboard(actor(request), dashboardScope(request), request.query.range),
   };
 }
 

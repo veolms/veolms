@@ -3,6 +3,7 @@ import {
   analyticsOverviewResponseSchema,
   dashboardSummaryResponseSchema,
 } from "@veolms/contracts";
+import type { DashboardRange } from "@veolms/contracts";
 
 export interface AnalyticsFilterParams {
   from?: string;
@@ -19,8 +20,8 @@ export const analyticsService = {
     analyticsOverviewResponseSchema.parse(
       await api.get<unknown>("/analytics/instructor/overview", { params }),
     ),
-  getDashboard: async () =>
+  getDashboard: async (range: DashboardRange = "30d") =>
     dashboardSummaryResponseSchema.parse(
-      await api.get<unknown>("/analytics/dashboard"),
+      await api.get<unknown>("/analytics/dashboard", { params: { range } }),
     ),
 };

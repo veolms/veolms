@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import type { DashboardRange } from "@veolms/contracts";
 import { analyticsKeys } from "./analytics.keys";
 import { analyticsService, type AnalyticsFilterParams } from "./analytics.service";
 
@@ -26,10 +27,13 @@ export function useInstructorAnalyticsOverview(
   });
 }
 
-export function useDashboard(options?: { enabled?: boolean }) {
+export function useDashboard(
+  range: DashboardRange = "30d",
+  options?: { enabled?: boolean },
+) {
   return useQuery({
-    queryKey: analyticsKeys.dashboard(),
-    queryFn: () => analyticsService.getDashboard(),
+    queryKey: analyticsKeys.dashboard(range),
+    queryFn: () => analyticsService.getDashboard(range),
     enabled: options?.enabled ?? true,
     staleTime: 30_000,
   });

@@ -6,6 +6,7 @@ import type {
   AnalyticsOverviewResponse,
   CoursePerformanceRow,
   DashboardSummaryResponse,
+  DashboardRange,
 } from "@veolms/contracts";
 import type { OrderScope } from "@veolms/contracts";
 import type { OrderService } from "../commerce/orders/order.service.ts";
@@ -39,6 +40,12 @@ interface ScopedCourse {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RANGE_DAYS = 30;
 const TOP_COURSES_LIMIT = 8;
+const DASHBOARD_RANGE_DAYS: Record<DashboardRange, number> = {
+  "7d": 7,
+  "30d": 30,
+  "3m": 90,
+  "1y": 365,
+};
 
 function resolveDashboardDateRanges(now = new Date()) {
   const currentMonthFrom = new Date(
@@ -81,6 +88,32 @@ function resolveDateRange(query: AnalyticsFilterQuery) {
   const prevTo = from;
   const prevFrom = new Date(from.getTime() - spanMs);
   return { from, to, prevFrom, prevTo };
+}
+
+function resolveDashboardRevenueRange(range: DashboardRange, now = new Date()) {
+  const days = DASHBOARD_RANGE_DAYS[range];
+  return resolveDateRange({
+    from: new Date(now.getTime() - days * DAY_MS),
+    to: now,
+  });
+}
+
+function normalizeRevenueTrend(
+  points: Array<{ date: string; value: number }>,
+  from: Date,
+  to: Date,
+) {
+  const valuesByDate = new Map(points.map((point) => [point.date, point.value]));
+  const start = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate());
+  const end = Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate());
+  const trend: Array<{ date: string; value: number }> = [];
+
+  for (let time = start; time <= end; time += DAY_MS) {
+    const date = new Date(time).toISOString().slice(0, 10);
+    trend.push({ date, value: valuesByDate.get(date) ?? 0 });
+  }
+
+  return trend;
 }
 
 export function createAnalyticsService(options: AnalyticsServiceOptions) {
@@ -342,9 +375,61 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     };
   }
 
+  async function buildRevenueOverview(
+    scope: OrderScope,
+    courseIdFilter: string | string[] | undefined,
+    range: DashboardRange,
+  ) {
+    const { from, to, prevFrom, prevTo } = resolveDashboardRevenueRange(range);
+    const current = await orderService.getRawStatsForCourses(scope, {
+      courseId: courseIdFilter,
+      from,
+      to,
+    });
+
+    const [previous, currentFunnel, previousFunnel, trend] = await Promise.all([
+      orderService.getRawStatsForCourses(scope, {
+        courseId: courseIdFilter,
+        from: prevFrom,
+        to: prevTo,
+        currency: current.currency,
+      }),
+      orderService.getOrderStatusFunnel(scope, {
+        from,
+        to,
+        courseId: courseIdFilter,
+      }),
+      orderService.getOrderStatusFunnel(scope, {
+        from: prevFrom,
+        to: prevTo,
+        courseId: courseIdFilter,
+      }),
+      orderService.getRevenueTrend(scope, {
+        courseId: courseIdFilter,
+        from,
+        to,
+        currency: current.currency,
+      }),
+    ]);
+
+    const currentNetRevenue = current.grossPaid - current.refundedAmount;
+    const previousNetRevenue = previous.grossPaid - previous.refundedAmount;
+
+    return {
+      range,
+      currency: current.currency,
+      trend: normalizeRevenueTrend(trend, from, to),
+      grossSales: kpi(current.grossPaid, previous.grossPaid),
+      netRevenue: kpi(currentNetRevenue, previousNetRevenue),
+      orders: kpi(currentFunnel.paid, previousFunnel.paid),
+      refunds: kpi(currentFunnel.refunded, previousFunnel.refunded),
+    };
+  }
+
   async function buildDashboard(
     actor: AnalyticsActor,
     dashboardScope: AnalyticsDashboardScope,
+    range: DashboardRange = "30d",
   ): Promise<DashboardSummaryResponse> {
     const { courseIds, isPlatformWide } =
       dashboardScope === "platform"
@@ -361,6 +446,15 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
         students: { total: 0, newThisMonth: 0 },
         activeLearners: kpi(0, 0),
         watchHours: kpi(0, 0),
+        revenueOverview: {
+          range,
+          currency: "INR",
+          trend: [],
+          grossSales: kpi(0, 0),
+          netRevenue: kpi(0, 0),
+          orders: kpi(0, 0),
+          refunds: kpi(0, 0),
+        },
       };
     }
 
@@ -380,11 +474,14 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       activePreviousTo,
     } = resolveDashboardDateRanges();
 
-    const currentRevenue = await orderService.getRawStatsForCourses(scope, {
-      courseId: courseIdFilter,
-      from: currentMonthFrom,
-      to: now,
-    });
+    const [currentRevenue, revenueOverview] = await Promise.all([
+      orderService.getRawStatsForCourses(scope, {
+        courseId: courseIdFilter,
+        from: currentMonthFrom,
+        to: now,
+      }),
+      buildRevenueOverview(scope, courseIdFilter, range),
+    ]);
 
     const [
       previousRevenue,
@@ -440,6 +537,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       students: studentCounts,
       activeLearners: kpi(activeLearnersCurrent, activeLearnersPrevious),
       watchHours: kpi(watchHoursCurrent, watchHoursPrevious),
+      revenueOverview,
     };
   }
 
@@ -471,7 +569,8 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     dashboard: (
       actor: AnalyticsActor,
       dashboardScope: AnalyticsDashboardScope,
-    ) => buildDashboard(actor, dashboardScope),
+      range: DashboardRange = "30d",
+    ) => buildDashboard(actor, dashboardScope, range),
   };
 }
 

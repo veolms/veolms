@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import type {
+  DashboardRange,
+  DashboardRevenueOverview,
+} from "@veolms/contracts";
 import { ArrowDownRightIcon as ArrowDownRight } from "@phosphor-icons/react/ArrowDownRight";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/ArrowUpRight";
@@ -91,7 +95,12 @@ interface DataCanvasProps {
   kind: "revenue" | "activity";
   label: string;
   themeKey?: string;
+  revenueTrend?: DashboardRevenueOverview["trend"];
+  revenueCurrency?: string;
+  revenueStatus?: "loading" | "empty" | "error";
 }
+
+const EMPTY_REVENUE_TREND: DashboardRevenueOverview["trend"] = [];
 
 interface NavigateProps {
   onNavigatePage?: (page: string) => void;
@@ -251,6 +260,44 @@ function Trend({
   );
 }
 
+function RevenueMetricTrend({
+  changePercent,
+  refunds = false,
+}: {
+  changePercent: number | null;
+  refunds?: boolean;
+}) {
+  if (changePercent === null) {
+    return <span className="creator-trend is-neutral">No comparison</span>;
+  }
+
+  const isNeutral = changePercent === 0;
+  const isNegative = refunds ? changePercent > 0 : changePercent < 0;
+  const Icon = changePercent < 0 ? ArrowDownRight : ArrowUpRight;
+
+  return (
+    <span
+      className={`creator-trend ${isNegative ? "is-negative" : ""} ${
+        isNeutral ? "is-neutral" : ""
+      }`}
+    >
+      <Icon size={14} weight="bold" /> {Math.abs(changePercent).toFixed(1)}%
+    </span>
+  );
+}
+
+function formatDashboardCurrency(value: number, currency: string) {
+  return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatDashboardNumber(value: number) {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
+}
+
 function DashboardPanel({
   className = "",
   title,
@@ -290,7 +337,14 @@ function DashboardPanel({
   );
 }
 
-function DataCanvas({ kind, label, themeKey = "default" }: DataCanvasProps) {
+function DataCanvas({
+  kind,
+  label,
+  themeKey = "default",
+  revenueTrend = EMPTY_REVENUE_TREND,
+  revenueCurrency = "INR",
+  revenueStatus,
+}: DataCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -314,20 +368,38 @@ function DataCanvas({ kind, label, themeKey = "default" }: DataCanvasProps) {
       context.font = "11px Manrope, sans-serif";
 
       if (kind === "revenue") {
-        const values = [
-          24, 38, 42, 36, 45, 53, 44, 33, 35, 49, 47, 43, 57, 64, 61, 70, 88,
-          96, 79, 81, 75, 78, 85, 97,
-        ];
+        if (revenueTrend.length === 0) {
+          context.fillStyle = muted;
+          context.textAlign = "center";
+          context.fillText(
+            revenueStatus === "loading"
+              ? "Loading revenue data…"
+              : revenueStatus === "error"
+                ? "Unable to load revenue data."
+                : "No revenue data for this period.",
+            width / 2,
+            height / 2,
+          );
+          return;
+        }
+
+        const values = revenueTrend.map((point) => point.value);
         const left = 29;
         const right = width - 8;
         const top = 14;
         const bottom = height - 23;
         const x = (index: number) =>
-          left + (index / (values.length - 1)) * (right - left);
-        const y = (value: number) => bottom - (value / 100) * (bottom - top);
+          values.length === 1
+            ? (left + right) / 2
+            : left + (index / (values.length - 1)) * (right - left);
+        const maxValue = Math.max(...values, 0);
+        const scaleMax = maxValue > 0 ? Math.ceil(maxValue / 4) * 4 : 1;
+        const y = (value: number) =>
+          bottom - (value / scaleMax) * (bottom - top);
         context.strokeStyle = track;
         context.lineWidth = 1;
-        [0, 25, 50, 75, 100].forEach((mark) => {
+        [0, 0.25, 0.5, 0.75, 1].forEach((ratio) => {
+          const mark = scaleMax * ratio;
           context.beginPath();
           context.moveTo(left, y(mark));
           context.lineTo(right, y(mark));
@@ -363,31 +435,43 @@ function DataCanvas({ kind, label, themeKey = "default" }: DataCanvasProps) {
         });
         context.fillStyle = muted;
         context.textAlign = "right";
-        [100, 80, 60, 40, 20, 0].forEach((mark) =>
+        [1, 0.8, 0.6, 0.4, 0.2, 0].forEach((ratio) => {
+          const mark = scaleMax * ratio;
           context.fillText(
-            mark === 0 ? "0" : `${mark}K`,
+            new Intl.NumberFormat(
+              revenueCurrency === "INR" ? "en-IN" : "en-US",
+              { notation: "compact", maximumFractionDigits: 1 },
+            ).format(mark),
             left - 6,
             y(mark) + 3,
-          ),
-        );
-        const dateLabels: readonly (readonly [number, string])[] = [
-          [0, "May 6"],
-          [4, "May 11"],
-          [8, "May 16"],
-          [12, "May 21"],
-          [16, "May 26"],
-          [20, "May 31"],
-          [23, "Jun 4"],
-        ];
+          );
+        });
+        const labelCount = Math.min(7, revenueTrend.length);
+        const dateLabels = Array.from({ length: labelCount }, (_, labelIndex) => {
+          const index =
+            labelCount === 1
+              ? 0
+              : Math.round(
+                  (labelIndex * (revenueTrend.length - 1)) /
+                    (labelCount - 1),
+                );
+          return [
+            index,
+            new Intl.DateTimeFormat(undefined, {
+              month: "short",
+              day: "numeric",
+            }).format(new Date(`${revenueTrend[index]!.date}T00:00:00Z`)),
+          ] as const;
+        });
         context.globalAlpha = 0.84;
-        dateLabels.forEach(([index, text], labelIndex) => {
+        dateLabels.forEach(([index, dateLabel], labelIndex) => {
           context.textAlign =
             labelIndex === 0
               ? "left"
               : labelIndex === dateLabels.length - 1
                 ? "right"
                 : "center";
-          context.fillText(text, x(index), height - 5);
+          context.fillText(dateLabel, x(index), height - 5);
         });
         context.globalAlpha = 1;
         context.save();
@@ -470,7 +554,7 @@ function DataCanvas({ kind, label, themeKey = "default" }: DataCanvasProps) {
     });
     observer.observe(canvas);
     return () => observer.disconnect();
-  }, [kind, themeKey]);
+  }, [kind, revenueCurrency, revenueStatus, revenueTrend, themeKey]);
 
   return (
     <canvas
@@ -486,23 +570,47 @@ function RevenuePanel({
   range,
   setRange,
   themeKey,
+  revenueOverview,
+  isLoading,
+  isError,
 }: {
-  range: string;
-  setRange: (range: string) => void;
+  range: DashboardRange;
+  setRange: (range: DashboardRange) => void;
   themeKey: string;
+  revenueOverview?: DashboardRevenueOverview;
+  isLoading: boolean;
+  isError: boolean;
 }) {
+  const currency = revenueOverview?.currency ?? "INR";
+  const trend = revenueOverview?.trend ?? [];
+  const revenueStatus = isLoading
+    ? "loading"
+    : isError
+      ? "error"
+      : trend.length === 0
+        ? "empty"
+        : undefined;
+  const summaryUnavailable = isLoading || isError;
+
   return (
     <DashboardPanel className="creator-revenue-panel" title="Revenue Overview">
       <div className="creator-chart-toolbar">
         <span>
-          <i /> Revenue (₹)
+          <i /> Revenue ({currency === "INR" ? "₹" : currency})
         </span>
         <div
           className="creator-range-tabs"
           role="tablist"
           aria-label="Revenue range"
         >
-          {["7D", "30D", "3M", "1Y"].map((option) => (
+          {(
+            [
+              ["7d", "7D"],
+              ["30d", "30D"],
+              ["3m", "3M"],
+              ["1y", "1Y"],
+            ] as const
+          ).map(([option, label]) => (
             <button
               type="button"
               role="tab"
@@ -513,7 +621,7 @@ function RevenuePanel({
               onClick={() => setRange(option)}
               onKeyDown={handleRovingTabKeyDown}
             >
-              {option}
+              {label}
             </button>
           ))}
         </div>
@@ -523,28 +631,56 @@ function RevenuePanel({
           kind="revenue"
           themeKey={themeKey}
           label="Revenue trend for the selected period"
+          revenueTrend={trend}
+          revenueCurrency={currency}
+          revenueStatus={revenueStatus}
         />
       </div>
       <div className="creator-revenue-summary">
         <div>
           <span>Gross Sales</span>
-          <strong>₹1,56,300</strong>
-          <Trend value="13.7%" />
+          <strong>
+            {summaryUnavailable
+              ? "—"
+              : formatDashboardCurrency(revenueOverview?.grossSales.value ?? 0, currency)}
+          </strong>
+          <RevenueMetricTrend
+            changePercent={revenueOverview?.grossSales.changePercent ?? null}
+          />
         </div>
         <div>
           <span>Net Revenue</span>
-          <strong>₹1,24,500</strong>
-          <Trend value="12.4%" />
+          <strong>
+            {summaryUnavailable
+              ? "—"
+              : formatDashboardCurrency(revenueOverview?.netRevenue.value ?? 0, currency)}
+          </strong>
+          <RevenueMetricTrend
+            changePercent={revenueOverview?.netRevenue.changePercent ?? null}
+          />
         </div>
         <div>
           <span>Orders</span>
-          <strong>512</strong>
-          <Trend value="9.3%" />
+          <strong>
+            {summaryUnavailable
+              ? "—"
+              : formatDashboardNumber(revenueOverview?.orders.value ?? 0)}
+          </strong>
+          <RevenueMetricTrend
+            changePercent={revenueOverview?.orders.changePercent ?? null}
+          />
         </div>
         <div>
           <span>Refunds</span>
-          <strong>12</strong>
-          <Trend value="7.7%" negative />
+          <strong>
+            {summaryUnavailable
+              ? "—"
+              : formatDashboardNumber(revenueOverview?.refunds.value ?? 0)}
+          </strong>
+          <RevenueMetricTrend
+            changePercent={revenueOverview?.refunds.changePercent ?? null}
+            refunds
+          />
         </div>
       </div>
     </DashboardPanel>
@@ -806,8 +942,13 @@ export function CreatorDashboard({
   setNotice,
   academyTheme = "default",
 }: CreatorDashboardProps) {
-  const [range, setRange] = useState("30D");
-  const { data: dashboardResponse } = useDashboard();
+  const [range, setRange] = useState<DashboardRange>("30d");
+  const {
+    data: dashboardResponse,
+    isLoading: isDashboardLoading,
+    isError: isDashboardError,
+  } =
+    useDashboard(range);
 
   useEffect(() => {
     if (import.meta.env.DEV && dashboardResponse) {
@@ -870,6 +1011,9 @@ export function CreatorDashboard({
           range={range}
           setRange={setRange}
           themeKey={academyTheme}
+          revenueOverview={dashboardResponse?.revenueOverview}
+          isLoading={isDashboardLoading}
+          isError={isDashboardError}
         />
         <LearningActivityPanel themeKey={academyTheme} />
         <CoursesPanel onNavigatePage={onNavigatePage} />

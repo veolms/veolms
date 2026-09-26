@@ -1,4 +1,5 @@
 import {
+  dashboardQuerySchema,
   analyticsFilterQuerySchema,
   analyticsOverviewResponseSchema,
   dashboardSummaryResponseSchema,
@@ -106,7 +107,8 @@ const analyticsRoutes: RoutePlugin = async (app, options) => {
         tags: ["Analytics"],
         summary: "Get the dashboard summary",
         description:
-          "Returns the four top dashboard card metrics using calendar-month and seven-day comparison windows. Requires analytics.revenue.read or analytics.course.read and scopes the data to the caller's authorized analytics surface.",
+          "Returns the top dashboard card metrics plus the range-aware Revenue Overview. Requires analytics.revenue.read or analytics.course.read and scopes the data to the caller's authorized analytics surface.",
+        querystring: dashboardQuerySchema,
         response: {
           200: jsonResponse(
             "Dashboard summary",

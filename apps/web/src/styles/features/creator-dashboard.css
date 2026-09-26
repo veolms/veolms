@@ -392,6 +392,10 @@
   color: var(--danger);
 }
 
+.creator-revenue-summary span.creator-trend.is-neutral {
+  color: var(--text-secondary);
+}
+
 .creator-activity-list {
   display: grid;
   gap: 5px;

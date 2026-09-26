@@ -19,7 +19,7 @@ const AUTH_FLOW_PATHS = new Set([
   "/auth/callback",
 ]);
 
-const GUEST_LANDING_PATHS = new Set(["/", "/home"]);
+const GUEST_LANDING_PATHS = new Set(["/"]);
 
 export function normalizeAppPath(pathname: string): string {
   return normalizeNavigationPath(pathname);
