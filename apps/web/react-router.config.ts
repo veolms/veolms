@@ -11,7 +11,6 @@ const staticApplicationPages = [
   "/register",
   "/auth/callback",
   "/courses",
-  "/catalogue",
   "/settings",
   "/settings/profile",
   "/settings/appearance",
@@ -31,18 +30,19 @@ const isDevelopment = import.meta.env.DEV;
 const developmentPrerenderCourseSlugs = ["tailwind-css"] as const;
 
 const staticLearningPages = createLearningPrerenderPaths({
-  courseSlugs: isDevelopment ? developmentPrerenderCourseSlugs : undefined,
+  courseSlugs: isDevelopment
+    ? developmentPrerenderCourseSlugs
+    : undefined,
   scope: learningPrerenderScope,
 });
 
-const developmentPrerenderPaths = ["/catalogue", ...staticLearningPages];
-
 const prerenderConfig = {
   // React Router still renders configured prerender paths through its dev
-  // server. Include the public catalogue because its route uses a server
-  // loader; development stays focused on it and the small Tailwind CSS course.
+  // server. Keep development focused on the small Tailwind CSS course so
+  // other routes use the SPA fallback while the full production prerender
+  // set remains unchanged.
   paths: isDevelopment
-    ? developmentPrerenderPaths
+    ? staticLearningPages
     : [...staticApplicationPages, ...staticLearningPages],
   concurrency: 1,
   timeout: 120_000,
@@ -52,7 +52,6 @@ const prerenderConfig = {
 
 export default {
   appDirectory: "src",
-  buildDirectory: process.env.VEO_BUILD_DIRECTORY || "build",
   // React Router accepts timeout/retry options at build time even though the
   // public Config type only documents paths and concurrency.
   prerender: prerenderConfig as NonNullable<Config["prerender"]>,

@@ -130,39 +130,19 @@ export function readAmbientPreference(
   return !constrainedDevice;
 }
 
-const NEAR_END_RESUME_SECONDS = 5;
-
 export function readResumePosition(
   mediaKey: string,
   duration?: number,
   storage: StorageReader | null = getBrowserStorage(),
 ): number {
-  return readResumePositionFromKeys([mediaKey], duration, storage);
-}
-
-export function readResumePositionFromKeys(
-  mediaKeys: readonly string[],
-  duration?: number,
-  storage: StorageReader | null = getBrowserStorage(),
-): number {
   if (!storage) return 0;
   try {
-    let savedPosition = 0;
-    for (const mediaKey of mediaKeys) {
-      if (!mediaKey) continue;
-      const candidate = Number(
-        storage.getItem(lessonPlayerStorageKeys.resume(mediaKey)),
-      );
-      if (Number.isFinite(candidate) && candidate > savedPosition) {
-        savedPosition = candidate;
-      }
-    }
-    if (savedPosition <= 0) return 0;
+    const savedPosition = Number(
+      storage.getItem(lessonPlayerStorageKeys.resume(mediaKey)),
+    );
+    if (!Number.isFinite(savedPosition) || savedPosition <= 0) return 0;
     if (duration === undefined || !Number.isFinite(duration) || duration <= 0) {
       return savedPosition;
-    }
-    if (savedPosition >= Math.max(0, duration - NEAR_END_RESUME_SECONDS)) {
-      return 0;
     }
     return Math.min(savedPosition, Math.max(0, duration - 1));
   } catch {
@@ -281,27 +261,14 @@ export function consumeMiniPlayerRestore(
 export function writeResumePosition(
   mediaKey: string,
   position: number,
-  storage: StorageMutator | null = getBrowserStorage(),
+  storage: StorageWriter | null = getBrowserStorage(),
 ): void {
-  writeResumePositionToKeys([mediaKey], position, storage);
-}
-
-export function writeResumePositionToKeys(
-  mediaKeys: readonly string[],
-  position: number,
-  storage: StorageMutator | null = getBrowserStorage(),
-): void {
-  if (!Number.isFinite(position) || position < 0) return;
+  if (!Number.isFinite(position) || position <= 0) return;
   try {
-    for (const mediaKey of mediaKeys) {
-      if (!mediaKey) continue;
-      const key = lessonPlayerStorageKeys.resume(mediaKey);
-      if (position <= 0) {
-        storage?.removeItem(key);
-        continue;
-      }
-      storage?.setItem(key, String(position));
-    }
+    storage?.setItem(
+      lessonPlayerStorageKeys.resume(mediaKey),
+      String(position),
+    );
   } catch {
     // Resume persistence is optional and must never interrupt playback.
   }

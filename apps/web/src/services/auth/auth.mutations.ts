@@ -26,25 +26,20 @@ import type {
   UserProfileResponse,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
+import { autosyncManager } from "../../lib/autosync";
 import { authStore } from "../../store/auth.store";
+import { clearCoursePlayerSessions } from "../../learning/coursePlayerNavigation";
 import { authKeys } from "./auth.keys";
 import { authService, type TotpSetupResponse } from "./auth.service";
-import { navigationKeys } from "../navigation/navigation.keys";
-import { learningInteractionKeys } from "../learning-interactions/learning-interactions.keys";
-import { resetLoadedLearningInteractions } from "../learning-interactions/lifecycle";
+import { navigationKeys } from "../navigation";
+import {
+  learningInteractionKeys,
+  desiredStateCoordinator,
+  interactionCreationCoordinator,
+  optimisticDeletionCoordinator,
+} from "../learning-interactions";
 
-async function clearPersistedCoursePlayerSessions() {
-  try {
-    const { clearCoursePlayerSessions } = await import(
-      "../../learning/coursePlayerNavigation"
-    );
-    clearCoursePlayerSessions();
-  } catch {
-    // Keep authentication transitions working if this optional cleanup chunk fails.
-  }
-}
-
-async function persistAuthenticatedSession(
+function persistAuthenticatedSession(
   queryClient: QueryClient,
   data: LoginResponse,
 ) {
@@ -77,9 +72,11 @@ async function persistAuthenticatedSession(
   // The legacy browser collection is not account-scoped. Clear it at the
   // account boundary so a prior account's fallback sessions cannot be
   // associated with the newly authenticated account.
-  await clearPersistedCoursePlayerSessions();
+  clearCoursePlayerSessions();
   authStore.setUser(data.user);
-  resetLoadedLearningInteractions();
+  desiredStateCoordinator.reset();
+  interactionCreationCoordinator.reset();
+  optimisticDeletionCoordinator.reset();
   queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
   queryClient.removeQueries({ queryKey: authKeys.avatars() });
   queryClient.setQueryData(authKeys.me(), currentUser);
@@ -147,7 +144,9 @@ export function useLogin() {
 
   return useMutation<LoginResponse, ApiError, LoginRequest>({
     mutationFn: (payload) => authService.login(payload),
-    onSuccess: (data) => persistAuthenticatedSession(queryClient, data),
+    onSuccess: (data) => {
+      persistAuthenticatedSession(queryClient, data);
+    },
   });
 }
 
@@ -156,7 +155,9 @@ export function useRegister() {
 
   return useMutation<LoginResponse, ApiError, RegisterRequest>({
     mutationFn: (payload) => authService.register(payload),
-    onSuccess: (data) => persistAuthenticatedSession(queryClient, data),
+    onSuccess: (data) => {
+      persistAuthenticatedSession(queryClient, data);
+    },
   });
 }
 
@@ -214,7 +215,9 @@ export function useOauthLogin() {
 
   return useMutation<LoginResponse, ApiError, OauthLoginRequest>({
     mutationFn: (payload) => authService.oauthLogin(payload),
-    onSuccess: (data) => persistAuthenticatedSession(queryClient, data),
+    onSuccess: (data) => {
+      persistAuthenticatedSession(queryClient, data);
+    },
   });
 }
 
@@ -329,10 +332,12 @@ export function useLogout() {
 
   return useMutation<AuthMessageResponse, ApiError, void>({
     mutationFn: () => authService.logout(),
-    onSettled: async () => {
+    onSettled: () => {
       authStore.clearAuth();
-      resetLoadedLearningInteractions();
-      await clearPersistedCoursePlayerSessions();
+      desiredStateCoordinator.reset();
+      interactionCreationCoordinator.reset();
+      optimisticDeletionCoordinator.reset();
+      clearCoursePlayerSessions();
       queryClient.setQueryData(authKeys.me(), null);
       queryClient.removeQueries({ queryKey: authKeys.me() });
       queryClient.removeQueries({ queryKey: authKeys.avatars() });
@@ -349,10 +354,12 @@ export function useDeactivateAccount() {
 
   return useMutation<AuthMessageResponse, ApiError, void>({
     mutationFn: () => authService.deactivateAccount(),
-    onSettled: async () => {
+    onSettled: () => {
       authStore.clearAuth();
-      resetLoadedLearningInteractions();
-      await clearPersistedCoursePlayerSessions();
+      desiredStateCoordinator.reset();
+      interactionCreationCoordinator.reset();
+      optimisticDeletionCoordinator.reset();
+      clearCoursePlayerSessions();
 
       // A deactivated account must not leave protected data in the client
       // cache, especially if another account signs in in the same tab.
@@ -368,12 +375,13 @@ export function useSignOut() {
 
   const signOut = useCallback(async () => {
     try {
-      const { autosyncManager } = await import("../../lib/autosync");
       await autosyncManager.requireSynced();
     } catch {
       // Autosync failed or timed out, proceed with logout so user is never trapped
     }
     await logoutMutationRef.current.mutateAsync().catch(() => undefined);
+    authStore.clearAuth();
+    clearCoursePlayerSessions();
     // Redirect even when the API request cannot complete. This prevents a
     // stale authenticated shell from trapping the user in the workspace.
     if (typeof window !== "undefined") window.location.href = "/";

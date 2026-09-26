@@ -181,8 +181,6 @@ export interface VideoStreamingConfiguration {
   useNativeHlsForFairPlay?: boolean;
   abrEnabled?: boolean;
   abrRestrictions?: AbrRestrictions;
-  /** Seconds to wait before the first automatic quality change. */
-  minTimeToSwitch?: number;
   transmuxWorkerUrl?: string;
 }
 

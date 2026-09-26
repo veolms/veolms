@@ -1,5 +1,4 @@
-import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
-import { XIcon as X } from "@phosphor-icons/react/X";
+import { TrashIcon as Trash, XIcon as X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useBackDismiss } from "./navigation/useBackDismiss";

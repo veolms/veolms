@@ -1,4 +1,4 @@
-import { otpSendRequestSchema } from "@veolms/contracts/auth";
+import { otpSendRequestSchema } from "@veolms/contracts";
 
 export type IdentifierMethod = "email" | "mobile";
 

@@ -1,11 +1,8 @@
 # Web CSS structure
 
-`full-app.css` contains the shared foundation used by every route. Theme
-palettes and Academy shell rules are loaded from `academy-shell.css` on Academy
-routes; authentication routes load their palette, reading-mode,
-scrollbar-preference, focus-visibility, and auth rules from `auth-layout.tsx`.
-The route entrypoints preserve the previous cascade order after the shared
-foundation.
+`full-app.css` remains the single application stylesheet. It imports
+`styles.css`, then `shell-theme.css`, then reading-mode CSS in the same
+cascade order used before the modular split.
 
 - `base/` contains global tokens, resets, and shared controls.
 - `features/` contains page- and feature-owned rules.
@@ -15,9 +12,9 @@ foundation.
   by multiple palettes.
 - `global/` contains app-wide behavior that must remain late in the cascade.
 
-The CSS entrypoints are split at the root/Academy/Auth route boundaries. Do not
-reorder imports within an entrypoint without visual-regression coverage: the
-current UI relies on the established cascade.
+The existing modules are intentionally assembled into one application stylesheet
+for now. Do not reorder those entrypoints without visual-regression coverage:
+the current UI relies on the established cascade.
 
 New work is Tailwind-first and feature-owned. Add exceptional CSS only when
 Tailwind cannot express the required browser behavior, keep it beside its

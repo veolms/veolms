@@ -302,7 +302,6 @@ export function DiscussionThreadPanel({
     activeEntryId,
     activeIndex,
     focusComposerOnOpen,
-    foundIndex,
     isPhone,
     open,
     requestComposerFocus,
@@ -1736,8 +1735,6 @@ function ThreadReplyComposer({
     [],
   );
 
-  const entryKey = entry.clientId ?? entry.id;
-
   useEffect(() => {
     setDraft(createEmptyDiscussionDraft());
     setReplyAttachments((current) => {
@@ -1746,7 +1743,7 @@ function ThreadReplyComposer({
     });
     setComposerKey(0);
     setSubmitError("");
-  }, [entryKey]);
+  }, [entry.clientId ?? entry.id]);
 
   useEffect(() => {
     if (!editorController || focusRequest <= 0) return;

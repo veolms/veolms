@@ -28,6 +28,8 @@ import {
   createEmptyDiscussionDraft,
   hasDiscussionDraftContent,
 } from "./discussion-editor/types";
+import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
+import { DiscussionEditor } from "./discussion-editor/DiscussionEditor";
 import { UndoDeleteButton } from "./useUndoableDeletion";
 import { QueryClientContext } from "@tanstack/react-query";
 import {
@@ -56,17 +58,6 @@ import {
   flattenReplyPages,
   getReplyTotalCount,
 } from "../services/learning-interactions/reply-pagination";
-
-const DiscussionMarkdown = React.lazy(() =>
-  import("./discussion-editor/DiscussionMarkdown").then((module) => ({
-    default: module.DiscussionMarkdown,
-  })),
-);
-const DiscussionEditor = React.lazy(() =>
-  import("./discussion-editor/DiscussionEditor").then((module) => ({
-    default: module.DiscussionEditor,
-  })),
-);
 
 export interface CommentReply {
   id: string | number;
@@ -640,22 +631,14 @@ export const CommentCard = React.memo(function CommentCard({
                 />
               </div>
 
-              <React.Suspense
-                fallback={
-                  <p className="mt-0.5 whitespace-pre-wrap text-sm text-(--text-secondary)">
-                    {comment.content?.plainText || comment.text}
-                  </p>
-                }
-              >
-                <DiscussionMarkdown
-                  content={comment.content ?? createDiscussionDraft(comment.text)}
-                  label={`${entryLabel} by ${comment.name}`}
-                  linkedAttachments={comment.attachments}
-                  enableInlineTimestamps={Boolean(onSeekToTimestamp)}
-                  onSeekToTimestamp={onSeekToTimestamp}
-                  className="mt-0.5 pr-9 sm:pr-10"
-                />
-              </React.Suspense>
+              <DiscussionMarkdown
+                content={comment.content ?? createDiscussionDraft(comment.text)}
+                label={`${entryLabel} by ${comment.name}`}
+                linkedAttachments={comment.attachments}
+                enableInlineTimestamps={Boolean(onSeekToTimestamp)}
+                onSeekToTimestamp={onSeekToTimestamp}
+                className="mt-0.5 pr-9 sm:pr-10"
+              />
 
               {comment.attachments && comment.attachments.length > 0 ? (
                 <DiscussionAttachmentsList attachments={comment.attachments} />
@@ -770,22 +753,16 @@ export const CommentCard = React.memo(function CommentCard({
                     <label className="min-w-0 flex-1">
                       <span className="sr-only">Reply to {comment.name}</span>
                       <span className="block min-h-12 overflow-hidden rounded-lg border bg-(--surface) [border-color:color-mix(in_srgb,var(--text)_14%,transparent)] focus-within:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]">
-                        <React.Suspense
-                          fallback={
-                            <span aria-hidden="true" className="block min-h-12" />
-                          }
-                        >
-                          <DiscussionEditor
-                            value={replyDraft}
-                            documentId={`reply-new-${comment.id}`}
-                            label={`Reply to ${comment.name}`}
-                            placeholderText={`Reply to ${comment.name}…`}
-                            className="min-h-12 max-h-40"
-                            courseId={courseId}
-                            mentionsEnabled={true}
-                            onChange={setReplyDraft}
-                          />
-                        </React.Suspense>
+                        <DiscussionEditor
+                          value={replyDraft}
+                          documentId={`reply-new-${comment.id}`}
+                          label={`Reply to ${comment.name}`}
+                          placeholderText={`Reply to ${comment.name}…`}
+                          className="min-h-12 max-h-40"
+                          courseId={courseId}
+                          mentionsEnabled={true}
+                          onChange={setReplyDraft}
+                        />
                       </span>
                     </label>
                     <button
@@ -1107,22 +1084,14 @@ function ReplyCard({
                   )}
                 </div>
               ) : (
-                <React.Suspense
-                  fallback={
-                    <p className="mt-0.5 whitespace-pre-wrap text-sm text-(--text-secondary)">
-                      {reply.content?.plainText || reply.text}
-                    </p>
-                  }
-                >
-                  <DiscussionMarkdown
-                    content={reply.content ?? createDiscussionDraft(reply.text)}
-                    label={`Reply by ${reply.name}`}
-                    linkedAttachments={reply.attachments}
-                    enableInlineTimestamps={Boolean(onSeekToTimestamp)}
-                    onSeekToTimestamp={onSeekToTimestamp}
-                    className="mt-0.5 pr-9 sm:pr-10"
-                  />
-                </React.Suspense>
+                <DiscussionMarkdown
+                  content={reply.content ?? createDiscussionDraft(reply.text)}
+                  label={`Reply by ${reply.name}`}
+                  linkedAttachments={reply.attachments}
+                  enableInlineTimestamps={Boolean(onSeekToTimestamp)}
+                  onSeekToTimestamp={onSeekToTimestamp}
+                  className="mt-0.5 pr-9 sm:pr-10"
+                />
               )}
 
               {reply.attachments && reply.attachments.length > 0 && (
@@ -1257,21 +1226,17 @@ export function InlineEditForm({
       }}
     >
       <div className="min-h-18 overflow-hidden rounded-lg border bg-(--surface) [border-color:color-mix(in_srgb,var(--text)_18%,transparent)] focus-within:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]">
-        <React.Suspense
-          fallback={<div aria-hidden="true" className="min-h-18" />}
-        >
-          <DiscussionEditor
-            value={value}
-            documentId={documentId}
-            label={label}
-            placeholderText="Write a reply…"
-            autoFocus
-            className="min-h-18 max-h-56"
-            courseId={courseId}
-            mentionsEnabled={mentionsEnabled}
-            onChange={onChange}
-          />
-        </React.Suspense>
+        <DiscussionEditor
+          value={value}
+          documentId={documentId}
+          label={label}
+          placeholderText="Write a reply…"
+          autoFocus
+          className="min-h-18 max-h-56"
+          courseId={courseId}
+          mentionsEnabled={mentionsEnabled}
+          onChange={onChange}
+        />
       </div>
       <div className="mt-2 flex justify-end gap-2">
         <button

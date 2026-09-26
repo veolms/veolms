@@ -1,4 +1,4 @@
-import { CloudArrowUpIcon as CloudArrowUp } from "@phosphor-icons/react/CloudArrowUp";
+import { CloudArrowUpIcon as CloudArrowUp } from "@phosphor-icons/react";
 import type { DragEvent, KeyboardEvent } from "react";
 
 export interface LessonUploadDropzoneProps {

@@ -1,5 +1,3 @@
-import "./styles/features/home.css";
-import "./styles/features/student-learning.css";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
@@ -393,12 +391,7 @@ export function StudentHome({
           />
           <div className="home-discussion-list">
             <article>
-              <img
-                src="/assets/ethan-avatar-160.webp"
-                alt=""
-                loading="lazy"
-                decoding="async"
-              />
+              <img src="/assets/ethan-avatar-160.webp" alt="" />
               <div>
                 <strong>
                   Anurag Singh replied to your comment <b>NEW</b>

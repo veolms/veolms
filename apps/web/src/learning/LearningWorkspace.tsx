@@ -1,9 +1,4 @@
-import "../styles/features/player.css";
-import "../styles/features/learning.css";
-import "@veolms/video-player/styles.css";
 import {
-  lazy,
-  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -40,7 +35,7 @@ import { scrollApplicationTo } from "../shell/applicationScroll";
 import { isEditingShortcutTarget } from "../keyboardShortcuts";
 import { ALLOW_GUEST_LEARNING } from "../routing/routeAccess";
 import { useShortcutPlatform } from "../useShortcutPlatform";
-import { LessonVideoPlayer } from "./player/LessonVideoPlayer";
+import { LessonVideoPlayer } from "./player";
 import { LessonPlayerChromePlaceholder } from "./player/LessonPlayerChromePlaceholder";
 import type {
   LessonPlayerMinimizeGestureState,
@@ -77,6 +72,7 @@ import {
   getPublicPreviewLessonNumbers,
 } from "./coursePlayerAccess";
 import { useAuthStore } from "../store/auth.store";
+import { QuizAttemptPanel } from "../quizzes/QuizAttemptPanel";
 import { useCourseOverview } from "../services/courses";
 import { useCourseQuizAssignments } from "../services/quizzes/quizzes.queries";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
@@ -87,8 +83,11 @@ import {
   getVideoPlaybackBootstrap,
   refreshVideoPlaybackToken,
 } from "./videoPlaybackBootstrap";
-import type { InteractionCapabilities } from "./Discussion";
-import { PrerenderedMobileCommentComposer } from "./CompactCommentComposer";
+import {
+  Discussion,
+  PrerenderedMobileCommentComposer,
+  type InteractionCapabilities,
+} from "./Discussion";
 import {
   clampLearningCurriculumWidth,
   CURRICULUM_COLLAPSED_STORAGE_KEY,
@@ -101,11 +100,6 @@ import {
 } from "./learningShellPreferences";
 import { useCurriculumTestPreferences } from "./useCurriculumTestPreferences";
 import { useLearningProgress } from "./useLearningProgress";
-import {
-  getResumePersistenceKeys,
-  resolveContinueLessonId,
-  writeStoredCourseLessonId,
-} from "./courseResumeState";
 import {
   getPhoneLessonDrawerCollapsedSnapPoint,
   getSideLessonDrawerBounds,
@@ -121,15 +115,6 @@ import {
   DrawerDescription,
   DrawerTitle,
 } from "@/components/ui/drawer";
-
-const loadQuizAttemptPanel = () =>
-  import("../quizzes/QuizAttemptPanel").then((module) => ({
-    default: module.QuizAttemptPanel,
-  }));
-const QuizAttemptPanel = lazy(loadQuizAttemptPanel);
-const Discussion = lazy(() =>
-  import("./Discussion").then((module) => ({ default: module.Discussion })),
-);
 
 const CURRICULUM_SNAP_WIDTH = CURRICULUM_MIN_WIDTH / 2;
 const FLOATING_LESSON_DRAWER_SNAP_WIDTH = LESSON_DRAWER_MIN_FLOATING_WIDTH / 2;
@@ -252,7 +237,6 @@ interface LearningWorkspaceProps {
   courseSlug: string | undefined;
   userId?: string;
   lessonId: number;
-  restoreContinueLesson?: boolean;
   deepLinkLessonUuid?: string | null;
   isDiscussionDeepLink?: boolean;
   deepLinkRouteSettled?: boolean;
@@ -336,7 +320,6 @@ export function LearningWorkspace({
   courseSlug,
   userId,
   lessonId,
-  restoreContinueLesson = false,
   deepLinkLessonUuid = null,
   isDiscussionDeepLink = false,
   deepLinkRouteSettled = true,
@@ -373,17 +356,20 @@ export function LearningWorkspace({
   const isInteractionCapabilitiesLoading =
     isApiRoute && isCourseOverviewLoading && !courseOverview;
 
-  const interactionCapabilities: InteractionCapabilities = courseOverview?.settings
-    ? {
+  const interactionCapabilities: InteractionCapabilities = useMemo(() => {
+    if (courseOverview?.settings) {
+      return {
         allowComments: courseOverview.settings.allowComments,
         allowNotes: courseOverview.settings.allowNotes,
         allowQa: courseOverview.settings.allowQa,
-      }
-    : {
-        allowComments: true,
-        allowNotes: true,
-        allowQa: true,
       };
+    }
+    return {
+      allowComments: true,
+      allowNotes: true,
+      allowQa: true,
+    };
+  }, [courseOverview?.settings]);
   const publicPreviewLessonNumbers = useMemo(
     () => getPublicPreviewLessonNumbers(courseOverview),
     [courseOverview],
@@ -403,6 +389,7 @@ export function LearningWorkspace({
       }),
     [isAuthenticated, publicPreviewLessonSet],
   );
+  const lessonStorageKey = `veolms-last-lesson-${encodeURIComponent(courseSlug || "default")}`;
   const shortcutPlatform = useShortcutPlatform();
   const [selectedLesson, setSelectedLesson] = useState(
     isLessonAvailable(lessonId) ? lessonId : firstPublicPreviewLessonId,
@@ -412,7 +399,6 @@ export function LearningWorkspace({
     setDeepLinkInitializationPending,
   ] = useState(Boolean(deepLinkLessonUuid));
   const pendingLessonSelectionRef = useRef<number | null>(null);
-  const continueLessonRestoreRef = useRef(restoreContinueLesson);
   const [localLessonProgress, setLocalLessonProgress] = useState<
     Record<number, number>
   >({});
@@ -935,12 +921,9 @@ export function LearningWorkspace({
       active = false;
     };
   }, [courseSlug, publicPlaybackBootstrap, selectedLesson]);
-  const totalLessonCount = useMemo(
+  const lessonSequence = useMemo(
     () =>
-      curriculumSections.reduce(
-        (total, { lessons }) => total + lessons.length,
-        0,
-      ),
+      curriculumSections.flatMap(({ lessons }) => lessons.map(([id]) => id)),
     [curriculumSections],
   );
   const lessonIdsByNumber = useMemo<ReadonlyMap<number, string> | undefined>(
@@ -974,15 +957,12 @@ export function LearningWorkspace({
     }
     return merged;
   }, [localLessonProgress, persistedLessonProgress]);
-  const currentLessonIndex =
-    selectedLesson >= 1 && selectedLesson <= totalLessonCount
-      ? selectedLesson - 1
-      : -1;
+  const currentLessonIndex = lessonSequence.indexOf(selectedLesson);
   const previousLessonId =
-    currentLessonIndex > 0 ? selectedLesson - 1 : undefined;
+    currentLessonIndex > 0 ? lessonSequence[currentLessonIndex - 1] : undefined;
   const nextLessonId =
-    currentLessonIndex >= 0 && currentLessonIndex < totalLessonCount - 1
-      ? selectedLesson + 1
+    currentLessonIndex >= 0 && currentLessonIndex < lessonSequence.length - 1
+      ? lessonSequence[currentLessonIndex + 1]
       : undefined;
   const courseThumbnail = useMemo(() => {
     if (courseOverview) {
@@ -1001,21 +981,22 @@ export function LearningWorkspace({
       lessons.some(([id]) => id === nextLessonId),
     );
     const video = getCourseVideoForLesson(nextLessonId);
+    const nextIndex = lessonSequence.indexOf(nextLessonId);
     return {
       id: nextLessonId,
       title: lesson[1],
       duration: lesson[2],
       sectionTitle: section?.title,
       thumbnailSrc: video?.thumbnailSrc || courseThumbnail,
-      lectureNumber: nextLessonId,
-      totalLessons: totalLessonCount,
+      lectureNumber: nextIndex >= 0 ? nextIndex + 1 : undefined,
+      totalLessons: lessonSequence.length,
     };
   }, [
     courseThumbnail,
     curriculumLessonsById,
     curriculumSections,
+    lessonSequence,
     nextLessonId,
-    totalLessonCount,
   ]);
 
   const selectedLessonRecord = useMemo(() => {
@@ -1355,41 +1336,6 @@ export function LearningWorkspace({
     lessonId,
     onSelectLesson,
     selectedLesson,
-  ]);
-
-  useEffect(() => {
-    if (!continueLessonRestoreRef.current || !courseSlug) return;
-    if (curriculumLessonsById.size === 0) return;
-    if (pendingLessonSelectionRef.current !== null) {
-      continueLessonRestoreRef.current = false;
-      return;
-    }
-
-    const inferredLessonId = resolveContinueLessonId(courseSlug, {
-      userId,
-      courseId: courseOverview?.course.id,
-      sessionLessonId: lessonId,
-      progressByLesson: lessonProgress,
-      maxLesson: curriculumLessonsById.size,
-    });
-    continueLessonRestoreRef.current = false;
-    if (
-      inferredLessonId !== selectedLesson &&
-      curriculumLessonsById.has(inferredLessonId) &&
-      isLessonAvailable(inferredLessonId)
-    ) {
-      selectLesson(inferredLessonId);
-    }
-  }, [
-    courseOverview?.course.id,
-    courseSlug,
-    curriculumLessonsById,
-    isLessonAvailable,
-    lessonId,
-    lessonProgress,
-    selectLesson,
-    selectedLesson,
-    userId,
   ]);
 
   const toggleTheaterMode = useCallback(() => {
@@ -2256,19 +2202,12 @@ export function LearningWorkspace({
   });
 
   useEffect(() => {
-    if (continueLessonRestoreRef.current) return;
-    if (!courseSlug || !curriculumLessonsById.has(selectedLesson)) return;
-    writeStoredCourseLessonId(
-      courseSlug,
-      selectedLesson,
-      courseOverview?.course.id ? [courseOverview.course.id] : [],
-    );
-  }, [
-    courseOverview?.course.id,
-    courseSlug,
-    curriculumLessonsById,
-    selectedLesson,
-  ]);
+    try {
+      localStorage.setItem(lessonStorageKey, String(selectedLesson));
+    } catch {
+      // Lesson selection remains usable when browser storage is unavailable.
+    }
+  }, [lessonStorageKey, selectedLesson]);
 
   useEffect(() => {
     try {
@@ -2372,7 +2311,6 @@ export function LearningWorkspace({
     lessonPlayerSeekRef.current?.(seconds);
   }, []);
 
-  const courseIdForResume = courseOverview?.course.id;
   const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
     () => ({
       media: getCourseVideoForLesson(currentLesson[0]),
@@ -2383,7 +2321,7 @@ export function LearningWorkspace({
       lessonTitle: currentLesson[1],
       courseTitle,
       lessonIndex: currentLessonIndex >= 0 ? currentLessonIndex + 1 : 1,
-      totalLessons: totalLessonCount,
+      totalLessons: lessonSequence.length,
       theaterMode,
       onTheaterToggle: toggleTheaterMode,
       autoPlayOnMediaChange: showingQuiz ? false : autoPlayOnLessonChange,
@@ -2419,16 +2357,10 @@ export function LearningWorkspace({
       onProgressChange: updateSelectedLessonProgress,
       onSeekToTimestampReady: registerLessonPlayerSeek,
       resumePersistenceKey: `${coursePersistenceKey}-lesson-${selectedLesson}`,
-      resumePersistenceKeys: getResumePersistenceKeys(
-        courseSlug || "default",
-        selectedLesson,
-        courseIdForResume ? [courseIdForResume] : [],
-      ),
     }),
     [
       autoPlayOnLessonChange,
       autoplayEnabled,
-      courseIdForResume,
       coursePersistenceKey,
       courseSlug,
       courseTitle,
@@ -2442,7 +2374,7 @@ export function LearningWorkspace({
       handleLessonEnded,
       handleMobileLandscapeFullscreenChange,
       lessonDrawer,
-      totalLessonCount,
+      lessonSequence.length,
       nextLessonId,
       nextLessonInfo,
       onMiniPlayerRestoreReady,
@@ -2565,12 +2497,6 @@ export function LearningWorkspace({
               ? "Return to video lesson"
               : "Open lesson quiz"
           }
-          onPointerEnter={() => {
-            if (activeLessonView !== "quiz") void loadQuizAttemptPanel();
-          }}
-          onFocus={() => {
-            if (activeLessonView !== "quiz") void loadQuizAttemptPanel();
-          }}
         >
           <Exam size={12} weight="bold" className="text-(--accent)" />
           <span>
@@ -2580,6 +2506,7 @@ export function LearningWorkspace({
       ) : null}
     </header>
   );
+
   return (
     <div
       ref={workspaceRef}
@@ -2623,37 +2550,25 @@ export function LearningWorkspace({
             {showingQuiz ? (
               <div className="w-full max-w-4xl mx-auto p-3 sm:p-5 md:p-6 lg:p-7">
                 {currentQuizAssignment ? (
-                  <Suspense
-                    fallback={
-                      <div
-                        className="grid min-h-72 place-items-center"
-                        role="status"
-                        aria-label="Loading quiz"
-                      >
-                        <span className="size-6 animate-spin rounded-full border-2 border-(--border) border-t-(--accent) motion-reduce:animate-none" />
-                      </div>
+                  <QuizAttemptPanel
+                    key={`${currentQuizAssignment.id}-${currentLessonUuid ?? selectedLesson}`}
+                    assignmentId={currentQuizAssignment.id}
+                    courseId={courseId ?? currentQuizAssignment.courseId}
+                    quizTitle={currentQuizAssignment.quizTitle}
+                    activeAttemptId={currentQuizAssignment.activeAttemptId}
+                    maxAttempts={currentQuizAssignment.maxAttempts}
+                    onBackToVideo={resumeLessonVideoPlayback}
+                    onPassed={() => updateSelectedLessonProgress(100)}
+                    lessonBadge={`Lesson ${selectedLesson} Quiz`}
+                    onContinueCourse={
+                      nextLessonId === undefined
+                        ? undefined
+                        : () => {
+                            resumeLessonVideoPlayback();
+                            onSelectLesson(nextLessonId);
+                          }
                     }
-                  >
-                    <QuizAttemptPanel
-                      key={`${currentQuizAssignment.id}-${currentLessonUuid ?? selectedLesson}`}
-                      assignmentId={currentQuizAssignment.id}
-                      courseId={courseId ?? currentQuizAssignment.courseId}
-                      quizTitle={currentQuizAssignment.quizTitle}
-                      activeAttemptId={currentQuizAssignment.activeAttemptId}
-                      maxAttempts={currentQuizAssignment.maxAttempts}
-                      onBackToVideo={resumeLessonVideoPlayback}
-                      onPassed={() => updateSelectedLessonProgress(100)}
-                      lessonBadge={`Lesson ${selectedLesson} Quiz`}
-                      onContinueCourse={
-                        nextLessonId === undefined
-                          ? undefined
-                          : () => {
-                              resumeLessonVideoPlayback();
-                              onSelectLesson(nextLessonId);
-                            }
-                      }
-                    />
-                  </Suspense>
+                  />
                 ) : (
                   <section
                     className="mx-auto w-full max-w-3xl rounded-[16px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-6 text-(--text)"
@@ -2747,44 +2662,31 @@ export function LearningWorkspace({
               {!phoneLessonDrawerViewport &&
                 lessonHeader(false, isLearningBootstrapLoading)}
               {isLearningDeepLinkReady || isLearningBootstrapLoading ? (
-                <Suspense
-                  fallback={
-                    <div
-                      className="flex min-h-48 flex-col items-center justify-center py-12 text-sm text-(--text-secondary)"
-                      role="status"
-                      aria-label="Loading discussion"
-                    >
-                      <div className="mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-                      Loading discussion…
-                    </div>
+                <Discussion
+                  key={discussionPersistenceKey}
+                  persistenceKey={discussionPersistenceKey}
+                  courseSlug={courseSlug}
+                  courseId={courseId}
+                  lessonId={backendLessonId}
+                  noteDeepLinkId={noteDeepLinkId}
+                  isThreadDeepLinkReady={isLearningDeepLinkReady}
+                  mobileBottomNavigation={mobileBottomNavigation}
+                  mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+                  mobileLessonHeader={lessonHeader(
+                    true,
+                    isLearningBootstrapLoading,
+                  )}
+                  lessonDescription={selectedLessonDescription}
+                  isLessonDescriptionLoading={
+                    (isApiRoute && isCourseOverviewLoading) ||
+                    isLearningBootstrapLoading
                   }
-                >
-                  <Discussion
-                    key={discussionPersistenceKey}
-                    persistenceKey={discussionPersistenceKey}
-                    courseSlug={courseSlug}
-                    courseId={courseId}
-                    lessonId={backendLessonId}
-                    noteDeepLinkId={noteDeepLinkId}
-                    isThreadDeepLinkReady={isLearningDeepLinkReady}
-                    mobileBottomNavigation={mobileBottomNavigation}
-                    mobileBottomNavigationHidden={mobileBottomNavigationHidden}
-                    mobileLessonHeader={lessonHeader(
-                      true,
-                      isLearningBootstrapLoading,
-                    )}
-                    lessonDescription={selectedLessonDescription}
-                    isLessonDescriptionLoading={
-                      (isApiRoute && isCourseOverviewLoading) ||
-                      isLearningBootstrapLoading
-                    }
-                    interactionCapabilities={interactionCapabilities}
-                    isInteractionCapabilitiesLoading={
-                      isLearningBootstrapLoading
-                    }
-                    onSeekToTimestamp={seekCurrentLessonToTimestamp}
-                  />
-                </Suspense>
+                  interactionCapabilities={interactionCapabilities}
+                  isInteractionCapabilitiesLoading={
+                    isLearningBootstrapLoading
+                  }
+                  onSeekToTimestamp={seekCurrentLessonToTimestamp}
+                />
               ) : isLearningDeepLinkError ? (
                 <div>
                   {phoneLessonDrawerViewport &&

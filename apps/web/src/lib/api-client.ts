@@ -5,13 +5,10 @@ import axios, {
   type AxiosResponse,
 } from "axios";
 import { getApiError, type ApiError } from "./api-error";
-import {
-  API_BASE_URL,
-  getApiBaseUrl,
-  getApiRequestUrl,
-} from "./apiBaseUrl";
 import { authStore } from "../store/auth.store";
-import { resetLoadedLearningInteractions } from "../services/learning-interactions/lifecycle";
+import { interactionCreationCoordinator } from "../services/learning-interactions/interaction-creation-coordinator";
+import { desiredStateCoordinator } from "../services/learning-interactions/desired-state-coordinator";
+import { optimisticDeletionCoordinator } from "../services/learning-interactions/optimistic-deletion-coordinator";
 import {
   buildMfaChallengePath,
   shouldRedirectToMfaChallenge,
@@ -19,9 +16,61 @@ import {
 import { isReactRouterBuildRequest } from "./react-router-build";
 
 export { getApiError, type ApiError };
-export { getApiBaseUrl, getApiRequestUrl };
 
-const BACKEND_URL = API_BASE_URL;
+const CONFIGURED_BACKEND_URL = import.meta.env.VITE_API_BASE_URL || "/v1";
+
+function isPrivateIpv4Address(hostname: string): boolean {
+  const octets = hostname.split(".").map(Number);
+  if (
+    octets.length !== 4 ||
+    octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)
+  ) {
+    return false;
+  }
+
+  const firstOctet = octets[0] ?? -1;
+  const secondOctet = octets[1] ?? -1;
+  return (
+    firstOctet === 10 ||
+    (firstOctet === 172 && secondOctet >= 16 && secondOctet <= 31) ||
+    (firstOctet === 192 && secondOctet === 168)
+  );
+}
+
+/** Replace loopback with the host serving the app when opened over LAN. */
+export function getApiBaseUrl(): string {
+  if (
+    typeof window === "undefined" ||
+    !isPrivateIpv4Address(window.location.hostname)
+  ) {
+    return CONFIGURED_BACKEND_URL;
+  }
+
+  try {
+    const configuredUrl = new URL(
+      CONFIGURED_BACKEND_URL,
+      window.location.origin,
+    );
+    if (
+      (configuredUrl.hostname === "localhost" ||
+        configuredUrl.hostname === "127.0.0.1") &&
+      configuredUrl.protocol === "http:"
+    ) {
+      configuredUrl.hostname = window.location.hostname;
+      return configuredUrl.toString().replace(/\/$/u, "");
+    }
+  } catch {
+    // Keep the configured value if it is not a valid URL.
+  }
+
+  return CONFIGURED_BACKEND_URL;
+}
+
+const BACKEND_URL = getApiBaseUrl();
+
+export function getApiRequestUrl(path: string): string {
+  return `${BACKEND_URL.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
+}
 
 function redirectToMfaSetup(apiError: ApiError): void {
   if (typeof window === "undefined") {
@@ -163,11 +212,9 @@ axiosInstance.interceptors.response.use(undefined, (error: AxiosError) => {
   redirectToMfaSetup(apiError);
   if (shouldClearAuthOnUnauthorized(error, apiError)) {
     authStore.clearAuth();
-    try {
-      resetLoadedLearningInteractions();
-    } catch {
-      // Keep the original API error if learning interaction cleanup fails.
-    }
+    desiredStateCoordinator.reset();
+    interactionCreationCoordinator.reset();
+    optimisticDeletionCoordinator.reset();
   }
   return Promise.reject(apiError);
 });

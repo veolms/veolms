@@ -1,26 +1,28 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { useParams } from "react-router";
-import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
-import { ArrowsInLineVerticalIcon as ArrowsInLineVertical } from "@phosphor-icons/react/ArrowsInLineVertical";
-import { ArrowsOutLineVerticalIcon as ArrowsOutLineVertical } from "@phosphor-icons/react/ArrowsOutLineVertical";
-import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
-import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
-import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
-import { CircleIcon as Circle } from "@phosphor-icons/react/Circle";
-import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
-import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
-import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
-import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
-import { PlayIcon as Play } from "@phosphor-icons/react/Play";
-import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
-import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
-import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
-import { StackIcon as Stack } from "@phosphor-icons/react/Stack";
-import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
-import { TicketIcon as Ticket } from "@phosphor-icons/react/Ticket";
-import { UserIcon as User } from "@phosphor-icons/react/User";
-import { XIcon as X } from "@phosphor-icons/react/X";
+import {
+  ArrowLeft,
+  ArrowsInLineVertical,
+  ArrowsOutLineVertical,
+  BookOpen,
+  CaretDown,
+  CheckCircle,
+  Circle,
+  CircleNotch,
+  Clock,
+  FileText,
+  Heart,
+  Play,
+  PlayCircle,
+  Question,
+  ShoppingBag,
+  Stack,
+  Tag,
+  Ticket,
+  User,
+  X,
+} from "@phosphor-icons/react";
 import {
   MAX_VOLUNTARY_AMOUNT,
   type Category,
@@ -38,14 +40,9 @@ import {
 } from "./catalogue";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
 import type { CourseSection } from "../learning/courseContent";
-import { VirtualizedLessonList } from "./curriculum/VirtualizedLessonList";
-import {
-  getCoursePlayerLaunchPath,
-  getCoursePlayerPath,
-} from "../learning/coursePlayerNavigation";
+import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
 import type { NavigateTo } from "../routing/navigation";
 import { useAuthStore } from "../store/auth.store";
-import { buildLoginPath } from "../routing/routeAccess";
 import { useCourseOverview } from "../services/courses";
 import { useEnrolledCourses } from "../services/enrollments";
 import { getApiError } from "../lib/api-error";
@@ -57,11 +54,6 @@ import {
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
 import { formatDuration, resolveCourseDurationSeconds } from "./courseAdapter";
-
-const OVERVIEW_VIRTUALIZATION_THRESHOLD = 80;
-const NO_PINNED_LESSONS: ReadonlySet<string> = new Set();
-const getOverviewLessonKey = (lesson: CourseSection["lessons"][number]) =>
-  String(lesson[0]);
 // ─── Helpers for Currency, Sale Window, Language, and Price Sizing ────────────
 
 export type PriceSizeVariant = "normal" | "medium" | "large" | "xlarge";
@@ -284,7 +276,6 @@ interface CurriculumSectionProps {
   isOpen: boolean;
   onToggle: () => void;
   onSelectLesson?: (lessonNumber: number) => void;
-  shouldVirtualizeLessons?: boolean;
   isReadOnlyPreview?: boolean;
   isPaidCourse?: boolean;
 }
@@ -301,7 +292,6 @@ function CurriculumSectionItem({
   isOpen,
   onToggle,
   onSelectLesson,
-  shouldVirtualizeLessons = false,
   isReadOnlyPreview = false,
   isPaidCourse = false,
 }: CurriculumSectionProps) {
@@ -314,69 +304,6 @@ function CurriculumSectionItem({
   );
   const durationLabel =
     durationSeconds > 0 ? formatDuration(durationSeconds) : "";
-  const renderLesson = (lesson: CourseSection["lessons"][number]) => {
-    const [number, title, duration, status, isPreview, contentType] = lesson;
-    const isDoc = contentType === "document";
-    const isQuiz = contentType === "quiz";
-
-    return (
-      <button
-        type="button"
-        className={`group/lesson flex items-center gap-3 w-full min-h-11.5 border-0 bg-transparent px-4.5 py-1.5 text-(--text-secondary) text-[0.85rem] text-left transition-colors duration-140 ${
-          isReadOnlyPreview
-            ? "cursor-default opacity-85 hover:bg-transparent hover:text-(--text-secondary)"
-            : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-inset"
-        }`}
-        key={number}
-        disabled={isReadOnlyPreview}
-        onClick={() => {
-          if (isReadOnlyPreview) return;
-          onSelectLesson?.(number);
-        }}
-        aria-label={`Lesson ${number}: ${title}${duration ? `, ${duration}` : ""}`}
-      >
-        <span
-          className={`inline-flex w-5 shrink-0 items-center justify-center text-(--muted) transition-colors duration-140 ${
-            isReadOnlyPreview ? "" : "group-hover/lesson:text-(--accent)"
-          }`}
-          aria-hidden="true"
-        >
-          {isDoc ? (
-            <FileText size={16} weight="regular" />
-          ) : isQuiz ? (
-            <Question size={16} weight="regular" />
-          ) : (
-            <PlayCircle size={16} weight="regular" />
-          )}
-        </span>
-        <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-(--text-secondary)">
-          {title}
-        </span>
-        {duration ? (
-          <span className="text-(--muted) text-[0.78rem] shrink-0 w-11.25 text-right">
-            {duration}
-          </span>
-        ) : null}
-        {isPaidCourse && isPreview ? (
-          <span
-            className="shrink-0 inline-flex items-center rounded-[5px] px-[6px] py-[2px] text-[0.7rem] font-[700] leading-none bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent) border border-[color-mix(in_srgb,var(--accent)_30%,transparent)]"
-            aria-label="Free preview"
-          >
-            Free
-          </span>
-        ) : null}
-        {status === "done" ? (
-          <span className="inline-flex items-center justify-center shrink-0" aria-hidden="true">
-            <CheckCircle size={16} weight="fill" className="text-[#10b981]" />
-          </span>
-        ) : status === "todo" ? (
-          <span className="inline-flex items-center justify-center shrink-0" aria-hidden="true">
-            <Circle size={16} className="text-(--muted)" />
-          </span>
-        ) : null}
-      </button>
-    );
-  };
 
   return (
     <div
@@ -392,7 +319,7 @@ function CurriculumSectionItem({
         type="button"
         className="flex w-full min-h-13 items-center gap-3.5 border-0 px-4.5 py-3 text-(--text) bg-transparent text-[0.92rem] font-semibold text-left cursor-pointer transition-colors duration-140 hover:bg-(--hover) max-[640px]:p-[10px_14px] max-[640px]:text-[0.88rem]"
         aria-expanded={isOpen}
-        aria-controls={isOpen ? panelId : undefined}
+        aria-controls={panelId}
         onClick={onToggle}
       >
         <span
@@ -416,123 +343,112 @@ function CurriculumSectionItem({
         </span>
       </button>
 
-      {isOpen ? (
-        <div id={panelId} role="region" aria-labelledby={buttonId}>
-          <div className="overflow-hidden min-h-0">
-            <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,var(--text))]">
-              {section.lessons.length > 0 ? (
-                shouldVirtualizeLessons ? (
-                  <VirtualizedLessonList
-                    items={section.lessons}
-                    forceVirtualized
-                    estimatedItemSize={46}
-                    itemGap={0}
-                    getItemKey={getOverviewLessonKey}
-                    pinnedItemIds={NO_PINNED_LESSONS}
-                    renderItem={renderLesson}
-                  />
-                ) : (
-                section.lessons.map(
-                  ([
-                    number,
-                    title,
-                    duration,
-                    status,
-                    isPreview,
-                    contentType,
-                  ]) => {
-                    const isDoc = contentType === "document";
-                    const isQuiz = contentType === "quiz";
-                    return (
-                      <button
-                        type="button"
-                        className={`group/lesson flex items-center gap-3 w-full min-h-11.5 border-0 bg-transparent px-4.5 py-1.5 text-(--text-secondary) text-[0.85rem] text-left transition-colors duration-140 ${
+      <div
+        id={panelId}
+        role="region"
+        aria-labelledby={buttonId}
+        aria-hidden={!isOpen}
+        className={`grid motion-reduce:transition-none ${
+          isOpen
+            ? "grid-rows-[1fr] opacity-100 visible transition-[grid-template-rows,opacity,visibility] duration-300 ease-in-out"
+            : "grid-rows-[0fr] opacity-0 invisible transition-[grid-template-rows,opacity,visibility] duration-250 ease-[cubic-bezier(0,1,0,1)]"
+        }`}
+      >
+        <div className="overflow-hidden min-h-0">
+          <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,var(--text))]">
+            {section.lessons.length > 0 ? (
+              section.lessons.map(
+                ([number, title, duration, status, isPreview, contentType]) => {
+                  const isDoc = contentType === "document";
+                  const isQuiz = contentType === "quiz";
+                  return (
+                    <button
+                      type="button"
+                      className={`group/lesson flex items-center gap-3 w-full min-h-11.5 border-0 bg-transparent px-4.5 py-1.5 text-(--text-secondary) text-[0.85rem] text-left transition-colors duration-140 ${
+                        isReadOnlyPreview
+                          ? "cursor-default opacity-85 hover:bg-transparent hover:text-(--text-secondary)"
+                          : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-inset"
+                      }`}
+                      key={number}
+                      disabled={isReadOnlyPreview}
+                      onClick={() => {
+                        if (isReadOnlyPreview) return;
+                        onSelectLesson?.(number);
+                      }}
+                      aria-label={`Lesson ${number}: ${title}${duration ? `, ${duration}` : ""}`}
+                    >
+                      {/* Content type icon */}
+                      <span
+                        className={`inline-flex w-5 shrink-0 items-center justify-center text-(--muted) transition-colors duration-140 ${
                           isReadOnlyPreview
-                            ? "cursor-default opacity-85 hover:bg-transparent hover:text-(--text-secondary)"
-                            : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-inset"
+                            ? ""
+                            : "group-hover/lesson:text-(--accent)"
                         }`}
-                        key={number}
-                        disabled={isReadOnlyPreview}
-                        onClick={() => {
-                          if (isReadOnlyPreview) return;
-                          onSelectLesson?.(number);
-                        }}
-                        aria-label={`Lesson ${number}: ${title}${duration ? `, ${duration}` : ""}`}
+                        aria-hidden="true"
                       >
-                        {/* Content type icon */}
+                        {isDoc ? (
+                          <FileText size={16} weight="regular" />
+                        ) : isQuiz ? (
+                          <Question size={16} weight="regular" />
+                        ) : (
+                          <PlayCircle size={16} weight="regular" />
+                        )}
+                      </span>
+
+                      {/* Lesson title */}
+                      <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-(--text-secondary)">
+                        {title}
+                      </span>
+
+                      {/* Duration */}
+                      {duration ? (
+                        <span className="text-(--muted) text-[0.78rem] shrink-0 w-11.25 text-right">
+                          {duration}
+                        </span>
+                      ) : null}
+
+                      {/* Free preview badge: only displayed when course is paid and lesson is marked as free preview */}
+                      {isPaidCourse && isPreview ? (
                         <span
-                          className={`inline-flex w-5 shrink-0 items-center justify-center text-(--muted) transition-colors duration-140 ${
-                            isReadOnlyPreview
-                              ? ""
-                              : "group-hover/lesson:text-(--accent)"
-                          }`}
+                          className="shrink-0 inline-flex items-center rounded-[5px] px-[6px] py-[2px] text-[0.7rem] font-[700] leading-none bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent) border border-[color-mix(in_srgb,var(--accent)_30%,transparent)]"
+                          aria-label="Free preview"
+                        >
+                          Free
+                        </span>
+                      ) : null}
+
+                      {/* Progress status */}
+                      {status === "done" ? (
+                        <span
+                          className="inline-flex items-center justify-center shrink-0"
                           aria-hidden="true"
                         >
-                          {isDoc ? (
-                            <FileText size={16} weight="regular" />
-                          ) : isQuiz ? (
-                            <Question size={16} weight="regular" />
-                          ) : (
-                            <PlayCircle size={16} weight="regular" />
-                          )}
+                          <CheckCircle
+                            size={16}
+                            weight="fill"
+                            className="text-[#10b981]"
+                          />
                         </span>
-
-                        {/* Lesson title */}
-                        <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-(--text-secondary)">
-                          {title}
+                      ) : status === "todo" ? (
+                        <span
+                          className="inline-flex items-center justify-center shrink-0"
+                          aria-hidden="true"
+                        >
+                          <Circle size={16} className="text-(--muted)" />
                         </span>
-
-                        {/* Duration */}
-                        {duration ? (
-                          <span className="text-(--muted) text-[0.78rem] shrink-0 w-11.25 text-right">
-                            {duration}
-                          </span>
-                        ) : null}
-
-                        {/* Free preview badge: only displayed when course is paid and lesson is marked as free preview */}
-                        {isPaidCourse && isPreview ? (
-                          <span
-                            className="shrink-0 inline-flex items-center rounded-[5px] px-[6px] py-[2px] text-[0.7rem] font-[700] leading-none bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent) border border-[color-mix(in_srgb,var(--accent)_30%,transparent)]"
-                            aria-label="Free preview"
-                          >
-                            Free
-                          </span>
-                        ) : null}
-
-                        {/* Progress status */}
-                        {status === "done" ? (
-                          <span
-                            className="inline-flex items-center justify-center shrink-0"
-                            aria-hidden="true"
-                          >
-                            <CheckCircle
-                              size={16}
-                              weight="fill"
-                              className="text-[#10b981]"
-                            />
-                          </span>
-                        ) : status === "todo" ? (
-                          <span
-                            className="inline-flex items-center justify-center shrink-0"
-                            aria-hidden="true"
-                          >
-                            <Circle size={16} className="text-(--muted)" />
-                          </span>
-                        ) : null}
-                      </button>
-                    );
-                  },
-                )
-                )
-              ) : (
-                <div className="px-3.5 py-3 text-(--muted) text-[0.82rem] italic">
-                  No lessons added yet
-                </div>
-              )}
-            </div>
+                      ) : null}
+                    </button>
+                  );
+                },
+              )
+            ) : (
+              <div className="px-3.5 py-3 text-(--muted) text-[0.82rem] italic">
+                No lessons added yet
+              </div>
+            )}
           </div>
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }
@@ -581,16 +497,6 @@ function CourseHeroSection({
   const createOrder = useCreateCheckoutOrder();
   const verify = useVerifyPayment();
   const isEnrolled = Boolean(user && course.enrolled);
-  const launchCoursePlayer = () => {
-    if (!onNavigatePage) return;
-    const sourcePath =
-      typeof window === "undefined"
-        ? "/courses"
-        : `${window.location.pathname}${window.location.search}`;
-    onNavigatePage(
-      getCoursePlayerLaunchPath(getCourseRouteKey(course), sourcePath),
-    );
-  };
 
   const [isPaymentBusy, setIsPaymentBusy] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -729,16 +635,7 @@ function CourseHeroSection({
   const handlePayNow = async (voluntaryContributionAmount?: number) => {
     if (isReadOnlyPreview) return;
     if (!user) {
-      const returnTo =
-        typeof window === "undefined"
-          ? undefined
-          : `${window.location.pathname}${window.location.search}`;
-      const loginPath = buildLoginPath(returnTo);
-      if (onNavigatePage) {
-        onNavigatePage(loginPath);
-      } else if (typeof window !== "undefined") {
-        window.location.assign(loginPath);
-      }
+      setPaymentError("Please log in before enrolling.");
       return;
     }
 
@@ -760,7 +657,9 @@ function CourseHeroSection({
 
       if (!order.gateway) {
         setIsPaymentBusy(false);
-        launchCoursePlayer();
+        onNavigatePage?.(
+          `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
+        );
         return;
       }
 
@@ -797,7 +696,9 @@ function CourseHeroSection({
               gatewaySignature: response.razorpay_signature,
             });
             setIsPaymentBusy(false);
-            launchCoursePlayer();
+            onNavigatePage?.(
+              `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
+            );
           } catch (error) {
             setPaymentError(
               error instanceof Error
@@ -831,7 +732,11 @@ function CourseHeroSection({
     <Play size="1.15em" weight="fill" className="shrink-0" aria-hidden="true" />
   );
   let ctaDisabled = false;
-  let ctaOnClick: (() => void) | undefined = launchCoursePlayer;
+  let ctaOnClick: (() => void) | undefined = () => {
+    if (onNavigatePage) {
+      onNavigatePage(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+    }
+  };
 
   const showApplyCoupon = !isCreatorNormal && !isFree;
   const isCustomUnderPrice =
@@ -854,7 +759,13 @@ function CourseHeroSection({
       />
     );
     ctaDisabled = false;
-    ctaOnClick = launchCoursePlayer;
+    ctaOnClick = () => {
+      if (onNavigatePage) {
+        onNavigatePage(
+          `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
+        );
+      }
+    };
   } else if (isPreview) {
     // 2. Creator Preview:
     if (isFree) {
@@ -975,7 +886,9 @@ function CourseHeroSection({
   const handlePreviewClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     if (isReadOnlyPreview) return;
-    launchCoursePlayer();
+    if (onNavigatePage) {
+      onNavigatePage(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+    }
   };
 
   return (
@@ -1703,9 +1616,6 @@ function CourseCurriculumCard({
               isOpen={openSections.has(index)}
               onToggle={() => onToggleSection(index)}
               onSelectLesson={onSelectLesson}
-              shouldVirtualizeLessons={
-                course.lectures >= OVERVIEW_VIRTUALIZATION_THRESHOLD
-              }
               isReadOnlyPreview={isReadOnlyPreview}
               isPaidCourse={isPaidCourse}
             />
@@ -2050,7 +1960,6 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
   const courseSlug = props.courseSlug ?? routeCourseSlug;
   const serverCategories = props.categories ?? [];
   const authUser = useAuthStore((s) => s.user);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const defaultInstructorName =
     authUser?.displayName || authUser?.username || "Instructor";
 
@@ -2078,9 +1987,7 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
 
   const course = activeAdapted?.course ?? props.customCourse;
 
-  const { data: enrolledData } = useEnrolledCourses({
-    enabled: isAuthenticated,
-  });
+  const { data: enrolledData } = useEnrolledCourses();
 
   const isEnrolled = useMemo(() => {
     if (!enrolledData?.courses) return false;

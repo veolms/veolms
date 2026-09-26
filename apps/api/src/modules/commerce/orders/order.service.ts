@@ -13,11 +13,7 @@ import { CommerceErrors } from "../shared/commerce.errors.ts";
 import { AppError } from "../../../lib/errors.ts";
 import * as orderRepo from "./order.repository.ts";
 import * as setupRepo from "../../auth/setup/setup.repository.ts";
-import {
-  toOrderAdminDetails,
-  toOrderContract,
-  toOrderPaymentSummary,
-} from "./order.mapper.ts";
+import { toOrderAdminDetails, toOrderContract } from "./order.mapper.ts";
 
 export interface OrderService {
   getOrderById(scope: OrderScope, orderId: string): Promise<Order>;
@@ -86,12 +82,7 @@ export function createOrderService({
       throw CommerceErrors.ORDER_NOT_FOUND(orderId);
     }
 
-    const [items, studentPayments] = await Promise.all([
-      orderRepo.listOrderItems(database, order.id),
-      scope.type === "user"
-        ? orderRepo.listOrderPaymentSummariesByOrderIds(database, [order.id])
-        : Promise.resolve([]),
-    ]);
+    const items = await orderRepo.listOrderItems(database, order.id);
 
     let adminDetails: OrderAdminDetails | undefined;
     if (scope.type === "academy") {
@@ -114,12 +105,7 @@ export function createOrderService({
       });
     }
 
-    return toOrderContract(order, items, {
-      admin: adminDetails,
-      ...(scope.type === "user"
-        ? { paymentSummary: toOrderPaymentSummary(studentPayments[0]) }
-        : {}),
-    });
+    return toOrderContract(order, items, { admin: adminDetails });
   }
 
   async function listOrders(
@@ -169,7 +155,7 @@ export function createOrderService({
     ];
 
     // Batch load relations in parallel
-    const [allItems, users, coupons, payments, refunds, studentPayments] = await Promise.all([
+    const [allItems, users, coupons, payments, refunds] = await Promise.all([
       orderRepo.listOrderItemsByOrderIds(database, orderIds),
       scope.type === "academy"
         ? orderRepo.listUsersByIds(database, userIds)
@@ -182,9 +168,6 @@ export function createOrderService({
         : Promise.resolve([]),
       scope.type === "academy"
         ? orderRepo.listRefundsByOrderIds(database, orderIds)
-        : Promise.resolve([]),
-      scope.type === "user"
-        ? orderRepo.listOrderPaymentSummariesByOrderIds(database, orderIds)
         : Promise.resolve([]),
     ]);
 
@@ -215,13 +198,6 @@ export function createOrderService({
       }
     }
 
-    const studentPaymentsByOrderId = new Map<string, (typeof studentPayments)[0]>();
-    for (const payment of studentPayments) {
-      if (!studentPaymentsByOrderId.has(payment.order_id)) {
-        studentPaymentsByOrderId.set(payment.order_id, payment);
-      }
-    }
-
     const refundsByOrderId = new Map<string, typeof refunds>();
     for (const r of refunds) {
       const list = refundsByOrderId.get(r.order_id) ?? [];
@@ -243,16 +219,7 @@ export function createOrderService({
             })
           : undefined;
 
-      return toOrderContract(order, items, {
-        admin: adminDetails,
-        ...(scope.type === "user"
-          ? {
-              paymentSummary: toOrderPaymentSummary(
-                studentPaymentsByOrderId.get(order.id),
-              ),
-            }
-          : {}),
-      });
+      return toOrderContract(order, items, { admin: adminDetails });
     });
 
     const lastOrder = pageRows[pageRows.length - 1]!;

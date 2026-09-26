@@ -24,14 +24,14 @@ import type {
   TotpEnableRequest,
   TotpVerifyRequest,
   UserProfileResponse,
-} from "@veolms/contracts/auth";
+} from "@veolms/contracts";
 import {
   avatarUploadContentTypeSchema,
   DICEBEAR_BASE_URL,
   passkeyAuthenticationOptionsResponseSchema,
   passkeyRegistrationOptionsResponseSchema,
   sessionResponseSchema,
-} from "@veolms/contracts/auth";
+} from "@veolms/contracts";
 
 export interface TotpSetupResponse {
   secret: string;

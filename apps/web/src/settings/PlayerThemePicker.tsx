@@ -3,7 +3,7 @@ import {
   getPlayerThemeStyle,
   type BuiltInPlayerThemeId,
   type PlayerThemeDefinition,
-} from "@veolms/video-player/themes";
+} from "@veolms/video-player";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 
 export interface PlayerThemePickerProps {

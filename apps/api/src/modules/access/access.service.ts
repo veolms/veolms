@@ -49,11 +49,6 @@ export interface AccessService {
     courseId: string,
   ): Promise<string[]>;
 
-  listActiveUserIdsForCourses(
-    database: Executor,
-    courseIds: readonly string[],
-  ): Promise<Array<{ courseId: string; userId: string }>>;
-
   revokeAccessForOrder(database: Executor, orderId: string): Promise<void>;
 
   revokeAccessForOrderCourse(
@@ -218,13 +213,6 @@ export function createAccessService(): AccessService {
     return rows;
   }
 
-  async function listActiveUserIdsForCourses(
-    database: Executor,
-    courseIds: readonly string[],
-  ) {
-    return await accessRepo.listActiveUserIdsForCourses(database, courseIds);
-  }
-
   async function revokeAccessForOrder(
     database: Executor,
     orderId: string,
@@ -251,7 +239,6 @@ export function createAccessService(): AccessService {
     listUserGrants,
     hasActiveAccess,
     listActiveUserIdsForCourse,
-    listActiveUserIdsForCourses,
     revokeAccessForOrder,
     revokeAccessForOrderCourse,
   };

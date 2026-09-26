@@ -2,10 +2,7 @@
   "name": "@veolms/contracts",
   "private": true,
   "type": "module",
-  "exports": {
-    ".": "./src/index.ts",
-    "./auth": "./src/auth/index.ts"
-  },
+  "exports": "./src/index.ts",
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit"

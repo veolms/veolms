@@ -1,5 +1,3 @@
-import "./styles/features/settings/foundation.css";
-import "./styles/features/settings/preferences-responsive.css";
 import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
@@ -8,9 +6,7 @@ import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldChec
 import { SidebarSimpleIcon as SidebarSimple } from "@phosphor-icons/react/SidebarSimple";
 import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import {
-  lazy,
   memo,
-  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -43,96 +39,16 @@ import {
   isEditingShortcutTarget,
 } from "./keyboardShortcuts";
 import { SwipeableTabPanel } from "./navigation/SwipeableTabPanel";
+import { AccountSettings } from "./settings/AccountSettings";
+import { AppearanceSettings } from "./settings/AppearanceSettings";
+import { LearningSettings } from "./settings/LearningSettings";
+import { NotificationSettings } from "./settings/NotificationSettings";
+import { ProfileSettings } from "./settings/ProfileSettings";
+import { SecuritySettings } from "./settings/SecuritySettings";
 import { useAuthStore } from "./store/auth.store";
-import { SettingsLoadingFallback } from "./settings/SettingsLoadingFallback";
+import { SidebarSettings } from "./settings/SidebarSettings";
+import "./auth/mfa-setup.css";
 export type { SettingsTab } from "./routing/tabSessionState";
-
-function createSettingsTabImporter<TModule>(importer: () => Promise<TModule>) {
-  let modulePromise: Promise<TModule> | undefined;
-  return () => {
-    modulePromise ??= importer().catch((error: unknown) => {
-      modulePromise = undefined;
-      throw error;
-    });
-    return modulePromise;
-  };
-}
-
-const loadProfileSettings = createSettingsTabImporter(() =>
-  import("./settings/ProfileSettings"),
-);
-const loadAppearanceSettings = createSettingsTabImporter(() =>
-  import("./settings/AppearanceSettings"),
-);
-const loadSidebarSettings = createSettingsTabImporter(() =>
-  import("./settings/SidebarSettings"),
-);
-const loadLearningSettings = createSettingsTabImporter(() =>
-  import("./settings/LearningSettings"),
-);
-const loadNotificationSettings = createSettingsTabImporter(() =>
-  import("./settings/NotificationSettings"),
-);
-const loadSecuritySettings = createSettingsTabImporter(() =>
-  import("./settings/SecuritySettings"),
-);
-const loadAccountSettings = createSettingsTabImporter(() =>
-  import("./settings/AccountSettings"),
-);
-
-const ProfileSettings = lazy(() =>
-  loadProfileSettings().then((module) => ({
-    default: module.ProfileSettings,
-  })),
-);
-const AppearanceSettings = lazy(() =>
-  loadAppearanceSettings().then((module) => ({
-    default: module.AppearanceSettings,
-  })),
-);
-const SidebarSettings = lazy(() =>
-  loadSidebarSettings().then((module) => ({
-    default: module.SidebarSettings,
-  })),
-);
-const LearningSettings = lazy(() =>
-  loadLearningSettings().then((module) => ({
-    default: module.LearningSettings,
-  })),
-);
-const NotificationSettings = lazy(() =>
-  loadNotificationSettings().then((module) => ({
-    default: module.NotificationSettings,
-  })),
-);
-const SecuritySettings = lazy(() =>
-  loadSecuritySettings().then((module) => ({
-    default: module.SecuritySettings,
-  })),
-);
-const AccountSettings = lazy(() =>
-  loadAccountSettings().then((module) => ({
-    default: module.AccountSettings,
-  })),
-);
-
-const SETTINGS_TAB_IMPORTERS: Record<SettingsTab, () => Promise<unknown>> = {
-  profile: loadProfileSettings,
-  appearance: loadAppearanceSettings,
-  sidebar: loadSidebarSettings,
-  learning: loadLearningSettings,
-  notifications: loadNotificationSettings,
-  security: loadSecuritySettings,
-  account: loadAccountSettings,
-};
-
-export function preloadSettingsTab(tab: string) {
-  return SETTINGS_TAB_IMPORTERS[normalizeSettingsTab(tab)]();
-}
-
-function prefetchSettingsTab(tab: SettingsTab) {
-  void preloadSettingsTab(tab).catch(() => undefined);
-}
 
 type SettingsTabIcon = ComponentType<{
   size?: number;
@@ -302,10 +218,11 @@ export function SettingsPage({
   // shell. This also prevents stale route props from leaving controls active
   // for a signed-out user.
   const canEditAuthenticatedSettings = isAuthenticated && storeIsAuthenticated;
-  const tabListRef = useRef<HTMLElement>(null);
-  const [swipePreviewTab, setSwipePreviewTab] = useState<SettingsTab | null>(
-    null,
+  const activeTabIndex = SETTINGS_TAB_IDS.indexOf(activeTab);
+  const [preparedTabs, setPreparedTabs] = useState<ReadonlySet<SettingsTab>>(
+    () => new Set([activeTab]),
   );
+  const tabListRef = useRef<HTMLElement>(null);
   const pageProps = useMemo<SettingsPageProps>(
     () => ({
       role,
@@ -350,7 +267,6 @@ export function SettingsPage({
   );
   const navigateTab = useCallback(
     (id: SettingsTab) => {
-      prefetchSettingsTab(id);
       rememberSettingsTab(id);
       window.requestAnimationFrame(() => {
         window.setTimeout(
@@ -371,28 +287,43 @@ export function SettingsPage({
     <SettingsTabContent panelTab={panelTab} pageProps={pageProps} />
   );
 
+  const prepareTab = useCallback((id: SettingsTab) => {
+    setPreparedTabs((current) => {
+      if (current.has(id)) return current;
+      const next = new Set(current);
+      next.add(id);
+      return next;
+    });
+  }, []);
+
   const navigateTabShortcut = useCallback(
     (id: SettingsTab) => {
-      prefetchSettingsTab(id);
+      prepareTab(id);
       rememberSettingsTab(id);
       onNavigatePage?.(`/settings/${id}`, { preserveScroll: true });
     },
-    [onNavigatePage],
+    [onNavigatePage, prepareTab],
   );
 
-  const prepareSwipeTab = useCallback((tab: SettingsTab) => {
-    setSwipePreviewTab(tab);
-    prefetchSettingsTab(tab);
-  }, []);
-
-  const clearSwipePreview = useCallback(() => {
-    setSwipePreviewTab(null);
-  }, []);
+  const prepareSwipeNeighbors = useCallback(() => {
+    setPreparedTabs((current) => {
+      const next = new Set(current);
+      const previous = SETTINGS_TAB_IDS[activeTabIndex - 1];
+      const following = SETTINGS_TAB_IDS[activeTabIndex + 1];
+      if (previous) next.add(previous);
+      if (following) next.add(following);
+      return next.size === current.size ? current : next;
+    });
+  }, [activeTabIndex]);
 
   useEffect(() => {
     rememberSettingsTab(activeTab);
-    setSwipePreviewTab(null);
-  }, [activeTab]);
+    prepareTab(activeTab);
+  }, [activeTab, prepareTab]);
+
+  useEffect(() => {
+    prepareSwipeNeighbors();
+  }, [prepareSwipeNeighbors]);
 
   useEffect(() => {
     const exitSettings = (event: KeyboardEvent) => {
@@ -491,12 +422,12 @@ export function SettingsPage({
             data-swipe-tab-id={id}
             tabIndex={activeTab === id ? 0 : -1}
             className={activeTab === id ? "group is-active" : "group"}
-            onMouseEnter={() => prefetchSettingsTab(id)}
-            onPointerDown={() => prefetchSettingsTab(id)}
+            onPointerEnter={() => prepareTab(id)}
+            onPointerDown={() => prepareTab(id)}
             onClick={() => navigateTab(id)}
             onKeyDown={handleRovingTabKeyDown}
             onFocus={(event) => {
-              prefetchSettingsTab(id);
+              prepareTab(id);
               scrollKeyboardFocusedTabIntoView(event);
             }}
           >
@@ -518,23 +449,14 @@ export function SettingsPage({
         className="settings-tab-content pb-8"
         stateAttribute="data-settings-tab"
         labelledBy={`settings-tab-${activeTab}`}
-        onSwipeStart={prepareSwipeTab}
-        onSwipeEnd={clearSwipePreview}
+        onSwipeStart={prepareSwipeNeighbors}
         nativeOnFinePointer
         focusable={false}
       >
         {(panelTab) =>
-          panelTab === activeTab || panelTab === swipePreviewTab ? (
-            <Suspense fallback={<SettingsLoadingFallback />}>
-              {renderSettingsTab(panelTab)}
-            </Suspense>
-          ) : (
-            <div
-              className="settings-content settings-content--swipe-placeholder"
-              aria-hidden="true"
-              inert
-            />
-          )
+          panelTab === activeTab || preparedTabs.has(panelTab)
+            ? renderSettingsTab(panelTab)
+            : null
         }
       </SwipeableTabPanel>
     </div>

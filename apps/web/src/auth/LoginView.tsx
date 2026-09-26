@@ -1,8 +1,12 @@
-import { lazy, Suspense, useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { AccountForm } from "./AccountForm";
+import { MfaEnrollmentSetup } from "./MfaEnrollmentSetup";
 import { AuthBrandMark } from "./AuthBrandPanel";
 import { IdentifierForm } from "./IdentifierForm";
+import { OtpForm } from "./OtpForm";
 import { SocialLoginActions } from "./SocialLoginActions";
+import { MfaStepUp } from "./MfaStepUp";
 import {
   AUTH_CARD_HEADING_ID,
   authFlowReducer,
@@ -15,21 +19,6 @@ import { resolveAuthenticatedDestination } from "../routing/routeAccess";
 import { productName } from "../routing/routeDescriptors";
 import { useLogin, useRegister, useSendOtp } from "../services/auth";
 import { authStore } from "../store/auth.store";
-
-const AccountForm = lazy(() =>
-  import("./AccountForm").then((module) => ({ default: module.AccountForm })),
-);
-const MfaEnrollmentSetup = lazy(() =>
-  import("./MfaEnrollmentSetup").then((module) => ({
-    default: module.MfaEnrollmentSetup,
-  })),
-);
-const OtpForm = lazy(() =>
-  import("./OtpForm").then((module) => ({ default: module.OtpForm })),
-);
-const MfaStepUp = lazy(() =>
-  import("./MfaStepUp").then((module) => ({ default: module.MfaStepUp })),
-);
 
 function resolvePayload(identifier: AuthIdentifier) {
   return identifier.method === "email"
@@ -237,9 +226,6 @@ export function LoginView() {
           onDone={() => {
             dispatch({ type: "ADMIN_MFA_SETUP_DONE" });
           }}
-          onClearError={() => {
-            dispatch({ type: "ADMIN_MFA_SETUP_ERROR_CLEARED" });
-          }}
           onError={(message) => {
             dispatch({ type: "ADMIN_MFA_SETUP_FAILED", message });
           }}
@@ -419,19 +405,7 @@ export function LoginView() {
 
   return (
     <section aria-labelledby={AUTH_CARD_HEADING_ID} className="auth-card">
-      <Suspense
-        fallback={
-          <div
-            className="auth-card__form-slot"
-            role="status"
-            aria-live="polite"
-          >
-            Loading secure sign-in…
-          </div>
-        }
-      >
-        {renderStep()}
-      </Suspense>
+      {renderStep()}
     </section>
   );
 }
