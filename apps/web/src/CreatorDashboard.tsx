@@ -37,8 +37,6 @@ const creatorCourses = [
     status: "Published",
     students: "1,246",
     progress: 64,
-    watch: "642 hrs",
-    rating: "4.8",
   },
   {
     title: "Complete Backend with Node.js",
@@ -46,8 +44,6 @@ const creatorCourses = [
     status: "Published",
     students: "987",
     progress: 58,
-    watch: "412 hrs",
-    rating: "4.7",
   },
   {
     title: "Building VeoLMS: Idea to Production",
@@ -55,8 +51,6 @@ const creatorCourses = [
     status: "Published",
     students: "653",
     progress: 71,
-    watch: "230 hrs",
-    rating: "4.9",
   },
 ];
 
@@ -868,12 +862,6 @@ function CoursesPanel({ onNavigatePage }: NavigateProps) {
           <span>Status</span>
           <span>Students</span>
           <span>Avg Progress</span>
-          <span>
-            Watch Hrs
-            <br />
-            (This Month)
-          </span>
-          <span>Rating</span>
         </div>
         {creatorCourses.map((course) => (
           <div className="creator-table-row" key={course.title}>
@@ -895,10 +883,6 @@ function CoursesPanel({ onNavigatePage }: NavigateProps) {
               <i>
                 <b style={{ width: `${course.progress}%` }} />
               </i>
-            </span>
-            <span>{course.watch}</span>
-            <span>
-              {course.rating} <b className="creator-rating">★</b>
             </span>
           </div>
         ))}

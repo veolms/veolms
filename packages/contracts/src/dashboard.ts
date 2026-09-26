@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { courseSchema } from "./course/course.ts";
 
 export const dashboardRangeSchema = z.enum(["7d", "30d", "3m", "1y"]);
 export type DashboardRange = z.infer<typeof dashboardRangeSchema>;
@@ -63,6 +64,17 @@ export type DashboardLearningActivity = z.infer<
   typeof dashboardLearningActivitySchema
 >;
 
+export const dashboardYourCourseSchema = z.strictObject({
+  id: z.uuid(),
+  title: z.string(),
+  thumbnailUrl: courseSchema.shape.thumbnailUrl,
+  thumbnailSrcSet: courseSchema.shape.thumbnailSrcSet,
+  status: courseSchema.shape.status,
+  students: z.number().int().nonnegative(),
+  averageProgressPercent: z.number().nonnegative().nullable(),
+});
+export type DashboardYourCourse = z.infer<typeof dashboardYourCourseSchema>;
+
 export const dashboardSummaryResponseSchema = z.strictObject({
   revenue: z.strictObject({
     value: z.number(),
@@ -78,6 +90,7 @@ export const dashboardSummaryResponseSchema = z.strictObject({
   watchHours: dashboardKpiSchema,
   revenueOverview: dashboardRevenueOverviewSchema,
   learningActivity: dashboardLearningActivitySchema,
+  yourCourses: z.array(dashboardYourCourseSchema),
 });
 
 export type DashboardSummaryResponse = z.infer<

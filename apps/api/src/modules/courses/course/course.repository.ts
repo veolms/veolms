@@ -271,6 +271,7 @@ export async function listAllCourses(database: Kysely<Database>) {
         .as("lesson_duration_seconds"),
     ])
     .where("courses.deleted_at", "is", null)
+    .orderBy("courses.updated_at", "desc")
     .orderBy("courses.created_at", "desc")
     .execute();
 }
@@ -343,6 +344,7 @@ export async function listCoursesByCreator(
     ])
     .where("courses.creator_id", "=", creatorId)
     .where("courses.deleted_at", "is", null)
+    .orderBy("courses.updated_at", "desc")
     .orderBy("courses.created_at", "desc")
     .execute();
 }

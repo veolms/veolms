@@ -8,6 +8,7 @@ import type {
   DashboardSummaryResponse,
   DashboardLearningActivity,
   DashboardRange,
+  DashboardYourCourse,
 } from "@veolms/contracts";
 import type { OrderScope } from "@veolms/contracts";
 import type { OrderService } from "../commerce/orders/order.service.ts";
@@ -37,6 +38,11 @@ interface ScopedCourse {
   createdAt: string;
   publishedAt: string | null;
 }
+
+type DashboardCourse = Pick<
+  DashboardYourCourse,
+  "id" | "title" | "thumbnailUrl" | "thumbnailSrcSet" | "status"
+>;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RANGE_DAYS = 30;
@@ -258,6 +264,45 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       })),
       isPlatformWide: false,
     };
+  }
+
+  async function resolveDashboardCourses(
+    actor: AnalyticsActor,
+  ): Promise<DashboardCourse[]> {
+    const mine = await courseService.listMyCourses(actor.id, actor.roles);
+    return mine.courses.map((course) => ({
+      id: course.id,
+      title: course.title,
+      thumbnailUrl: course.thumbnailUrl,
+      thumbnailSrcSet: course.thumbnailSrcSet,
+      status: course.status,
+    }));
+  }
+
+  async function buildYourCourses(
+    courses: DashboardCourse[],
+  ): Promise<DashboardYourCourse[]> {
+    if (courses.length === 0) return [];
+
+    const courseIds = courses.map((course) => course.id);
+    const [enrollmentCounts, progressRows] = await Promise.all([
+      enrollmentService.listEnrollmentCountsByCourse({ courseId: courseIds }),
+      learningProgressService.getAverageProgressByCourse({
+        courseId: courseIds,
+      }),
+    ]);
+    const studentsByCourse = new Map(
+      enrollmentCounts.map((row) => [row.courseId, row.enrollmentCount]),
+    );
+    const progressByCourse = new Map(
+      progressRows.map((row) => [row.courseId, row.averageProgressPercent]),
+    );
+
+    return courses.map((course) => ({
+      ...course,
+      students: studentsByCourse.get(course.id) ?? 0,
+      averageProgressPercent: progressByCourse.get(course.id) ?? null,
+    }));
   }
 
   async function buildCoursePerformance(
@@ -563,6 +608,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     const dashboardNow = new Date();
     const enrollmentActivityWindow =
       resolveEnrollmentActivityWindow(dashboardNow);
+    const dashboardCourses = await resolveDashboardCourses(actor);
     const { courseIds, isPlatformWide } =
       dashboardScope === "platform"
         ? { courseIds: [], isPlatformWide: true }
@@ -588,6 +634,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
           refunds: kpi(0, 0),
         },
         learningActivity: emptyLearningActivity(enrollmentActivityWindow),
+        yourCourses: await buildYourCourses(dashboardCourses),
       };
     }
 
@@ -607,7 +654,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       activePreviousTo,
     } = resolveDashboardDateRanges(dashboardNow);
 
-    const [currentRevenue, revenueOverview, learningActivity] =
+    const [currentRevenue, revenueOverview, learningActivity, yourCourses] =
       await Promise.all([
         orderService.getRawStatsForCourses(scope, {
           courseId: courseIdFilter,
@@ -616,6 +663,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
         }),
         buildRevenueOverview(scope, courseIdFilter, range),
         buildLearningActivity(courseIdFilter, enrollmentActivityWindow),
+        buildYourCourses(dashboardCourses),
       ]);
 
     const [
@@ -674,6 +722,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       watchHours: kpi(watchHoursCurrent, watchHoursPrevious),
       revenueOverview,
       learningActivity,
+      yourCourses,
     };
   }
 

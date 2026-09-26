@@ -188,6 +188,29 @@ export async function listTopCoursesByEnrollment(
   }));
 }
 
+export async function listEnrollmentCountsByCourse(
+  database: Executor,
+  options: { courseId?: string | string[] } = {},
+): Promise<Array<{ courseId: string; enrollmentCount: number }>> {
+  const courseIds = toCourseIdList(options.courseId);
+  if (courseIds.length === 0) return [];
+
+  const rows = await database
+    .selectFrom("enrollments")
+    .select([
+      "course_id",
+      sql<number>`count(*)::int`.as("enrollment_count"),
+    ])
+    .where("course_id", "in", courseIds)
+    .groupBy("course_id")
+    .execute();
+
+  return rows.map((row) => ({
+    courseId: row.course_id,
+    enrollmentCount: Number(row.enrollment_count),
+  }));
+}
+
 export async function insertEnrollment(
   database: Executor,
   values: {

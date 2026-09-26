@@ -18,6 +18,9 @@ export interface EnrollmentService {
     to?: Date;
     courseId?: string | string[];
   }): Promise<Array<{ courseId: string; enrollmentCount: number }>>;
+  listEnrollmentCountsByCourse(options?: {
+    courseId?: string | string[];
+  }): Promise<Array<{ courseId: string; enrollmentCount: number }>>;
 }
 
 export function createEnrollmentService({
@@ -182,10 +185,17 @@ export function createEnrollmentService({
     return await enrollmentRepo.listTopCoursesByEnrollment(database, options);
   }
 
+  async function listEnrollmentCountsByCourse(options: {
+    courseId?: string | string[];
+  } = {}) {
+    return await enrollmentRepo.listEnrollmentCountsByCourse(database, options);
+  }
+
   return {
     listEnrolledCourses,
     getEnrollmentStats,
     getEnrollmentActivityBuckets,
     listTopCoursesByEnrollment,
+    listEnrollmentCountsByCourse,
   };
 }

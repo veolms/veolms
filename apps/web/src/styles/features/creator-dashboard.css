@@ -473,7 +473,7 @@
   min-width: 0;
   grid-template-columns:
     minmax(132px, 1.55fr) minmax(54px, 0.7fr) minmax(46px, 0.52fr)
-    minmax(65px, 0.72fr) minmax(62px, 0.68fr) minmax(38px, 0.42fr);
+    minmax(65px, 0.72fr);
   column-gap: 7px;
 }
 

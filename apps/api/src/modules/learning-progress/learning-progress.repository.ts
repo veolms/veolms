@@ -86,6 +86,38 @@ export async function getAverageProgressAndCompletionRate(
   };
 }
 
+export async function getAverageProgressByCourse(
+  database: LearningProgressExecutor,
+  filters: { courseId?: string | string[] } = {},
+): Promise<Array<{ courseId: string; averageProgressPercent: number }>> {
+  const courseIds = toIdList(filters.courseId);
+  if (courseIds.length === 0) return [];
+
+  const rows = await database
+    .selectFrom("learning_progress")
+    .select([
+      "course_id",
+      "user_id",
+      sql<number>`avg(progress_percent)`.as("avg_percent"),
+    ])
+    .where("course_id", "in", courseIds)
+    .groupBy(["course_id", "user_id"])
+    .execute();
+
+  const totals = new Map<string, { total: number; count: number }>();
+  for (const row of rows) {
+    const current = totals.get(row.course_id) ?? { total: 0, count: 0 };
+    current.total += Number(row.avg_percent);
+    current.count += 1;
+    totals.set(row.course_id, current);
+  }
+
+  return Array.from(totals, ([courseId, value]) => ({
+    courseId,
+    averageProgressPercent: value.total / value.count,
+  }));
+}
+
 /**
  * Distinct-user counts of progress *events* (not full-course averages) in a
  * date range — a simplified stand-in for a per-cohort "started"/"completed"
