@@ -910,10 +910,10 @@ test("sidebar logo stays on one anchor while the rail reveals it", async ({
 test("learning settings save a coherent preference object", async ({
   page,
 }) => {
-  await page.route("**/api/v1/courses", (route) =>
+  await page.route("**/v1/courses", (route) =>
     route.fulfill({ status: 200, json: { courses: [] } }),
   );
-  await page.route("**/api/v1/notification-preferences", (route) =>
+  await page.route("**/v1/notification-preferences", (route) =>
     route.fulfill({ status: 200, json: { preferences: [] } }),
   );
   await openApp(page, "/settings/learning");

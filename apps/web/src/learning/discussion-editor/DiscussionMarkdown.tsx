@@ -4,6 +4,7 @@ import type {
   DynamicImportLanguageRegistration,
   HighlighterCore,
 } from "@shikijs/core";
+import type { DescriptionChapterDeclaration } from "@veolms/video-player";
 import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -110,6 +111,52 @@ const INLINE_TIMESTAMP_LINK_CLASS_NAME =
 const INLINE_TIMESTAMP_TEXT_CLASS_NAME =
   "inline font-medium text-blue-400 no-underline";
 
+interface InlineTimestampButtonProps {
+  value: string;
+  seconds: number;
+  ariaLabel: string;
+  onSeekToTimestamp?: (seconds: number) => void;
+  className?: string;
+}
+
+function InlineTimestampButton({
+  value,
+  seconds,
+  ariaLabel,
+  onSeekToTimestamp,
+  className,
+}: InlineTimestampButtonProps) {
+  if (!onSeekToTimestamp) {
+    return (
+      <span
+        data-inline-timestamp={value}
+        className={INLINE_TIMESTAMP_TEXT_CLASS_NAME}
+      >
+        {value}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      data-inline-timestamp={value}
+      aria-label={ariaLabel}
+      className={
+        className
+          ? `${INLINE_TIMESTAMP_LINK_CLASS_NAME} ${className}`
+          : INLINE_TIMESTAMP_LINK_CLASS_NAME
+      }
+      onClick={(event) => {
+        event.stopPropagation();
+        onSeekToTimestamp(seconds);
+      }}
+    >
+      {value}
+    </button>
+  );
+}
+
 function renderInlineTimestampsInNode(
   node: React.ReactNode,
   options: InlineTimestampRenderOptions,
@@ -124,32 +171,14 @@ function renderInlineTimestampsInNode(
       if (part.type === "text") return part.value;
       const ariaLabel = formatInlineTimestampAriaLabel(part);
 
-      if (!options.onSeekToTimestamp) {
-        return (
-          <span
-            key={`timestamp-${index}-${part.value}`}
-            data-inline-timestamp={part.value}
-            className={INLINE_TIMESTAMP_TEXT_CLASS_NAME}
-          >
-            {part.value}
-          </span>
-        );
-      }
-
       return (
-        <button
+        <InlineTimestampButton
           key={`timestamp-${index}-${part.value}`}
-          type="button"
-          data-inline-timestamp={part.value}
-          aria-label={ariaLabel}
-          className={INLINE_TIMESTAMP_LINK_CLASS_NAME}
-          onClick={(event) => {
-            event.stopPropagation();
-            options.onSeekToTimestamp?.(part.seconds);
-          }}
-        >
-          {part.value}
-        </button>
+          value={part.value}
+          seconds={part.seconds}
+          ariaLabel={ariaLabel}
+          onSeekToTimestamp={options.onSeekToTimestamp}
+        />
       );
     });
   }
@@ -219,7 +248,67 @@ interface DiscussionMarkdownProps {
   enableInlineTimestamps?: boolean;
   /** Seeks the current lesson player when an inline timestamp is activated. */
   onSeekToTimestamp?: (seconds: number) => void;
+  /** Accepted plain-text lesson-description chapters to render as seek buttons. */
+  chapterDeclarations?: readonly DescriptionChapterDeclaration[];
   className?: string;
+}
+
+const CHAPTER_MARKER_PREFIX = "#__veolms-plain-chapter-";
+
+function chapterMarker(index: number) {
+  return `${CHAPTER_MARKER_PREFIX}${index}`;
+}
+
+function chapterMarkerIndex(href: string | undefined) {
+  if (!href?.startsWith(CHAPTER_MARKER_PREFIX)) return null;
+  const value = Number(href.slice(CHAPTER_MARKER_PREFIX.length));
+  return Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+function preparePlainChapterMarkdown(
+  markdown: string,
+  declarations: readonly DescriptionChapterDeclaration[],
+) {
+  if (declarations.length === 0) return markdown;
+
+  const declarationByLine = new Map(
+    declarations.map((declaration, index) => [
+      declaration.lineStart,
+      { declaration, index },
+    ]),
+  );
+  const lines = markdown.split(/\r?\n/);
+  const output: string[] = [];
+  let sourceOffset = 0;
+
+  for (const [lineIndex, line] of lines.entries()) {
+    const entry = declarationByLine.get(lineIndex + 1);
+
+    if (entry) {
+      if (output.at(-1)?.trim()) output.push("");
+
+      const timestampStart = entry.declaration.timestampStart - sourceOffset;
+      const timestampEnd = entry.declaration.timestampEnd - sourceOffset;
+      const timestamp = line.slice(timestampStart, timestampEnd);
+      output.push(
+        timestampStart >= 0 && timestampEnd <= line.length && timestamp
+          ? `${line.slice(0, timestampStart)}[${timestamp}](${chapterMarker(entry.index)})${line.slice(timestampEnd)}`
+          : line,
+      );
+
+      const nextLine = lines[lineIndex + 1];
+      if (nextLine !== undefined && nextLine.trim()) output.push("");
+    } else {
+      output.push(line);
+    }
+
+    sourceOffset += line.length;
+    if (lineIndex < lines.length - 1) {
+      sourceOffset += markdown[sourceOffset] === "\r" ? 2 : 1;
+    }
+  }
+
+  return output.join("\n");
 }
 
 export function DiscussionMarkdown({
@@ -229,6 +318,7 @@ export function DiscussionMarkdown({
   enableLinkPreview = true,
   enableInlineTimestamps = false,
   onSeekToTimestamp,
+  chapterDeclarations,
   className = "",
 }: DiscussionMarkdownProps) {
   const isGeneratedAttachmentMarkdown = (
@@ -248,6 +338,11 @@ export function DiscussionMarkdown({
     typeof content === "string"
       ? content
       : content.plainText || content.markdown || "";
+  const markdown =
+    typeof content === "string" ? content : content.markdown || "";
+  const chapterMarkdown = chapterDeclarations
+    ? preparePlainChapterMarkdown(markdown, chapterDeclarations)
+    : markdown;
   const detectedUrl = extractFirstUrl(rawText);
   const { data: linkPreview } = useLinkPreview(detectedUrl, {
     enabled: enableLinkPreview,
@@ -269,6 +364,23 @@ export function DiscussionMarkdown({
         urlTransform={safeMarkdownUrl}
         components={{
           a: ({ href, children }) => {
+            const chapterIndex = chapterMarkerIndex(href);
+            const chapter =
+              chapterIndex === null
+                ? undefined
+                : chapterDeclarations?.[chapterIndex];
+            if (chapter) {
+              const value = flattenMarkdownText(children) ?? "";
+              return (
+                <InlineTimestampButton
+                  value={value}
+                  seconds={chapter.startTime}
+                  ariaLabel={`Seek to ${value} — ${chapter.title}`}
+                  onSeekToTimestamp={onSeekToTimestamp}
+                />
+              );
+            }
+
             const linkLabel = flattenMarkdownText(children);
             if (isGeneratedAttachmentMarkdown(href, linkLabel)) return null;
             return (
@@ -397,7 +509,7 @@ export function DiscussionMarkdown({
           ),
         }}
       >
-        {content.markdown}
+        {chapterMarkdown}
       </ReactMarkdown>
 
       {linkPreview && (

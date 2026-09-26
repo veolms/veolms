@@ -85,6 +85,7 @@ type FullscreenCoursePanelStyle = CSSProperties & {
 
 export interface LessonVideoPlayerProps {
   media: CourseVideo;
+  description?: string | null;
   lessonTitle: string;
   courseTitle?: string;
   lessonIndex?: number;
@@ -160,6 +161,7 @@ export function LessonVideoPlayer({
   courseLessonsVideoWidthPercent = 60,
   courseTitle,
   engineFactory,
+  description,
   lessonIndex,
   lessonTitle,
   media,
@@ -243,6 +245,15 @@ export function LessonVideoPlayer({
       if (!player) return;
 
       try {
+        const duration = player.getSnapshot().media.duration;
+        if (
+          Number.isFinite(duration) &&
+          duration > 0 &&
+          seconds > duration
+        ) {
+          return;
+        }
+
         player.seekTo(seconds);
       } catch {
         // The player may be between media lifecycles; a later click can retry.
@@ -831,6 +842,7 @@ export function LessonVideoPlayer({
     <VeoVideoPlayer
       ref={playerRef}
       source={source}
+      description={description ?? undefined}
       theme={playerTheme}
       engine="shaka"
       engineFactory={engineFactory}

@@ -86,7 +86,7 @@ API logs are formatted for readability in development by default. Set `API_DEV_P
 
 ## API documentation
 
-Interactive OpenAPI documentation is served at `http://localhost:4000/api/docs`, with the raw document at `/api/docs/json` and `/api/docs/yaml`. It is generated from the Zod schemas each route uses to validate and serialise traffic, so it cannot drift from the running code and there is nothing to regenerate. Set `API_DOCS_ENABLED=false` in `.env` to run the API without exposing it.
+Interactive OpenAPI documentation is served at `http://localhost:4000/docs`, with the raw document at `/docs/json` and `/docs/yaml`. It is generated from the Zod schemas each route uses to validate and serialise traffic, so it cannot drift from the running code and there is nothing to regenerate. Set `API_DOCS_ENABLED=false` in `.env` to run the API without exposing it.
 
 Adding a file to `apps/api/src/routes` is all it takes for an endpoint and its documentation to exist — see [apps/api/README.md](../apps/api/README.md).
 
@@ -173,6 +173,8 @@ The workflow uses the GitHub `development` environment and exchanges GitHub's OI
 - `AWS_REGION`
 - `AWS_S3_BUCKET`
 - `AWS_CLOUDFRONT_DISTRIBUTION_ID`
+- `VITE_API_BASE_URL` (optional; defaults to `https://api.procodrr.dev/v1` so
+  static hosts do not send API requests to their SPA fallback)
 - `VITE_CDN_URL` (optional; use a full CDN domain or `/cdn` when the host routes `/cdn/*` to the Worker)
 - `CDN_URL` remains the API/Worker setting and is used as a build fallback when `VITE_CDN_URL` is not configured.
 
@@ -190,7 +192,7 @@ veolms-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart veolms-api.service
 
 Configure these values on the GitHub `development` environment:
 
-- Variables: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT` (optional; defaults to `22`), `DEPLOY_APP_DIR`, `DEPLOY_SERVICE_NAME`, and `API_HEALTHCHECK_URL` (for example, `http://127.0.0.1:4000/api/v1/health`).
+- Variables: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT` (optional; defaults to `22`), `DEPLOY_APP_DIR`, `DEPLOY_SERVICE_NAME`, and `API_HEALTHCHECK_URL` (for example, `http://127.0.0.1:4000/v1/health`).
 - Secrets: `DEPLOY_SSH_PRIVATE_KEY` and `DEPLOY_KNOWN_HOSTS`.
 
 The server checkout's `origin` must point to the repository and the deploy key must be able to fetch the `development` branch. `DEPLOY_KNOWN_HOSTS` should contain the server's verified `known_hosts` entry; do not use `ssh-keyscan` inside the workflow or disable host-key checking.

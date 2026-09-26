@@ -3477,7 +3477,7 @@ test("learning comment search stays out of the phone layout", async ({
 test("lesson video preloads without requesting a first-frame thumbnail", async ({
   page,
 }) => {
-  await page.route("**/api/v1/courses/backend-nodejs/overview", (route) =>
+  await page.route("**/v1/courses/backend-nodejs/overview", (route) =>
     route.fulfill({
       status: 200,
       json: { course: { slug: "backend-nodejs" }, sections: [] },

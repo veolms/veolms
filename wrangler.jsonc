@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "dev",
+  "name": "white-bird-4fbb",
   "compatibility_date": "2024-11-01",
   "assets": {
     "directory": "./apps/web/build/client",

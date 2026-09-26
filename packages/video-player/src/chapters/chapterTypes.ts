@@ -5,6 +5,18 @@ export interface ChapterInput {
   endTime?: number;
 }
 
+/** Source metadata for a chapter candidate without changing parser output. */
+export interface DescriptionChapterDeclaration extends ChapterInput {
+  declarationId: string;
+  sourceStart: number;
+  sourceEnd: number;
+  timestampStart: number;
+  timestampEnd: number;
+  lineStart: number;
+  lineEnd: number;
+  isPlainText: boolean;
+}
+
 export interface Chapter {
   id: string;
   title: string;
