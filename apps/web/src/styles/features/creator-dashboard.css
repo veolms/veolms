@@ -580,6 +580,8 @@
 
 .creator-discussion-list {
   display: grid;
+  max-height: 258px;
+  overflow-y: auto;
 }
 
 .creator-discussion-list article {
@@ -594,12 +596,28 @@
     color-mix(in srgb, var(--border-strong) 32%, transparent);
 }
 
-.creator-discussion-list article > img {
+.creator-discussion-list article > .creator-discussion-avatar {
   grid-area: avatar;
+  display: grid;
+  place-items: center;
   width: 34px;
   height: 34px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
   border-radius: 50%;
+  background: color-mix(in srgb, var(--surface-strong) 78%, var(--canvas));
+  color: var(--muted);
+}
+
+.creator-discussion-list article > .creator-discussion-avatar img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
+}
+
+.creator-discussion-avatar-icon {
+  width: 68%;
+  height: 68%;
 }
 
 .creator-discussion-list article > div {
@@ -650,15 +668,6 @@
   font: inherit;
   font-size: 0.64rem;
   cursor: pointer;
-}
-.creator-discussion-list article > i {
-  position: absolute;
-  top: 13px;
-  right: 0;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
 }
 
 .creator-enrollment-table .creator-table-row {

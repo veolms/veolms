@@ -19,6 +19,7 @@ import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { PlusCircleIcon as PlusCircle } from "@phosphor-icons/react/PlusCircle";
 import { PulseIcon as Pulse } from "@phosphor-icons/react/Pulse";
 import { TicketIcon as Ticket } from "@phosphor-icons/react/Ticket";
+import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import { UserListIcon as UserList } from "@phosphor-icons/react/UserList";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { VideoCameraIcon as VideoCamera } from "@phosphor-icons/react/VideoCamera";
@@ -26,6 +27,8 @@ import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/Warnin
 import type { Icon } from "@phosphor-icons/react";
 import { handleRovingTabKeyDown } from "./accessibility/rovingTabFocus";
 import { useDashboard } from "./services/analytics";
+import { useDashboardRecentDiscussions } from "./services/learning-interactions";
+import { adaptDiscussionWorkspaceItem } from "./workspace/discussions-workspace.adapter";
 import typescriptThumbnail from "./assets/course-thumbnails/typescript-960.webp";
 import nodeThumbnail from "./assets/course-thumbnails/nodejs-960.webp";
 import veolmsThumbnail from "./assets/learning-thumbnails/veolms-course.webp";
@@ -145,36 +148,6 @@ const recentEnrollments: readonly EnrollmentRow[] = [
     "4h ago",
     "/assets/ethan-avatar-160.webp",
   ],
-];
-
-const discussions = [
-  {
-    name: "Rahul Kumar asked a question",
-    course: "The Ultimate TypeScript Course",
-    lesson: "Lecture 24: Generics Deep Dive",
-    body: "I'm confused about the constraint in generic functions...",
-    time: "10m ago",
-    action: "Reply",
-    avatar: "/assets/ethan-avatar-160.webp",
-  },
-  {
-    name: "Sneha Verma commented",
-    course: "Complete Backend with Node.js",
-    lesson: "Lecture 15: Authentication with JWT",
-    body: "Great explanation! Could you also cover refresh tokens?",
-    time: "1h ago",
-    action: "View",
-    avatar: "/assets/sofia-avatar-160.webp",
-  },
-  {
-    name: "Discussion has 3 new replies",
-    course: "Building VeoLMS: Idea to Production",
-    lesson: "Lecture 68: File Upload & Storage",
-    body: "There's an issue when uploading large files on S3...",
-    time: "2h ago",
-    action: "View thread",
-    avatar: "/assets/ethan-avatar-160.webp",
-  },
 ];
 
 const attentionItems = [
@@ -891,7 +864,59 @@ function CoursesPanel({ onNavigatePage }: NavigateProps) {
   );
 }
 
+function getDiscussionActivityLabel(kind: string) {
+  switch (kind) {
+    case "question":
+    case "qna":
+      return "asked a question";
+    case "comment":
+      return "commented";
+    case "note":
+      return "added a note";
+    default:
+      return "started a discussion";
+  }
+}
+
+function CreatorDiscussionAvatar({ src }: { src?: string }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [src]);
+
+  return (
+    <span className="creator-discussion-avatar" aria-hidden="true">
+      {src && !imageFailed ? (
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={(event) => {
+            event.currentTarget.style.display = "none";
+            setImageFailed(true);
+          }}
+        />
+      ) : (
+        <UserCircle className="creator-discussion-avatar-icon" weight="duotone" />
+      )}
+    </span>
+  );
+}
+
 function DiscussionsPanel({ onNavigatePage }: NavigateProps) {
+  const {
+    data: discussionsResponse,
+    isLoading,
+    isError,
+  } = useDashboardRecentDiscussions();
+  const discussionCards =
+    discussionsResponse?.items.map((item) => ({
+      ...adaptDiscussionWorkspaceItem(item),
+      activityLabel: getDiscussionActivityLabel(item.kind),
+    })) ?? [];
+
   return (
     <DashboardPanel
       className="creator-discussions-panel"
@@ -900,25 +925,34 @@ function DiscussionsPanel({ onNavigatePage }: NavigateProps) {
       onAction={() => onNavigatePage?.("Discussions")}
     >
       <div className="creator-discussion-list">
-        {discussions.map((item) => (
-          <article key={item.name}>
-            <img src={item.avatar} alt="" />
-            <div>
-              <strong>{item.name}</strong>
-              <small>{item.course}</small>
-              <small>{item.lesson}</small>
-              <p>{item.body}</p>
-            </div>
-            <time>{item.time}</time>
-            <button
-              type="button"
-              onClick={() => onNavigatePage?.("Discussions")}
-            >
-              {item.action}
-            </button>
-            <i />
-          </article>
-        ))}
+        {isLoading ? (
+          <p role="status">Loading recent discussions…</p>
+        ) : isError ? (
+          <p role="alert">Unable to load recent discussions.</p>
+        ) : discussionCards.length === 0 ? (
+          <p>No recent discussions.</p>
+        ) : (
+          discussionCards.map((item) => (
+            <article key={item.id}>
+              <CreatorDiscussionAvatar src={item.avatar} />
+              <div>
+                <strong>
+                  {item.author} {item.activityLabel}
+                </strong>
+                {item.course && <small>{item.course}</small>}
+                {item.lesson && <small>{item.lesson}</small>}
+                <p>{item.excerpt}</p>
+              </div>
+              <time>{item.activity}</time>
+              <button
+                type="button"
+                onClick={() => onNavigatePage?.("Discussions")}
+              >
+                View
+              </button>
+            </article>
+          ))
+        )}
       </div>
     </DashboardPanel>
   );

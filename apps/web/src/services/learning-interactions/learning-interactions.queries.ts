@@ -748,6 +748,23 @@ export function useDiscussionsWorkspace(
   });
 }
 
+export function useDashboardRecentDiscussions(options?: {
+  enabled?: boolean;
+}) {
+  const queryKey = learningInteractionKeys.dashboardRecentDiscussions();
+  return useQuery<DiscussionsWorkspaceResponse, ApiError>({
+    queryKey,
+    queryFn: () =>
+      learningInteractionsService.listDiscussionsWorkspace({
+        tab: "all",
+        sort: "activity",
+        limit: 10,
+      } as ListLearningThreadsQuery),
+    enabled: options?.enabled ?? true,
+    staleTime: 30 * 1000,
+  });
+}
+
 export function useThreadDetails(
   threadId: string | undefined,
   options?: { enabled?: boolean },
