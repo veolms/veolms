@@ -28,7 +28,7 @@ function getApiBaseUrl() {
     process.env.VEO_PUBLIC_API_BASE_URL || process.env.VITE_API_BASE_URL;
   if (!configured || configured.startsWith("/")) {
     throw new Error(
-      "Set VEO_PUBLIC_API_BASE_URL to the absolute public API base URL (including /api/v1).",
+      "Set VEO_PUBLIC_API_BASE_URL to the absolute public API base URL (including /v1).",
     );
   }
 

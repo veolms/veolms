@@ -9,13 +9,6 @@ import { getPreviewBuildFingerprint } from "./preview-build-fingerprint.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(scriptDirectory, "../../..");
-
-try {
-  process.loadEnvFile(path.join(workspaceRoot, ".env"));
-} catch (error) {
-  if (error?.code !== "ENOENT") throw error;
-}
-
 const buildDirectory = path.resolve(scriptDirectory, "../build");
 const root = path.join(buildDirectory, "client");
 const previewMetadataPath = path.join(root, ".veolms-preview-build.json");
@@ -27,9 +20,32 @@ const requiredPreviewFiles = [
   "../server/index.js",
 ];
 
+let metadataForEnvironment;
 try {
-  const metadata = JSON.parse(await readFile(previewMetadataPath, "utf8"));
+  metadataForEnvironment = JSON.parse(
+    await readFile(previewMetadataPath, "utf8"),
+  );
+} catch {
+  // The standard preflight below reports a missing or invalid build.
+}
+const previewEnvironmentFiles =
+  metadataForEnvironment?.learningPrerenderScope === "first-section"
+    ? [".env", ".env.production"]
+    : [".env.production", ".env"];
+for (const environmentFile of previewEnvironmentFiles) {
+  try {
+    // Match the build's environment precedence so preview settings, API proxy
+    // target, and freshness fingerprint all describe the same output.
+    process.loadEnvFile(path.join(workspaceRoot, environmentFile));
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+}
+
+try {
+  const metadata = metadataForEnvironment;
   if (
+    !metadata ||
     metadata.version !== 1 ||
     metadata.nodeEnv !== "production" ||
     !["first-section", "all-lectures"].includes(metadata.learningPrerenderScope)
@@ -69,6 +85,11 @@ const apiTargetValue =
     ? process.argv[apiTargetArgumentIndex + 1]
     : process.env.STATIC_BUILD_API_URL || "http://127.0.0.1:4000";
 const apiTarget = new URL(apiTargetValue);
+// The local API listens on IPv4 loopback. On some Windows setups, Node resolves
+// `localhost` to IPv6 first, which cannot reach that listener.
+if (apiTarget.hostname === "localhost" && apiTarget.protocol === "http:") {
+  apiTarget.hostname = "127.0.0.1";
+}
 const apiOrigin = apiTarget.origin;
 const mimeTypes = new Map([
   [".css", "text/css; charset=utf-8"],
@@ -171,8 +192,8 @@ const proxyRequestToOrigin = (
 createServer(async (request, response) => {
   const requestUrl = new URL(request.url || "/", "http://localhost");
   if (
-    requestUrl.pathname === "/api" ||
-    requestUrl.pathname.startsWith("/api/")
+    requestUrl.pathname === "/v1" ||
+    requestUrl.pathname.startsWith("/v1/")
   ) {
     proxyRequestToOrigin(request, response, requestUrl, apiOrigin, {
       code: "API_UNAVAILABLE",

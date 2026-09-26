@@ -10,8 +10,9 @@ type RuntimeProcess = typeof globalThis & {
 function resolveApiUrl(requestUrl: string, path: string): URL {
   const runtimeBase = (globalThis as RuntimeProcess).process?.env
     ?.VEO_PUBLIC_API_BASE_URL;
-  const configuredBase =
-    runtimeBase || import.meta.env.VITE_API_BASE_URL || "/api/v1";
+  const configuredBase = (
+    runtimeBase || import.meta.env.VITE_API_BASE_URL || "/v1"
+  ).replace(/\/api(?=\/v1\/?$)/u, "");
   const normalizedBase = configuredBase.endsWith("/")
     ? configuredBase
     : `${configuredBase}/`;
@@ -20,10 +21,11 @@ function resolveApiUrl(requestUrl: string, path: string): URL {
 
 function isBuildPrerenderWithoutPublicApi(): boolean {
   const runtimeEnv = (globalThis as RuntimeProcess).process?.env;
+  // The browser API base may be unavailable during a static build. Server-side
+  // prerender fetches are opt-in through the dedicated public API setting.
   return Boolean(
     runtimeEnv?.IS_RR_BUILD_REQUEST === "yes" &&
-    !runtimeEnv.VEO_PUBLIC_API_BASE_URL &&
-    !import.meta.env.VITE_API_BASE_URL,
+    !runtimeEnv.VEO_PUBLIC_API_BASE_URL,
   );
 }
 
