@@ -1250,6 +1250,9 @@ export default function AcademyLayout() {
   return (
     <AcademyRouteGuard>
       <CoursesPage
+        isDashboardRoute={
+          normalizeNavigationPath(location.pathname) === "/dashboard"
+        }
         page={route.page}
         section={route.section}
         settingsTab={route.settingsTab}

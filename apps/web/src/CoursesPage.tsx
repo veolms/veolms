@@ -111,6 +111,7 @@ import {
   getWorkspaceRoleStorageKey,
   getRoleDisplayName,
 } from "./shell/workspaceRole";
+import { hasCourseAuthorRole } from "./routing/routeAccess";
 import {
   SIDEBAR_MIN_WIDTH,
   applySidebarShellToDocument,
@@ -232,6 +233,7 @@ interface CoursesPageProps {
   ) => void;
   onNavigatePage: NavigateTo;
   onExitSettings?: () => void;
+  isDashboardRoute?: boolean;
   page?: string;
   section?: string | null;
   settingsTab?: string;
@@ -547,6 +549,7 @@ export function CoursesPage({
   onOpenCourse,
   onNavigatePage,
   onExitSettings,
+  isDashboardRoute = false,
   page = "courses",
   section: requestedSection = null,
   settingsTab = "profile",
@@ -562,6 +565,7 @@ export function CoursesPage({
   renderMain = null,
 }: CoursesPageProps) {
   const [role, setRole] = useState<CourseRole>(() => {
+    if (isDashboardRoute) return "creator";
     if (typeof window === "undefined") return "student";
     try {
       const stored = localStorage.getItem("veolms-role");
@@ -1006,9 +1010,16 @@ export function CoursesPage({
     const storedRole = localStorage.getItem(
       getWorkspaceRoleStorageKey(activeUser?.id),
     );
-    setRole(storedRole === "creator" ? "creator" : "student");
+    const userRoles = getUserRoles(activeUser);
+    setRole(
+      isDashboardRoute && hasCourseAuthorRole(userRoles)
+        ? "creator"
+        : storedRole === "creator"
+          ? "creator"
+          : "student",
+    );
     setHydratedWorkspaceRoleKey(activeUser?.id ?? "guest");
-  }, [activeUser?.id, authUserFetched, storedPreferencesReady]);
+  }, [activeUser, authUserFetched, isDashboardRoute, storedPreferencesReady]);
 
   useEffect(() => {
     if (!storedPreferencesReady) return;

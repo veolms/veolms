@@ -14,6 +14,7 @@ import {
   APP_HOME_PATH,
   buildMfaChallengePath,
   buildLoginPath,
+  resolveCourseAuthorRouteFallback,
   shouldRedirectFromCourseAuthorPath,
   isGuestLandingPath,
   normalizeAppPath,
@@ -95,7 +96,7 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     }
 
     if (courseAuthorRouteDenied) {
-      navigate("/", { replace: true });
+      navigate(resolveCourseAuthorRouteFallback(path), { replace: true });
     }
   }, [
     access.isAuthenticated,
