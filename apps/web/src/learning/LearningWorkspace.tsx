@@ -1292,10 +1292,30 @@ export function LearningWorkspace({
         if (current[selectedLesson] === nextProgress) return current;
         const updated = { ...current, [selectedLesson]: nextProgress };
         try {
-          localStorage.setItem(
-            `veolms-learning-${coursePersistenceKey}-progress`,
-            JSON.stringify(updated),
-          );
+          // Merge with any previously stored map so a single watched lesson
+          // cannot wipe catalogue % derived from this legacy key.
+          const storageKey = `veolms-learning-${coursePersistenceKey}-progress`;
+          let merged: Record<string, number> = { ...updated };
+          try {
+            const raw = localStorage.getItem(storageKey);
+            if (raw) {
+              const existing = JSON.parse(raw) as Record<string, unknown>;
+              if (existing && typeof existing === "object") {
+                merged = {};
+                for (const [key, value] of Object.entries(existing)) {
+                  if (typeof value === "number" && Number.isFinite(value)) {
+                    merged[key] = value;
+                  }
+                }
+                for (const [key, value] of Object.entries(updated)) {
+                  merged[key] = Math.max(merged[key] ?? 0, value);
+                }
+              }
+            }
+          } catch {
+            merged = { ...updated };
+          }
+          localStorage.setItem(storageKey, JSON.stringify(merged));
         } catch {
           // Ignore storage write errors
         }
