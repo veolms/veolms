@@ -3280,7 +3280,6 @@ export function CoursesPage({
       return (
         <CreatorDashboard
           onNavigatePage={onNavigatePage}
-          setNotice={setNotice}
           academyTheme={appliedAcademyTheme}
         />
       );

@@ -8,7 +8,6 @@ import type {
 import { ArrowDownRightIcon as ArrowDownRight } from "@phosphor-icons/react/ArrowDownRight";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/ArrowUpRight";
-import { ArrowsClockwiseIcon as ArrowsClockwise } from "@phosphor-icons/react/ArrowsClockwise";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
@@ -18,12 +17,8 @@ import { InfoIcon as Info } from "@phosphor-icons/react/Info";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { PlusCircleIcon as PlusCircle } from "@phosphor-icons/react/PlusCircle";
 import { PulseIcon as Pulse } from "@phosphor-icons/react/Pulse";
-import { TicketIcon as Ticket } from "@phosphor-icons/react/Ticket";
 import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
-import { UserListIcon as UserList } from "@phosphor-icons/react/UserList";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
-import { VideoCameraIcon as VideoCamera } from "@phosphor-icons/react/VideoCamera";
-import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import type { Icon } from "@phosphor-icons/react";
 import { handleRovingTabKeyDown } from "./accessibility/rovingTabFocus";
 import { useDashboard } from "./services/analytics";
@@ -70,15 +65,6 @@ type ActivityRow = readonly [
   icon: Icon,
   tone: string,
 ];
-type QuickAction = readonly [
-  title: string,
-  detail: string,
-  icon: Icon,
-  tone: string,
-  notice: string,
-  destination?: string,
-];
-
 interface DashboardPanelProps {
   className?: string;
   title: string;
@@ -108,7 +94,6 @@ interface NavigateProps {
 }
 
 interface CreatorDashboardProps extends NavigateProps {
-  setNotice?: (notice: string) => void;
   academyTheme?: string;
 }
 
@@ -148,37 +133,6 @@ const recentEnrollments: readonly EnrollmentRow[] = [
     "4h ago",
     "/assets/ethan-avatar-160.webp",
   ],
-];
-
-const attentionItems = [
-  {
-    title: "14 unanswered questions",
-    detail: "Students are waiting for your response.",
-    action: "View all",
-    icon: WarningCircle,
-    tone: "danger",
-  },
-  {
-    title: "Lecture 68 has high drop-off",
-    detail: "65% of learners left in the last 10 minutes.",
-    action: "View insights",
-    icon: ChartBar,
-    tone: "gold",
-  },
-  {
-    title: "3 refund requests",
-    detail: "Requires your review and action.",
-    action: "Review",
-    icon: ArrowsClockwise,
-    tone: "blue",
-  },
-  {
-    title: "7 students stalled this week",
-    detail: "Help them get back on track.",
-    action: "View students",
-    icon: Users,
-    tone: "violet",
-  },
 ];
 
 const metricCards = [
@@ -989,106 +943,8 @@ function EnrollmentsPanel({ onNavigatePage }: NavigateProps) {
   );
 }
 
-function AttentionPanel({
-  setNotice,
-}: {
-  setNotice?: (notice: string) => void;
-}) {
-  return (
-    <DashboardPanel
-      className="creator-attention-panel"
-      title="Needs Your Attention"
-    >
-      <div className="creator-attention-list">
-        {attentionItems.map(({ title, detail, action, icon: Icon, tone }) => (
-          <button
-            type="button"
-            key={title}
-            onClick={() =>
-              setNotice?.(`${action} selected for ${title.toLowerCase()}.`)
-            }
-          >
-            <span className={`creator-icon-circle tone-${tone}`}>
-              <Icon size={19} weight="duotone" />
-            </span>
-            <span>
-              <strong>{title}</strong>
-              <small>{detail}</small>
-            </span>
-            <em>{action}</em>
-            <ArrowRight size={17} />
-          </button>
-        ))}
-      </div>
-    </DashboardPanel>
-  );
-}
-
-function QuickActions({
-  onNavigatePage,
-  setNotice,
-}: NavigateProps & { setNotice?: (notice: string) => void }) {
-  const actions: readonly QuickAction[] = [
-    [
-      "Create Course",
-      "Build a new course",
-      PlusCircle,
-      "violet",
-      "Create Course selected. The course editor will be added later.",
-      "Create Course",
-    ],
-    [
-      "Add Lecture",
-      "Upload or create content",
-      VideoCamera,
-      "blue",
-      "Add Lecture selected. Lecture authoring will be added later.",
-    ],
-    [
-      "Manage Coupons",
-      "Create or edit coupons",
-      Ticket,
-      "green",
-      "Manage Coupons selected.",
-      "/coupons",
-    ],
-    [
-      "View Students",
-      "Manage your learners",
-      UserList,
-      "gold",
-      "View Students selected. Student management will be added later.",
-    ],
-  ];
-  return (
-    <DashboardPanel className="creator-quick-panel" title="Quick Actions">
-      <div className="creator-quick-grid">
-        {actions.map(([title, detail, Icon, tone, notice, destination]) => (
-          <button
-            type="button"
-            key={title}
-            onClick={() =>
-              destination ? onNavigatePage?.(destination) : setNotice?.(notice)
-            }
-          >
-            <span className={`creator-icon-circle tone-${tone}`}>
-              <Icon size={20} weight="duotone" />
-            </span>
-            <span>
-              <strong>{title}</strong>
-              <small>{detail}</small>
-            </span>
-            <ArrowRight size={17} />
-          </button>
-        ))}
-      </div>
-    </DashboardPanel>
-  );
-}
-
 export function CreatorDashboard({
   onNavigatePage,
-  setNotice,
   academyTheme = "default",
 }: CreatorDashboardProps) {
   const [range, setRange] = useState<DashboardRange>("30d");
@@ -1173,8 +1029,6 @@ export function CreatorDashboard({
         <CoursesPanel onNavigatePage={onNavigatePage} />
         <DiscussionsPanel onNavigatePage={onNavigatePage} />
         <EnrollmentsPanel onNavigatePage={onNavigatePage} />
-        <AttentionPanel setNotice={setNotice} />
-        <QuickActions onNavigatePage={onNavigatePage} setNotice={setNotice} />
       </div>
     </div>
   );
