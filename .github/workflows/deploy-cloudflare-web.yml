@@ -1,0 +1,92 @@
+name: Deploy Cloudflare static web
+
+on:
+  push:
+    branches:
+      - development
+    paths:
+      - "apps/web/**"
+      - "packages/contracts/**"
+      - "packages/database/**"
+      - "packages/config/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "wrangler.jsonc"
+      - ".github/workflows/deploy-cloudflare-web.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-static-development
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy Cloudflare static assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: development
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.18.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Require deployment configuration
+        shell: bash
+        env:
+          VEO_PUBLIC_API_BASE_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${VEO_PUBLIC_API_BASE_URL}" || { echo "::error::Set VEO_PUBLIC_API_BASE_URL in the development environment"; exit 1; }
+          test -n "${CLOUDFLARE_ACCOUNT_ID}" || { echo "::error::Set CLOUDFLARE_ACCOUNT_ID in the development environment"; exit 1; }
+          test -n "${CLOUDFLARE_API_TOKEN}" || { echo "::error::Set CLOUDFLARE_API_TOKEN in the development environment"; exit 1; }
+
+      - name: Build the web application
+        run: pnpm build:web
+        env:
+          VEO_PUBLIC_API_BASE_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL }}
+
+      - name: Generate current public course pages
+        run: pnpm --filter @veolms/web refresh:course-pages -- --all
+        env:
+          VEO_PUBLIC_API_BASE_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL }}
+
+      - name: Record the source revision used for this deployed build
+        run: echo "$GITHUB_SHA" > apps/web/build/deployment-source.sha
+
+      - name: Save the deployable build for content-only refreshes
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: web-static-build
+          path: apps/web/build/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Deploy static assets to Cloudflare
+        run: pnpm exec wrangler deploy --config wrangler.jsonc
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

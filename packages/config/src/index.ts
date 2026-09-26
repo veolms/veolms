@@ -94,6 +94,20 @@ const serverConfigSchema = z.object({
   WEB_URL: z.url().default("http://localhost:3000"),
   SETUP_TOKEN: z.string().default("veo_setup_token_123"),
 
+  // Targeted public course page refreshes run through a GitHub Actions job,
+  // which restores the last Cloudflare web artifact and deploys only the
+  // regenerated static page outputs.
+  COURSE_STATIC_REFRESH_GITHUB_TOKEN: z.string().optional(),
+  COURSE_STATIC_REFRESH_REPOSITORY: z
+    .string()
+    .regex(/^[^/]+\/[^/]+$/u)
+    .optional(),
+  COURSE_STATIC_REFRESH_REF: z.string().min(1).default("development"),
+  COURSE_STATIC_REFRESH_WORKFLOW: z
+    .string()
+    .min(1)
+    .default("refresh-cloudflare-course-pages.yml"),
+
   // WebAuthn Passkeys Config
   RP_ID: z.string().optional(),
   RP_NAME: z.string().default("VeoLMS"),

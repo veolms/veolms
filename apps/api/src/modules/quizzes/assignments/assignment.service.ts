@@ -288,18 +288,13 @@ export function createAssignmentService(options: QuizServiceOptions) {
         "COURSE_ACCESS_REQUIRED",
         "You need active course access to view this Quiz assignment.",
       );
-    const rows = await repo.listAssignmentsForCourse(database, courseId);
-    const pricing = await pricingRepo.findPricing(database, courseId);
-    const quizTitles = new Map(
-      (
-        await repo.listQuizzesByIds(database, [
-          ...new Set(rows.map((row) => row.quiz_id)),
-        ])
-      ).map((quiz) => [quiz.id, quiz.title] as const),
-    );
+    const [rows, pricing] = await Promise.all([
+      repo.listAssignmentsForCourseWithQuiz(database, courseId),
+      pricingRepo.findPricing(database, courseId),
+    ]);
     return rows.map((row) => ({
       ...present(row, pricing),
-      quizTitle: quizTitles.get(row.quiz_id) ?? "Quiz",
+      quizTitle: row.quiz_title ?? "Quiz",
     }));
   }
 

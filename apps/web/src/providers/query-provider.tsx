@@ -27,9 +27,14 @@ export function QueryProvider({ children }: QueryProviderProps) {
           shouldDehydrateMutation: (mutation) => mutation.state.isPaused,
         },
       }}
-      onSuccess={async () => {
-        await autosyncManager.recover();
-        await queryClient.resumePausedMutations();
+      onSuccess={() => {
+        // Autosync recovery must not block the first auth/catalogue render.
+        // The persisted mutation queue is recovered in the background after
+        // React Query is ready to issue normal requests.
+        void autosyncManager
+          .recover()
+          .then(() => queryClient.resumePausedMutations())
+          .catch(() => undefined);
       }}
     >
       {children}

@@ -1,15 +1,18 @@
-import { useMemo, useState } from "react";
-import {
-  BookOpenIcon as BookOpen,
-  CircleNotchIcon as CircleNotch,
-  MagnifyingGlassIcon as MagnifyingGlass,
-  PlusIcon as Plus,
-  PuzzlePieceIcon as PuzzlePiece,
-  ArrowLeftIcon as ArrowLeft,
-} from "@phosphor-icons/react";
-import { QuizAuthoringPanel } from "./QuizAuthoringPanel";
+import { lazy, Suspense, useMemo, useState } from "react";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
+import { PuzzlePieceIcon as PuzzlePiece } from "@phosphor-icons/react/PuzzlePiece";
+import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { useMyCourses } from "../services/courses";
 import { Button } from "../components/Button";
+
+const QuizAuthoringPanel = lazy(() =>
+  import("./QuizAuthoringPanel").then((module) => ({
+    default: module.QuizAuthoringPanel,
+  })),
+);
 
 interface Props {
   quizId?: string;
@@ -20,19 +23,21 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
   const coursesQuery = useMyCourses({ enabled: !quizId });
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
-
-  const rawCourses = coursesQuery.data?.courses ?? [];
+  const rawCourses = coursesQuery.data?.courses;
 
   const filteredCourses = useMemo(() => {
-    if (!searchQuery.trim()) return rawCourses;
+    const courses = rawCourses ?? [];
+    if (!searchQuery.trim()) return courses;
     const lower = searchQuery.toLowerCase().trim();
-    return rawCourses.filter((course) =>
+    return courses.filter((course) =>
       course.title.toLowerCase().includes(lower),
     );
   }, [rawCourses, searchQuery]);
 
   const handleProceed = (courseId: string) => {
-    onNavigatePage?.(`/courses/create?edit=${encodeURIComponent(courseId)}&tab=curriculum`);
+    onNavigatePage?.(
+      `/courses/create?edit=${encodeURIComponent(courseId)}&tab=curriculum`,
+    );
   };
 
   if (quizId) {
@@ -41,10 +46,22 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
         data-quiz-surface=""
         className="mx-auto w-full max-w-[1320px] px-0 py-0.5 sm:px-4 sm:py-6 lg:px-8"
       >
-        <QuizAuthoringPanel
-          initialQuizId={quizId}
-          onBack={() => onNavigatePage?.("/quizzes")}
-        />
+        <Suspense
+          fallback={
+            <div
+              className="grid min-h-[50vh] place-items-center"
+              role="status"
+              aria-label="Loading quiz editor"
+            >
+              <span className="size-6 animate-spin rounded-full border-2 border-(--border) border-t-(--accent) motion-reduce:animate-none" />
+            </div>
+          }
+        >
+          <QuizAuthoringPanel
+            initialQuizId={quizId}
+            onBack={() => onNavigatePage?.("/quizzes")}
+          />
+        </Suspense>
       </main>
     );
   }
@@ -77,7 +94,8 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
             Create New Quiz
           </h1>
           <p className="max-w-2xl text-xs sm:text-sm text-(--muted)">
-            Select a course to create or manage quizzes directly inside its curriculum.
+            Select a course to create or manage quizzes directly inside its
+            curriculum.
           </p>
         </div>
       </div>
@@ -101,7 +119,7 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
         </div>
 
         {/* Search Input */}
-        {rawCourses.length > 0 && (
+        {(rawCourses?.length ?? 0) > 0 && (
           <div className="relative flex items-center w-full mb-4">
             <MagnifyingGlass
               size={16}
@@ -124,7 +142,7 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
               <CircleNotch size={24} className="animate-spin text-(--accent)" />
               <span>Loading your courses...</span>
             </div>
-          ) : rawCourses.length === 0 ? (
+          ) : (rawCourses?.length ?? 0) === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] text-(--accent) mb-3">
                 <BookOpen size={24} weight="duotone" />
@@ -133,7 +151,8 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
                 No courses found
               </h3>
               <p className="text-xs text-(--muted) max-w-sm mb-4">
-                You must have an existing course to create and attach quizzes in its curriculum.
+                You must have an existing course to create and attach quizzes in
+                its curriculum.
               </p>
               <Button
                 onClick={() => onNavigatePage?.("/courses/create")}
@@ -183,9 +202,13 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
                               : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted)"
                           }`}
                         >
-                          {course.status === "published" ? "Published" : "Draft"}
+                          {course.status === "published"
+                            ? "Published"
+                            : "Draft"}
                         </span>
-                        {course.difficulty && <span>• {course.difficulty}</span>}
+                        {course.difficulty && (
+                          <span>• {course.difficulty}</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -211,7 +234,7 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
         </div>
 
         {/* Action Button */}
-        {rawCourses.length > 0 && (
+        {(rawCourses?.length ?? 0) > 0 && (
           <div className="flex items-center justify-end gap-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-4 mt-4">
             <Button
               disabled={!selectedCourseId}

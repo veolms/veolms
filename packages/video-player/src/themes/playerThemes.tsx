@@ -1,64 +1,64 @@
 import {
-  ArrowLeft,
-  ArrowCounterClockwise,
-  ArrowClockwise,
-  ArrowsIn,
-  ArrowsInSimple,
-  ArrowsOut,
-  ArrowsOutSimple,
-  CaretDown,
-  CaretDoubleLeft,
-  CaretDoubleRight,
-  CaretRight,
-  CircleNotch,
-  ClosedCaptioning,
-  CornersIn,
-  CornersOut,
-  FastForward,
-  GearFine,
-  GearSix,
-  ListBullets,
-  MonitorPlay,
-  Pause,
-  PauseCircle,
-  PictureInPicture,
-  Play,
-  PlayCircle,
-  Rectangle,
-  RectangleDashed,
-  Rewind,
-  SkipBack,
-  SkipForward,
-  SlidersHorizontal,
-  Spinner,
-  SpinnerGap,
-  SpeakerHigh,
-  SpeakerLow,
-  SpeakerNone,
-  SpeakerSimpleHigh,
-  SpeakerSimpleLow,
-  SpeakerSimpleNone,
-  SpeakerSimpleX,
-  SpeakerX,
-  Speedometer,
-  Subtitles,
-  Warning,
-  WarningCircle,
-  WarningDiamond,
-  X,
-  type Icon,
-  type IconProps,
-  type IconWeight,
-} from "@phosphor-icons/react";
+  ArrowLeftIcon as ArrowLeft,
+} from "@phosphor-icons/react/ArrowLeft";
+import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
+import { ArrowClockwiseIcon as ArrowClockwise } from "@phosphor-icons/react/ArrowClockwise";
+import { ArrowsInIcon as ArrowsIn } from "@phosphor-icons/react/ArrowsIn";
+import { ArrowsInSimpleIcon as ArrowsInSimple } from "@phosphor-icons/react/ArrowsInSimple";
+import { ArrowsOutIcon as ArrowsOut } from "@phosphor-icons/react/ArrowsOut";
+import { ArrowsOutSimpleIcon as ArrowsOutSimple } from "@phosphor-icons/react/ArrowsOutSimple";
+import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
+import { CaretDoubleLeftIcon as CaretDoubleLeft } from "@phosphor-icons/react/CaretDoubleLeft";
+import { CaretDoubleRightIcon as CaretDoubleRight } from "@phosphor-icons/react/CaretDoubleRight";
+import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { ClosedCaptioningIcon as ClosedCaptioning } from "@phosphor-icons/react/ClosedCaptioning";
+import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
+import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
+import { FastForwardIcon as FastForward } from "@phosphor-icons/react/FastForward";
+import { GearFineIcon as GearFine } from "@phosphor-icons/react/GearFine";
+import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
+import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullets";
+import { MonitorPlayIcon as MonitorPlay } from "@phosphor-icons/react/MonitorPlay";
+import { PauseIcon as Pause } from "@phosphor-icons/react/Pause";
+import { PauseCircleIcon as PauseCircle } from "@phosphor-icons/react/PauseCircle";
+import { PictureInPictureIcon as PictureInPicture } from "@phosphor-icons/react/PictureInPicture";
+import { PlayIcon as Play } from "@phosphor-icons/react/Play";
+import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
+import { RectangleIcon as Rectangle } from "@phosphor-icons/react/Rectangle";
+import { RectangleDashedIcon as RectangleDashed } from "@phosphor-icons/react/RectangleDashed";
+import { RewindIcon as Rewind } from "@phosphor-icons/react/Rewind";
+import { SkipBackIcon as SkipBack } from "@phosphor-icons/react/SkipBack";
+import { SkipForwardIcon as SkipForward } from "@phosphor-icons/react/SkipForward";
+import { SlidersHorizontalIcon as SlidersHorizontal } from "@phosphor-icons/react/SlidersHorizontal";
+import { SpinnerIcon as Spinner } from "@phosphor-icons/react/Spinner";
+import { SpinnerGapIcon as SpinnerGap } from "@phosphor-icons/react/SpinnerGap";
+import { SpeakerHighIcon as SpeakerHigh } from "@phosphor-icons/react/SpeakerHigh";
+import { SpeakerLowIcon as SpeakerLow } from "@phosphor-icons/react/SpeakerLow";
+import { SpeakerNoneIcon as SpeakerNone } from "@phosphor-icons/react/SpeakerNone";
+import { SpeakerSimpleHighIcon as SpeakerSimpleHigh } from "@phosphor-icons/react/SpeakerSimpleHigh";
+import { SpeakerSimpleLowIcon as SpeakerSimpleLow } from "@phosphor-icons/react/SpeakerSimpleLow";
+import { SpeakerSimpleNoneIcon as SpeakerSimpleNone } from "@phosphor-icons/react/SpeakerSimpleNone";
+import { SpeakerSimpleXIcon as SpeakerSimpleX } from "@phosphor-icons/react/SpeakerSimpleX";
+import { SpeakerXIcon as SpeakerX } from "@phosphor-icons/react/SpeakerX";
+import { SpeedometerIcon as Speedometer } from "@phosphor-icons/react/Speedometer";
+import { SubtitlesIcon as Subtitles } from "@phosphor-icons/react/Subtitles";
+import { WarningIcon as Warning } from "@phosphor-icons/react/Warning";
+import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import { WarningDiamondIcon as WarningDiamond } from "@phosphor-icons/react/WarningDiamond";
+import { XIcon as X } from "@phosphor-icons/react/X";
+import type { Icon, IconProps, IconWeight } from "@phosphor-icons/react";
 import type { CSSProperties, ComponentType } from "react";
+import {
+  BUILT_IN_PLAYER_THEME_IDS,
+  type BuiltInPlayerThemeId,
+} from "./playerThemeIds";
 
-export const BUILT_IN_PLAYER_THEME_IDS = [
-  "youtube",
-  "aurora",
-  "minimal",
-] as const;
-
-export type BuiltInPlayerThemeId = (typeof BUILT_IN_PLAYER_THEME_IDS)[number];
+export {
+  BUILT_IN_PLAYER_THEME_IDS,
+  isBuiltInPlayerThemeId,
+} from "./playerThemeIds";
+export type { BuiltInPlayerThemeId } from "./playerThemeIds";
 
 export interface PlayerThemeIconProps extends Omit<IconProps, "weight"> {
   active?: boolean;
@@ -358,15 +358,6 @@ export const BUILT_IN_PLAYER_THEMES: Record<
 export const PLAYER_THEME_OPTIONS = BUILT_IN_PLAYER_THEME_IDS.map(
   (id) => BUILT_IN_PLAYER_THEMES[id],
 );
-
-export function isBuiltInPlayerThemeId(
-  value: unknown,
-): value is BuiltInPlayerThemeId {
-  return (
-    typeof value === "string" &&
-    BUILT_IN_PLAYER_THEME_IDS.includes(value as BuiltInPlayerThemeId)
-  );
-}
 
 export function resolvePlayerTheme(
   theme: PlayerTheme = "youtube",

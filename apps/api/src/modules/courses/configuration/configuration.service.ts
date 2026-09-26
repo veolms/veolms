@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
+import type { AppServices } from "../../../services/index.ts";
 import type {
   UpdateCourseAccessRuleRequest,
   UpdateCoursePricingRequest,
@@ -11,10 +12,12 @@ import { getCourseAndVerifyOwner as verifyCourseOwner } from "../shared/courses.
 
 export interface ConfigurationServiceOptions {
   database: Kysely<Database>;
+  services: AppServices;
 }
 
 export function createConfigurationService({
   database,
+  services,
 }: ConfigurationServiceOptions) {
   function getCourseAndVerifyOwner(
     courseId: string,
@@ -30,14 +33,18 @@ export function createConfigurationService({
     updates: UpdateCourseAccessRuleRequest,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+    );
 
     const now = new Date();
 
     const durationType = updates.durationType;
     const durationDays =
       updates.durationType === "fixed_duration"
-        ? updates.durationDays ?? null
+        ? (updates.durationDays ?? null)
         : null;
 
     const id = await configRepo.upsertAccessRule(database, {
@@ -49,6 +56,13 @@ export function createConfigurationService({
       created_at: now,
       updated_at: now,
     });
+
+    if (course.status === "published") {
+      services.courseStaticPages.requestRefresh({
+        courseId: course.id,
+        courseSlug: course.slug,
+      });
+    }
 
     return {
       id,
@@ -65,14 +79,18 @@ export function createConfigurationService({
     updates: UpdateCoursePricingRequest,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+    );
 
     const now = new Date();
 
     const price = updates.pricingType === "free" ? 0 : updates.price;
     const currency = updates.currency ?? "INR";
     const salePrice =
-      updates.pricingType === "free" ? null : updates.salePrice ?? null;
+      updates.pricingType === "free" ? null : (updates.salePrice ?? null);
 
     const id = await configRepo.upsertPricing(database, {
       id: crypto.randomUUID(),
@@ -84,6 +102,13 @@ export function createConfigurationService({
       created_at: now,
       updated_at: now,
     });
+
+    if (course.status === "published") {
+      services.courseStaticPages.requestRefresh({
+        courseId: course.id,
+        courseSlug: course.slug,
+      });
+    }
 
     return {
       id,
@@ -101,11 +126,18 @@ export function createConfigurationService({
     updates: UpdateCourseSettingsRequest,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+    );
 
     const now = new Date();
 
-    const existing = await configRepo.findSettingsByCourseId(database, courseId);
+    const existing = await configRepo.findSettingsByCourseId(
+      database,
+      courseId,
+    );
 
     const allowQa =
       updates.allowQa !== undefined
@@ -155,6 +187,13 @@ export function createConfigurationService({
       updated_at: now,
     });
 
+    if (course.status === "published") {
+      services.courseStaticPages.requestRefresh({
+        courseId: course.id,
+        courseSlug: course.slug,
+      });
+    }
+
     return {
       id,
       courseId,
@@ -194,4 +233,6 @@ export function createConfigurationService({
   };
 }
 
-export type ConfigurationService = ReturnType<typeof createConfigurationService>;
+export type ConfigurationService = ReturnType<
+  typeof createConfigurationService
+>;

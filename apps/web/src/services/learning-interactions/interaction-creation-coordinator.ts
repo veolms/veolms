@@ -18,6 +18,7 @@ import {
   type OptimisticThreadContext,
 } from "./interaction-entities";
 import { isClientEntityId } from "./interaction-entities";
+import { registerLearningInteractionReset } from "./lifecycle";
 import {
   mergeConfirmedInteractionAttachments,
   revokeLocalAttachmentPreview,
@@ -908,3 +909,4 @@ function getAuthorRole(
 
 export const interactionCreationCoordinator =
   new InteractionCreationCoordinator();
+registerLearningInteractionReset(() => interactionCreationCoordinator.reset());

@@ -163,6 +163,11 @@ export function createQuizController({
         actor(request),
         (request.params as { courseId: string }).courseId,
       ),
+    analyticsOverview: async (request: FastifyRequest) =>
+      analytics.overview(
+        actor(request),
+        (request.body as { courseIds: string[] }).courseIds,
+      ),
     studentReport: async (request: FastifyRequest) =>
       analytics.student(
         actor(request),

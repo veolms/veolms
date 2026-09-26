@@ -1,11 +1,9 @@
-import {
-  DotsThreeIcon as DotsThree,
-  HeadphonesIcon as Headphones,
-  PauseIcon as Pause,
-  PlayIcon as Play,
-  SpeakerHighIcon as SpeakerHigh,
-  SpeakerSlashIcon as SpeakerSlash,
-} from "@phosphor-icons/react";
+import { DotsThreeIcon as DotsThree } from "@phosphor-icons/react/DotsThree";
+import { HeadphonesIcon as Headphones } from "@phosphor-icons/react/Headphones";
+import { PauseIcon as Pause } from "@phosphor-icons/react/Pause";
+import { PlayIcon as Play } from "@phosphor-icons/react/Play";
+import { SpeakerHighIcon as SpeakerHigh } from "@phosphor-icons/react/SpeakerHigh";
+import { SpeakerSlashIcon as SpeakerSlash } from "@phosphor-icons/react/SpeakerSlash";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface LessonAudioPlayerProps {

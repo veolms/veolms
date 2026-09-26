@@ -5,10 +5,12 @@ import type {
   CourseAccessRule,
   CourseDeleteResponse,
   CourseEditorDataResponse,
+  CourseListQuery,
+  CourseListResponse,
   CourseOverviewResponse,
   CoursePricing,
   CourseSettings,
-  CourseSummary,
+  CourseStaticPageRefreshStatus,
   CourseValidationResponse,
   CourseIncludeItem,
   CourseIncludesListResponse,
@@ -37,9 +39,13 @@ import type {
 } from "@veolms/contracts";
 
 export const coursesService = {
-  list: (creatorId?: string): Promise<{ courses: CourseSummary[] }> => {
-    return api.get<{ courses: CourseSummary[] }>("/courses", {
-      params: creatorId ? { creatorId } : undefined,
+  list: (
+    params: Partial<CourseListQuery> = {},
+    signal?: AbortSignal,
+  ): Promise<CourseListResponse> => {
+    return api.get<CourseListResponse>("/courses", {
+      params,
+      signal,
     });
   },
 
@@ -69,6 +75,22 @@ export const coursesService = {
 
   getCourseEditor: (courseId: string): Promise<CourseEditorDataResponse> => {
     return api.get<CourseEditorDataResponse>(`/courses/${courseId}/editor`);
+  },
+
+  getPublicPageRefreshStatus: (
+    courseId: string,
+  ): Promise<CourseStaticPageRefreshStatus> => {
+    return api.get<CourseStaticPageRefreshStatus>(
+      `/courses/${courseId}/public-page-refresh`,
+    );
+  },
+
+  retryPublicPageRefresh: (
+    courseId: string,
+  ): Promise<CourseStaticPageRefreshStatus> => {
+    return api.post<CourseStaticPageRefreshStatus>(
+      `/courses/${courseId}/public-page-refresh/retry`,
+    );
   },
 
   getPreview: (courseId: string): Promise<CourseEditorDataResponse> => {

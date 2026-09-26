@@ -12,6 +12,8 @@ build/
 s3-bucket/
 dist/
 scratch/
+performance/
+apps/web/performance/
 
 # Local Impeccable hook manifests
 .codex/hooks.json

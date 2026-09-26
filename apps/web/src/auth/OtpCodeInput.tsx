@@ -8,6 +8,7 @@ export interface OtpCodeInputProps {
   invalid?: boolean;
   describedBy?: string;
   label: string;
+  autoFocus?: boolean;
 }
 
 const CODE_LENGTH = 6;
@@ -20,6 +21,7 @@ export function OtpCodeInput({
   disabled = false,
   invalid = false,
   label,
+  autoFocus = false,
   onChange,
   value,
 }: OtpCodeInputProps) {
@@ -129,6 +131,7 @@ export function OtpCodeInput({
               }}
               aria-describedby={describedBy}
               aria-invalid={invalid}
+              autoFocus={autoFocus && position === 0}
               autoComplete="one-time-code"
               className="auth-otp__digit"
               disabled={disabled}

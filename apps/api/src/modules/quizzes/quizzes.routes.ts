@@ -3,6 +3,8 @@ import {
   assignQuizRequestSchema,
   bulkQuizAnswersRequestSchema,
   courseQuizAnalyticsSchema,
+  quizAnalyticsOverviewRequestSchema,
+  quizAnalyticsOverviewSchema,
   courseQuizAssignmentsResponseSchema,
   createQuizQuestionRequestSchema,
   createQuizRequestSchema,
@@ -497,6 +499,22 @@ const quizRoutes: RoutePlugin = async (app, options) => {
       preHandler: author,
     },
     controller.courseAnalytics,
+  );
+  app.post(
+    "/quiz-analytics/overview",
+    {
+      schema: {
+        operationId: "getQuizAnalyticsOverview",
+        tags: ["Quizzes"],
+        body: quizAnalyticsOverviewRequestSchema,
+        response: {
+          200: jsonResponse("Quiz analytics overview", quizAnalyticsOverviewSchema),
+          ...errors,
+        },
+      },
+      preHandler: author,
+    },
+    controller.analyticsOverview,
   );
   app.get(
     "/students/:studentId/quiz-report",

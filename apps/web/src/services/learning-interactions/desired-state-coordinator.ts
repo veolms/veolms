@@ -16,6 +16,7 @@ import {
   updateThreadLockInCache,
 } from "./cache-updaters";
 import { isClientEntityId } from "./interaction-entities";
+import { registerLearningInteractionReset } from "./lifecycle";
 
 export type OptimisticSyncStatus = "pending" | "confirmed" | "failed";
 
@@ -1358,3 +1359,4 @@ export class DesiredStateCoordinator {
 }
 
 export const desiredStateCoordinator = new DesiredStateCoordinator();
+registerLearningInteractionReset(() => desiredStateCoordinator.reset());

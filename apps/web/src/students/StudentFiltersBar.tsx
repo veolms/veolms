@@ -19,6 +19,9 @@ export interface StudentFiltersBarProps {
   sortBy: "recent" | "name" | "courses" | "progress";
   onSortByChange: (sort: "recent" | "name" | "courses" | "progress") => void;
   availableCourses: readonly { id: string; title: string }[];
+  hasMoreCourses: boolean;
+  isLoadingMoreCourses: boolean;
+  onLoadMoreCourses: () => void;
   onResetFilters: () => void;
 }
 
@@ -46,6 +49,9 @@ export function StudentFiltersBar({
   sortBy,
   onSortByChange,
   availableCourses,
+  hasMoreCourses,
+  isLoadingMoreCourses,
+  onLoadMoreCourses,
   onResetFilters,
 }: StudentFiltersBarProps) {
   const courseOptions: readonly [string, string][] = [
@@ -106,10 +112,23 @@ export function StudentFiltersBar({
             searchable
             searchPlaceholder="Search courses..."
             defaultLimit={8}
+            action={
+              hasMoreCourses && !isLoadingMoreCourses
+                ? {
+                    label: "Load more courses",
+                    onSelect: onLoadMoreCourses,
+                  }
+                : undefined
+            }
             ariaLabel="Filter by course"
             triggerClassName="min-h-9.75! p-0! bg-transparent! shadow-none! border-0! text-xs md:text-sm font-medium text-(--text-secondary) hover:bg-transparent! hover:text-(--text)! focus:outline-none! flex items-center justify-between w-full"
           />
         </div>
+        {isLoadingMoreCourses ? (
+          <p className="m-0 text-xs text-(--muted)" role="status">
+            Loading more courses...
+          </p>
+        ) : null}
 
         {/* Status Filter Dropdown */}
         <div className="flex min-h-9.75 min-w-36 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all">

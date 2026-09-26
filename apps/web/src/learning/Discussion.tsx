@@ -31,6 +31,11 @@ import { CommentCard } from "./CommentCard";
 import type { Comment, CommentReply } from "./CommentCard";
 import { CommentComposer } from "./CommentComposer";
 import { DiscussionAvatar } from "./DiscussionAvatar";
+import {
+  CompactComposer,
+  type CompactComposerProps,
+} from "./CompactCommentComposer";
+import { MOBILE_COMPOSER_SURFACE_BASE } from "./discussionSurfaceStyles";
 import { getApplicationScrollElement } from "../shell/applicationScroll";
 import {
   applyDiscussionFeed,
@@ -53,11 +58,7 @@ import {
 } from "./unified-discussions.reconciliation";
 
 export type { InteractionCapabilities };
-import { DiscussionThreadPanel } from "./DiscussionThreadPanel";
-import {
-  DESCRIPTION_SURFACE_BASE,
-  LessonDescription,
-} from "./LessonDescription";
+import { LessonDescription } from "./LessonDescription";
 import {
   createDiscussionDraft,
   createEmptyDiscussionDraft,
@@ -133,12 +134,16 @@ import {
   isCommentOrQaThread,
 } from "./learning-threads.adapter";
 
+const loadDiscussionThreadPanel = () =>
+  import("./DiscussionThreadPanel").then((module) => ({
+    default: module.DiscussionThreadPanel,
+  }));
+const DiscussionThreadPanel = React.lazy(loadDiscussionThreadPanel);
+
 const CURRENT_USER = {
   name: "Ashi Singh",
   avatar: "",
 };
-
-const EMPTY_MOBILE_COMPOSER_DRAFT = createEmptyDiscussionDraft();
 
 function getCachedInteractionItems<T>(
   data: unknown,
@@ -1155,9 +1160,14 @@ function DiscussionInner({
   const [openThread, setOpenThread] = useState<OpenDiscussionThread | null>(
     null,
   );
+  const [hasMountedThreadPanel, setHasMountedThreadPanel] = useState(false);
   const [reportingTarget, setReportingTarget] = useState<ReportTarget | null>(
     null,
   );
+
+  useEffect(() => {
+    if (openThread !== null) setHasMountedThreadPanel(true);
+  }, [openThread]);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [creationToast, setCreationToast] = useState<ToastMessage | null>(null);
@@ -2541,6 +2551,8 @@ function DiscussionInner({
           if (!entry) return;
           const clientId = getClientEntityId(entry);
           const serverId = getServerEntityId(entry);
+          void loadDiscussionThreadPanel();
+          setHasMountedThreadPanel(true);
           setOpenThread({ id: clientId, focusComposer });
           setSearchParams(
             (prev) => {
@@ -2566,79 +2578,83 @@ function DiscussionInner({
         onDeleteFailure={setNotice}
         courseId={courseId}
       />
-      <DiscussionThreadPanel
-        open={
-          openThread !== null &&
-          threadEntries.some(
-            (entry) => getClientEntityId(entry) === String(openThread.id),
-          )
-        }
-        activeEntryId={openThread?.id ?? null}
-        entries={threadEntries}
-        isBackendMode={isBackendMode}
-        currentUserId={currentUser?.id}
-        userRole={currentUserRole}
-        currentUser={{ name: authorName, avatar: authorAvatar }}
-        courseId={courseId}
-        focusComposerOnOpen={Boolean(openThread?.focusComposer)}
-        onOpenChange={(open) => {
-          if (!open) {
-            suppressThreadUrlSyncRef.current = true;
-            setOpenThread(null);
-            setSearchParams(
-              (prev) => {
-                if (!prev.has("thread")) return prev;
-                const next = new URLSearchParams(prev);
-                next.delete("thread");
-                return next;
-              },
-              { replace: true },
-            );
-          }
-        }}
-        onActiveEntryChange={(id) => {
-          setOpenThread((current) =>
-            current ? { id, focusComposer: false } : current,
-          );
-          setSearchParams(
-            (prev) => {
-              const next = new URLSearchParams(prev);
-              const entry = threadEntries.find(
-                (candidate) => getClientEntityId(candidate) === String(id),
+      {hasMountedThreadPanel ? (
+        <React.Suspense fallback={null}>
+          <DiscussionThreadPanel
+            open={
+              openThread !== null &&
+              threadEntries.some(
+                (entry) => getClientEntityId(entry) === String(openThread.id),
+              )
+            }
+            activeEntryId={openThread?.id ?? null}
+            entries={threadEntries}
+            isBackendMode={isBackendMode}
+            currentUserId={currentUser?.id}
+            userRole={currentUserRole}
+            currentUser={{ name: authorName, avatar: authorAvatar }}
+            courseId={courseId}
+            focusComposerOnOpen={Boolean(openThread?.focusComposer)}
+            onOpenChange={(open) => {
+              if (!open) {
+                suppressThreadUrlSyncRef.current = true;
+                setOpenThread(null);
+                setSearchParams(
+                  (prev) => {
+                    if (!prev.has("thread")) return prev;
+                    const next = new URLSearchParams(prev);
+                    next.delete("thread");
+                    return next;
+                  },
+                  { replace: true },
+                );
+              }
+            }}
+            onActiveEntryChange={(id) => {
+              setOpenThread((current) =>
+                current ? { id, focusComposer: false } : current,
               );
-              const serverId = entry ? getServerEntityId(entry) : undefined;
-              if (serverId) next.set("thread", serverId);
-              else next.delete("thread");
-              return next;
-            },
-            { replace: true },
-          );
-        }}
-        onLike={onLike}
-        onAddReply={addReply}
-        onEditEntry={beginEditingEntry}
-        onDeleteEntry={deleteEntry}
-        onEditReply={editReply}
-        onDeleteReply={deleteReply}
-        onReport={handleOpenReport}
-        onToggleAcceptReply={handleToggleAcceptReply}
-        onToggleLockThread={handleToggleLockThread}
-        onToggleBookmark={handleToggleBookmark}
-        onToggleFollow={handleToggleFollow}
-        onSeekToTimestamp={onSeekToTimestamp}
-        onReplyCreateError={() =>
-          setCreationToast({
-            message: "Couldn't post your reply. Please try again.",
-            type: "error",
-          })
-        }
-        onReplyEditError={() =>
-          setNotice("Failed to update reply. Please try again.")
-        }
-        onReplyDeleteError={() =>
-          setNotice("Couldn't delete this reply. Please try again.")
-        }
-      />
+              setSearchParams(
+                (prev) => {
+                  const next = new URLSearchParams(prev);
+                  const entry = threadEntries.find(
+                    (candidate) => getClientEntityId(candidate) === String(id),
+                  );
+                  const serverId = entry ? getServerEntityId(entry) : undefined;
+                  if (serverId) next.set("thread", serverId);
+                  else next.delete("thread");
+                  return next;
+                },
+                { replace: true },
+              );
+            }}
+            onLike={onLike}
+            onAddReply={addReply}
+            onEditEntry={beginEditingEntry}
+            onDeleteEntry={deleteEntry}
+            onEditReply={editReply}
+            onDeleteReply={deleteReply}
+            onReport={handleOpenReport}
+            onToggleAcceptReply={handleToggleAcceptReply}
+            onToggleLockThread={handleToggleLockThread}
+            onToggleBookmark={handleToggleBookmark}
+            onToggleFollow={handleToggleFollow}
+            onSeekToTimestamp={onSeekToTimestamp}
+            onReplyCreateError={() =>
+              setCreationToast({
+                message: "Couldn't post your reply. Please try again.",
+                type: "error",
+              })
+            }
+            onReplyEditError={() =>
+              setNotice("Failed to update reply. Please try again.")
+            }
+            onReplyDeleteError={() =>
+              setNotice("Couldn't delete this reply. Please try again.")
+            }
+          />
+        </React.Suspense>
+      ) : null}
       <DiscussionReportDialog
         open={reportDialogOpen}
         target={reportingTarget}
@@ -2909,6 +2925,8 @@ function DiscussionViewportVirtualFeed({
     viewportRef,
   );
 
+  // TanStack Virtual's mutable virtualizer API is intentionally not compiler-memoized.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: props.entries.length,
     getScrollElement: () => viewportRef.current,
@@ -3432,6 +3450,7 @@ function ThreadSurface({
   const protectedEntryIndices = useMemo(() => {
     const indices = new Set<number>();
 
+    void deletionRevision;
     entries.forEach((entry, index) => {
       const clientId = getClientEntityId(entry);
       const serverId = getServerEntityId(entry);
@@ -4011,25 +4030,11 @@ function ThreadSurface({
   );
 }
 
-interface CompactComposerProps {
-  draft: DiscussionDraft;
-  attachmentCount: number;
-  promptText?: string;
-  avatar?: string | null;
-  disabled?: boolean;
-  onOpen: () => void;
-}
-
-const COMPACT_COMPOSER_SURFACE = `${DESCRIPTION_SURFACE_BASE} rounded-md transition-[background-color,box-shadow] hover:bg-[color-mix(in_srgb,var(--surface)_96%,var(--hover))]`;
-
-const MOBILE_COMPOSER_SURFACE_BASE =
-  "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-transparent backdrop-blur-xl px-3 pt-2 pb-[max(8px,var(--app-safe-area-bottom))]";
-
 interface MobileCompactComposerPortalProps {
-  draft: DiscussionDraft;
-  attachmentCount: number;
-  promptText?: string;
-  avatar?: string | null;
+  draft: CompactComposerProps["draft"];
+  attachmentCount: CompactComposerProps["attachmentCount"];
+  promptText?: CompactComposerProps["promptText"];
+  avatar?: CompactComposerProps["avatar"];
   mobileBottomNavigation: boolean;
   scrollHidden: boolean;
   onOpen: () => void;
@@ -4081,71 +4086,6 @@ function MobileCompactComposerPortal({
       </div>
     </div>,
     layerTarget ?? document.body,
-  );
-}
-
-export function PrerenderedMobileCommentComposer() {
-  return (
-    <div
-      data-learning-mobile-composer-prerender
-      aria-hidden="true"
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(58px+var(--app-viewport-safe-area-bottom))] z-130 box-border hidden min-w-0 max-w-full overflow-x-clip [[data-navigation-layout=compact]_&]:block [[data-learning-mobile-composer-ready=true]_&]:hidden!"
-    >
-      <div
-        className={`relative box-border min-w-0 max-w-full overflow-x-clip ${MOBILE_COMPOSER_SURFACE_BASE}`}
-      >
-        <CompactComposer
-          draft={EMPTY_MOBILE_COMPOSER_DRAFT}
-          attachmentCount={0}
-          avatar={null}
-          disabled
-          onOpen={() => undefined}
-        />
-      </div>
-    </div>
-  );
-}
-
-function CompactComposer({
-  draft,
-  attachmentCount,
-  promptText = "Write something…",
-  avatar,
-  disabled = false,
-  onOpen,
-}: CompactComposerProps) {
-  const preview =
-    draft.plainText
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .find(Boolean) ?? "";
-  const attachmentPreview = `${attachmentCount} ${attachmentCount === 1 ? "attachment" : "attachments"}`;
-
-  return (
-    <div
-      role="button"
-      data-compact-comment-composer
-      aria-label="Open discussion composer"
-      aria-disabled={disabled || undefined}
-      tabIndex={disabled ? -1 : 0}
-      onClick={disabled ? undefined : onOpen}
-      onKeyDown={(event) => {
-        if (disabled) return;
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onOpen();
-        }
-      }}
-      className={`flex w-full cursor-pointer items-center gap-2 p-1.5 text-left ${COMPACT_COMPOSER_SURFACE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)${disabled ? " pointer-events-none opacity-60" : ""}`}
-    >
-      <DiscussionAvatar
-        src={avatar}
-        className="pointer-events-none size-9"
-      />
-      <span className="learning-discussion__composer-prompt min-w-0 flex-1 truncate px-2 py-1.5 text-(--muted)">
-        {preview || (attachmentCount > 0 ? attachmentPreview : promptText)}
-      </span>
-    </div>
   );
 }
 

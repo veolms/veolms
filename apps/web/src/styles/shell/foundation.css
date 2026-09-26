@@ -125,13 +125,13 @@
     position: relative;
   }
 
-  :root[data-content-layout="framed"],
-  :root[data-content-layout="framed"] body {
+  :root[data-content-layout="framed"]:has(.courses-app),
+  :root[data-content-layout="framed"]:has(.courses-app) body {
     height: 100%;
     overflow: hidden;
   }
 
-  :root[data-content-layout="framed"] #root {
+  :root[data-content-layout="framed"]:has(.courses-app) #root {
     height: 100%;
     min-height: 0;
   }
