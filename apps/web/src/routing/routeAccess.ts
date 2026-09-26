@@ -20,6 +20,18 @@ const AUTH_FLOW_PATHS = new Set([
 ]);
 
 const GUEST_LANDING_PATHS = new Set(["/"]);
+const DASHBOARD_PERMISSIONS = [
+  "analytics.revenue.read",
+  "analytics.course.read",
+] as const;
+
+export function hasDashboardAnalyticsPermission(
+  permissions: readonly string[] | null | undefined,
+): boolean {
+  return DASHBOARD_PERMISSIONS.some((permission) =>
+    permissions?.includes(permission),
+  );
+}
 
 export function normalizeAppPath(pathname: string): string {
   return normalizeNavigationPath(pathname);
@@ -58,6 +70,9 @@ export function shouldRedirectFromCourseAuthorPath(
   pathname: string,
   roles: readonly string[] | null | undefined,
 ): boolean {
+  if (normalizeAppPath(pathname) === "/dashboard") {
+    return false;
+  }
   return isCourseAuthorPath(pathname) && !hasCourseAuthorRole(roles);
 }
 

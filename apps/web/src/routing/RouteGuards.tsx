@@ -8,6 +8,7 @@ import {
 } from "react-router";
 import type { MfaGateUser } from "../auth/mfaGate";
 import { AppLoadingScreen } from "../bootstrap/AppLoadingScreen";
+import { useCapabilities } from "../services/authorization";
 import { useCurrentUser } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
 import {
@@ -22,6 +23,7 @@ import {
   resolveAcademyLandingDestination,
   resolveAuthenticatedDestination,
   resolveSessionAccess,
+  hasDashboardAnalyticsPermission,
   shouldBlockAcademyRender,
 } from "./routeAccess";
 
@@ -66,9 +68,22 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const path = normalizeAppPath(location.pathname);
   const authenticationRequired = requiresAcademyAuth(path);
   const landingDestination = resolveAcademyLandingDestination(access);
+  const isDashboardPath = path === "/dashboard";
+  const dashboardCapabilities = useCapabilities({
+    enabled: isDashboardPath && access.isSessionReady,
+  });
+  const dashboardCapabilityPending =
+    isDashboardPath &&
+    access.isSessionReady &&
+    !dashboardCapabilities.isFetched;
+  const dashboardRouteDenied =
+    isDashboardPath &&
+    dashboardCapabilities.isFetched &&
+    !hasDashboardAnalyticsPermission(dashboardCapabilities.permissions);
   const courseAuthorRouteDenied =
     access.isSessionReady &&
-    shouldRedirectFromCourseAuthorPath(path, user?.roles);
+    (dashboardRouteDenied ||
+      shouldRedirectFromCourseAuthorPath(path, user?.roles));
 
   useEffect(() => {
     if (pending) {
@@ -121,14 +136,14 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const blockRender =
     (pending && authenticationRequired) ||
     shouldBlockAcademyRender(path, access) ||
-    courseAuthorRouteDenied;
+    courseAuthorRouteDenied ||
+    dashboardCapabilityPending;
 
-  return (
-    <>
-      {children}
-      {blockRender ? <AppLoadingScreen /> : null}
-    </>
-  );
+  if (blockRender) {
+    return <AppLoadingScreen />;
+  }
+
+  return <>{children}</>;
 }
 
 export function AuthRouteGuard() {

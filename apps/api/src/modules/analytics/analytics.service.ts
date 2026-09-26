@@ -110,10 +110,16 @@ function resolveDateRange(query: AnalyticsFilterQuery) {
 
 function resolveDashboardRevenueRange(range: DashboardRange, now = new Date()) {
   const days = DASHBOARD_RANGE_DAYS[range];
-  return resolveDateRange({
-    from: new Date(now.getTime() - days * DAY_MS),
-    to: now,
-  });
+  const currentDayStart = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  );
+  const from = new Date(currentDayStart - (days - 1) * DAY_MS);
+  const to = now;
+  const prevTo = from;
+  const prevFrom = new Date(prevTo.getTime() - days * DAY_MS);
+  return { from, to, prevFrom, prevTo, days };
 }
 
 function resolveEnrollmentActivityWindow(
@@ -179,14 +185,14 @@ function emptyLearningActivity(
 function normalizeRevenueTrend(
   points: Array<{ date: string; value: number }>,
   from: Date,
-  to: Date,
+  bucketCount: number,
 ) {
   const valuesByDate = new Map(points.map((point) => [point.date, point.value]));
   const start = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate());
-  const end = Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate());
   const trend: Array<{ date: string; value: number }> = [];
 
-  for (let time = start; time <= end; time += DAY_MS) {
+  for (let index = 0; index < bucketCount; index += 1) {
+    const time = start + index * DAY_MS;
     const date = new Date(time).toISOString().slice(0, 10);
     trend.push({ date, value: valuesByDate.get(date) ?? 0 });
   }
@@ -270,13 +276,33 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     actor: AnalyticsActor,
   ): Promise<DashboardCourse[]> {
     const mine = await courseService.listMyCourses(actor.id, actor.roles);
-    return mine.courses.map((course) => ({
-      id: course.id,
-      title: course.title,
-      thumbnailUrl: course.thumbnailUrl,
-      thumbnailSrcSet: course.thumbnailSrcSet,
-      status: course.status,
-    }));
+    return mine.courses
+      .filter(
+        (course) =>
+          course.status === "published" || course.status === "draft",
+      )
+      .map((course) => ({
+        id: course.id,
+        title: course.title,
+        thumbnailUrl: course.thumbnailUrl,
+        thumbnailSrcSet: course.thumbnailSrcSet,
+        status: course.status,
+      }));
+  }
+
+  async function resolveDashboardAnalyticsCourseIds(
+    actor: AnalyticsActor,
+  ): Promise<string[]> {
+    const scoped = await courseService.listMyCourseScope(
+      actor.id,
+      actor.roles,
+    );
+
+    // Preserve the existing course-scoped analytics eligibility rule while
+    // using the collaborative course population for instructors.
+    return scoped.courses
+      .filter((course) => course.status === "published")
+      .map((course) => course.id);
   }
 
   async function buildYourCourses(
@@ -497,34 +523,34 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     courseIdFilter: string | string[] | undefined,
     range: DashboardRange,
   ) {
-    const { from, to, prevFrom, prevTo } = resolveDashboardRevenueRange(range);
+    const { from, to, prevFrom, prevTo, days } = resolveDashboardRevenueRange(range);
     const current = await orderService.getRawStatsForCourses(scope, {
       courseId: courseIdFilter,
       from,
-      to,
+      toExclusive: to,
     });
 
     const [previous, currentFunnel, previousFunnel, trend] = await Promise.all([
       orderService.getRawStatsForCourses(scope, {
         courseId: courseIdFilter,
         from: prevFrom,
-        to: prevTo,
+        toExclusive: prevTo,
         currency: current.currency,
       }),
       orderService.getOrderStatusFunnel(scope, {
         from,
-        to,
+        toExclusive: to,
         courseId: courseIdFilter,
       }),
       orderService.getOrderStatusFunnel(scope, {
         from: prevFrom,
-        to: prevTo,
+        toExclusive: prevTo,
         courseId: courseIdFilter,
       }),
       orderService.getRevenueTrend(scope, {
         courseId: courseIdFilter,
         from,
-        to,
+        toExclusive: to,
         currency: current.currency,
       }),
     ]);
@@ -535,7 +561,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     return {
       range,
       currency: current.currency,
-      trend: normalizeRevenueTrend(trend, from, to),
+      trend: normalizeRevenueTrend(trend, from, days),
       grossSales: kpi(current.grossPaid, previous.grossPaid),
       netRevenue: kpi(currentNetRevenue, previousNetRevenue),
       orders: kpi(currentFunnel.paid, previousFunnel.paid),
@@ -612,7 +638,10 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     const { courseIds, isPlatformWide } =
       dashboardScope === "platform"
         ? { courseIds: [], isPlatformWide: true }
-        : await resolveCoursesInScope(actor, undefined);
+        : {
+            courseIds: await resolveDashboardAnalyticsCourseIds(actor),
+            isPlatformWide: false,
+          };
     if (!isPlatformWide && courseIds.length === 0) {
       return {
         revenue: {

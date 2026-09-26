@@ -205,6 +205,10 @@
   color: var(--danger);
 }
 
+.creator-trend.is-neutral {
+  color: var(--muted);
+}
+
 .creator-dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.07fr) minmax(0, 1fr);
@@ -464,6 +468,11 @@
   overflow-x: auto;
 }
 
+.creator-courses-table {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
 .creator-table-head,
 .creator-table-row {
   display: grid;
@@ -478,6 +487,13 @@
     minmax(132px, 1.55fr) minmax(54px, 0.7fr) minmax(46px, 0.52fr)
     minmax(65px, 0.72fr);
   column-gap: 7px;
+}
+
+.creator-courses-table .creator-table-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--card-surface);
 }
 
 .creator-enrollment-table .creator-table-head,
@@ -526,6 +542,21 @@
   object-fit: cover;
 }
 
+.creator-course-thumbnail {
+  display: block;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  overflow: hidden;
+  border-radius: 5px;
+}
+
+.creator-course-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .creator-student-cell img {
   width: 100%;
   height: 100%;
@@ -561,7 +592,7 @@
   text-overflow: ellipsis;
 }
 
-.creator-published {
+.creator-course-status {
   display: inline-flex;
   align-items: center;
   min-height: 21px;
@@ -694,6 +725,11 @@
 }
 
 .creator-enrollment-table .creator-table-state > span {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+
+.creator-courses-table .creator-table-state > span {
   grid-column: 1 / -1;
   color: var(--muted);
 }

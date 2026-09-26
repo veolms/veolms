@@ -4,6 +4,7 @@ import type {
   DashboardRange,
   DashboardRevenueOverview,
   DashboardSummaryResponse,
+  DashboardYourCourse,
 } from "@veolms/contracts";
 import { ArrowDownRightIcon as ArrowDownRight } from "@phosphor-icons/react/ArrowDownRight";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
@@ -26,33 +27,8 @@ import { useRecentEnrollments } from "./services/enrollments";
 import { useDashboardRecentDiscussions } from "./services/learning-interactions";
 import { adaptDiscussionWorkspaceItem } from "./workspace/discussions-workspace.adapter";
 import { formatRelativeTime } from "./learning/learning-notes.adapter";
-import typescriptThumbnail from "./assets/course-thumbnails/typescript-960.webp";
-import nodeThumbnail from "./assets/course-thumbnails/nodejs-960.webp";
-import veolmsThumbnail from "./assets/learning-thumbnails/veolms-course.webp";
-
-const creatorCourses = [
-  {
-    title: "The Ultimate TypeScript Course",
-    thumbnail: typescriptThumbnail,
-    status: "Published",
-    students: "1,246",
-    progress: 64,
-  },
-  {
-    title: "Complete Backend with Node.js",
-    thumbnail: nodeThumbnail,
-    status: "Published",
-    students: "987",
-    progress: 58,
-  },
-  {
-    title: "Building VeoLMS: Idea to Production",
-    thumbnail: veolmsThumbnail,
-    status: "Published",
-    students: "653",
-    progress: 71,
-  },
-];
+import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
+import { useAuthStore } from "./store/auth.store";
 
 type ActivityRow = readonly [
   label: string,
@@ -92,53 +68,81 @@ interface CreatorDashboardProps extends NavigateProps {
   academyTheme?: string;
 }
 
-const metricCards = [
-  {
-    label: "Revenue This Month",
-    value: "₹1,24,500",
-    change: "12.4%",
-    context: "vs last month",
-    icon: CurrencyInr,
-    tone: "violet",
-  },
-  {
-    label: "Total Students",
-    value: "2,486",
-    change: "+84",
-    context: "this month",
-    icon: Users,
-    tone: "blue",
-  },
-  {
-    label: "Active Learners (7d)",
-    value: "327",
-    change: "8.1%",
-    context: "vs last 7 days",
-    icon: Pulse,
-    tone: "green",
-  },
-  {
-    label: "Watch Time This Month",
-    value: "1,284 hrs",
-    change: "10.2%",
-    context: "vs last month",
-    icon: Clock,
-    tone: "gold",
-  },
-];
-
 function Trend({
   value,
   negative = false,
+  neutral = false,
 }: {
   value: string;
   negative?: boolean;
+  neutral?: boolean;
 }) {
   const Icon = negative ? ArrowDownRight : ArrowUpRight;
   return (
-    <span className={`creator-trend ${negative ? "is-negative" : ""}`}>
-      <Icon size={14} weight="bold" /> {value}
+    <span
+      className={`creator-trend ${negative ? "is-negative" : ""} ${
+        neutral ? "is-neutral" : ""
+      }`}
+    >
+      {!neutral && <Icon size={14} weight="bold" />} {value}
     </span>
+  );
+}
+
+function getDashboardGreeting(hour = new Date().getHours()) {
+  if (hour >= 5 && hour < 12) return "Good morning";
+  if (hour >= 12 && hour < 17) return "Good afternoon";
+  if (hour >= 17 && hour < 21) return "Good evening";
+  return "Good night";
+}
+
+function DashboardMetricComparison({
+  changePercent,
+  changeValue,
+  context,
+  unavailable,
+}: {
+  changePercent?: number | null;
+  changeValue?: string;
+  context: string;
+  unavailable: boolean;
+}) {
+  if (unavailable) {
+    return (
+      <>
+        <Trend value="—" neutral />
+        <span className="creator-kpi-context">{context}</span>
+      </>
+    );
+  }
+
+  if (changeValue !== undefined) {
+    return (
+      <>
+        <Trend value={changeValue} neutral={changeValue === "+0"} />
+        <span className="creator-kpi-context">{context}</span>
+      </>
+    );
+  }
+
+  if (changePercent === null || changePercent === undefined) {
+    return (
+      <>
+        <Trend value="No comparison" neutral />
+        <span className="creator-kpi-context">{context}</span>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Trend
+        value={`${Math.abs(changePercent).toFixed(1)}%`}
+        negative={changePercent < 0}
+        neutral={changePercent === 0}
+      />
+      <span className="creator-kpi-context">{context}</span>
+    </>
   );
 }
 
@@ -732,7 +736,50 @@ function LearningActivityPanel({
   );
 }
 
-function CoursesPanel({ onNavigatePage }: NavigateProps) {
+function CreatorCourseThumbnail({ course }: { course: DashboardYourCourse }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [course.thumbnailUrl]);
+
+  return (
+    <span className="creator-course-thumbnail">
+      {course.thumbnailUrl && !imageFailed ? (
+        <img
+          src={course.thumbnailUrl}
+          srcSet={course.thumbnailSrcSet
+            ?.map((variant) => `${variant.url} ${variant.width}w`)
+            .join(", ")}
+          sizes="32px"
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={() => setImageFailed(true)}
+        />
+      ) : (
+        <CourseThumbnailPlaceholder />
+      )}
+    </span>
+  );
+}
+
+function formatCourseStatus(status: DashboardYourCourse["status"]) {
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function CoursesPanel({
+  onNavigatePage,
+  courses,
+  isLoading,
+  isError,
+}: NavigateProps & {
+  courses?: DashboardSummaryResponse["yourCourses"];
+  isLoading: boolean;
+  isError: boolean;
+}) {
+  const courseRows = courses ?? [];
+
   return (
     <DashboardPanel
       className="creator-courses-panel"
@@ -747,29 +794,55 @@ function CoursesPanel({ onNavigatePage }: NavigateProps) {
           <span>Students</span>
           <span>Avg Progress</span>
         </div>
-        {creatorCourses.map((course) => (
-          <div className="creator-table-row" key={course.title}>
-            <span className="creator-course-cell">
-              <img
-                src={course.thumbnail}
-                alt=""
-                loading="lazy"
-                decoding="async"
-              />
-              <strong>{course.title}</strong>
-            </span>
-            <span>
-              <em className="creator-published">{course.status}</em>
-            </span>
-            <span>{course.students}</span>
-            <span className="creator-progress-cell">
-              <span>{course.progress}%</span>
-              <i>
-                <b style={{ width: `${course.progress}%` }} />
-              </i>
-            </span>
+        {isLoading ? (
+          <div className="creator-table-row creator-table-state" role="status">
+            <span>Loading courses…</span>
           </div>
-        ))}
+        ) : isError ? (
+          <div className="creator-table-row creator-table-state" role="alert">
+            <span>Unable to load courses.</span>
+          </div>
+        ) : courseRows.length === 0 ? (
+          <div className="creator-table-row creator-table-state">
+            <span>No courses available.</span>
+          </div>
+        ) : (
+          courseRows.map((course) => (
+            <div className="creator-table-row" key={course.id}>
+              <span className="creator-course-cell">
+                <CreatorCourseThumbnail course={course} />
+                <strong>{course.title}</strong>
+              </span>
+              <span>
+                <em
+                  className={`course-tag creator-course-status course-tag--${course.status}`}
+                >
+                  {formatCourseStatus(course.status)}
+                </em>
+              </span>
+              <span>{formatDashboardNumber(course.students)}</span>
+              <span className="creator-progress-cell">
+                <span>
+                  {course.averageProgressPercent === null
+                    ? "—"
+                    : formatDashboardPercent(course.averageProgressPercent)}
+                </span>
+                {course.averageProgressPercent !== null && (
+                  <i>
+                    <b
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.max(0, course.averageProgressPercent),
+                        )}%`,
+                      }}
+                    />
+                  </i>
+                )}
+              </span>
+            </div>
+          ))
+        )}
       </div>
     </DashboardPanel>
   );
@@ -956,12 +1029,68 @@ export function CreatorDashboard({
   academyTheme = "default",
 }: CreatorDashboardProps) {
   const [range, setRange] = useState<DashboardRange>("30d");
+  const currentUser = useAuthStore((state) => state.user);
   const {
     data: dashboardResponse,
     isLoading: isDashboardLoading,
     isError: isDashboardError,
   } =
     useDashboard(range);
+  const dashboardUnavailable =
+    isDashboardLoading || isDashboardError || !dashboardResponse;
+  const dashboardCurrency = dashboardResponse?.revenue.currency ?? "INR";
+  const dashboardDisplayName =
+    currentUser?.displayName?.trim() ||
+    currentUser?.username?.trim() ||
+    "Your name";
+  const dashboardGreeting = getDashboardGreeting();
+  const metricCards = [
+    {
+      label: "Revenue This Month",
+      value: dashboardUnavailable
+        ? "—"
+        : formatDashboardCurrency(
+            dashboardResponse.revenue.value,
+            dashboardCurrency,
+          ),
+      changePercent: dashboardResponse?.revenue.changePercent,
+      context: "vs last month",
+      icon: CurrencyInr,
+      tone: "violet",
+    },
+    {
+      label: "Total Students",
+      value: dashboardUnavailable
+        ? "—"
+        : formatDashboardNumber(dashboardResponse.students.total),
+      changeValue: dashboardUnavailable
+        ? undefined
+        : `+${formatDashboardNumber(dashboardResponse.students.newThisMonth)}`,
+      context: "this month",
+      icon: Users,
+      tone: "blue",
+    },
+    {
+      label: "Active Learners (7d)",
+      value: dashboardUnavailable
+        ? "—"
+        : formatDashboardNumber(dashboardResponse.activeLearners.value),
+      changePercent: dashboardResponse?.activeLearners.changePercent,
+      context: "vs last 7 days",
+      icon: Pulse,
+      tone: "green",
+    },
+    {
+      label: "Watch Time This Month",
+      value: dashboardUnavailable
+        ? "—"
+        : `${formatDashboardNumber(dashboardResponse.watchHours.value)} hrs`,
+      changePercent: dashboardResponse?.watchHours.changePercent,
+      context: "vs last month",
+      icon: Clock,
+      tone: "gold",
+    },
+  ];
 
   useEffect(() => {
     if (import.meta.env.DEV && dashboardResponse) {
@@ -977,7 +1106,8 @@ export function CreatorDashboard({
       <header className="creator-dashboard-heading">
         <div>
           <h1>
-            Good afternoon, Anurag <span aria-hidden="true">👋</span>
+            {dashboardGreeting}, {dashboardDisplayName}{" "}
+            <span aria-hidden="true">👋</span>
           </h1>
           <p>Here&apos;s what&apos;s happening with your academy today.</p>
         </div>
@@ -1001,7 +1131,15 @@ export function CreatorDashboard({
 
       <section className="creator-kpi-grid" aria-label="Academy overview">
         {metricCards.map(
-          ({ label, value, change, context, icon: Icon, tone }) => (
+          ({
+            label,
+            value,
+            changePercent,
+            changeValue,
+            context,
+            icon: Icon,
+            tone,
+          }) => (
             <article className="creator-kpi-card" key={label}>
               <span className={`creator-icon-circle tone-${tone}`}>
                 <Icon size={22} weight="duotone" />
@@ -1010,8 +1148,12 @@ export function CreatorDashboard({
                 <small>{label}</small>
                 <strong>{value}</strong>
                 <span className="creator-kpi-footer">
-                  <Trend value={change} />
-                  <span className="creator-kpi-context">{context}</span>
+                  <DashboardMetricComparison
+                    changePercent={changePercent}
+                    changeValue={changeValue}
+                    context={context}
+                    unavailable={dashboardUnavailable}
+                  />
                 </span>
               </div>
             </article>
@@ -1034,7 +1176,12 @@ export function CreatorDashboard({
           isLoading={isDashboardLoading}
           isError={isDashboardError}
         />
-        <CoursesPanel onNavigatePage={onNavigatePage} />
+        <CoursesPanel
+          onNavigatePage={onNavigatePage}
+          courses={dashboardResponse?.yourCourses}
+          isLoading={isDashboardLoading}
+          isError={isDashboardError}
+        />
         <DiscussionsPanel onNavigatePage={onNavigatePage} />
         <EnrollmentsPanel onNavigatePage={onNavigatePage} />
       </div>

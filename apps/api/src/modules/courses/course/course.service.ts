@@ -591,6 +591,32 @@ export function createCourseService({
   }
 
   /**
+   * Lists only the course identity and status needed by analytics scope
+   * resolution, using the same visibility split as the course-management
+   * list. This intentionally avoids course media and metadata hydration.
+   */
+  async function listMyCourseScope(
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    const isAdminOrInstructor =
+      userRoles?.includes(ADMIN_ROLE) || userRoles?.includes("instructor");
+    const rows = isAdminOrInstructor
+      ? await courseRepo.listAllCourseScope(database)
+      : await courseRepo.listAvailableCourseScopeByCreator(
+          database,
+          creatorId,
+        );
+
+    return {
+      courses: rows.map((course) => ({
+        id: course.id,
+        status: course.status,
+      })),
+    };
+  }
+
+  /**
    * Updates basic course metadata with optimistic concurrency validation.
    */
   async function updateCourseBasics(
@@ -1307,6 +1333,7 @@ export function createCourseService({
     getCourseAndVerifyOwner,
     createCourse,
     listMyCourses,
+    listMyCourseScope,
     listPublishedCourses,
     getPublishedCourseBySlug,
     listAvailableCoursesByCreator,
