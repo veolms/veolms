@@ -1,4 +1,6 @@
-import { ArrowLeftIcon as ArrowLeft, MagnifyingGlassIcon as MagnifyingGlass, XIcon as X } from "@phosphor-icons/react";
+import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { XIcon as X } from "@phosphor-icons/react/X";
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { flushSync } from "react-dom";

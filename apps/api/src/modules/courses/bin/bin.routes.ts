@@ -16,6 +16,7 @@ const binRoutes: RoutePlugin = async (app, options) => {
   const service = createCourseBinService({
     database: options.database,
     storage: options.services.storage,
+    services: options.services,
   });
   const controller = createCourseBinController({ service });
 

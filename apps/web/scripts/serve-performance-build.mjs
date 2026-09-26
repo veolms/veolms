@@ -1,30 +1,73 @@
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { access, readFile, stat } from "node:fs/promises";
 import { createServer, request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createBrotliCompress, createGzip, constants } from "node:zlib";
-import {
-  FIRST_SECTION_FLAG,
-  runPerformanceBuild,
-} from "./build-performance.mjs";
-
-const buildExitCode = await runPerformanceBuild(
-  process.argv.includes(FIRST_SECTION_FLAG) ? [FIRST_SECTION_FLAG] : [],
-);
-if (buildExitCode !== 0) process.exit(buildExitCode);
+import { getPreviewBuildFingerprint } from "./preview-build-fingerprint.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(scriptDirectory, "../../..");
+const buildDirectory = path.resolve(scriptDirectory, "../build");
+const root = path.join(buildDirectory, "client");
+const previewMetadataPath = path.join(root, ".veolms-preview-build.json");
+const requiredPreviewFiles = [
+  "index.html",
+  "courses/index.html",
+  "settings/profile/index.html",
+  "__spa-fallback.html",
+  "../server/index.js",
+];
 
+let metadataForEnvironment;
 try {
-  process.loadEnvFile(path.join(workspaceRoot, ".env"));
-} catch (error) {
-  if (error?.code !== "ENOENT") throw error;
+  metadataForEnvironment = JSON.parse(
+    await readFile(previewMetadataPath, "utf8"),
+  );
+} catch {
+  // The standard preflight below reports a missing or invalid build.
+}
+const previewEnvironmentFiles =
+  metadataForEnvironment?.learningPrerenderScope === "first-section"
+    ? [".env", ".env.production"]
+    : [".env.production", ".env"];
+for (const environmentFile of previewEnvironmentFiles) {
+  try {
+    // Match the build's environment precedence so preview settings, API proxy
+    // target, and freshness fingerprint all describe the same output.
+    process.loadEnvFile(path.join(workspaceRoot, environmentFile));
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
 }
 
-const root = path.resolve(scriptDirectory, "../build/client");
+try {
+  const metadata = metadataForEnvironment;
+  if (
+    !metadata ||
+    metadata.version !== 1 ||
+    metadata.nodeEnv !== "production" ||
+    !["first-section", "all-lectures"].includes(metadata.learningPrerenderScope)
+  ) {
+    throw new Error("production build metadata is invalid");
+  }
+  await Promise.all(
+    requiredPreviewFiles.map((file) => access(path.join(root, file))),
+  );
+  const sourceFingerprint = await getPreviewBuildFingerprint(workspaceRoot, {
+    learningPrerenderScope: metadata.learningPrerenderScope,
+  });
+  if (sourceFingerprint !== metadata.sourceFingerprint) {
+    throw new Error("preview output is stale for the current source tree");
+  }
+} catch {
+  console.error(
+    "A complete, current production preview build was not found. Run `pnpm build:preview:web` for Lighthouse preview, or `pnpm build:web` for the full release build, then start the preview again.",
+  );
+  process.exit(1);
+}
+
 const portArgumentIndex = process.argv.indexOf("--port");
 const commandLinePort =
   portArgumentIndex >= 0 ? Number(process.argv[portArgumentIndex + 1]) : NaN;
@@ -42,6 +85,11 @@ const apiTargetValue =
     ? process.argv[apiTargetArgumentIndex + 1]
     : process.env.STATIC_BUILD_API_URL || "http://127.0.0.1:4000";
 const apiTarget = new URL(apiTargetValue);
+// The local API listens on IPv4 loopback. On some Windows setups, Node resolves
+// `localhost` to IPv6 first, which cannot reach that listener.
+if (apiTarget.hostname === "localhost" && apiTarget.protocol === "http:") {
+  apiTarget.hostname = "127.0.0.1";
+}
 const apiOrigin = apiTarget.origin;
 const mimeTypes = new Map([
   [".css", "text/css; charset=utf-8"],
@@ -144,8 +192,8 @@ const proxyRequestToOrigin = (
 createServer(async (request, response) => {
   const requestUrl = new URL(request.url || "/", "http://localhost");
   if (
-    requestUrl.pathname === "/api" ||
-    requestUrl.pathname.startsWith("/api/")
+    requestUrl.pathname === "/v1" ||
+    requestUrl.pathname.startsWith("/v1/")
   ) {
     proxyRequestToOrigin(request, response, requestUrl, apiOrigin, {
       code: "API_UNAVAILABLE",

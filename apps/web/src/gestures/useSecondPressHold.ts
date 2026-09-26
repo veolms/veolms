@@ -52,26 +52,26 @@ export function useSecondPressHold<T extends HTMLElement>({
   const suppressNextClickRef = useRef(false);
   const [isSecondPressHolding, setIsSecondPressHolding] = useState(false);
 
-  const clearDeferredPress = () => {
+  const clearDeferredPress = useCallback(() => {
     if (deferredPressTimerRef.current === null) return;
     window.clearTimeout(deferredPressTimerRef.current);
     deferredPressTimerRef.current = null;
-  };
+  }, []);
 
-  const clearHoldTimer = () => {
+  const clearHoldTimer = useCallback(() => {
     if (holdTimerRef.current === null) return;
     window.clearTimeout(holdTimerRef.current);
     holdTimerRef.current = null;
-  };
+  }, []);
 
-  const disarm = () => {
+  const disarm = useCallback(() => {
     clearDeferredPress();
     clearHoldTimer();
     armedUntilRef.current = 0;
     secondPointerRef.current = null;
     secondClickPendingRef.current = false;
     setIsSecondPressHolding(false);
-  };
+  }, [clearDeferredPress, clearHoldTimer]);
 
   useEffect(
     () => () => {
@@ -124,7 +124,7 @@ export function useSecondPressHold<T extends HTMLElement>({
       callbacksRef.current.onSecondPressHold();
       if (event.pointerType === "touch") navigator.vibrate?.(10);
     }, optionsRef.current.holdDuration);
-  }, []);
+  }, [clearDeferredPress, clearHoldTimer]);
 
   const onPointerMove: PointerEventHandler<T> = useCallback((event) => {
     const pointer = secondPointerRef.current;
@@ -141,7 +141,7 @@ export function useSecondPressHold<T extends HTMLElement>({
     pointer.cancelled = true;
     clearHoldTimer();
     setIsSecondPressHolding(false);
-  }, []);
+  }, [clearHoldTimer]);
 
   const finishSecondPress = useCallback(
     (
@@ -169,7 +169,7 @@ export function useSecondPressHold<T extends HTMLElement>({
         }
       }
     },
-    [],
+    [clearHoldTimer],
   );
 
   const onPointerUp: PointerEventHandler<T> = useCallback(
@@ -219,7 +219,7 @@ export function useSecondPressHold<T extends HTMLElement>({
       armedUntilRef.current = 0;
       callbacksRef.current.onPress?.();
     }, secondPressWindowOption);
-  }, []);
+  }, [clearDeferredPress, disarm]);
 
   const handlers = useMemo(
     () => ({

@@ -1,7 +1,12 @@
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
-import { CheckIcon as Check } from "@phosphor-icons/react/Check";
-import { CircleIcon as Circle } from "@phosphor-icons/react/Circle";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { RefObject } from "react";
 import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "../hooks/useDebounce";
 import { ExpandableSearch } from "../ExpandableSearch";
@@ -22,8 +27,11 @@ import {
   useSessionStorageState,
 } from "./useSessionStorageState";
 import type { LessonDrawerHeroControlProps } from "./useLessonDrawerHeroControl";
+import { CurriculumLessonRows } from "./CurriculumLessonRows";
+import { useCurriculumLayoutRevision } from "./useCurriculumLayoutRevision";
 
 const LESSON_PROGRESS_COMPLETE_THRESHOLD = 99.5;
+const EMPTY_LESSON_PROGRESS: Readonly<Record<number, number>> = {};
 
 interface CurriculumProps {
   selectedLesson: number;
@@ -56,7 +64,7 @@ export function Curriculum({
   selectedLesson,
   sections = defaultSections,
   lessonsById = defaultLessonsById,
-  lessonProgress = {},
+  lessonProgress = EMPTY_LESSON_PROGRESS,
   onSelectLesson,
   onOpenCourseOverview,
   courseNavigationActionLabel,
@@ -126,24 +134,22 @@ export function Curriculum({
   const activeLessonRef = useRef<HTMLButtonElement>(null);
   const currentSectionRef = useRef<HTMLElement>(null);
   const lessonListRef = useRef<HTMLDivElement>(null);
+  const layoutRevision = useCurriculumLayoutRevision(lessonListRef);
   const curriculumRef = useRef<HTMLElement>(null);
   const contextMenuPortalHostRef = useRef<HTMLElement | null>(null);
   const scrollControlRef = useRef<ElasticScrollerHandle>(null);
   const handledFocusRequestRef = useRef(0);
   const handledTopRequestRef = useRef(0);
-  const fallbackSection: CourseSection = {
-    id: 0,
-    title: "",
-    progress: "",
-    lessons: [],
-  };
   const fallbackLesson: Lesson = [selectedLesson || 1, "", "", "todo"];
-  const currentSection =
-    sections.find((section) =>
-      section.lessons.some(([number]) => number === selectedLesson),
-    ) ||
-    sections[0] ||
-    fallbackSection;
+  const currentSection = useMemo(
+    () =>
+      sections.find((section) =>
+        section.lessons.some(([number]) => number === selectedLesson),
+      ) ||
+      sections[0] ||
+      { id: 0, title: "", progress: "", lessons: [] },
+    [sections, selectedLesson],
+  );
   const currentLesson =
     lessonsById?.get(selectedLesson) || lessonsById?.get(1) || fallbackLesson;
   useEffect(() => {
@@ -174,25 +180,56 @@ export function Curriculum({
     [scrollportRef],
   );
 
-  const getLessonProgress = (number: number, status: string) => {
-    const storedProgress = lessonProgress[number];
-    if (typeof storedProgress === "number")
-      return Math.max(0, Math.min(100, storedProgress));
-    if (status === "done") return 100;
-    return 0;
-  };
+  const { courseProgress, completedLessonsBySection } = useMemo(() => {
+    let lessonCount = 0;
+    let totalProgress = 0;
+    const completedLessonsBySection = new Map<number, number>();
 
-  const allLessons = sections.flatMap(({ lessons }) => lessons);
-  const courseProgress =
-    allLessons.length > 0
-      ? Math.round(
-          allLessons.reduce(
-            (total, [number, , , status]) =>
-              total + getLessonProgress(number, status),
-            0,
-          ) / allLessons.length,
-        )
-      : 0;
+    for (const section of sections) {
+      let completedLessons = 0;
+      for (const [number, , , status] of section.lessons) {
+        const storedProgress = lessonProgress[number];
+        const progress =
+          typeof storedProgress === "number"
+            ? Math.max(0, Math.min(100, storedProgress))
+            : status === "done"
+              ? 100
+              : 0;
+        totalProgress += progress;
+        lessonCount += 1;
+        if (progress >= LESSON_PROGRESS_COMPLETE_THRESHOLD) {
+          completedLessons += 1;
+        }
+      }
+      completedLessonsBySection.set(section.id, completedLessons);
+    }
+
+    return {
+      courseProgress:
+        lessonCount > 0 ? Math.round(totalProgress / lessonCount) : 0,
+      completedLessonsBySection,
+    };
+  }, [lessonProgress, sections]);
+  const searchableSections = useMemo(() => {
+    const query = activeLessonSearch.toLowerCase();
+    return sections
+      .map((section) => {
+        const matchingLessons = query
+          ? section.lessons.filter((lesson) =>
+              lesson[1].toLowerCase().includes(query),
+            )
+          : section.lessons;
+        return {
+          section,
+          matchingLessons,
+          sectionMatches: Boolean(query && section.title.toLowerCase().includes(query)),
+        };
+      })
+      .filter(
+        ({ matchingLessons, sectionMatches }) =>
+          !query || sectionMatches || matchingLessons.length > 0,
+      );
+  }, [activeLessonSearch, sections]);
   const scrollItemToTop = (element: HTMLElement | null) => {
     const curriculum = element?.closest<HTMLElement>(".learning-curriculum");
     if (!element || !curriculum) return;
@@ -576,29 +613,13 @@ export function Curriculum({
               ))}
             </div>
           ) : (
-            sections.map((section) => {
-              const matchingLessons = section.lessons.filter((lesson) =>
-                lesson[1]
-                  .toLowerCase()
-                  .includes(activeLessonSearch.toLowerCase()),
-              );
-              const completedLessons = section.lessons.filter(
-                ([number, , , status]) =>
-                  getLessonProgress(number, status) >=
-                  LESSON_PROGRESS_COMPLETE_THRESHOLD,
-              ).length;
+            searchableSections.map(({ section, matchingLessons }) => {
+              const completedLessons =
+                completedLessonsBySection.get(section.id) ?? 0;
               const sectionProgress = `${completedLessons}/${section.lessons.length}`;
               const isOpen =
                 expanded.includes(section.id) ||
                 Boolean(activeLessonSearch && matchingLessons.length > 0);
-              if (
-                activeLessonSearch &&
-                !section.title
-                  .toLowerCase()
-                  .includes(activeLessonSearch.toLowerCase()) &&
-                matchingLessons.length === 0
-              )
-                return null;
               return (
                 <section
                   key={section.id}
@@ -636,93 +657,21 @@ export function Curriculum({
                       inert={!isOpen ? true : undefined}
                     >
                       <div className="learning-curriculum__section-lessons-inner">
-                        {matchingLessons.map(
-                          ([number, title, duration, status]) => {
-                            const active = selectedLesson === number;
-                            const available =
-                              isLessonAvailable?.(number) ?? true;
-                            const progress = getLessonProgress(number, status);
-                            const completed =
-                              status === "done" ||
-                              progress >= LESSON_PROGRESS_COMPLETE_THRESHOLD;
-                            const showProgress = active || progress > 0;
-                            return (
-                              <button
-                                type="button"
-                                key={number}
-                                ref={active ? activeLessonRef : undefined}
-                                disabled={!available}
-                                title={
-                                  available
-                                    ? undefined
-                                    : "Log in to watch this lecture"
-                                }
-                                aria-label={
-                                  available
-                                    ? undefined
-                                    : `${title} (log in to watch)`
-                                }
-                                onClick={() => {
-                                  if (!available) return;
-                                  onSelectLesson(number);
-                                  onClose?.();
-                                }}
-                                className={`learning-curriculum__lesson ${active ? "is-active" : ""} ${!available ? "cursor-not-allowed opacity-50" : ""}`}
-                              >
-                                {completed ? (
-                                  <span
-                                    className="learning-curriculum__lesson-status"
-                                    aria-label="Completed"
-                                  >
-                                    <Check size={12} weight="bold" />
-                                  </span>
-                                ) : showProgress ? (
-                                  <span
-                                    className="learning-curriculum__lesson-progress"
-                                    role="progressbar"
-                                    aria-label={`Lecture ${number} progress`}
-                                    aria-valuemin={0}
-                                    aria-valuemax={100}
-                                    aria-valuenow={Math.round(progress)}
-                                    aria-valuetext={`${Math.round(progress)}% watched`}
-                                  >
-                                    <svg viewBox="0 0 20 20" aria-hidden="true">
-                                      <circle
-                                        className="learning-curriculum__lesson-progress-track"
-                                        cx="10"
-                                        cy="10"
-                                        r="8"
-                                      />
-                                      <circle
-                                        className="learning-curriculum__lesson-progress-value"
-                                        cx="10"
-                                        cy="10"
-                                        r="8"
-                                        pathLength="100"
-                                        strokeDasharray="100"
-                                        strokeDashoffset={100 - progress}
-                                      />
-                                    </svg>
-                                  </span>
-                                ) : (
-                                  <Circle
-                                    size={20}
-                                    className="learning-curriculum__lesson-status learning-curriculum__lesson-status--todo"
-                                  />
-                                )}
-                                <span className="learning-curriculum__lesson-number">
-                                  {number}.
-                                </span>
-                                <span className="min-w-0 flex-1 truncate">
-                                  {title}
-                                </span>
-                                <span className="learning-curriculum__lesson-duration">
-                                  {duration}
-                                </span>
-                              </button>
-                            );
-                          },
-                        )}
+                        {isOpen ? (
+                          <CurriculumLessonRows
+                            sectionId={section.id}
+                            sectionTitle={section.title}
+                            lessons={matchingLessons}
+                            selectedLesson={selectedLesson}
+                            lessonProgress={lessonProgress}
+                            onSelectLesson={onSelectLesson}
+                            isLessonAvailable={isLessonAvailable}
+                            onClose={onClose}
+                            activeLessonRef={activeLessonRef}
+                            scrollportRef={curriculumRef}
+                            layoutRevision={layoutRevision}
+                          />
+                        ) : null}
                       </div>
                     </div>
                   )}

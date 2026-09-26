@@ -3,6 +3,7 @@ import type {
   CreateCourseRequest,
   UpdateCourseBasicsRequest,
   CourseSlugParams,
+  CourseListQuery,
 } from "@veolms/contracts";
 import { httpError } from "../../../lib/errors.ts";
 import type { CourseService } from "./course.service.ts";
@@ -14,13 +15,14 @@ export function createCourseController({
 }) {
   async function listCourses(
     request: FastifyRequest<{
-      Querystring: { creatorId?: string };
+      Querystring: CourseListQuery;
     }>,
   ) {
-    const courses = await service.listPublishedCourses({
+    return await service.listPublishedCourses({
       creatorId: request.query.creatorId,
+      cursor: request.query.cursor,
+      limit: request.query.limit,
     });
-    return { courses };
   }
 
   async function getCourseBySlug(
@@ -72,7 +74,23 @@ export function createCourseController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.getCourseEditorData(id, creatorId, request.user?.roles);
+    return await service.getCourseEditorData(
+      id,
+      creatorId,
+      request.user?.roles,
+    );
+  }
+
+  async function getPublicPageRefreshStatus(
+    request: FastifyRequest<{ Params: { id: string } }>,
+  ) {
+    return service.getStaticPageRefreshStatus(request.params.id);
+  }
+
+  async function retryPublicPageRefresh(
+    request: FastifyRequest<{ Params: { id: string } }>,
+  ) {
+    return await service.retryStaticPageRefresh(request.params.id);
   }
 
   async function updateCourseBasics(
@@ -165,6 +183,8 @@ export function createCourseController({
     createCourse,
     listMyCourses,
     getCourseEditor,
+    getPublicPageRefreshStatus,
+    retryPublicPageRefresh,
     updateCourseBasics,
     updateCourseThumbnail,
     updateCourseDetails,

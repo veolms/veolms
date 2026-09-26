@@ -254,3 +254,46 @@
   min-width: 0;
   gap: 6px;
 }
+
+@media (max-width: 640px) {
+  .settings-learning {
+    padding: 14px;
+    border-radius: 13px;
+  }
+
+  .settings-learning__header {
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .settings-learning__saved {
+    min-height: 32px;
+    font-size: 0.66rem;
+  }
+
+  .settings-learning-card {
+    padding: 13px;
+    border-radius: 11px;
+  }
+
+  .settings-learning-select-row,
+  .settings-learning-toggle-row,
+  .settings-learning-custom-range {
+    grid-template-columns: minmax(0, 1fr) minmax(128px, 148px);
+    gap: 10px;
+  }
+
+  .settings-learning-reminder-fields {
+    padding: 10px;
+  }
+
+  .settings-learning-days {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .settings-learning-reminder-selects {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}

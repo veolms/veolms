@@ -136,6 +136,7 @@ export function OtpForm({
               disabled={verifying}
               invalid={message !== null}
               label={CODE_LABEL}
+              autoFocus
               onChange={changeCode}
               value={code}
             />

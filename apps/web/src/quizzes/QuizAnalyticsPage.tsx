@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQueries } from "@tanstack/react-query";
 import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "../hooks/useDebounce";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
@@ -27,8 +26,6 @@ import { ThemedSelect, type ThemedSelectOption } from "../ThemedSelect";
 import { useMyCourses } from "../services/courses";
 import { useStudents } from "../services/students";
 import {
-  quizKeys,
-  quizzesService,
   useCourseQuizAnalytics,
   useCourseQuizAssignments,
   useMyQuizAssignments,
@@ -36,6 +33,7 @@ import {
   useQuizHistory,
   useStudentQuizReport,
   useMyQuizzes,
+  useQuizAnalyticsOverview,
 } from "../services/quizzes";
 import { SelectCourseForQuizModal } from "./SelectCourseForQuizModal";
 
@@ -314,14 +312,11 @@ function InstructorOverview({
     () => courses.data?.courses ?? [],
     [courses.data?.courses],
   );
-
-  const allCourseAnalyticsQueries = useQueries({
-    queries: courseList.map((course) => ({
-      queryKey: quizKeys.courseAnalytics(course.id),
-      queryFn: () => quizzesService.courseAnalytics(course.id),
-      staleTime: 30_000,
-    })),
-  });
+  const courseIds = useMemo(
+    () => courseList.map((course) => course.id),
+    [courseList],
+  );
+  const allCourseAnalytics = useQuizAnalyticsOverview(courseIds);
 
   useEffect(() => {
     if (courseId && courses.data?.courses) {
@@ -338,57 +333,26 @@ function InstructorOverview({
   ).length;
   const drafts = quizzes.filter((quiz) => quiz.status === "draft").length;
 
-  const totalAssignedAssessmentsAcrossAll = useMemo(() => {
-    return allCourseAnalyticsQueries.reduce((sum, q) => {
-      return sum + (q.data?.totalQuizzes ?? 0);
-    }, 0);
-  }, [allCourseAnalyticsQueries]);
+  const totalAssignedAssessmentsAcrossAll =
+    allCourseAnalytics.data?.totalQuizzes ?? 0;
 
   const totalLearnersAcrossAll = useMemo(() => {
     if (typeof studentsQuery.data?.pages[0]?.totalCount === "number") {
       return studentsQuery.data.pages[0].totalCount;
     }
-    const studentCounts = allCourseAnalyticsQueries
-      .map((q) => q.data?.students)
-      .filter((val): val is number => typeof val === "number");
-    if (studentCounts.length > 0) {
-      return Math.max(...studentCounts);
-    }
-    return null;
-  }, [studentsQuery.data, allCourseAnalyticsQueries]);
+    return allCourseAnalytics.data?.students ?? null;
+  }, [studentsQuery.data, allCourseAnalytics.data?.students]);
 
-  const coursesWithAttempts = useMemo(() => {
-    return allCourseAnalyticsQueries
-      .map((q) => q.data)
-      .filter((data): data is NonNullable<typeof data> =>
-        Boolean(
-          data &&
-          data.totalQuizzes > 0 &&
-          (data.quizCompletionRate > 0 ||
-            data.quizzes.some(
-              (q) => q.completionRate > 0 || q.averageScore > 0,
-            )),
-        ),
-      );
-  }, [allCourseAnalyticsQueries]);
-
-  const allCoursesMetrics = useMemo(() => {
-    if (coursesWithAttempts.length === 0) {
-      return { averageScore: null, passRate: null };
-    }
-    const avgScoreSum = coursesWithAttempts.reduce(
-      (sum, c) => sum + c.averageQuizScore,
-      0,
-    );
-    const passRateSum = coursesWithAttempts.reduce(
-      (sum, c) => sum + c.passRate,
-      0,
-    );
-    return {
-      averageScore: Math.round(avgScoreSum / coursesWithAttempts.length),
-      passRate: Math.round(passRateSum / coursesWithAttempts.length),
-    };
-  }, [coursesWithAttempts]);
+  const allCoursesMetrics = {
+    averageScore:
+      allCourseAnalytics.data?.averageQuizScore == null
+        ? null
+        : Math.round(allCourseAnalytics.data.averageQuizScore),
+    passRate:
+      allCourseAnalytics.data?.passRate == null
+        ? null
+        : Math.round(allCourseAnalytics.data.passRate),
+  };
 
   const assignedCount =
     assignments.data?.length ?? analytics?.totalQuizzes ?? 0;

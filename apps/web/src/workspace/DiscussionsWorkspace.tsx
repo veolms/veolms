@@ -106,7 +106,9 @@ const canRestoreDiscussionScroll = ({ top }: ApplicationScrollPosition) => {
   const feedRect = feed.getBoundingClientRect();
   const scrollport = getApplicationScrollElement();
   const contentTop = scrollport
-    ? feedRect.top - scrollport.getBoundingClientRect().top + scrollport.scrollTop
+    ? feedRect.top -
+      scrollport.getBoundingClientRect().top +
+      scrollport.scrollTop
     : feedRect.top + window.scrollY;
 
   return contentTop + feedRect.height >= top;
@@ -128,7 +130,9 @@ function hasTextSelectionWithin(node: Node): boolean {
   return selection.getRangeAt(0).intersectsNode(node);
 }
 
-function isDiscussionCardInteractiveTarget(target: EventTarget | null): boolean {
+function isDiscussionCardInteractiveTarget(
+  target: EventTarget | null,
+): boolean {
   return (
     target instanceof Element &&
     Boolean(
@@ -1680,15 +1684,11 @@ export function DiscussionsWorkspace({
       courseId: overrides.courseId ?? selectedCourseId,
       ownership: effectiveOwnership,
       qnaStatus:
-        tabId === "q-and-a" && overrides.status
-          ? overrides.status
-          : qnaStatus,
-      qnaSort:
-        tabId === "q-and-a" && overrides.sort ? overrides.sort : qnaSort,
+        tabId === "q-and-a" && overrides.status ? overrides.status : qnaStatus,
+      qnaSort: tabId === "q-and-a" && overrides.sort ? overrides.sort : qnaSort,
       notesSort:
         tabId === "notes" && overrides.sort ? overrides.sort : notesSort,
-      sort:
-        tabId === "comments" && overrides.sort ? overrides.sort : sort,
+      sort: tabId === "comments" && overrides.sort ? overrides.sort : sort,
     });
   const discussionRestorationKey = getRestorationKeyForTab(activeTab);
   const transitionDiscussionScroll = ({
@@ -1845,11 +1845,7 @@ export function DiscussionsWorkspace({
   };
 
   const setDiscussionSort = (nextSort: string) => {
-    const currentSort = isQnaTab
-      ? qnaSort
-      : isNotesTab
-        ? notesSort
-        : sort;
+    const currentSort = isQnaTab ? qnaSort : isNotesTab ? notesSort : sort;
     if (nextSort === currentSort) return;
 
     if (isQnaTab) setQnaSort(nextSort);
@@ -2100,69 +2096,11 @@ export function DiscussionsWorkspace({
     setMobileActionTarget(null);
   }, []);
 
-  const renderDiscussionCard = useCallback(
-    (thread: DiscussionWorkspaceCard) => {
-      if (isBookmarksTab) {
-        return (
-          <DiscussionWorkspaceBookmarkCard
-            bookmark={thread}
-            onNavigatePage={onNavigatePage}
-            showActions={!showDiscussionSwipePreviews}
-            onRequestMobileActions={
-              showDiscussionSwipePreviews ? openMobileActions : undefined
-            }
-            setNotice={setNotice}
-          />
-        );
-      }
-
-      if (isNotesTab) {
-        return (
-          <DiscussionWorkspaceNoteCard
-            note={thread}
-            onNavigatePage={onNavigatePage}
-            showActions={!showDiscussionSwipePreviews}
-            onRequestMobileActions={
-              showDiscussionSwipePreviews ? openMobileActions : undefined
-            }
-            setNotice={setNotice}
-          />
-        );
-      }
-
-      if (isMentionsTab) {
-        return (
-          <DiscussionWorkspaceMentionCard
-            mention={thread}
-            onNavigatePage={onNavigatePage}
-            showActions={!showDiscussionSwipePreviews}
-            onRequestMobileActions={
-              showDiscussionSwipePreviews ? openMobileActions : undefined
-            }
-            setNotice={setNotice}
-          />
-        );
-      }
-
-      if (isFollowingTab) {
-        return (
-          <DiscussionWorkspaceFollowingCard
-            thread={thread}
-            onNavigatePage={onNavigatePage}
-            showActions={!showDiscussionSwipePreviews}
-            onRequestMobileActions={
-              showDiscussionSwipePreviews ? openMobileActions : undefined
-            }
-            setNotice={setNotice}
-          />
-        );
-      }
-
-      const discussionStatus = thread.status ?? "open";
-      const StatusIcon = statusIcons[discussionStatus];
-      return activeTab === "q-and-a" ? (
-        <DiscussionWorkspaceQuestionCard
-          thread={thread}
+  const renderDiscussionCard = (thread: DiscussionWorkspaceCard) => {
+    if (activeTab === "saved") {
+      return (
+        <DiscussionWorkspaceBookmarkCard
+          bookmark={thread}
           onNavigatePage={onNavigatePage}
           showActions={!showDiscussionSwipePreviews}
           onRequestMobileActions={
@@ -2170,89 +2108,130 @@ export function DiscussionsWorkspace({
           }
           setNotice={setNotice}
         />
-      ) : isCommentsTab ? (
-        <DiscussionWorkspaceCommentCard
-          thread={thread}
-          onNavigatePage={onNavigatePage}
-          showActions={!showDiscussionSwipePreviews}
-          onRequestMobileActions={
-            showDiscussionSwipePreviews ? openMobileActions : undefined
-          }
-          setNotice={setNotice}
-        />
-      ) : (
-        <article className="discussion-thread">
-          <button
-            type="button"
-            className="discussion-thread__open"
-            onClick={() => openThread(thread)}
-          >
-            <div className="discussion-thread__avatar">
-              <DiscussionAvatar
-                src={thread.avatar || null}
-                className="discussion-thread__avatar-image"
-              />
-              {discussionStatus !== "open" && <i aria-hidden="true" />}
-            </div>
-            <div className="discussion-thread__body">
-              <span className="discussion-thread__title">
-                {thread.title ?? "Untitled discussion"}
-              </span>
-              <p>{thread.excerpt}</p>
-              {(thread.course || thread.lesson) && (
-                <div className="discussion-thread__context">
-                  {thread.course && <span>{thread.course}</span>}
-                  {thread.course && thread.lesson && (
-                    <span aria-hidden="true" />
-                  )}
-                  {thread.lesson && <small>{thread.lesson}</small>}
-                </div>
-              )}
-            </div>
-            <div className="discussion-thread__meta">
-              <span
-                className={"discussion-thread__status is-" + discussionStatus}
-              >
-                <StatusIcon size={15} weight="fill" />{" "}
-                {statusLabels[discussionStatus]}
-              </span>
-              <span>
-                <ChatTeardropText size={17} />{" "}
-                {thread.replies} {thread.replies === 1 ? "reply" : "replies"}
-              </span>
-              <time>{thread.activity}</time>
-            </div>
-          </button>
-          <button
-            type="button"
-            className="discussion-thread__more"
-            aria-label={"More options for " + thread.title}
-            onClick={(event) => {
-              event.stopPropagation();
-              setNotice?.(
-                "Thread actions will be available with connected discussions.",
-              );
-            }}
-          >
-            <DotsThreeVertical size={21} weight="bold" />
-          </button>
-        </article>
       );
-    },
-    [
-      activeTab,
-      isBookmarksTab,
-      isCommentsTab,
-      isFollowingTab,
-      isMentionsTab,
-      isNotesTab,
-      onNavigatePage,
-      openThread,
-      openMobileActions,
-      setNotice,
-      showDiscussionSwipePreviews,
-    ],
-  );
+    }
+
+    if (activeTab === "notes") {
+      return (
+        <DiscussionWorkspaceNoteCard
+          note={thread}
+          onNavigatePage={onNavigatePage}
+          showActions={!showDiscussionSwipePreviews}
+          onRequestMobileActions={
+            showDiscussionSwipePreviews ? openMobileActions : undefined
+          }
+          setNotice={setNotice}
+        />
+      );
+    }
+
+    if (activeTab === "mentions") {
+      return (
+        <DiscussionWorkspaceMentionCard
+          mention={thread}
+          onNavigatePage={onNavigatePage}
+          showActions={!showDiscussionSwipePreviews}
+          onRequestMobileActions={
+            showDiscussionSwipePreviews ? openMobileActions : undefined
+          }
+          setNotice={setNotice}
+        />
+      );
+    }
+
+    if (activeTab === "following") {
+      return (
+        <DiscussionWorkspaceFollowingCard
+          thread={thread}
+          onNavigatePage={onNavigatePage}
+          showActions={!showDiscussionSwipePreviews}
+          onRequestMobileActions={
+            showDiscussionSwipePreviews ? openMobileActions : undefined
+          }
+          setNotice={setNotice}
+        />
+      );
+    }
+
+    const discussionStatus = thread.status ?? "open";
+    const StatusIcon = statusIcons[discussionStatus];
+    return activeTab === "q-and-a" ? (
+      <DiscussionWorkspaceQuestionCard
+        thread={thread}
+        onNavigatePage={onNavigatePage}
+        showActions={!showDiscussionSwipePreviews}
+        onRequestMobileActions={
+          showDiscussionSwipePreviews ? openMobileActions : undefined
+        }
+        setNotice={setNotice}
+      />
+    ) : activeTab === "comments" ? (
+      <DiscussionWorkspaceCommentCard
+        thread={thread}
+        onNavigatePage={onNavigatePage}
+        showActions={!showDiscussionSwipePreviews}
+        onRequestMobileActions={
+          showDiscussionSwipePreviews ? openMobileActions : undefined
+        }
+        setNotice={setNotice}
+      />
+    ) : (
+      <article className="discussion-thread">
+        <button
+          type="button"
+          className="discussion-thread__open"
+          onClick={() => openThread(thread)}
+        >
+          <div className="discussion-thread__avatar">
+            <DiscussionAvatar
+              src={thread.avatar || null}
+              className="discussion-thread__avatar-image"
+            />
+            {discussionStatus !== "open" && <i aria-hidden="true" />}
+          </div>
+          <div className="discussion-thread__body">
+            <span className="discussion-thread__title">
+              {thread.title ?? "Untitled discussion"}
+            </span>
+            <p>{thread.excerpt}</p>
+            {(thread.course || thread.lesson) && (
+              <div className="discussion-thread__context">
+                {thread.course && <span>{thread.course}</span>}
+                {thread.course && thread.lesson && <span aria-hidden="true" />}
+                {thread.lesson && <small>{thread.lesson}</small>}
+              </div>
+            )}
+          </div>
+          <div className="discussion-thread__meta">
+            <span
+              className={"discussion-thread__status is-" + discussionStatus}
+            >
+              <StatusIcon size={15} weight="fill" />{" "}
+              {statusLabels[discussionStatus]}
+            </span>
+            <span>
+              <ChatTeardropText size={17} /> {thread.replies}{" "}
+              {thread.replies === 1 ? "reply" : "replies"}
+            </span>
+            <time>{thread.activity}</time>
+          </div>
+        </button>
+        <button
+          type="button"
+          className="discussion-thread__more"
+          aria-label={"More options for " + thread.title}
+          onClick={(event) => {
+            event.stopPropagation();
+            setNotice?.(
+              "Thread actions will be available with connected discussions.",
+            );
+          }}
+        >
+          <DotsThreeVertical size={21} weight="bold" />
+        </button>
+      </article>
+    );
+  };
 
   const renderDiscussionFilterControls = (inSheet = false) => {
     const field = (label: string, control: ReactNode) =>
@@ -2342,7 +2321,9 @@ export function DiscussionsWorkspace({
                     }`}
                     triggerClassName="discussion-hub__select-trigger"
                     contentClassName={selectContentClassName}
-                    menuMaxWidth={inSheet ? Number.POSITIVE_INFINITY : undefined}
+                    menuMaxWidth={
+                      inSheet ? Number.POSITIVE_INFINITY : undefined
+                    }
                     matchMenuToContainer
                     options={[
                       ["activity", "Latest activity"],
@@ -2377,7 +2358,9 @@ export function DiscussionsWorkspace({
                     }
                     triggerClassName="discussion-hub__select-trigger"
                     contentClassName={selectContentClassName}
-                    menuMaxWidth={inSheet ? Number.POSITIVE_INFINITY : undefined}
+                    menuMaxWidth={
+                      inSheet ? Number.POSITIVE_INFINITY : undefined
+                    }
                     matchMenuToContainer={isQnaTab || isCommentsTab}
                     options={
                       isQnaTab
@@ -2496,10 +2479,7 @@ export function DiscussionsWorkspace({
               onKeyDown={handleRovingTabKeyDown}
               onFocus={scrollKeyboardFocusedTabIntoView}
             >
-              <Icon
-                size={19}
-                weight={activeTab === id ? "fill" : "regular"}
-              />
+              <Icon size={19} weight={activeTab === id ? "fill" : "regular"} />
               <span>{label}</span>
             </button>
           ))}
@@ -2526,8 +2506,7 @@ export function DiscussionsWorkspace({
           className="discussion-hub__filter-sheet"
           style={
             {
-              "--drawer-content-max-height":
-                "min(720px, calc(100dvh - 16px))",
+              "--drawer-content-max-height": "min(720px, calc(100dvh - 16px))",
             } as CSSProperties
           }
         >

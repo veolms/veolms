@@ -99,6 +99,14 @@ export function useCourseQuizAnalytics(courseId: string | null | undefined) {
     staleTime: 15_000,
   });
 }
+export function useQuizAnalyticsOverview(courseIds: readonly string[]) {
+  return useQuery({
+    queryKey: quizKeys.overviewAnalytics(courseIds),
+    queryFn: () => quizzesService.analyticsOverview(courseIds),
+    enabled: courseIds.length > 0,
+    staleTime: 30_000,
+  });
+}
 export function useStudentQuizReport(studentId: string | null | undefined) {
   return useQuery({
     queryKey: studentId

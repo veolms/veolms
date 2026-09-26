@@ -24,6 +24,7 @@
     "import:youtube": "pnpm --filter @veolms/api import:youtube",
     "build": "turbo run build",
     "build:web": "pnpm --filter @veolms/web build",
+    "build:preview:web": "pnpm --filter @veolms/web build:preview",
     "build:api": "pnpm --filter @veolms/api build",
     "deploy:web": "pnpm build:web && wrangler deploy",
     "lint": "eslint .",

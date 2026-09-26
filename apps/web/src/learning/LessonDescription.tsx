@@ -6,11 +6,9 @@ import {
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "./discussion-editor/types";
 import { SurfaceTopRightAccentGlow } from "./SurfaceTopRightAccentGlow";
+import { DESCRIPTION_SURFACE } from "./discussionSurfaceStyles";
 
-export const DESCRIPTION_SURFACE_BASE =
-  "bg-[color-mix(in_srgb,var(--surface)_94%,var(--canvas))] shadow-[0_14px_38px_color-mix(in_srgb,var(--canvas)_34%,transparent),0_1px_0_color-mix(in_srgb,var(--text)_6%,transparent)]";
-
-export const DESCRIPTION_SURFACE = `rounded-xl ${DESCRIPTION_SURFACE_BASE}`;
+export { DESCRIPTION_SURFACE, DESCRIPTION_SURFACE_BASE } from "./discussionSurfaceStyles";
 
 const DESCRIPTION_PREVIEW_TYPOGRAPHY = "text-sm leading-6 sm:text-[15px]";
 

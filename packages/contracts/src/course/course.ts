@@ -58,7 +58,15 @@ const courseSummaryObjectSchema = z.strictObject({
     .nullable()
     .optional(),
   thumbnailUrl: z.string().nullable().optional(),
-  thumbnailSrcSet: z.array(z.object({ url: z.string(), width: z.number().int().positive(), height: z.number().int().positive() })).optional(),
+  thumbnailSrcSet: z
+    .array(
+      z.object({
+        url: z.string(),
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+      }),
+    )
+    .optional(),
   instructorName: z.string().nullable().optional(),
   categoryName: z.string().nullable().optional(),
   totalSections: z.number().int().nonnegative().default(0),
@@ -70,6 +78,14 @@ const courseSummaryObjectSchema = z.strictObject({
 
 export const courseSummarySchema: z.ZodType<CourseSummary> =
   courseSummaryObjectSchema;
+
+export const courseListQuerySchema = z.object({
+  cursor: z.string().max(512).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(15),
+  creatorId: z.uuid().optional(),
+});
+
+export type CourseListQuery = z.infer<typeof courseListQuerySchema>;
 
 const publicCourseObjectSchema = z.strictObject({
   id: z.uuid().meta({ description: "Stable identifier of the course." }),
@@ -97,8 +113,14 @@ export const publicCourseSchema: z.ZodType<PublicCourse> =
 export const courseListResponseSchema = z.strictObject({
   courses: z
     .array(courseSummarySchema)
-    .meta({ description: "Published courses, oldest first." }),
+    .meta({ description: "The current page of published courses." }),
+  nextCursor: z
+    .string()
+    .nullable()
+    .meta({ description: "Opaque cursor for the next course page." }),
 });
+
+export type CourseListResponse = z.infer<typeof courseListResponseSchema>;
 
 export const courseSlugSchema = z
   .string()
@@ -593,6 +615,19 @@ export const courseOverviewSchema = z.object({
 });
 
 export type CourseOverviewResponse = z.infer<typeof courseOverviewSchema>;
+
+export const courseStaticPageRefreshStatusSchema = z.strictObject({
+  courseId: z.uuid(),
+  status: z.enum(["idle", "queued", "running", "succeeded", "failed"]),
+  message: z.string().nullable(),
+  updatedAt: z.string().datetime(),
+  requestId: z.uuid().nullable(),
+  runUrl: z.url().nullable(),
+});
+
+export type CourseStaticPageRefreshStatus = z.infer<
+  typeof courseStaticPageRefreshStatusSchema
+>;
 
 z.globalRegistry.add(courseSummarySchema, {
   id: "CourseSummary",

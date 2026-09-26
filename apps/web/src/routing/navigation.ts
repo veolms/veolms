@@ -8,6 +8,7 @@ export interface NavigationOptions {
   scrollRestorationKey?: string;
   sourceScrollRestorationKey?: string;
   exact?: boolean;
+  skipAutosync?: boolean;
   replace?: boolean;
 }
 

@@ -1,4 +1,4 @@
-import { otpVerifyRequestSchema } from "@veolms/contracts";
+import { otpVerifyRequestSchema } from "@veolms/contracts/auth";
 import {
   DEFAULT_COUNTRY_ID,
   findCountry,
@@ -219,6 +219,7 @@ export type AuthFlowAction =
   | { readonly type: "TWO_FACTOR_REJECTED"; readonly message: string }
   | { readonly type: "ADMIN_MFA_SETUP_DONE" }
   | { readonly type: "ADMIN_MFA_SETUP_FAILED"; readonly message: string }
+  | { readonly type: "ADMIN_MFA_SETUP_ERROR_CLEARED" }
   | { readonly type: "UNEXPECTED_FAILURE" };
 
 const TWO_FACTOR_STATUS = {
@@ -424,6 +425,13 @@ export function authFlowReducer(
     action.type === "ADMIN_MFA_SETUP_FAILED"
   ) {
     return { ...state, message: action.message };
+  }
+
+  if (
+    state.status === "adminMfaSetup" &&
+    action.type === "ADMIN_MFA_SETUP_ERROR_CLEARED"
+  ) {
+    return { ...state, message: null };
   }
 
   return state;

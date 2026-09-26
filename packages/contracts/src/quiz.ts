@@ -355,6 +355,15 @@ export const courseQuizAnalyticsSchema = z.strictObject({
     }),
   ),
 });
+export const quizAnalyticsOverviewRequestSchema = z.strictObject({
+  courseIds: z.array(uuid).max(1000),
+});
+export const quizAnalyticsOverviewSchema = z.strictObject({
+  totalQuizzes: z.number().int().nonnegative(),
+  students: z.number().int().nonnegative(),
+  averageQuizScore: z.number().nonnegative().nullable(),
+  passRate: z.number().min(0).max(100).nullable(),
+});
 export const studentQuizReportSchema = z.strictObject({
   studentId: uuid,
   completedQuizzes: z.number().int().nonnegative(),

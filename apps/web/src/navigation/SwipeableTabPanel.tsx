@@ -126,7 +126,8 @@ interface SwipeableTabPanelProps<T extends string> {
   disabled?: boolean;
   spaceBetween?: number;
   spaceBetweenOffset?: number;
-  onSwipeStart?: () => void;
+  onSwipeStart?: (tab: T) => void;
+  onSwipeEnd?: () => void;
   nativeOnFinePointer?: boolean;
   focusable?: boolean;
   children: (tab: T, preview: boolean) => ReactNode;
@@ -245,6 +246,7 @@ export function SwipeableTabPanel<T extends string>({
   spaceBetween,
   spaceBetweenOffset = 0,
   onSwipeStart,
+  onSwipeEnd,
   nativeOnFinePointer = false,
   focusable = true,
   children,
@@ -254,6 +256,7 @@ export function SwipeableTabPanel<T extends string>({
   const activeTabRef = useRef(activeTab);
   const tabPointerTypeRef = useRef<string | null>(null);
   const touchActiveRef = useRef(false);
+  const swipePreviewActiveRef = useRef(false);
   const finePointer = useSyncExternalStore(
     subscribeToFinePointer,
     getFinePointerSnapshot,
@@ -344,6 +347,23 @@ export function SwipeableTabPanel<T extends string>({
     // following slideChange can therefore commit without updating mid-drag.
     touchActiveRef.current = false;
   }, []);
+
+  const handleSliderFirstMove = useCallback(
+    (swiper: SwiperInstance) => {
+      const direction = swiper.touches.diff < 0 ? 1 : -1;
+      const destination = tabs[swiper.activeIndex + direction];
+      if (!destination) return;
+      swipePreviewActiveRef.current = true;
+      onSwipeStart?.(destination);
+    },
+    [onSwipeStart, tabs],
+  );
+
+  const handleTransitionEnd = useCallback(() => {
+    if (!swipePreviewActiveRef.current) return;
+    swipePreviewActiveRef.current = false;
+    onSwipeEnd?.();
+  }, [onSwipeEnd]);
 
   useLayoutEffect(() => {
     updateIndicatorForTab(activeTab);
@@ -579,9 +599,10 @@ export function SwipeableTabPanel<T extends string>({
           }
           onSwiper={handleSwiperReady}
           onTouchStart={handleTouchStart}
-          onSliderFirstMove={onSwipeStart}
+          onSliderFirstMove={handleSliderFirstMove}
           onTouchEnd={handleTouchEnd}
           onSlideChange={handleSlideChange}
+          onTransitionEnd={handleTransitionEnd}
         >
           {tabs.map((tab) => (
             <SwiperSlide

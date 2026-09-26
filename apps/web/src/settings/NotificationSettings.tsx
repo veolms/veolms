@@ -1,3 +1,4 @@
+import "../styles/features/workspace.css";
 import type {
   NotificationChannel,
   NotificationPreference,

@@ -1,5 +1,7 @@
 import {
+  lazy,
   startTransition,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -14,7 +16,10 @@ import {
   useMatches,
   useNavigate,
   useParams,
+  useRouteLoaderData,
 } from "react-router";
+import type { CourseListResponse } from "@veolms/contracts";
+import "../academy-shell.css";
 import { CoursesPage } from "../CoursesPage";
 import {
   getCourseRouteKey,
@@ -25,19 +30,46 @@ import { useCurrentUser, useSignOut } from "../services/auth";
 import { useSidenav } from "../services/navigation";
 import { useAuthStore } from "../store/auth.store";
 import type { LearningCourse } from "../StudentPages";
+import { SettingsLoadingFallback } from "../settings/SettingsLoadingFallback";
 import {
   getCoursePlayerLaunchPath,
   getCoursePlayerReturnPath,
   getCoursePlayerSession,
 } from "../learning/coursePlayerNavigation";
-import { LearningMiniPlayer } from "../learning/player/LearningMiniPlayer";
-import {
-  PersistentLearningPlayerHost,
-  type LearningPlayerPresentation,
-  type LessonPlayerMinimizeGestureState,
-  type PersistentLearningPlayerRegistration,
-  type RegisterPersistentLearningPlayer,
+import type {
+  LearningPlayerPresentation,
+  LessonPlayerMinimizeGestureState,
+  PersistentLearningPlayerRegistration,
+  RegisterPersistentLearningPlayer,
 } from "../learning/player";
+
+const LearningMiniPlayer = lazy(() =>
+  import("../learning/player/LearningMiniPlayer").then((module) => ({
+    default: module.LearningMiniPlayer,
+  })),
+);
+const PersistentLearningPlayerHost = lazy(() =>
+  import("../learning/player/PersistentLearningPlayerHost").then((module) => ({
+    default: module.PersistentLearningPlayerHost,
+  })),
+);
+const SettingsPage = lazy(() =>
+  import("../SettingsPage").then((module) => ({
+    default: module.SettingsPage,
+  })),
+);
+function AcademyPageLoadingFallback() {
+  return (
+    <div
+      className="grid min-h-[55vh] w-full place-items-center px-4 py-8 text-(--muted)"
+      role="status"
+      aria-label="Loading page"
+      data-academy-page-loading
+    >
+      <span className="size-6 animate-spin rounded-full border-2 border-(--border) border-t-(--accent) motion-reduce:animate-none" />
+    </div>
+  );
+}
 import {
   easeLearningPlayerMotionProgress,
   getLearningBackgroundMotionState,
@@ -55,11 +87,7 @@ import {
   resolveLearningMiniPlayerLessonPath,
   resolveMiniPlayerCourseId,
 } from "../learning/player/persistentMiniPlayerLesson";
-import {
-  getCachedVideoPlaybackBootstrap,
-  getVideoPlaybackBootstrap,
-  refreshVideoPlaybackToken,
-} from "../learning/videoPlaybackBootstrap";
+import { getCachedVideoPlaybackBootstrap } from "../learning/videoPlaybackBootstrapCache";
 import type { LearningMiniPlayerSession } from "../learning/player/learningMiniPlayerTypes";
 import {
   closeLearningMiniPlayerSession,
@@ -68,12 +96,10 @@ import {
   openLearningMiniPlayerSession,
   subscribeToLearningMiniPlayer,
 } from "../learning/player/learningMiniPlayerStore";
-import type {
-  NavigateTo,
-  NavigationOptions,
-} from "../routing/navigation";
+import type { NavigateTo, NavigationOptions } from "../routing/navigation";
 import { AcademyRouteGuard } from "../routing/RouteGuards";
 import { buildLoginPath } from "../routing/routeAccess";
+import { preloadActiveRouteForHydration } from "../routing/activeRoutePreload";
 import {
   getDefaultNavigationOrder,
   getDefaultNavigationVisibility,
@@ -297,6 +323,14 @@ export default function AcademyLayout() {
   const selectLessonTokenRef = useRef(0);
   const currentLocationPath = `${location.pathname}${location.search}${location.hash}`;
   const route = getMatchedRouteDescriptor(matches, location.pathname);
+  const courseRouteData = useRouteLoaderData("courses") as
+    { publicCourses?: CourseListResponse | null } | undefined;
+  const rootCourseRouteData = useRouteLoaderData("root-courses") as
+    { publicCourses?: CourseListResponse | null } | undefined;
+  const prerenderedPublicCourses =
+    courseRouteData?.publicCourses ??
+    rootCourseRouteData?.publicCourses ??
+    null;
   const {
     data: authUser,
     isError: authUserError,
@@ -358,17 +392,15 @@ export default function AcademyLayout() {
 
     if (previousPath !== currentLocationPath) {
       if (pending?.sourcePath !== previousPath) {
-        applicationScrollPositionsRef.current.set(
-          previousPath,
-          { position: readApplicationScrollPosition() },
-        );
+        applicationScrollPositionsRef.current.set(previousPath, {
+          position: readApplicationScrollPosition(),
+        });
       }
       renderedLocationPathRef.current = currentLocationPath;
     }
 
-    const storedEntry = applicationScrollPositionsRef.current.get(
-      currentLocationPath,
-    );
+    const storedEntry =
+      applicationScrollPositionsRef.current.get(currentLocationPath);
     const position =
       pending?.destinationPath === currentLocationPath
         ? pending.position
@@ -400,6 +432,13 @@ export default function AcademyLayout() {
 
   const navigateTo: NavigateTo = useCallback(
     (destination, options) => {
+      const prefetchPath = options?.exact
+        ? destination
+        : getDestinationPath(destination);
+      void preloadActiveRouteForHydration(prefetchPath, activeUser).catch(
+        () => undefined,
+      );
+
       const performNavigation = () => {
         const destinationPath = options?.exact
           ? destination
@@ -445,10 +484,10 @@ export default function AcademyLayout() {
           canRestoreScroll: options?.canRestoreScroll,
         };
         if (options?.captureScroll !== false) {
-        applicationScrollPositionsRef.current.set(
-          sourceStorageKey,
-          sourceEntry,
-        );
+          applicationScrollPositionsRef.current.set(
+            sourceStorageKey,
+            sourceEntry,
+          );
           if (sourceStorageKey !== sourcePath) {
             applicationScrollPositionsRef.current.set(sourcePath, sourceEntry);
           }
@@ -504,9 +543,13 @@ export default function AcademyLayout() {
         });
       };
 
-      void autosyncManager.flushAll().then(performNavigation);
+      if (options?.skipAutosync) {
+        performNavigation();
+      } else {
+        void autosyncManager.flushAll().then(performNavigation);
+      }
     },
-    [navigate],
+    [activeUser, navigate],
   );
   const navigateToRef = useRef(navigateTo);
   useLayoutEffect(() => {
@@ -515,10 +558,9 @@ export default function AcademyLayout() {
   const exitSettings = useCallback(() => {
     const destination = settingsReturnLocationRef.current;
     const sourcePath = locationPathRef.current;
-    applicationScrollPositionsRef.current.set(
-      sourcePath,
-      { position: readApplicationScrollPosition() },
-    );
+    applicationScrollPositionsRef.current.set(sourcePath, {
+      position: readApplicationScrollPosition(),
+    });
     pendingScrollPositionRef.current = {
       destinationPath: destination.path,
       sourcePath,
@@ -776,7 +818,7 @@ export default function AcademyLayout() {
 
     const isProtected = Boolean(
       current.playerProps.protectedPlayback ||
-        current.playerProps.playbackBootstrap != null,
+      current.playerProps.playbackBootstrap != null,
     );
 
     const token = ++selectLessonTokenRef.current;
@@ -810,7 +852,10 @@ export default function AcademyLayout() {
     persistentPlayerRef.current = updated;
     setPersistentPlayer(updated);
 
-    void getVideoPlaybackBootstrap({ courseSlug, lessonNumber })
+    void import("../learning/videoPlaybackBootstrap")
+      .then(({ getVideoPlaybackBootstrap }) =>
+        getVideoPlaybackBootstrap({ courseSlug, lessonNumber }),
+      )
       .then((bootstrap) => {
         if (selectLessonTokenRef.current !== token) return;
         const active = persistentPlayerRef.current;
@@ -829,7 +874,10 @@ export default function AcademyLayout() {
             playbackBootstrap: bootstrap,
             playbackSuspended: false,
             refreshPlaybackToken: () =>
-              refreshVideoPlaybackToken({ courseSlug, lessonNumber }),
+              import("../learning/videoPlaybackBootstrap").then(
+                ({ refreshVideoPlaybackToken }) =>
+                  refreshVideoPlaybackToken({ courseSlug, lessonNumber }),
+              ),
           },
         };
         persistentPlayerRef.current = withBootstrap;
@@ -1249,67 +1297,81 @@ export default function AcademyLayout() {
 
   return (
     <AcademyRouteGuard>
-      <CoursesPage
-        page={route.page}
-        section={route.section}
-        settingsTab={route.settingsTab}
-        discussionTab={route.discussionTab}
-        courseSlug={courseSlug}
-        quizId={quizId}
-        assignmentId={assignmentId}
-        username={username}
-        couponId={couponId}
-        miniPlayerCourseId={resolveMiniPlayerCourseId({
-          presentation: playerPresentation,
-          persistentCourseRouteKey: persistentPlayer?.courseRouteKey,
-          persistentCourseSlug: persistentPlayer?.courseSlug,
-          persistentLessonPath: persistentPlayer?.lessonPath,
-          miniPlayerCourseSlug: learningMiniPlayer?.courseSlug,
-          miniPlayerLessonPath: learningMiniPlayer?.lessonPath,
-        })}
-        learningBackground={learningBackground}
-        learningMotionStageRef={learningMotionStageRef}
-        onNavigatePage={navigateTo}
-        onExitSettings={exitSettings}
-        onOpenCourse={openCourse}
-        renderMain={
-          route.kind === "learning"
-            ? ({ mobileBottomNavigation, mobileBottomNavigationHidden }) => (
-                <Outlet
-                  context={
-                    {
-                      mobileBottomNavigation,
-                      mobileBottomNavigationHidden,
-                      navigateTo,
-                      onLearningPlayerMinimizeGestureChange:
-                        handleLearningPlayerMinimizeGestureChange,
-                      onMiniPlayerRestoreReady: closeLearningMiniPlayer,
-                      openLearningMiniPlayer,
-                      persistentPlayerMounted: Boolean(persistentPlayer),
-                      registerPersistentPlayer,
-                    } satisfies AcademyOutletContext
-                  }
-                />
-              )
-            : null
-        }
-      />
-      {persistentPlayer ? (
-        <PersistentLearningPlayerHost
-          player={persistentPlayer}
-          presentation={playerPresentation}
-          onClose={closeLearningMiniPlayer}
-          onRestore={restoreLearningMiniPlayer}
-          onSelectMiniPlayerLesson={selectPersistentMiniPlayerLesson}
-          onOpenCourseOverview={openPersistentPlayerCourseOverview}
+      <Suspense fallback={<AcademyPageLoadingFallback />}>
+        <CoursesPage
+          activeUser={activeUser ?? null}
+          authUserFetched={authUserFetched}
+          initialPublishedCourses={prerenderedPublicCourses}
+          page={route.page}
+          section={route.section}
+          settingsTab={route.settingsTab}
+          discussionTab={route.discussionTab}
+          courseSlug={courseSlug}
+          quizId={quizId}
+          assignmentId={assignmentId}
+          username={username}
+          couponId={couponId}
+          miniPlayerCourseId={resolveMiniPlayerCourseId({
+            presentation: playerPresentation,
+            persistentCourseRouteKey: persistentPlayer?.courseRouteKey,
+            persistentCourseSlug: persistentPlayer?.courseSlug,
+            persistentLessonPath: persistentPlayer?.lessonPath,
+            miniPlayerCourseSlug: learningMiniPlayer?.courseSlug,
+            miniPlayerLessonPath: learningMiniPlayer?.lessonPath,
+          })}
+          learningBackground={learningBackground}
+          learningMotionStageRef={learningMotionStageRef}
+          onNavigatePage={navigateTo}
+          onExitSettings={exitSettings}
+          onOpenCourse={openCourse}
+          renderSettingsPage={(settingsPageProps) => (
+            <Suspense fallback={<SettingsLoadingFallback />}>
+              <SettingsPage {...settingsPageProps} />
+            </Suspense>
+          )}
+          renderMain={
+            route.kind === "learning"
+              ? ({ mobileBottomNavigation, mobileBottomNavigationHidden }) => (
+                  <Outlet
+                    context={
+                      {
+                        mobileBottomNavigation,
+                        mobileBottomNavigationHidden,
+                        navigateTo,
+                        onLearningPlayerMinimizeGestureChange:
+                          handleLearningPlayerMinimizeGestureChange,
+                        onMiniPlayerRestoreReady: closeLearningMiniPlayer,
+                        openLearningMiniPlayer,
+                        persistentPlayerMounted: Boolean(persistentPlayer),
+                        registerPersistentPlayer,
+                      } satisfies AcademyOutletContext
+                    }
+                  />
+                )
+              : null
+          }
         />
-      ) : learningMiniPlayer ? (
-        <LearningMiniPlayer
-          session={learningMiniPlayer}
-          onClose={closeLearningMiniPlayer}
-          onRestore={restoreLearningMiniPlayer}
-          onOpenCourseOverview={openStandaloneMiniPlayerCourseOverview}
-        />
+      </Suspense>
+      {persistentPlayer || learningMiniPlayer ? (
+        <Suspense fallback={null}>
+          {persistentPlayer ? (
+            <PersistentLearningPlayerHost
+              player={persistentPlayer}
+              presentation={playerPresentation}
+              onClose={closeLearningMiniPlayer}
+              onRestore={restoreLearningMiniPlayer}
+              onSelectMiniPlayerLesson={selectPersistentMiniPlayerLesson}
+              onOpenCourseOverview={openPersistentPlayerCourseOverview}
+            />
+          ) : learningMiniPlayer ? (
+            <LearningMiniPlayer
+              session={learningMiniPlayer}
+              onClose={closeLearningMiniPlayer}
+              onRestore={restoreLearningMiniPlayer}
+              onOpenCourseOverview={openStandaloneMiniPlayerCourseOverview}
+            />
+          ) : null}
+        </Suspense>
       ) : null}
     </AcademyRouteGuard>
   );

@@ -87,9 +87,53 @@ export async function findCourseBySlugIncludingDeleted(
     .executeTakeFirst();
 }
 
+export interface PublishedCourseCursor {
+  createdAt: string;
+  id: string;
+}
+
+export interface ListPublishedCoursesOptions {
+  creatorId?: string;
+  cursor?: PublishedCourseCursor;
+  limit: number;
+}
+
+export function encodePublishedCourseCursor(
+  cursor: PublishedCourseCursor,
+): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+export function decodePublishedCourseCursor(
+  value: string | undefined,
+): PublishedCourseCursor | null {
+  if (!value) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(
+      Buffer.from(value, "base64url").toString("utf8"),
+    );
+    if (!parsed || typeof parsed !== "object") return null;
+
+    const cursor = parsed as Record<string, unknown>;
+    if (
+      typeof cursor.createdAt !== "string" ||
+      Number.isNaN(new Date(cursor.createdAt).getTime()) ||
+      typeof cursor.id !== "string" ||
+      cursor.id.length === 0
+    ) {
+      return null;
+    }
+
+    return { createdAt: cursor.createdAt, id: cursor.id };
+  } catch {
+    return null;
+  }
+}
+
 export async function listPublishedCourses(
   database: Kysely<Database>,
-  filters?: { creatorId?: string },
+  options: ListPublishedCoursesOptions,
 ) {
   let query = database
     .selectFrom("courses")
@@ -107,6 +151,7 @@ export async function listPublishedCourses(
     .leftJoin("course_settings", "course_settings.course_id", "courses.id")
     .select((eb) => [
       "courses.id",
+      "courses.created_at",
       "courses.slug",
       "courses.title",
       "courses.short_description",
@@ -167,11 +212,28 @@ export async function listPublishedCourses(
     .where("courses.status", "=", "published")
     .where("courses.deleted_at", "is", null);
 
-  if (filters?.creatorId) {
-    query = query.where("courses.creator_id", "=", filters.creatorId);
+  if (options.creatorId) {
+    query = query.where("courses.creator_id", "=", options.creatorId);
   }
 
-  return await query.orderBy("courses.created_at", "asc").execute();
+  if (options.cursor) {
+    const cursorDate = new Date(options.cursor.createdAt);
+    query = query.where((eb) =>
+      eb.or([
+        eb("courses.created_at", ">", cursorDate),
+        eb.and([
+          eb("courses.created_at", "=", cursorDate),
+          eb("courses.id", ">", options.cursor!.id),
+        ]),
+      ]),
+    );
+  }
+
+  return await query
+    .orderBy("courses.created_at", "asc")
+    .orderBy("courses.id", "asc")
+    .limit(options.limit + 1)
+    .execute();
 }
 
 export async function findPublishedCourseBySlug(

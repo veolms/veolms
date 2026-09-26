@@ -1,5 +1,11 @@
 import type { Route } from "./+types/auth-layout";
 import { Outlet, redirect } from "react-router";
+import "../styles/themes/palettes.css";
+import "../styles/global/scrollbars.css";
+import "../reading-mode.css";
+import "../settings/scrollbars/scrollbarPreferences.css";
+import "../accessibility/tabFocusVisibility.css";
+import "../auth/auth.css";
 import { useAuthAppearance } from "../auth/useAuthAppearance";
 import { queryClient } from "../lib/query-client";
 import { AuthRouteGuard } from "../routing/RouteGuards";

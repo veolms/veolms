@@ -5,6 +5,7 @@ import { createReadableStreamFromReadable } from "@react-router/node";
 import { isbot } from "isbot";
 import type { EntryContext, RouterContextProvider } from "react-router";
 import { ServerRouter } from "react-router";
+import { setCourseLcpPrerenderSpaShell } from "./courses/courseLcpPreload";
 
 export const streamTimeout = 90_000;
 
@@ -15,6 +16,8 @@ export default function handleRequest(
   routerContext: EntryContext,
   _loadContext: RouterContextProvider,
 ) {
+  setCourseLcpPrerenderSpaShell(routerContext.isSpaMode);
+
   if (request.method.toUpperCase() === "HEAD") {
     return new Response(null, {
       status: responseStatusCode,

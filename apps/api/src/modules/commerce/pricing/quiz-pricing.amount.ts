@@ -40,4 +40,3 @@ export function resolveQuizCharge(
     effectivePrice: salePrice ?? row.price,
   };
 }
-

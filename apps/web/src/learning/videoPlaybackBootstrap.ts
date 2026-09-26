@@ -4,13 +4,19 @@ import {
   type VideoPlaybackBootstrap,
   type VideoPlaybackToken,
 } from "@veolms/contracts";
-import { getApiBaseUrl } from "../lib/api-client";
+import { getApiBaseUrl } from "../lib/apiBaseUrl";
+import {
+  clearCachedVideoPlaybackBootstraps,
+  deleteCachedVideoPlaybackBootstrap,
+  setCachedVideoPlaybackBootstrap,
+} from "./videoPlaybackBootstrapCache";
+
+export { getCachedVideoPlaybackBootstrap } from "./videoPlaybackBootstrapCache";
 
 const API_BASE_URL = getApiBaseUrl();
 const CDN_URL = import.meta.env.VITE_CDN_URL || "/cdn";
 
 const bootstrapRequests = new Map<string, Promise<VideoPlaybackBootstrap>>();
-const bootstrapCache = new Map<string, VideoPlaybackBootstrap>();
 const playbackTokenRequests = new Map<string, Promise<VideoPlaybackToken>>();
 
 export class VideoPlaybackBootstrapError extends Error {
@@ -54,23 +60,6 @@ export function resolveVideoPlaybackCdnUrl(path: string): string {
 export function getVideoPlaybackApiOrigin(): string | null {
   try {
     const url = new URL(API_BASE_URL, "http://veolms.local");
-    return /^https?:$/i.test(url.protocol) &&
-      url.origin !== "http://veolms.local"
-      ? url.origin
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Returns the external CDN origin for the document head preconnect. A
- * same-origin path such as `/cdn` deliberately returns null because it does
- * not require a separate DNS/TLS connection.
- */
-export function getVideoPlaybackCdnOrigin(): string | null {
-  try {
-    const url = new URL(CDN_URL, "http://veolms.local");
     return /^https?:$/i.test(url.protocol) &&
       url.origin !== "http://veolms.local"
       ? url.origin
@@ -244,25 +233,19 @@ export function getVideoPlaybackBootstrap(
   bootstrapRequests.set(key, promise);
   void promise
     .then((bootstrap) => {
-      bootstrapCache.set(key, bootstrap);
+      setCachedVideoPlaybackBootstrap(options, bootstrap);
     })
     .catch(() => {
       if (bootstrapRequests.get(key) === promise) {
         bootstrapRequests.delete(key);
       }
-      bootstrapCache.delete(key);
+      deleteCachedVideoPlaybackBootstrap(options);
     });
   return promise;
-}
-
-export function getCachedVideoPlaybackBootstrap(
-  options: VideoPlaybackBootstrapRequest,
-): VideoPlaybackBootstrap | null {
-  return bootstrapCache.get(requestKey(options)) ?? null;
 }
 
 export function clearVideoPlaybackBootstrapCache(): void {
   bootstrapRequests.clear();
   playbackTokenRequests.clear();
-  bootstrapCache.clear();
+  clearCachedVideoPlaybackBootstraps();
 }
