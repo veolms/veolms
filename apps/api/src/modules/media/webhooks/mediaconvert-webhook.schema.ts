@@ -30,52 +30,70 @@ export const mediaConvertUserMetadataSchema = z
     outputPrefix: z.string().optional(),
     webhookUrl: z.string().optional(),
     webhookSecret: z.string().optional(),
+    s3Config: z
+      .union([
+        z.string(),
+        z
+          .object({
+            bucketName: z.string().optional(),
+            endpoint: z.string().optional(),
+            region: z.string().optional(),
+            hasSessionToken: z.boolean().optional(),
+          })
+          .passthrough(),
+        z.record(z.string(), z.unknown()),
+      ])
+      .optional(),
   })
-  .catchall(z.string());
+  .passthrough();
 export type MediaConvertUserMetadata = z.infer<
   typeof mediaConvertUserMetadataSchema
 >;
 
-export const mediaConvertEventDetailSchema = z.object({
-  timestamp: z.number().optional(),
-  accountId: z.string().optional(),
-  queue: z.string().optional(),
-  jobId: z.string().optional(),
-  videoId: z.string().optional(),
-  status: z.string(),
-  userMetadata: mediaConvertUserMetadataSchema.optional(),
-  outputGroupDetails: z.array(mediaConvertOutputGroupDetailSchema).optional(),
-  errorMessage: z.string().optional(),
-  errorCode: z.number().optional(),
-  jobPercentComplete: z.number().optional(),
-});
+export const mediaConvertEventDetailSchema = z
+  .object({
+    timestamp: z.number().optional(),
+    accountId: z.string().optional(),
+    queue: z.string().optional(),
+    jobId: z.string().optional(),
+    videoId: z.string().optional(),
+    status: z.string(),
+    userMetadata: mediaConvertUserMetadataSchema.optional(),
+    outputGroupDetails: z.array(mediaConvertOutputGroupDetailSchema).optional(),
+    errorMessage: z.string().optional(),
+    errorCode: z.number().optional(),
+    jobPercentComplete: z.number().optional(),
+  })
+  .passthrough();
 export type MediaConvertEventDetail = z.infer<
   typeof mediaConvertEventDetailSchema
 >;
 
-export const mediaConvertWebhookPayloadSchema = z.object({
-  version: z.string().optional(),
-  id: z.string().optional(),
-  "detail-type": z.string().optional(),
-  source: z.string().optional(),
-  account: z.string().optional(),
-  time: z.string().optional(),
-  region: z.string().optional(),
-  resources: z.array(z.string()).optional(),
-  detail: mediaConvertEventDetailSchema.optional(),
+export const mediaConvertWebhookPayloadSchema = z
+  .object({
+    version: z.string().optional(),
+    id: z.string().optional(),
+    "detail-type": z.string().optional(),
+    source: z.string().optional(),
+    account: z.string().optional(),
+    time: z.string().optional(),
+    region: z.string().optional(),
+    resources: z.array(z.string()).optional(),
+    detail: mediaConvertEventDetailSchema.optional(),
 
-  // Direct payload fallback
-  status: z.string().optional(),
-  jobId: z.string().optional(),
-  videoId: z.string().optional(),
-  progressPercent: z.number().optional(),
-  jobPercentComplete: z.number().optional(),
-  errorMessage: z.string().optional(),
-  masterPlaylistPath: z.string().optional(),
-  durationSeconds: z.number().optional(),
-  outputGroupDetails: z.array(mediaConvertOutputGroupDetailSchema).optional(),
-  userMetadata: mediaConvertUserMetadataSchema.optional(),
-});
+    // Direct payload fallback
+    status: z.string().optional(),
+    jobId: z.string().optional(),
+    videoId: z.string().optional(),
+    progressPercent: z.number().optional(),
+    jobPercentComplete: z.number().optional(),
+    errorMessage: z.string().optional(),
+    masterPlaylistPath: z.string().optional(),
+    durationSeconds: z.number().optional(),
+    outputGroupDetails: z.array(mediaConvertOutputGroupDetailSchema).optional(),
+    userMetadata: mediaConvertUserMetadataSchema.optional(),
+  })
+  .passthrough();
 export type MediaConvertWebhookPayload = z.infer<
   typeof mediaConvertWebhookPayloadSchema
 >;

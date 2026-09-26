@@ -775,6 +775,15 @@ export function createMediaService({
       await mediaRepo.updateMediaAssetStatus(database, videoId, "ready");
     } else if (job.status === "failed" && media.status !== "failed") {
       await mediaRepo.updateMediaAssetStatus(database, videoId, "failed");
+    } else if (media.status === "ready" && job.status !== "completed") {
+      job.status = "completed";
+      job.progress_percent = 100;
+      await database
+        .updateTable("video_jobs")
+        .set({ status: "completed", progress_percent: 100, updated_at: new Date() })
+        .where("id", "=", job.id)
+        .execute()
+        .catch(() => {});
     }
 
     return {
@@ -1326,9 +1335,17 @@ export function createMediaService({
       );
     }
 
-    const job = jobId
-      ? await mediaRepo.findVideoJobById(database, jobId)
-      : await mediaRepo.findVideoJobByVideoId(database, videoId!);
+    const isUuid = (val?: string) =>
+      typeof val === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+
+    let job: Awaited<ReturnType<typeof mediaRepo.findVideoJobById>> | undefined;
+    if (jobId && isUuid(jobId)) {
+      job = await mediaRepo.findVideoJobById(database, jobId);
+    }
+    if (!job && videoId && isUuid(videoId)) {
+      job = await mediaRepo.findVideoJobByVideoId(database, videoId);
+    }
 
     if (!job) {
       logger?.warn(
@@ -1410,6 +1427,14 @@ export function createMediaService({
     }
 
     if (statusRaw === "PROGRESSING" || statusRaw === "PROCESSING") {
+      // Guard against out-of-order progress webhooks downgrading terminal statuses
+      if (job.status === "completed") {
+        return { success: true, status: "completed", jobId: job.id };
+      }
+      if (job.status === "failed" || job.status === "cancelled") {
+        return { success: true, status: job.status, jobId: job.id };
+      }
+
       const progressPercent =
         typeof eventDetail?.jobPercentComplete === "number"
           ? eventDetail.jobPercentComplete
@@ -1417,10 +1442,16 @@ export function createMediaService({
             ? body.progressPercent
             : 50;
 
-      await mediaRepo.updateVideoJobStatus(database, job.id, {
-        status: "processing",
-        progress_percent: progressPercent,
-      });
+      await database
+        .updateTable("video_jobs")
+        .set({
+          status: "processing",
+          progress_percent: progressPercent,
+          updated_at: new Date(),
+        })
+        .where("id", "=", job.id)
+        .where("status", "not in", ["completed", "failed", "cancelled"])
+        .execute();
       return { success: true, status: "processing", jobId: job.id };
     }
 
