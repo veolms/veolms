@@ -616,6 +616,19 @@ export const courseOverviewSchema = z.object({
 
 export type CourseOverviewResponse = z.infer<typeof courseOverviewSchema>;
 
+export const courseStaticPageRefreshStatusSchema = z.strictObject({
+  courseId: z.uuid(),
+  status: z.enum(["idle", "queued", "running", "succeeded", "failed"]),
+  message: z.string().nullable(),
+  updatedAt: z.string().datetime(),
+  requestId: z.uuid().nullable(),
+  runUrl: z.url().nullable(),
+});
+
+export type CourseStaticPageRefreshStatus = z.infer<
+  typeof courseStaticPageRefreshStatusSchema
+>;
+
 z.globalRegistry.add(courseSummarySchema, {
   id: "CourseSummary",
   description: "A course as it appears in catalogue listings.",

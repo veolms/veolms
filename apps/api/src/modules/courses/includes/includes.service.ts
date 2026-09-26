@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
+import type { AppServices } from "../../../services/index.ts";
 import type {
   CreateCourseIncludeRequest,
   UpdateCourseIncludeRequest,
@@ -12,9 +13,13 @@ import { getCourseAndVerifyOwner as verifyCourseOwner } from "../shared/courses.
 
 export interface IncludesServiceOptions {
   database: Kysely<Database>;
+  services: AppServices;
 }
 
-export function createIncludesService({ database }: IncludesServiceOptions) {
+export function createIncludesService({
+  database,
+  services,
+}: IncludesServiceOptions) {
   function getCourseAndVerifyOwner(
     courseId: string,
     creatorId: string,
@@ -43,13 +48,30 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     };
   }
 
+  function requestPublicRefreshIfPublished(course: {
+    id: string;
+    slug: string;
+    status: string;
+  }) {
+    if (course.status === "published") {
+      services.courseStaticPages.requestRefresh({
+        courseId: course.id,
+        courseSlug: course.slug,
+      });
+    }
+  }
+
   async function createCourseInclude(
     courseId: string,
     creatorId: string,
     payload: CreateCourseIncludeRequest,
     userRoles?: readonly string[],
   ): Promise<CourseIncludeItem> {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+    );
 
     let position = payload.position;
     if (position === undefined) {
@@ -73,6 +95,8 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
       updated_at: now,
     });
 
+    requestPublicRefreshIfPublished(course);
+
     return {
       id: includeId,
       courseId,
@@ -95,9 +119,17 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     courseId: string,
     includeId: string,
   ): Promise<CourseIncludeItem> {
-    const row = await includesRepo.findIncludeById(database, includeId, courseId);
+    const row = await includesRepo.findIncludeById(
+      database,
+      includeId,
+      courseId,
+    );
     if (!row) {
-      throw new AppError(404, "INCLUDE_NOT_FOUND", "Course include item not found.");
+      throw new AppError(
+        404,
+        "INCLUDE_NOT_FOUND",
+        "Course include item not found.",
+      );
     }
     return formatInclude(row);
   }
@@ -109,7 +141,11 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     payload: UpdateCourseIncludeRequest,
     userRoles?: readonly string[],
   ): Promise<CourseIncludeItem> {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+    );
 
     const existing = await includesRepo.findIncludeById(
       database,
@@ -117,7 +153,11 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
       courseId,
     );
     if (!existing) {
-      throw new AppError(404, "INCLUDE_NOT_FOUND", "Course include item not found.");
+      throw new AppError(
+        404,
+        "INCLUDE_NOT_FOUND",
+        "Course include item not found.",
+      );
     }
 
     const now = new Date();
@@ -127,6 +167,8 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
       position: payload.position,
       updated_at: now,
     });
+
+    requestPublicRefreshIfPublished(course);
 
     const updated = await includesRepo.findIncludeById(
       database,
@@ -142,7 +184,11 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     creatorId: string,
     userRoles?: readonly string[],
   ): Promise<{ success: boolean }> {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+    );
 
     const existing = await includesRepo.findIncludeById(
       database,
@@ -150,10 +196,15 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
       courseId,
     );
     if (!existing) {
-      throw new AppError(404, "INCLUDE_NOT_FOUND", "Course include item not found.");
+      throw new AppError(
+        404,
+        "INCLUDE_NOT_FOUND",
+        "Course include item not found.",
+      );
     }
 
     await includesRepo.deleteInclude(database, includeId, courseId);
+    requestPublicRefreshIfPublished(course);
     return { success: true };
   }
 
@@ -163,7 +214,11 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     orderedIds: string[],
     userRoles?: readonly string[],
   ): Promise<{ success: boolean }> {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+    );
 
     const currentItems = await includesRepo.findIncludesByCourseId(
       database,
@@ -194,6 +249,8 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
         );
       }
     });
+
+    requestPublicRefreshIfPublished(course);
 
     return { success: true };
   }

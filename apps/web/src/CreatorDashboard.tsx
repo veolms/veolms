@@ -651,7 +651,7 @@ function DiscussionsPanel({ onNavigatePage }: NavigateProps) {
       <div className="creator-discussion-list">
         {discussions.map((item) => (
           <article key={item.name}>
-            <img src={item.avatar} alt="" />
+            <img src={item.avatar} alt="" loading="lazy" decoding="async" />
             <div>
               <strong>{item.name}</strong>
               <small>{item.course}</small>
@@ -691,7 +691,7 @@ function EnrollmentsPanel({ onNavigatePage }: NavigateProps) {
         {recentEnrollments.map(([student, course, amount, time, avatar]) => (
           <div className="creator-table-row" key={`${student}-${time}`}>
             <span className="creator-student-cell">
-              <img src={avatar} alt="" />
+              <img src={avatar} alt="" loading="lazy" decoding="async" />
               <strong>{student}</strong>
             </span>
             <span>{course}</span>

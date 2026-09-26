@@ -237,6 +237,9 @@ export function LoginView() {
           onDone={() => {
             dispatch({ type: "ADMIN_MFA_SETUP_DONE" });
           }}
+          onClearError={() => {
+            dispatch({ type: "ADMIN_MFA_SETUP_ERROR_CLEARED" });
+          }}
           onError={(message) => {
             dispatch({ type: "ADMIN_MFA_SETUP_FAILED", message });
           }}

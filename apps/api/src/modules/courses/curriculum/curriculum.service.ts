@@ -36,6 +36,19 @@ export function createCurriculumService({
     return verifyCourseOwner(database, courseId, creatorId, userRoles);
   }
 
+  function requestPublicRefreshIfPublished(course: {
+    id: string;
+    slug: string;
+    status: string;
+  }) {
+    if (course.status === "published") {
+      services.courseStaticPages.requestRefresh({
+        courseId: course.id,
+        courseSlug: course.slug,
+      });
+    }
+  }
+
   // --- Sections ---
 
   async function createCourseSection(
@@ -44,7 +57,7 @@ export function createCurriculumService({
     title: string,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const maxPos = await curriculumRepo.findMaxSectionPosition(
       database,
@@ -63,6 +76,7 @@ export function createCurriculumService({
       updated_at: now,
     });
 
+    requestPublicRefreshIfPublished(course);
     return { id: sectionId, courseId, title, position };
   }
 
@@ -73,7 +87,7 @@ export function createCurriculumService({
     title?: string,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const section = await curriculumRepo.findSectionById(
       database,
@@ -89,6 +103,7 @@ export function createCurriculumService({
       updated_at: new Date(),
     });
 
+    requestPublicRefreshIfPublished(course);
     return { success: true };
   }
 
@@ -98,7 +113,7 @@ export function createCurriculumService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const section = await curriculumRepo.findSectionById(
       database,
@@ -129,6 +144,7 @@ export function createCurriculumService({
       }
     });
 
+    requestPublicRefreshIfPublished(course);
     return { success: true };
   }
 
@@ -192,6 +208,7 @@ export function createCurriculumService({
       }
     });
 
+    requestPublicRefreshIfPublished(course);
     return { success: true };
   }
 
@@ -204,7 +221,7 @@ export function createCurriculumService({
     payload: CreateCourseLessonRequest,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const section = await curriculumRepo.findSectionById(
       database,
@@ -237,6 +254,7 @@ export function createCurriculumService({
       updated_at: now,
     });
 
+    requestPublicRefreshIfPublished(course);
     return { id: lessonId, position };
   }
 
@@ -248,7 +266,7 @@ export function createCurriculumService({
     logger: FastifyBaseLogger,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const lesson = await curriculumRepo.findLessonById(
       database,
@@ -304,6 +322,7 @@ export function createCurriculumService({
       is_published: payload.isPublished,
       updated_at: now,
     });
+    requestPublicRefreshIfPublished(course);
 
     let transcodeJobInfo: {
       should202: boolean;
@@ -339,7 +358,7 @@ export function createCurriculumService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const lesson = await curriculumRepo.findLessonById(
       database,
@@ -356,6 +375,7 @@ export function createCurriculumService({
       await curriculumRepo.softDeleteResourcesByLessonId(trx, lessonId, now);
     });
 
+    requestPublicRefreshIfPublished(course);
     return { success: true };
   }
 
@@ -429,6 +449,7 @@ export function createCurriculumService({
       }
     });
 
+    requestPublicRefreshIfPublished(course);
     return { success: true };
   }
 

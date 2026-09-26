@@ -181,7 +181,17 @@ export async function listOrders(
   if (search && search.trim()) {
     const term = `%${search.trim()}%`;
     if (scope.type === "user") {
-      query = query.where(sql<boolean>`o.order_number ILIKE ${term}`);
+      const invoiceSearch = search.trim().replace(/^#?INV-/i, "");
+      const invoiceTerm = `%${invoiceSearch || search.trim()}%`;
+      query = query.where(sql<boolean>`(
+        o.order_number ILIKE ${term}
+        OR o.order_number ILIKE ${invoiceTerm}
+        OR EXISTS (
+          SELECT 1 FROM order_items oi
+          WHERE oi.order_id = o.id
+            AND oi.title_snapshot ILIKE ${term}
+        )
+      )`);
     } else {
       query = query.where(
         sql<boolean>`(
@@ -534,6 +544,24 @@ export async function listPaymentsByOrderIds(
   return await database
     .selectFrom("payments")
     .selectAll()
+    .where("order_id", "in", orderIds)
+    .orderBy("order_id")
+    .orderBy(
+      sql`case status when 'captured' then 0 when 'refunded' then 1 when 'processing' then 2 when 'initiated' then 3 else 4 end`,
+    )
+    .orderBy("created_at", "desc")
+    .orderBy("id", "desc")
+    .execute();
+}
+
+export async function listOrderPaymentSummariesByOrderIds(
+  database: Executor,
+  orderIds: string[],
+) {
+  if (orderIds.length === 0) return [];
+  return await database
+    .selectFrom("payments")
+    .select(["order_id", "gateway_provider", "payment_method"])
     .where("order_id", "in", orderIds)
     .orderBy("order_id")
     .orderBy(

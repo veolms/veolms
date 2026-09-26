@@ -38,9 +38,14 @@ import {
 } from "./catalogue";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
 import type { CourseSection } from "../learning/courseContent";
-import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
+import { VirtualizedLessonList } from "./curriculum/VirtualizedLessonList";
+import {
+  getCoursePlayerLaunchPath,
+  getCoursePlayerPath,
+} from "../learning/coursePlayerNavigation";
 import type { NavigateTo } from "../routing/navigation";
 import { useAuthStore } from "../store/auth.store";
+import { buildLoginPath } from "../routing/routeAccess";
 import { useCourseOverview } from "../services/courses";
 import { useEnrolledCourses } from "../services/enrollments";
 import { getApiError } from "../lib/api-error";
@@ -52,6 +57,11 @@ import {
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
 import { formatDuration, resolveCourseDurationSeconds } from "./courseAdapter";
+
+const OVERVIEW_VIRTUALIZATION_THRESHOLD = 80;
+const NO_PINNED_LESSONS: ReadonlySet<string> = new Set();
+const getOverviewLessonKey = (lesson: CourseSection["lessons"][number]) =>
+  String(lesson[0]);
 // ─── Helpers for Currency, Sale Window, Language, and Price Sizing ────────────
 
 export type PriceSizeVariant = "normal" | "medium" | "large" | "xlarge";
@@ -274,6 +284,7 @@ interface CurriculumSectionProps {
   isOpen: boolean;
   onToggle: () => void;
   onSelectLesson?: (lessonNumber: number) => void;
+  shouldVirtualizeLessons?: boolean;
   isReadOnlyPreview?: boolean;
   isPaidCourse?: boolean;
 }
@@ -290,6 +301,7 @@ function CurriculumSectionItem({
   isOpen,
   onToggle,
   onSelectLesson,
+  shouldVirtualizeLessons = false,
   isReadOnlyPreview = false,
   isPaidCourse = false,
 }: CurriculumSectionProps) {
@@ -302,6 +314,69 @@ function CurriculumSectionItem({
   );
   const durationLabel =
     durationSeconds > 0 ? formatDuration(durationSeconds) : "";
+  const renderLesson = (lesson: CourseSection["lessons"][number]) => {
+    const [number, title, duration, status, isPreview, contentType] = lesson;
+    const isDoc = contentType === "document";
+    const isQuiz = contentType === "quiz";
+
+    return (
+      <button
+        type="button"
+        className={`group/lesson flex items-center gap-3 w-full min-h-11.5 border-0 bg-transparent px-4.5 py-1.5 text-(--text-secondary) text-[0.85rem] text-left transition-colors duration-140 ${
+          isReadOnlyPreview
+            ? "cursor-default opacity-85 hover:bg-transparent hover:text-(--text-secondary)"
+            : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-inset"
+        }`}
+        key={number}
+        disabled={isReadOnlyPreview}
+        onClick={() => {
+          if (isReadOnlyPreview) return;
+          onSelectLesson?.(number);
+        }}
+        aria-label={`Lesson ${number}: ${title}${duration ? `, ${duration}` : ""}`}
+      >
+        <span
+          className={`inline-flex w-5 shrink-0 items-center justify-center text-(--muted) transition-colors duration-140 ${
+            isReadOnlyPreview ? "" : "group-hover/lesson:text-(--accent)"
+          }`}
+          aria-hidden="true"
+        >
+          {isDoc ? (
+            <FileText size={16} weight="regular" />
+          ) : isQuiz ? (
+            <Question size={16} weight="regular" />
+          ) : (
+            <PlayCircle size={16} weight="regular" />
+          )}
+        </span>
+        <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-(--text-secondary)">
+          {title}
+        </span>
+        {duration ? (
+          <span className="text-(--muted) text-[0.78rem] shrink-0 w-11.25 text-right">
+            {duration}
+          </span>
+        ) : null}
+        {isPaidCourse && isPreview ? (
+          <span
+            className="shrink-0 inline-flex items-center rounded-[5px] px-[6px] py-[2px] text-[0.7rem] font-[700] leading-none bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent) border border-[color-mix(in_srgb,var(--accent)_30%,transparent)]"
+            aria-label="Free preview"
+          >
+            Free
+          </span>
+        ) : null}
+        {status === "done" ? (
+          <span className="inline-flex items-center justify-center shrink-0" aria-hidden="true">
+            <CheckCircle size={16} weight="fill" className="text-[#10b981]" />
+          </span>
+        ) : status === "todo" ? (
+          <span className="inline-flex items-center justify-center shrink-0" aria-hidden="true">
+            <Circle size={16} className="text-(--muted)" />
+          </span>
+        ) : null}
+      </button>
+    );
+  };
 
   return (
     <div
@@ -346,6 +421,17 @@ function CurriculumSectionItem({
           <div className="overflow-hidden min-h-0">
             <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,var(--text))]">
               {section.lessons.length > 0 ? (
+                shouldVirtualizeLessons ? (
+                  <VirtualizedLessonList
+                    items={section.lessons}
+                    forceVirtualized
+                    estimatedItemSize={46}
+                    itemGap={0}
+                    getItemKey={getOverviewLessonKey}
+                    pinnedItemIds={NO_PINNED_LESSONS}
+                    renderItem={renderLesson}
+                  />
+                ) : (
                 section.lessons.map(
                   ([
                     number,
@@ -437,6 +523,7 @@ function CurriculumSectionItem({
                     );
                   },
                 )
+                )
               ) : (
                 <div className="px-3.5 py-3 text-(--muted) text-[0.82rem] italic">
                   No lessons added yet
@@ -494,6 +581,16 @@ function CourseHeroSection({
   const createOrder = useCreateCheckoutOrder();
   const verify = useVerifyPayment();
   const isEnrolled = Boolean(user && course.enrolled);
+  const launchCoursePlayer = () => {
+    if (!onNavigatePage) return;
+    const sourcePath =
+      typeof window === "undefined"
+        ? "/courses"
+        : `${window.location.pathname}${window.location.search}`;
+    onNavigatePage(
+      getCoursePlayerLaunchPath(getCourseRouteKey(course), sourcePath),
+    );
+  };
 
   const [isPaymentBusy, setIsPaymentBusy] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -632,7 +729,16 @@ function CourseHeroSection({
   const handlePayNow = async (voluntaryContributionAmount?: number) => {
     if (isReadOnlyPreview) return;
     if (!user) {
-      setPaymentError("Please log in before enrolling.");
+      const returnTo =
+        typeof window === "undefined"
+          ? undefined
+          : `${window.location.pathname}${window.location.search}`;
+      const loginPath = buildLoginPath(returnTo);
+      if (onNavigatePage) {
+        onNavigatePage(loginPath);
+      } else if (typeof window !== "undefined") {
+        window.location.assign(loginPath);
+      }
       return;
     }
 
@@ -654,9 +760,7 @@ function CourseHeroSection({
 
       if (!order.gateway) {
         setIsPaymentBusy(false);
-        onNavigatePage?.(
-          `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
-        );
+        launchCoursePlayer();
         return;
       }
 
@@ -693,9 +797,7 @@ function CourseHeroSection({
               gatewaySignature: response.razorpay_signature,
             });
             setIsPaymentBusy(false);
-            onNavigatePage?.(
-              `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
-            );
+            launchCoursePlayer();
           } catch (error) {
             setPaymentError(
               error instanceof Error
@@ -729,11 +831,7 @@ function CourseHeroSection({
     <Play size="1.15em" weight="fill" className="shrink-0" aria-hidden="true" />
   );
   let ctaDisabled = false;
-  let ctaOnClick: (() => void) | undefined = () => {
-    if (onNavigatePage) {
-      onNavigatePage(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
-    }
-  };
+  let ctaOnClick: (() => void) | undefined = launchCoursePlayer;
 
   const showApplyCoupon = !isCreatorNormal && !isFree;
   const isCustomUnderPrice =
@@ -756,13 +854,7 @@ function CourseHeroSection({
       />
     );
     ctaDisabled = false;
-    ctaOnClick = () => {
-      if (onNavigatePage) {
-        onNavigatePage(
-          `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
-        );
-      }
-    };
+    ctaOnClick = launchCoursePlayer;
   } else if (isPreview) {
     // 2. Creator Preview:
     if (isFree) {
@@ -883,9 +975,7 @@ function CourseHeroSection({
   const handlePreviewClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     if (isReadOnlyPreview) return;
-    if (onNavigatePage) {
-      onNavigatePage(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
-    }
+    launchCoursePlayer();
   };
 
   return (
@@ -1613,6 +1703,9 @@ function CourseCurriculumCard({
               isOpen={openSections.has(index)}
               onToggle={() => onToggleSection(index)}
               onSelectLesson={onSelectLesson}
+              shouldVirtualizeLessons={
+                course.lectures >= OVERVIEW_VIRTUALIZATION_THRESHOLD
+              }
               isReadOnlyPreview={isReadOnlyPreview}
               isPaidCourse={isPaidCourse}
             />

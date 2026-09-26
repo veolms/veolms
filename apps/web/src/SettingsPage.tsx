@@ -126,8 +126,12 @@ const SETTINGS_TAB_IMPORTERS: Record<SettingsTab, () => Promise<unknown>> = {
   account: loadAccountSettings,
 };
 
+export function preloadSettingsTab(tab: string) {
+  return SETTINGS_TAB_IMPORTERS[normalizeSettingsTab(tab)]();
+}
+
 function prefetchSettingsTab(tab: SettingsTab) {
-  void SETTINGS_TAB_IMPORTERS[tab]().catch(() => undefined);
+  void preloadSettingsTab(tab).catch(() => undefined);
 }
 
 type SettingsTabIcon = ComponentType<{
@@ -388,68 +392,6 @@ export function SettingsPage({
   useEffect(() => {
     rememberSettingsTab(activeTab);
     setSwipePreviewTab(null);
-  }, [activeTab]);
-
-  useEffect(() => {
-    const remainingTabs = SETTINGS_TAB_IDS.filter((id) => id !== activeTab);
-    const idleWindow = window as Window & {
-      requestIdleCallback?: (
-        callback: (deadline: {
-          didTimeout: boolean;
-          timeRemaining: () => number;
-        }) => void,
-        options?: { timeout: number },
-      ) => number;
-      cancelIdleCallback?: (handle: number) => void;
-    };
-    let nextTabIndex = 0;
-    let startTimer: number | undefined;
-    let stepTimer: number | undefined;
-    let idleCallback: number | undefined;
-    let cancelled = false;
-
-    const prefetchNextTab = () => {
-      if (cancelled || nextTabIndex >= remainingTabs.length) return;
-
-      if (idleWindow.requestIdleCallback) {
-        idleCallback = idleWindow.requestIdleCallback(
-          (deadline) => {
-            idleCallback = undefined;
-            if (cancelled) return;
-            if (deadline.didTimeout || deadline.timeRemaining() > 4) {
-              const nextTab = remainingTabs[nextTabIndex];
-              if (!nextTab) return;
-              prefetchSettingsTab(nextTab);
-              nextTabIndex += 1;
-            }
-            prefetchNextTab();
-          },
-          { timeout: 1800 },
-        );
-        return;
-      }
-
-      stepTimer = window.setTimeout(() => {
-        stepTimer = undefined;
-        if (cancelled) return;
-        const nextTab = remainingTabs[nextTabIndex];
-        if (!nextTab) return;
-        prefetchSettingsTab(nextTab);
-        nextTabIndex += 1;
-        prefetchNextTab();
-      }, 160);
-    };
-
-    startTimer = window.setTimeout(prefetchNextTab, 350);
-
-    return () => {
-      cancelled = true;
-      if (startTimer !== undefined) window.clearTimeout(startTimer);
-      if (stepTimer !== undefined) window.clearTimeout(stepTimer);
-      if (idleCallback !== undefined) {
-        idleWindow.cancelIdleCallback?.(idleCallback);
-      }
-    };
   }, [activeTab]);
 
   useEffect(() => {

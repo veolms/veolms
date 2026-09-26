@@ -1,81 +1,90 @@
-import { useEffect, useRef } from "react";
-import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
-import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { lazy, Suspense, useEffect, useMemo } from "react";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
-import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
-import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
 import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
-import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
-import { XCircleIcon as XCircle } from "@phosphor-icons/react/XCircle";
+import type { CourseRole } from "../courses/catalogue";
 import type { NavigateTo } from "../routing/navigation";
-import { OrderCard } from "./OrderCard";
-import { OrderFiltersBar } from "./OrderFiltersBar";
-import { OrderReceiptModal } from "./OrderReceiptModal";
-import type { OrderTabId } from "./ordersData";
-import { OrderSummaryWidget } from "./OrderSummaryWidget";
-import { RecentPaymentsWidget } from "./RecentPaymentsWidget";
+import { useCurrentUser } from "../services/auth";
+import { useAuthStore } from "../store/auth.store";
+import {
+  getUserRoles,
+  getWorkspaceRoleStorageKey,
+  isStaffRole,
+} from "../shell/workspaceRole";
 import { useOrdersFilter } from "./useOrdersFilter";
-import { ordersService } from "../services/orders";
+import { OrderSummaryCards } from "./OrderSummaryCards";
+import { OrderFiltersBar } from "./OrderFiltersBar";
+import { OrdersTable } from "./OrdersTable";
+
+const OrderHistoryPage = lazy(() =>
+  import("../order-history/OrderHistoryPage").then((module) => ({
+    default: module.OrderHistoryPage,
+  })),
+);
+const OrderDetailsDrawer = lazy(() =>
+  import("./OrderDetailsDrawer").then((module) => ({
+    default: module.OrderDetailsDrawer,
+  })),
+);
+const OrderRefundModal = lazy(() =>
+  import("./OrderRefundModal").then((module) => ({
+    default: module.OrderRefundModal,
+  })),
+);
 
 export interface OrdersPageProps {
   onNavigatePage?: NavigateTo;
   setNotice?: (message: string) => void;
+  role?: CourseRole;
 }
 
-const tabsConfig: readonly {
-  id: OrderTabId;
-  label: string;
-  Icon: typeof Receipt;
-}[] = [
-  { id: "all", label: "All", Icon: Receipt },
-  { id: "completed", label: "Completed", Icon: CheckCircle },
-  { id: "pending", label: "Pending", Icon: Clock },
-  { id: "failed", label: "Failed", Icon: XCircle },
-  { id: "refunded", label: "Refunded", Icon: ArrowCounterClockwise },
-];
+export function OrdersPage({
+  onNavigatePage,
+  setNotice,
+  role,
+}: OrdersPageProps) {
+  const { data: authUser, isFetched: authUserFetched } = useCurrentUser();
+  const storeUser = useAuthStore((s) => s.user);
+  const isAuthReady = Boolean(storeUser) || authUserFetched;
+  const user = authUserFetched ? authUser : storeUser;
+  const userRoles = getUserRoles(user);
 
-export function OrdersPage({ onNavigatePage, setNotice }: OrdersPageProps) {
-  const {
-    orders,
-    orderSummary,
-    recentPayments,
-    totalFilteredCount,
-    totalLoadedCount,
-    activeTab,
-    setActiveTab,
-    searchQuery,
-    setSearchQuery,
-    courseFilter,
-    setCourseFilter,
-    statusFilter,
-    setStatusFilter,
-    selectedReceiptOrder,
-    setSelectedReceiptOrder,
-    resetFilters,
-    isLoading,
-    isError,
-    hasNextPage,
-    isFetchingNextPage,
-    fetchNextPage,
-    refetch,
-  } = useOrdersFilter(setNotice);
+  // Resolve active workspace role (respecting role switcher)
+  const activeRole = useMemo(() => {
+    if (role === "student") return "student";
+    if (role === "creator") return "creator";
+    if (typeof window === "undefined") return "student";
+    try {
+      const key = getWorkspaceRoleStorageKey(user?.id);
+      const stored =
+        localStorage.getItem(key) || localStorage.getItem("veolms-role");
+      return stored === "creator" ? "creator" : "student";
+    } catch {
+      return "student";
+    }
+  }, [role, user?.id]);
 
-  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const isStaff = Boolean(
+    user && isStaffRole(userRoles) && activeRole !== "student",
+  );
 
-  // Keyboard shortcut listener (/ or Cmd+K to search)
+  const filterState = useOrdersFilter({ enabled: isStaff });
+
+  // Keyboard shortcut listener (/ or Cmd+K to focus search input)
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent) => {
       const activeTag = (document.activeElement?.tagName || "").toLowerCase();
       const isInput =
         activeTag === "input" ||
         activeTag === "textarea" ||
         (document.activeElement as HTMLElement)?.isContentEditable;
 
-      if (!isInput) {
-        if (e.key === "/" || ((e.metaKey || e.ctrlKey) && e.key === "k")) {
-          e.preventDefault();
-          document.getElementById("orders-search-input")?.focus();
-        }
+      if (
+        !isInput &&
+        (event.key === "/" ||
+          ((event.metaKey || event.ctrlKey) && event.key === "k"))
+      ) {
+        event.preventDefault();
+        document.getElementById("orders-search-input")?.focus();
       }
     };
 
@@ -83,19 +92,36 @@ export function OrdersPage({ onNavigatePage, setNotice }: OrdersPageProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const handleDownloadReceipt = (order: typeof selectedReceiptOrder) => {
-    if (!order) return;
-    setNotice?.(`Downloading receipt for order ${order.orderNumber}...`);
-    window.open(ordersService.getInvoiceDownloadUrl(order.id), "_blank");
-  };
+  // Waiting for authentication
+  if (!isAuthReady) {
+    return (
+      <main className="mx-auto grid w-full max-w-[1360px] place-items-center py-24">
+        <CircleNotch size={32} className="mb-3 animate-spin text-(--accent)" />
+        <p className="text-sm text-(--muted)">Loading orders dashboard...</p>
+      </main>
+    );
+  }
+
+  // When active role is student or non-staff: seamlessly render Student Order History
+  if (!isStaff || activeRole === "student") {
+    return (
+      <Suspense fallback={null}>
+        <OrderHistoryPage
+          onNavigatePage={onNavigatePage}
+          setNotice={setNotice}
+        />
+      </Suspense>
+    );
+  }
 
   return (
-    <div
-      className="w-full min-w-0 flex flex-col font-sans"
+    <main
+      data-orders-surface=""
+      className="mx-auto flex w-full max-w-[1360px] flex-col gap-4 sm:gap-6 px-3 pb-8 sm:px-6 sm:pb-12 font-sans"
       aria-labelledby="orders-page-title"
     >
       {/* Top Header Row with Title, Description, and Header Icon Badge */}
-      <header className="flex items-start justify-between gap-5 mb-6">
+      <header className="flex items-start justify-between gap-5 pt-1">
         <div>
           <h1
             id="orders-page-title"
@@ -104,192 +130,86 @@ export function OrdersPage({ onNavigatePage, setNotice }: OrdersPageProps) {
             Orders
           </h1>
           <p className="mt-2 text-[0.92rem] text-(--muted) leading-normal">
-            Track your purchases, payment status, and active course orders.
+            Manage purchases, transactions, and refunds across your academy.
           </p>
         </div>
+
         <span
-          className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-[19px] text-(--accent) transition-transform hover:scale-105"
-          style={{
-            background: "color-mix(in srgb, var(--accent) 16%, var(--surface))",
-            boxShadow:
-              "0 14px 26px color-mix(in srgb, var(--accent-shadow) 40%, transparent)",
-          }}
+          className="inline-flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl bg-(--accent)/12 text-(--accent)"
           aria-hidden="true"
         >
-          <ShoppingBag size={28} weight="duotone" />
+          <ShoppingBag size={26} weight="duotone" />
         </span>
       </header>
 
-      {/* Tab Navigation Bar with delicate thin bottom line and prominent active underline */}
-      <nav
-        aria-label="Order status categories"
-        className="scrollbar-none mb-5 flex min-w-0 gap-1 overflow-x-auto border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)] bg-transparent md:gap-3"
-        role="tablist"
-      >
-        {tabsConfig.map((tab, idx) => {
-          const isActive = activeTab === tab.id;
-          const Icon = tab.Icon;
-          return (
-            <button
-              key={tab.id}
-              ref={(el) => {
-                tabRefs.current[idx] = el;
-              }}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setActiveTab(tab.id)}
-              className={`relative inline-flex min-h-11.5 shrink-0 items-center gap-2 px-3.5 pb-2.5 pt-1 text-xs md:text-sm font-[650] transition-colors cursor-pointer select-none ${
-                isActive
-                  ? "text-(--text)"
-                  : "text-(--muted) hover:text-(--text)"
-              }`}
-            >
-              <Icon
-                size={18}
-                weight={isActive ? "fill" : "regular"}
-                className={
-                  isActive ? "text-(--accent)" : "text-(--muted)"
-                }
-              />
-              <span>{tab.label}</span>
-              {isActive && (
-                <span
-                  className="absolute bottom-0 left-0 right-0 h-[2.5px] rounded-t-full bg-(--accent)"
-                  aria-hidden="true"
-                />
-              )}
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* Filter and Search Toolbar */}
-      <section aria-label="Order filters" className="mb-5">
-        <OrderFiltersBar
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          courseFilter={courseFilter}
-          onCourseFilterChange={setCourseFilter}
-          statusFilter={statusFilter}
-          onStatusFilterChange={setStatusFilter}
-        />
-      </section>
-
-      {/* Responsive Layout: 1 column on <=150% zoom / tablets, 2 columns on >=1280px / 100% zoom */}
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:items-start">
-        {/* Left / Main Column: Orders Feed (Full width on zoom, 8 of 12 columns on desktop) */}
-        <main className="flex flex-col gap-3.5 xl:col-span-8 min-w-0">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center">
-              <CircleNotch size={32} className="animate-spin text-(--accent) mb-3" />
-              <h3 className="text-base font-semibold text-(--text)">Loading orders...</h3>
-            </div>
-          ) : isError ? (
-            <div className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center">
-              <WarningCircle size={32} className="text-rose-400 mb-3" />
-              <h3 className="text-base font-semibold text-(--text)">Unable to load orders</h3>
-              <p className="mt-1 text-xs text-(--muted)">Please check your connection and try again.</p>
-              <button
-                type="button"
-                onClick={() => refetch()}
-                className="mt-4 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-white cursor-pointer"
-              >
-                Retry
-              </button>
-            </div>
-          ) : orders.length > 0 ? (
-            <>
-              {orders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  onViewReceipt={setSelectedReceiptOrder}
-                  setNotice={setNotice}
-                />
-              ))}
-
-              {hasNextPage && (
-                <div className="mt-2 flex items-center justify-center pt-2">
-                  <button
-                    type="button"
-                    onClick={() => fetchNextPage()}
-                    disabled={isFetchingNextPage}
-                    className="rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs md:text-sm font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer disabled:opacity-50"
-                    style={{ boxShadow: "var(--card-shadow)" }}
-                  >
-                    {isFetchingNextPage ? "Loading more orders..." : "Load more orders"}
-                  </button>
-                </div>
-              )}
-
-              {/* Showing orders count indicator */}
-              <div className="mt-2 flex items-center justify-center pt-2">
-                <button
-                  type="button"
-                  onClick={() => setNotice?.("All orders currently loaded.")}
-                  className="rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs md:text-sm font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
-                  style={{ boxShadow: "var(--card-shadow)" }}
-                >
-                  Showing {totalFilteredCount} of {orderSummary.totalOrders}{" "}
-                  orders
-                </button>
-              </div>
-            </>
-          ) : (
-            <div
-              className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center"
-              style={{ boxShadow: "var(--card-shadow)" }}
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-(--hover) text-(--muted) mb-3">
-                <Receipt size={24} />
-              </div>
-              <h3 className="text-base font-semibold text-(--text)">
-                No orders found
-              </h3>
-              <p className="mt-1 max-w-sm text-xs md:text-sm text-(--muted)">
-                {searchQuery || courseFilter !== "all" || statusFilter !== "all"
-                  ? "Try changing your search query or reset your active filters to view all orders."
-                  : "There are no orders in this category."}
-              </p>
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="mt-4 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90 cursor-pointer"
-              >
-                Reset filters
-              </button>
-            </div>
-          )}
-        </main>
-
-        {/* Right Column / Subgrid: Sidebar Widgets (2 side-by-side on 150% zoom, 1 stacked on desktop) */}
-        <aside className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-5 xl:col-span-4 min-w-0">
-          {/* Order Summary Widget */}
-          <OrderSummaryWidget
-            summary={orderSummary}
-            onSelectStatusFilter={(status) => setActiveTab(status)}
-          />
-
-          {/* Recent Payments Widget */}
-          <RecentPaymentsWidget
-            payments={recentPayments}
-            onViewAll={() => resetFilters()}
-            onOpenBillingHistory={() =>
-              setNotice?.("Full billing statement downloaded to your device.")
-            }
-          />
-        </aside>
-      </div>
-
-      {/* Order Receipt Modal Dialog */}
-      <OrderReceiptModal
-        order={selectedReceiptOrder}
-        isOpen={Boolean(selectedReceiptOrder)}
-        onClose={() => setSelectedReceiptOrder(null)}
-        onDownloadReceipt={handleDownloadReceipt}
+      {/* Filter toolbar card: placed ON TOP of stats cards as requested */}
+      <OrderFiltersBar
+        searchQuery={filterState.searchQuery}
+        onSearchChange={filterState.setSearchQuery}
+        courseFilter={filterState.courseFilter}
+        onCourseFilterChange={filterState.setCourseFilter}
+        couponFilter={filterState.couponFilter}
+        onCouponFilterChange={filterState.setCouponFilter}
+        statusFilter={filterState.statusFilter}
+        onStatusFilterChange={filterState.setStatusFilter}
+        datePreset={filterState.datePreset}
+        dateLabel={filterState.dateLabel}
+        onDatePresetChange={filterState.setDatePreset}
+        isFiltered={filterState.isFiltered}
+        onResetFilters={filterState.resetFilters}
       />
-    </div>
+
+      {/* 4 KPI Summary Cards */}
+      <OrderSummaryCards
+        stats={filterState.stats}
+        isLoading={filterState.isLoadingStats}
+      />
+
+      {/* Virtualized Orders Table */}
+      <OrdersTable
+        orders={filterState.orders}
+        isLoading={filterState.isLoading}
+        hasNextPage={filterState.hasNextPage}
+        isFetchingNextPage={filterState.isFetchingNextPage}
+        fetchNextPage={filterState.fetchNextPage}
+        sortOrder={filterState.sortOrder}
+        onToggleSortOrder={filterState.toggleSortOrder}
+        selectedOrderId={filterState.selectedOrderId}
+        onSelectOrder={filterState.setSelectedOrderId}
+        onRequestRefund={filterState.setRefundTargetOrder}
+        onNavigatePage={onNavigatePage}
+        setNotice={setNotice}
+        isFiltered={filterState.isFiltered}
+        onResetFilters={filterState.resetFilters}
+      />
+
+      {/* Slide-over Order Details Drawer */}
+      {filterState.selectedOrder && (
+        <Suspense fallback={null}>
+          <OrderDetailsDrawer
+            order={filterState.selectedOrder}
+            onClose={() => filterState.setSelectedOrderId(null)}
+            hasPrev={filterState.hasPrevOrder}
+            hasNext={filterState.hasNextOrder}
+            onPrev={filterState.selectPrevOrder}
+            onNext={filterState.selectNextOrder}
+            onRequestRefund={filterState.setRefundTargetOrder}
+            onNavigatePage={onNavigatePage}
+            setNotice={setNotice}
+          />
+        </Suspense>
+      )}
+
+      {/* Refund Modal */}
+      {filterState.refundTargetOrder && (
+        <Suspense fallback={null}>
+          <OrderRefundModal
+            order={filterState.refundTargetOrder}
+            onClose={() => filterState.setRefundTargetOrder(null)}
+            setNotice={setNotice}
+          />
+        </Suspense>
+      )}
+    </main>
   );
 }
-

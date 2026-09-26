@@ -1,11 +1,14 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { CommentFormattingToolbar } from "../learning/CommentFormattingToolbar";
-import {
-  DiscussionEditor,
-  type DiscussionEditorController,
-} from "../learning/discussion-editor/DiscussionEditor";
+import type { DiscussionEditorController } from "../learning/discussion-editor/DiscussionEditor";
 import type { DiscussionFormattingState } from "../learning/discussion-editor/commands";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
+
+const DiscussionEditor = lazy(() =>
+  import("../learning/discussion-editor/DiscussionEditor").then((module) => ({
+    default: module.DiscussionEditor,
+  })),
+);
 
 interface Props {
   label: string;
@@ -44,17 +47,19 @@ export function QuizRichTextField({
 
   return (
     <div className="overflow-hidden rounded-[12px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] shadow-[inset_0_1px_2px_color-mix(in_srgb,black_10%,transparent)] transition-all focus-within:border-(--accent) focus-within:ring-2 focus-within:ring-(--accent)/20">
-      <DiscussionEditor
-        value={draft}
-        documentId={documentId}
-        label={label}
-        placeholderText={placeholder}
-        autoGrow
-        className={`${minHeight} px-2.5 sm:px-3.5 py-2 sm:py-3 text-xs sm:text-sm text-(--text)`}
-        onChange={(next) => onChange(next.markdown)}
-        onControllerChange={setController}
-        onFormattingStateChange={setFormattingState}
-      />
+      <Suspense fallback={<div className={minHeight} aria-hidden="true" />}>
+        <DiscussionEditor
+          value={draft}
+          documentId={documentId}
+          label={label}
+          placeholderText={placeholder}
+          autoGrow
+          className={`${minHeight} px-2.5 sm:px-3.5 py-2 sm:py-3 text-xs sm:text-sm text-(--text)`}
+          onChange={(next) => onChange(next.markdown)}
+          onControllerChange={setController}
+          onFormattingStateChange={setFormattingState}
+        />
+      </Suspense>
       <div className="flex min-h-11 items-center border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_65%,var(--surface))] px-2">
         {controller ? (
           <CommentFormattingToolbar

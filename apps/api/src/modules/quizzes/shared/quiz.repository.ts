@@ -354,7 +354,10 @@ export async function listAssignmentsForCoursesWithQuiz(
         .on("quizzes.deleted_at", "is", null),
     )
     .selectAll("quiz_assignments")
-    .select(["quizzes.title as quiz_title"])
+    .select([
+      "quizzes.title as quiz_title",
+      "quizzes.creator_id as quiz_creator_id",
+    ])
     .where("quiz_assignments.course_id", "in", courseIds)
     .orderBy("quiz_assignments.created_at", "asc")
     .execute();

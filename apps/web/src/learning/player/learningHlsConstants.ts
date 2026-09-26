@@ -172,10 +172,14 @@ function appendLearningHlsQueryParameter(
 
 export const LEARNING_HLS_STREAMING = {
   abrEnabled: true,
-  // A VOD player does not need Shaka's default ~10s startup buffer. Keep the
-  // first playable frame responsive while retaining a small rebuffer safety
-  // margin for normal network jitter.
-  bufferingGoal: 2,
+  // Playback can start once rebufferingGoal is met. bufferingGoal is how far
+  // ahead Shaka keeps media while playing. A ~2s goal let a quality change
+  // abort the in-flight segment and starve the playhead before the new
+  // rendition arrived, which showed up as a short pause. Twelve seconds is
+  // enough runway for that fetch. The first switch waits until that buffer
+  // exists so the opening upgrade does not hitch either.
+  bufferingGoal: 12,
   rebufferingGoal: 1,
   bufferBehind: 60,
+  minTimeToSwitch: 6,
 } as const;

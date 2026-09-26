@@ -1,11 +1,11 @@
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
 import { CurrencyInrIcon as CurrencyInr } from "@phosphor-icons/react/CurrencyInr";
 import { ShoppingCartIcon as ShoppingCart } from "@phosphor-icons/react/ShoppingCart";
-import { UsersIcon as Users } from "@phosphor-icons/react/Users";
-import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
-import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { StudentIcon as Student } from "@phosphor-icons/react/Student";
+import { UsersIcon as Users } from "@phosphor-icons/react/Users";
+import { lazy, Suspense } from "react";
 import type { AnalyticsOverviewResponse } from "@veolms/contracts";
-import { TrendChart } from "../../components/analytics/Charts";
 import {
   ChartSection,
   CoursePerformanceTable,
@@ -19,6 +19,12 @@ import {
   kpiGridClass,
   toChartData,
 } from "../analyticsShared";
+
+const TrendChart = lazy(() =>
+  import("../../components/analytics/Charts").then((module) => ({
+    default: module.TrendChart,
+  })),
+);
 
 export function OverviewTab({ data }: { data: AnalyticsOverviewResponse }) {
   const { overview, currency } = data;
@@ -92,10 +98,19 @@ export function OverviewTab({ data }: { data: AnalyticsOverviewResponse }) {
       </section>
 
       <ChartSection title="Revenue Trend" description="Net revenue per day">
-        <TrendChart
-          data={toChartData(overview.revenueTrend)}
-          valueFormatter={(value) => formatCurrencyAmount(value, currency)}
-        />
+        <Suspense
+          fallback={
+            <div
+              aria-hidden="true"
+              className="h-[260px] animate-pulse rounded-xl bg-(--surface)"
+            />
+          }
+        >
+          <TrendChart
+            data={toChartData(overview.revenueTrend)}
+            valueFormatter={(value) => formatCurrencyAmount(value, currency)}
+          />
+        </Suspense>
       </ChartSection>
 
       <div className="grid gap-3.5 sm:gap-6 lg:grid-cols-2">

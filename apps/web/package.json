@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-performance.mjs",
+    "build:preview": "node scripts/build-performance.mjs --first-section",
+    "refresh:course-pages": "node scripts/refresh-course-static-pages.mjs",
     "analyze": "node scripts/build-performance.mjs --mode analyze",
     "benchmark:web-vitals": "node scripts/benchmark-web-vitals.mjs",
     "dev": "react-router dev",
@@ -19,7 +21,7 @@
     "test:e2e": "playwright test",
     "test:e2e:behavior": "playwright test --grep-invert @visual",
     "test:e2e:visual": "playwright test --grep @visual",
-    "test:e2e:dist": "playwright test --config=playwright.preview.config.ts",
+    "test:e2e:dist": "pnpm build:preview && playwright test --config=playwright.preview.config.ts",
     "test:e2e:update": "playwright test --grep @visual --update-snapshots=all",
     "test:e2e:headed": "playwright test --headed",
     "check": "pnpm typecheck && pnpm test:e2e:dist && pnpm test:e2e",

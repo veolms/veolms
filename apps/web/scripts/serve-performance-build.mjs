@@ -1,19 +1,11 @@
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { access, readFile, stat } from "node:fs/promises";
 import { createServer, request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createBrotliCompress, createGzip, constants } from "node:zlib";
-import {
-  FIRST_SECTION_FLAG,
-  runPerformanceBuild,
-} from "./build-performance.mjs";
-
-const buildExitCode = await runPerformanceBuild(
-  process.argv.includes(FIRST_SECTION_FLAG) ? [FIRST_SECTION_FLAG] : [],
-);
-if (buildExitCode !== 0) process.exit(buildExitCode);
+import { getPreviewBuildFingerprint } from "./preview-build-fingerprint.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(scriptDirectory, "../../..");
@@ -24,7 +16,42 @@ try {
   if (error?.code !== "ENOENT") throw error;
 }
 
-const root = path.resolve(scriptDirectory, "../build/client");
+const buildDirectory = path.resolve(scriptDirectory, "../build");
+const root = path.join(buildDirectory, "client");
+const previewMetadataPath = path.join(root, ".veolms-preview-build.json");
+const requiredPreviewFiles = [
+  "index.html",
+  "courses/index.html",
+  "settings/profile/index.html",
+  "__spa-fallback.html",
+  "../server/index.js",
+];
+
+try {
+  const metadata = JSON.parse(await readFile(previewMetadataPath, "utf8"));
+  if (
+    metadata.version !== 1 ||
+    metadata.nodeEnv !== "production" ||
+    !["first-section", "all-lectures"].includes(metadata.learningPrerenderScope)
+  ) {
+    throw new Error("production build metadata is invalid");
+  }
+  await Promise.all(
+    requiredPreviewFiles.map((file) => access(path.join(root, file))),
+  );
+  const sourceFingerprint = await getPreviewBuildFingerprint(workspaceRoot, {
+    learningPrerenderScope: metadata.learningPrerenderScope,
+  });
+  if (sourceFingerprint !== metadata.sourceFingerprint) {
+    throw new Error("preview output is stale for the current source tree");
+  }
+} catch {
+  console.error(
+    "A complete, current production preview build was not found. Run `pnpm build:preview:web` for Lighthouse preview, or `pnpm build:web` for the full release build, then start the preview again.",
+  );
+  process.exit(1);
+}
+
 const portArgumentIndex = process.argv.indexOf("--port");
 const commandLinePort =
   portArgumentIndex >= 0 ? Number(process.argv[portArgumentIndex + 1]) : NaN;

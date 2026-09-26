@@ -101,6 +101,17 @@ export default [
     route("*", marker, { id: "home-fallback", caseSensitive: true }),
   ]),
 
+  // Public catalogue routes stay outside the authenticated academy shell so
+  // prerendering includes only public course data and lightweight UI.
+  route("catalogue", "routes/public-course-catalogue.tsx", {
+    id: "public-catalogue",
+    caseSensitive: true,
+  }),
+  route("catalogue/:courseSlug/overview", "routes/public-course-overview.tsx", {
+    id: "public-course-overview",
+    caseSensitive: true,
+  }),
+
   layout("routes/auth-layout.tsx", { id: "auth-layout" }, [
     route("login", "routes/login.tsx", { id: "login", caseSensitive: true }),
     route("mfa-setup", "routes/mfa-setup.tsx", {

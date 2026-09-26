@@ -1,5 +1,5 @@
 import { useLayoutEffect, type ReactNode } from "react";
-import { Links, Meta, Outlet, Scripts } from "react-router";
+import { Links, Meta, Outlet, Scripts, useLocation } from "react-router";
 import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
 import { fullAppStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
@@ -12,9 +12,10 @@ import {
 } from "./learning/learningShellPreferences";
 import { getEarlyCourseCatalogueScript } from "./courses/courseCatalogueBootstrap";
 import {
-  API_BASE_URL_ORIGIN,
-  getApiRequestUrl,
-} from "./lib/apiBaseUrl";
+  isCoursesDocumentPath,
+  readPrerenderedCourseLcp,
+} from "./courses/courseLcpPreload";
+import { API_BASE_URL_ORIGIN, getApiRequestUrl } from "./lib/apiBaseUrl";
 import {
   EARLY_HLS_PRELOAD_URL_PLACEHOLDER,
   getEarlyHlsPreloadInlineScript,
@@ -40,6 +41,24 @@ import {
   DEFAULT_ACADEMY_THEME,
   academyThemes,
 } from "./themes";
+
+function preloadMobileSettingsTab() {
+  if (
+    typeof window === "undefined" ||
+    !window.matchMedia("(max-width: 820px)").matches ||
+    !/^\/settings(?:\/|$)/.test(window.location.pathname)
+  ) {
+    return;
+  }
+
+  const tab =
+    window.location.pathname.split("/").filter(Boolean)[1] ?? "profile";
+  void import("./SettingsPage")
+    .then((module) => module.preloadSettingsTab(tab))
+    .catch(() => undefined);
+}
+
+preloadMobileSettingsTab();
 
 interface LayoutProps {
   children: ReactNode;
@@ -141,6 +160,10 @@ export function Layout({ children }: LayoutProps) {
   // flashes. Snapshot the already-mutated document into React's first render;
   // the server uses the deterministic defaults above.
   const initialLayoutDomState = getInitialLayoutDomState();
+  const location = useLocation();
+  const courseLcp = isCoursesDocumentPath(location.pathname)
+    ? readPrerenderedCourseLcp()
+    : null;
 
   return (
     <html
@@ -186,6 +209,7 @@ export function Layout({ children }: LayoutProps) {
           content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
         />
         <meta name="theme-color" content="#151718" />
+        <link rel="preload" href={fullAppStylesheet} as="style" />
         {API_BASE_URL_ORIGIN ? (
           <link
             rel="preconnect"
@@ -194,10 +218,25 @@ export function Layout({ children }: LayoutProps) {
           />
         ) : null}
         {videoPlaybackCdnOrigin ? (
+          <>
+            <link
+              rel="preconnect"
+              href={videoPlaybackCdnOrigin}
+              crossOrigin="anonymous"
+            />
+            {/* Image requests are no-cors, so they cannot reuse the CORS
+                connection opened for video. */}
+            <link rel="preconnect" href={videoPlaybackCdnOrigin} />
+          </>
+        ) : null}
+        {courseLcp ? (
           <link
-            rel="preconnect"
-            href={videoPlaybackCdnOrigin}
-            crossOrigin="anonymous"
+            rel="preload"
+            as="image"
+            href={courseLcp.src}
+            imageSrcSet={courseLcp.srcSet || undefined}
+            imageSizes={courseLcp.sizes}
+            fetchPriority="high"
           />
         ) : null}
         <link rel="icon" type="image/svg+xml" href={procodrrLogoMark} />
@@ -256,7 +295,7 @@ export function Layout({ children }: LayoutProps) {
         <script
           dangerouslySetInnerHTML={{
             __html:
-              '(()=>{const e=document.getElementById("courses-hydrate-fallback");if(!e)return;if(location.pathname==="/courses"||location.pathname==="/")e.style.removeProperty("display");else e.style.display="none"})();',
+              '(()=>{const s=document.getElementById("settings-hydrate-fallback");if(s){s.style.display=/^\\/settings(?:\\/|$)/.test(location.pathname)&&typeof matchMedia==="function"&&matchMedia("(max-width: 820px)").matches?"":"none"}})();',
           }}
         />
         <Scripts />
@@ -276,54 +315,43 @@ export const meta = () => [
 ];
 
 export function HydrateFallback() {
-  const showCoursesFallback =
-    typeof window !== "undefined" &&
-    (window.location.pathname === "/courses" ||
-      window.location.pathname === "/");
-
   return (
-    <div
-      id="courses-hydrate-fallback"
-      aria-hidden="true"
-      className="courses-app"
-      style={showCoursesFallback ? undefined : { display: "none" }}
-    >
-      <aside className="courses-sidebar" />
-      <div className="courses-main-frame">
-        <main className="courses-main">
-          <div className="mx-auto w-full max-w-screen-2xl">
-            <div className="mb-8 space-y-3">
-              <h1 className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
-                Courses
-              </h1>
-              <p className="mt-1.5 hidden text-[0.88rem] leading-6 text-(--muted) min-[640px]:block">
-                Browse courses and keep learning.
-              </p>
+    <>
+      <div
+        id="settings-hydrate-fallback"
+        aria-hidden="true"
+        className="courses-app"
+        style={{ display: "none" }}
+      >
+        <aside className="courses-sidebar" />
+        <div className="courses-main-frame">
+          <main className="courses-main">
+            <div className="mx-auto w-full max-w-screen-2xl px-4 py-5">
+              <header className="mb-6 space-y-1">
+                <h1 className="text-[clamp(2.25rem,9vw,3rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
+                  Settings
+                </h1>
+                <p className="text-sm text-(--muted)">
+                  Manage your personal preferences and interface experience.
+                </p>
+              </header>
+              <nav
+                className="mb-4 flex gap-2 overflow-hidden"
+                aria-hidden="true"
+              >
+                <div className="h-10 w-20 shrink-0 rounded-full bg-(--track)" />
+                <div className="h-10 w-24 shrink-0 rounded-full bg-(--track)" />
+                <div className="h-10 w-18 shrink-0 rounded-full bg-(--track)" />
+                <div className="h-10 w-20 shrink-0 rounded-full bg-(--track)" />
+              </nav>
+              <div className="grid min-h-[55vh] w-full place-items-center">
+                <span className="size-6 animate-spin rounded-full border-2 border-(--border) border-t-(--accent) motion-reduce:animate-none" />
+              </div>
             </div>
-            <div className="mb-7 flex gap-3">
-              <div className="h-10 w-24 rounded-full bg-(--track)" />
-              <div className="h-10 w-28 rounded-full bg-(--track)" />
-              <div className="h-10 w-28 rounded-full bg-(--track)" />
-            </div>
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-              {Array.from({ length: 8 }, (_, index) => (
-                <div
-                  key={index}
-                  className="overflow-hidden rounded-xl border border-(--border) bg-(--surface)"
-                >
-                  <div className="aspect-video bg-(--track)" />
-                  <div className="space-y-3 p-4">
-                    <div className="h-5 w-4/5 rounded bg-(--track)" />
-                    <div className="h-4 w-2/3 rounded bg-(--track)" />
-                    <div className="h-9 w-28 rounded-lg bg-(--track)" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

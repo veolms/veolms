@@ -1,20 +1,25 @@
 import { EditorView } from "@codemirror/view";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useRef,
   useState,
 } from "react";
 import { CommentFormattingToolbar } from "../learning/CommentFormattingToolbar";
-import {
-  DiscussionEditor,
-  type DiscussionEditorController,
-} from "../learning/discussion-editor/DiscussionEditor";
+import type { DiscussionEditorController } from "../learning/discussion-editor/DiscussionEditor";
 import type { DiscussionFormattingState } from "../learning/discussion-editor/commands";
 import {
   createDiscussionDraft,
   type DiscussionDraft,
 } from "../learning/discussion-editor/types";
+
+const DiscussionEditor = lazy(() =>
+  import("../learning/discussion-editor/DiscussionEditor").then((module) => ({
+    default: module.DiscussionEditor,
+  })),
+);
 
 export interface CourseDescriptionEditorProps {
   value: string;
@@ -103,17 +108,19 @@ export function CourseDescriptionEditor({
       }`}
     >
       <div className="relative min-h-[140px] flex-1">
-        <DiscussionEditor
-          documentId={id}
-          value={draft}
-          label={label}
-          placeholderText={placeholder}
-          invalid={isOverLimit}
-          className="min-h-[140px]"
-          onChange={handleDraftChange}
-          onControllerChange={setController}
-          onFormattingStateChange={setFormattingState}
-        />
+        <Suspense fallback={<div className="min-h-[140px]" aria-hidden="true" />}>
+          <DiscussionEditor
+            documentId={id}
+            value={draft}
+            label={label}
+            placeholderText={placeholder}
+            invalid={isOverLimit}
+            className="min-h-[140px]"
+            onChange={handleDraftChange}
+            onControllerChange={setController}
+            onFormattingStateChange={setFormattingState}
+          />
+        </Suspense>
       </div>
 
       <div

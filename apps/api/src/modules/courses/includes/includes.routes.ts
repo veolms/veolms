@@ -19,6 +19,7 @@ const includesRoutes: RoutePlugin = async (app, options) => {
   const ctx = createCoursesContext(options);
   const service = createIncludesService({
     database: options.database,
+    services: options.services,
   });
   const controller = createIncludesController({ service });
 

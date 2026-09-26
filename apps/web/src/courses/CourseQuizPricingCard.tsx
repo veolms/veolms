@@ -5,12 +5,10 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  CheckCircleIcon as CheckCircle,
-  CircleNotchIcon as CircleNotch,
-  TagIcon as Tag,
-  WarningCircleIcon as WarningCircle,
-} from "@phosphor-icons/react";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
+import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import {
   useCourseQuizPricing,
   useSetQuizCoursePricing,

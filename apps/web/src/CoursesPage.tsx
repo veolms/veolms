@@ -285,10 +285,12 @@ const QuizDirectAttemptPage = lazy(() =>
   })),
 );
 const StudentsPage = lazy(() =>
-  import("./students").then((module) => ({ default: module.StudentsPage })),
+  import("./students/StudentsPage").then((module) => ({
+    default: module.StudentsPage,
+  })),
 );
 const StudentDetailsPage = lazy(() =>
-  import("./students").then((module) => ({
+  import("./students/StudentDetailsPage").then((module) => ({
     default: module.StudentDetailsPage,
   })),
 );
@@ -949,7 +951,7 @@ export function CoursesPage({
     }
   }, [signOut]);
   const shouldLoadCourseSurface =
-    page !== "settings" &&
+    (page === "courses" || learningBackground?.page === "courses") &&
     learningBackground?.page !== "settings" &&
     (!renderMain || Boolean(learningBackground)) &&
     !isEditingOrCreatingCourse;
@@ -3623,7 +3625,11 @@ export function CoursesPage({
     }
     if (surfacePage === "orders" || surfaceActiveSection === "Orders") {
       return (
-        <OrdersPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+        <OrdersPage
+          onNavigatePage={onNavigatePage}
+          setNotice={setNotice}
+          role={effectiveRole}
+        />
       );
     }
     if (

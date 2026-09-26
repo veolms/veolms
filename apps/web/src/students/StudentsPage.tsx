@@ -44,10 +44,6 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
     isFetchingNextPage: isFetchingMoreCourses,
     fetchNextPage: fetchMoreCourses,
   } = useInfiniteCourses({ limit: 50 });
-  useEffect(() => {
-    if (!hasMoreCourses || isFetchingMoreCourses) return;
-    void fetchMoreCourses();
-  }, [fetchMoreCourses, hasMoreCourses, isFetchingMoreCourses]);
   const courseRecords = coursesData?.courses;
   const availableCourses = useMemo(() => {
     if (!courseRecords) return [];
@@ -265,6 +261,9 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
           sortBy={sortBy}
           onSortByChange={setSortBy}
           availableCourses={availableCourses}
+          hasMoreCourses={hasMoreCourses}
+          isLoadingMoreCourses={isFetchingMoreCourses}
+          onLoadMoreCourses={() => void fetchMoreCourses()}
           onResetFilters={resetFilters}
         />
       </div>

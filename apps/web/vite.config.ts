@@ -21,7 +21,10 @@ const shellPhosphorIcons = new Set([
   "CaretRight",
   "ChartBar",
   "ChatCircleDots",
+  "ChatTeardropDots",
   "Check",
+  "CheckCircle",
+  "CircleNotch",
   "CornersIn",
   "CornersOut",
   "DotsThreeCircle",
@@ -31,6 +34,8 @@ const shellPhosphorIcons = new Set([
   "GraduationCap",
   "Heart",
   "House",
+  "Info",
+  "Link",
   "Moon",
   "Palette",
   "Play",
@@ -43,53 +48,11 @@ const shellPhosphorIcons = new Set([
   "Sun",
   "Tote",
   "User",
-  "Users",
-]);
-const initialRoutePhosphorIcons = new Set([
-  ...shellPhosphorIcons,
-  "ArrowCounterClockwise",
-  "ArrowLeft",
-  "Certificate",
-  "CheckCircle",
-  "CopySimple",
-  "Flag",
-  "Info",
-  "Link",
-  "LinkSimple",
-  "ListBullets",
-  "MagnifyingGlass",
-  "PaperPlaneTilt",
-  "PencilSimple",
-  "Plus",
-  "ShareNetwork",
-  "Trash",
-  "UploadSimple",
   "UserCircle",
-  "UsersThree",
+  "Users",
+  "WarningCircle",
   "X",
   "XCircle",
-  "ArrowRight",
-  "ArrowsClockwise",
-  "At",
-  "Camera",
-  "ChatTeardropDots",
-  "Clock",
-  "Copy",
-  "DeviceMobile",
-  "DownloadSimple",
-  "GithubLogo",
-  "Globe",
-  "Key",
-  "LinkedinLogo",
-  "Lock",
-  "MagicWand",
-  "Phone",
-  "SealCheck",
-  "ShieldCheck",
-  "ShieldWarning",
-  "Tag",
-  "WarningCircle",
-  "CircleNotch",
 ]);
 const loginLucideIcons = [
   "arrow-left",
@@ -107,16 +70,6 @@ const loginLucideIcons = [
   "smartphone",
   "star",
 ] as const;
-const homePhosphorIcons = new Set([
-  "ArrowRight",
-  "ChartLineUp",
-  "CheckCircle",
-  "Clock",
-  "Fire",
-  "Target",
-]);
-const settingsPhosphorIcons = new Set(["ShieldCheck", "UserCircle"]);
-
 const getPhosphorIconName = (id: string) =>
   id
     .replaceAll("\\", "/")
@@ -283,10 +236,7 @@ export default defineConfig(({ command, mode }) => {
         "swiper",
         "swiper/react",
         "tailwind-merge",
-        ...Array.from(
-          initialRoutePhosphorIcons,
-          (iconName) => `@phosphor-icons/react/${iconName}`,
-        ),
+        "@phosphor-icons/react",
         ...loginLucideIcons.map(
           (iconName) => `lucide-react/dist/esm/icons/${iconName}.mjs`,
         ),
@@ -301,6 +251,12 @@ export default defineConfig(({ command, mode }) => {
         config.STATIC_BUILD_API_URL,
       ),
       "import.meta.env.VITE_CDN_URL": JSON.stringify(config.VITE_CDN_URL),
+      // Baked by the preview build from the public course list. Kept off the
+      // VITE_ env allowlist so a missing value at serve time does not make a
+      // finished build look stale.
+      "import.meta.env.VITE_COURSE_LCP_PRELOAD": JSON.stringify(
+        process.env.VEO_COURSE_LCP_PRELOAD || "",
+      ),
     },
     plugins: [
       earlyHlsPreloadPlugin(),
@@ -354,12 +310,8 @@ export default defineConfig(({ command, mode }) => {
               return "shaka-player";
             }
             const iconName = getPhosphorIconName(id);
-            if (iconName && initialRoutePhosphorIcons.has(iconName))
+            if (iconName && shellPhosphorIcons.has(iconName))
               return "shell-icons";
-            if (iconName && homePhosphorIcons.has(iconName))
-              return "home-icons";
-            if (iconName && settingsPhosphorIcons.has(iconName))
-              return "settings-icons";
             return undefined;
           },
         },

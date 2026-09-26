@@ -1,0 +1,96 @@
+name: Refresh Cloudflare course pages
+run-name: Public pages refresh ${{ inputs.request_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      course_id:
+        description: Course UUID to refresh
+        required: true
+        type: string
+      course_slug:
+        description: Current course slug (optional for public courses)
+        required: false
+        type: string
+      request_id:
+        description: Unique API refresh request ID
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: cloudflare-static-development
+  cancel-in-progress: false
+
+jobs:
+  refresh-and-deploy:
+    name: Render changed course pages and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: development
+
+    steps:
+      - name: Check out the deployment branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: development
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.18.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Find the latest successful Cloudflare web build
+        id: latest-build
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          run_id="$(gh run list --workflow deploy-cloudflare-web.yml --branch development --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          test -n "${run_id}" || { echo "::error::No successful Cloudflare web build artifact is available"; exit 1; }
+          echo "run_id=${run_id}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore the deployed build artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN_ID: ${{ steps.latest-build.outputs.run_id }}
+        run: gh run download "${BUILD_RUN_ID}" --name web-static-build --dir apps/web/build
+
+      - name: Check out the source revision used by that deployed build
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          source_sha="$(tr -d '\r\n' < apps/web/build/deployment-source.sha)"
+          [[ "${source_sha}" =~ ^[a-f0-9]{40}$ ]] || { echo "::error::Build artifact has no valid source revision"; exit 1; }
+          git fetch --no-tags --depth=1 origin "${source_sha}"
+          git checkout --detach FETCH_HEAD
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate only the affected course pages
+        run: pnpm --filter @veolms/web refresh:course-pages
+        env:
+          VEO_PUBLIC_API_BASE_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL }}
+          COURSE_STATIC_COURSE_ID: ${{ inputs.course_id }}
+          COURSE_STATIC_COURSE_SLUG: ${{ inputs.course_slug }}
+
+      - name: Deploy the updated static version to Cloudflare
+        run: pnpm exec wrangler deploy --config wrangler.jsonc
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -81,6 +81,18 @@ export function createCourseController({
     );
   }
 
+  async function getPublicPageRefreshStatus(
+    request: FastifyRequest<{ Params: { id: string } }>,
+  ) {
+    return service.getStaticPageRefreshStatus(request.params.id);
+  }
+
+  async function retryPublicPageRefresh(
+    request: FastifyRequest<{ Params: { id: string } }>,
+  ) {
+    return await service.retryStaticPageRefresh(request.params.id);
+  }
+
   async function updateCourseBasics(
     request: FastifyRequest<{
       Params: { id: string };
@@ -171,6 +183,8 @@ export function createCourseController({
     createCourse,
     listMyCourses,
     getCourseEditor,
+    getPublicPageRefreshStatus,
+    retryPublicPageRefresh,
     updateCourseBasics,
     updateCourseThumbnail,
     updateCourseDetails,

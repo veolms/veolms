@@ -1,0 +1,9 @@
+﻿@import "./styles/themes/palettes.css";
+@import "./styles/global/scrollbars.css";
+@import "./styles/features/courses.css";
+@import "./shell-theme.css";
+@import "./reading-mode.css";
+/* Scrollbar pseudo-elements cannot be expressed with Tailwind. Keep their
+   application-wide preference styles owned by the settings feature. */
+@import "./settings/scrollbars/scrollbarPreferences.css";
+@import "./accessibility/tabFocusVisibility.css";

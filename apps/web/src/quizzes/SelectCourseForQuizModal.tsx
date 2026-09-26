@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  BookOpenIcon as BookOpen,
-  CircleNotchIcon as CircleNotch,
-  MagnifyingGlassIcon as MagnifyingGlass,
-  PlusIcon as Plus,
-  PuzzlePieceIcon as PuzzlePiece,
-  XIcon as X,
-} from "@phosphor-icons/react";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
+import { PuzzlePieceIcon as PuzzlePiece } from "@phosphor-icons/react/PuzzlePiece";
+import { XIcon as X } from "@phosphor-icons/react/X";
 import { useMyCourses } from "../services/courses";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 

@@ -3,8 +3,6 @@
 @import "shadcn/tailwind.css";
 @import "./styles/base/theme-contract.css";
 @import "./styles/base/foundation.css";
-@import "./styles/features/courses.css";
-@import "./styles/features/student-learning.css";
 @import "./styles/components/confirm-delete-modal.css";
 @source "../../../packages/video-player/src";
 @import "./styles/components/toast-notification.css";

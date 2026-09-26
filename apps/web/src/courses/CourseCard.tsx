@@ -23,7 +23,11 @@ import type { Course, CourseRole } from "./catalogue";
 import { CourseActionMenu, MenuAction, MenuDivider } from "./CourseActionMenu";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
 import { preloadCourseOverviewPage } from "./courseOverviewPreload";
-import { COURSE_THUMBNAIL_SIZES } from "./courseThumbnailSizing";
+import {
+  COURSE_THUMBNAIL_SIZES,
+  getCourseThumbnailFallbackUrl,
+  LAZY_COURSE_THUMBNAIL_SIZES,
+} from "./courseThumbnailSizing";
 import type { NavigateTo } from "../routing/navigation";
 
 const courseOverviewPath = (course: Course) =>
@@ -204,11 +208,18 @@ export const CourseCard = memo(function CourseCard({
       >
         {course.thumbnail ? (
           <img
-            src={course.thumbnail}
+            src={getCourseThumbnailFallbackUrl(
+              course.thumbnail,
+              course.thumbnailSrcSet,
+            )}
             srcSet={course.thumbnailSrcSet
               ?.map((variant) => `${variant.url} ${variant.width}w`)
               .join(", ")}
-            sizes={COURSE_THUMBNAIL_SIZES}
+            sizes={
+              imagePriority
+                ? COURSE_THUMBNAIL_SIZES
+                : LAZY_COURSE_THUMBNAIL_SIZES
+            }
             alt={course.title}
             className="h-full w-full object-cover"
             width={960}
