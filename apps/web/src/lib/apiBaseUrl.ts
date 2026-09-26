@@ -1,4 +1,6 @@
-const CONFIGURED_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
+const CONFIGURED_API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL || "/v1"
+).replace(/\/api(?=\/v1\/?$)/u, "");
 
 function isPrivateIpv4Address(hostname: string): boolean {
   const octets = hostname.split(".").map(Number);

@@ -2,6 +2,7 @@ import { Link, useLoaderData } from "react-router";
 import type { CourseListResponse } from "@veolms/contracts";
 import type { LoaderFunctionArgs } from "react-router";
 import { publicCourseApi } from "../lib/public-course-api";
+import { takeEarlyCourseCataloguePrefetch } from "../courses/courseCatalogueBootstrap";
 import { useInfiniteCourses } from "../services/courses";
 
 export function loader({
@@ -13,7 +14,9 @@ export function loader({
 export function clientLoader({
   request,
 }: LoaderFunctionArgs): Promise<CourseListResponse> {
-  return publicCourseApi.list(request);
+  const prefetch = takeEarlyCourseCataloguePrefetch();
+  if (!prefetch) return publicCourseApi.list(request);
+  return prefetch.then((data) => data ?? publicCourseApi.list(request));
 }
 clientLoader.hydrate = true as const;
 
