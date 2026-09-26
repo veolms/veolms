@@ -1,22 +1,37 @@
 import { Link, useLoaderData } from "react-router";
 import type { CourseListResponse } from "@veolms/contracts";
 import type { LoaderFunctionArgs } from "react-router";
-import { publicCourseApi } from "../lib/public-course-api";
+import {
+  isBuildPrerenderRequest,
+  publicCourseApi,
+} from "../lib/public-course-api";
 import { takeEarlyCourseCataloguePrefetch } from "../courses/courseCatalogueBootstrap";
 import { useInfiniteCourses } from "../services/courses";
 
-export function loader({
-  request,
-}: LoaderFunctionArgs): Promise<CourseListResponse> {
-  return publicCourseApi.list(request);
+const EMPTY_PUBLIC_COURSE_LIST: CourseListResponse = {
+  courses: [],
+  nextCursor: null,
+};
+
+async function loadPublicCourses(
+  request: Request,
+): Promise<CourseListResponse> {
+  try {
+    return await publicCourseApi.list(request);
+  } catch (error) {
+    if (isBuildPrerenderRequest()) return EMPTY_PUBLIC_COURSE_LIST;
+    throw error;
+  }
 }
 
-export function clientLoader({
-  request,
-}: LoaderFunctionArgs): Promise<CourseListResponse> {
+export function loader({ request }: LoaderFunctionArgs) {
+  return loadPublicCourses(request);
+}
+
+export async function clientLoader({ request }: LoaderFunctionArgs) {
   const prefetch = takeEarlyCourseCataloguePrefetch();
-  if (!prefetch) return publicCourseApi.list(request);
-  return prefetch.then((data) => data ?? publicCourseApi.list(request));
+  if (!prefetch) return loadPublicCourses(request);
+  return (await prefetch) ?? loadPublicCourses(request);
 }
 clientLoader.hydrate = true as const;
 

@@ -10,7 +10,10 @@ import {
   useState,
 } from "react";
 import { Link } from "react-router";
-import type { CourseListResponse } from "@veolms/contracts";
+import type {
+  CourseListResponse,
+  CourseOverviewResponse,
+} from "@veolms/contracts";
 import type { AuthUser } from "./store/auth.store";
 import { flushSync } from "react-dom";
 import type {
@@ -346,6 +349,7 @@ interface CoursesPageProps {
   renderMain?: ((context: CoursesPageRenderContext) => ReactNode) | null;
   renderSettingsPage?: (props: SettingsPageProps) => ReactNode;
   initialPublishedCourses?: CourseListResponse | null;
+  initialCourseOverview?: CourseOverviewResponse | null;
 }
 
 export interface CoursesPageRenderContext {
@@ -745,6 +749,7 @@ export function CoursesPage({
   renderMain = null,
   renderSettingsPage,
   initialPublishedCourses = null,
+  initialCourseOverview = null,
 }: CoursesPageProps) {
   const [role, setRole] = useState<CourseRole>(() => {
     if (typeof window === "undefined") return "student";
@@ -3580,6 +3585,7 @@ export function CoursesPage({
         <Suspense fallback={<CourseOverviewLoadingFallback />}>
           <CourseOverviewPage
             courseSlug={surfaceCourseSlug}
+            initialOverview={initialCourseOverview ?? undefined}
             onNavigateCourses={() => onNavigatePage("/courses")}
             onNavigatePage={onNavigatePage}
             role={role}

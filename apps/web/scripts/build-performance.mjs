@@ -83,6 +83,8 @@ for (const environmentFile of environmentFiles) {
 
 const readCourseLcpPreload = async (apiBase) => {
   let requestUrl = apiBase;
+  let publicCoursesAvailable = false;
+  let courseSlugs = [];
   try {
     const url = new URL(apiBase);
     if (url.hostname === "localhost") url.hostname = "127.0.0.1";
@@ -96,7 +98,7 @@ const readCourseLcpPreload = async (apiBase) => {
     requestUrl = url.toString();
     const response = await fetch(url, {
       headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(8_000),
+      signal: AbortSignal.timeout(30_000),
     });
     if (!response.ok) {
       throw new Error(`course list returned ${response.status}`);
@@ -109,12 +111,21 @@ const readCourseLcpPreload = async (apiBase) => {
       payload.data
         ? payload.data
         : payload;
-    const courses = Array.isArray(data?.courses) ? data.courses : [];
+    if (!Array.isArray(data?.courses)) {
+      throw new Error("course list response had an invalid shape");
+    }
+    const courses = data.courses;
+    courseSlugs = courses
+      .map((course) => course?.slug)
+      .filter((slug) => typeof slug === "string" && slug.length > 0);
+    publicCoursesAvailable = true;
     const courseIndex = courses.findIndex(
       (item) => item && typeof item.thumbnailUrl === "string",
     );
     const course = courseIndex >= 0 ? courses[courseIndex] : null;
-    if (!course) return "";
+    if (!course) {
+      return { preload: "", courseSlugs };
+    }
     const variants = Array.isArray(course.thumbnailSrcSet)
       ? course.thumbnailSrcSet.filter(
           (variant) =>
@@ -131,24 +142,34 @@ const readCourseLcpPreload = async (apiBase) => {
         .sort((left, right) => left.width - right.width)[0] ||
       variants.sort((left, right) => right.width - left.width)[0];
     const src = preferred?.url || course.thumbnailUrl;
-    if (typeof src !== "string" || !src) return "";
+    if (typeof src !== "string" || !src) {
+      return { preload: "", courseSlugs };
+    }
     const probe = await fetch(src, { signal: AbortSignal.timeout(8_000) });
     await probe.body?.cancel();
     if (!probe.ok) {
       throw new Error(`thumbnail returned ${probe.status}`);
     }
-    return JSON.stringify({
-      src,
-      srcSet: variants
-        .map((variant) => `${variant.url} ${variant.width}w`)
-        .join(", "),
-      index: courseIndex,
-    });
+    return {
+      preload: JSON.stringify({
+        src,
+        srcSet: variants
+          .map((variant) => `${variant.url} ${variant.width}w`)
+          .join(", "),
+        index: courseIndex,
+      }),
+      courseSlugs,
+    };
   } catch (error) {
+    if (!publicCoursesAvailable) {
+      throw new Error(
+        `Could not load the public course catalogue for SSG from ${requestUrl}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
     console.warn(
-      `Course LCP image was not baked into the document (${requestUrl}): ${error instanceof Error ? error.message : String(error)}`,
+      `Course LCP image was not baked into the document: ${error instanceof Error ? error.message : String(error)}`,
     );
-    return "";
+    return { preload: "", courseSlugs };
   }
 };
 
@@ -158,9 +179,14 @@ export const runPerformanceBuild = async (args = process.argv.slice(2)) => {
     (argument) => argument !== FIRST_SECTION_FLAG,
   );
   const scope = firstSectionOnly ? "first-section" : "all-lectures";
-  const courseLcpPreload = await readCourseLcpPreload(
-    process.env.STATIC_BUILD_API_URL || "http://127.0.0.1:4000/v1",
-  );
+  const publicCourseBuildApiBase =
+    process.env.VEO_PUBLIC_API_BASE_URL ||
+    process.env.STATIC_BUILD_API_URL ||
+    "http://127.0.0.1:4000/v1";
+  const {
+    preload: courseLcpPreload,
+    courseSlugs: publicCourseSlugs,
+  } = await readCourseLcpPreload(publicCourseBuildApiBase);
   const stagingBuildDirectory = await mkdtemp(
     path.join(appRoot, ".build-staging-"),
   );
@@ -179,6 +205,8 @@ export const runPerformanceBuild = async (args = process.argv.slice(2)) => {
     VEO_LEARNING_PRERENDER_SCOPE: scope,
     VEO_BUILD_DIRECTORY: stagingBuildDirectoryName,
     VEO_COURSE_LCP_PRELOAD: courseLcpPreload,
+    VEO_PUBLIC_API_BASE_URL: publicCourseBuildApiBase,
+    VEO_PUBLIC_COURSE_SLUGS: JSON.stringify(publicCourseSlugs),
     ...(firstSectionOnly ? { VITE_API_BASE_URL: "/v1" } : {}),
   };
   if (courseLcpPreload) {

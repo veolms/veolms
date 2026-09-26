@@ -420,6 +420,10 @@ interface DraggedLessonState {
 }
 
 const getCurriculumLessonId = (lesson: CurriculumLessonItem) => lesson.id;
+const getCourseWizardScrollElement = (): HTMLElement | null =>
+  typeof document === "undefined"
+    ? null
+    : document.getElementById("course-wizard-tab-panel");
 
 interface LessonDropTarget {
   sectionId: string;
@@ -4056,6 +4060,56 @@ export function CourseCreatePage({
   const [sections, setSections] = useState<CurriculumSectionItem[]>([]);
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
+  const pendingSectionAnchorRef = useRef<{
+    sectionId: string;
+    collapsingSectionId: string;
+    header: HTMLElement;
+    scrollPanel: HTMLElement;
+    top: number;
+    timerId: number;
+    cleanupUserInput: () => void;
+  } | null>(null);
+  useEffect(
+    () => () => {
+      const pendingAnchor = pendingSectionAnchorRef.current;
+      if (!pendingAnchor) return;
+      window.clearTimeout(pendingAnchor.timerId);
+      pendingAnchor.cleanupUserInput();
+      pendingSectionAnchorRef.current = null;
+    },
+    [],
+  );
+  const restoreSectionAnchorAfterCollapse = (collapsingSectionId: string) => {
+    const pendingAnchor = pendingSectionAnchorRef.current;
+    if (
+      !pendingAnchor ||
+      pendingAnchor.collapsingSectionId !== collapsingSectionId
+    ) {
+      return;
+    }
+
+    window.clearTimeout(pendingAnchor.timerId);
+    pendingAnchor.cleanupUserInput();
+    pendingSectionAnchorRef.current = null;
+    if (
+      !pendingAnchor.header.isConnected ||
+      !pendingAnchor.scrollPanel.isConnected ||
+      !sectionsRef.current.some(
+        (section) =>
+          section.id === pendingAnchor.sectionId && section.isExpanded,
+      )
+    ) {
+      return;
+    }
+
+    const currentTop =
+      pendingAnchor.header.getBoundingClientRect().top -
+      pendingAnchor.scrollPanel.getBoundingClientRect().top;
+    const offsetDelta = currentTop - pendingAnchor.top;
+    if (Math.abs(offsetDelta) > 1) {
+      pendingAnchor.scrollPanel.scrollTop += offsetDelta;
+    }
+  };
   const shouldVirtualizeCurriculum = useMemo(
     () =>
       sections.reduce((total, section) => total + section.lessons.length, 0) >=
@@ -4067,13 +4121,15 @@ export function CourseCreatePage({
   useEffect(() => {
     if (activeStep !== "curriculum" || !requestedSectionId) return;
     setSections((previous) => {
+      if (!previous.some((section) => section.id === requestedSectionId)) {
+        return previous;
+      }
       let changed = false;
       const next = previous.map((section) => {
-        if (section.id !== requestedSectionId || section.isExpanded) {
-          return section;
-        }
+        const isExpanded = section.id === requestedSectionId;
+        if (section.isExpanded === isExpanded) return section;
         changed = true;
-        return { ...section, isExpanded: true };
+        return { ...section, isExpanded };
       });
       return changed ? next : previous;
     });
@@ -5247,6 +5303,9 @@ export function CourseCreatePage({
       if (editorData.sections && editorData.sections.length > 0) {
         setSections((prev) => {
           const prevMap = new Map(prev.map((s) => [s.id, s]));
+          const expandedSectionId = prev.find(
+            (section) => section.isExpanded,
+          )?.id;
           const mappedServerSections = editorData.sections.map(
             (sec, secIdx) => {
               const existing = prevMap.get(sec.id);
@@ -5341,7 +5400,9 @@ export function CourseCreatePage({
               return {
                 id: sec.id,
                 title: sec.title,
-                isExpanded: existing ? existing.isExpanded : secIdx === 0,
+                isExpanded: existing
+                  ? existing.isExpanded && existing.id === expandedSectionId
+                  : !expandedSectionId && secIdx === 0,
                 isEditingTitle: existing ? existing.isEditingTitle : false,
                 lessons: [...serverLessons, ...pendingLessons],
               };
@@ -5356,7 +5417,14 @@ export function CourseCreatePage({
             (s) => s.isPendingCreation || !serverSectionIds.has(s.id),
           );
 
-          return [...mappedServerSections, ...pendingSections];
+          const nextSections = [...mappedServerSections, ...pendingSections];
+          const nextExpandedSectionId = nextSections.find(
+            (section) => section.isExpanded,
+          )?.id;
+          return nextSections.map((section) => ({
+            ...section,
+            isExpanded: section.id === nextExpandedSectionId,
+          }));
         });
       }
     } else {
@@ -6493,8 +6561,17 @@ export function CourseCreatePage({
       lessons: [],
     };
 
-    // Show temporary section immediately
-    setSections((prev) => [...prev, optimisticSection]);
+    // Show the new section immediately and keep only one lesson list mounted.
+    setSections((prev) => {
+      const next = [
+        ...prev.map((section) =>
+          section.isExpanded ? { ...section, isExpanded: false } : section,
+        ),
+        optimisticSection,
+      ];
+      sectionsRef.current = next;
+      return next;
+    });
     setIsCreatingSection(true);
 
     let targetCourseId = currentCourseId;
@@ -7387,28 +7464,154 @@ export function CourseCreatePage({
     sectionId?: string | null,
     lessonId?: string | null,
   ) => {
-    void navigate(
-      getCourseEditorPath({
-        mode: isEditing ? "edit" : "create",
-        courseId: activeEditId,
-        step: "curriculum",
-        sectionId,
-        lessonId,
-      }),
-    );
+    const destination = getCourseEditorPath({
+      mode: isEditing ? "edit" : "create",
+      courseId: activeEditId,
+      step: "curriculum",
+      sectionId,
+      lessonId,
+    });
+    const currentPath = `${location.pathname}${location.search}`;
+    if (currentPath === destination) return;
+
+    if (onNavigatePage) {
+      onNavigatePage(destination, {
+        preserveScroll: true,
+        skipAutosync: true,
+      });
+      return;
+    }
+
+    void navigate(destination, { preventScrollReset: true });
   };
 
-  const handleToggleSectionExpand = async (sectionId: string) => {
+  const handleToggleSectionExpand = async (
+    sectionId: string,
+    clickedSectionHeader?: HTMLElement | null,
+  ) => {
+    const previousAnchor = pendingSectionAnchorRef.current;
+    if (previousAnchor) {
+      window.clearTimeout(previousAnchor.timerId);
+      previousAnchor.cleanupUserInput();
+      pendingSectionAnchorRef.current = null;
+    }
+
     const currentSections = sectionsRef.current || sections;
     const sec = currentSections.find((s) => s.id === sectionId);
     if (!sec) return;
 
     // 1. When the section is being EXPANDED:
     if (!sec.isExpanded) {
-      setSections((prev) => {
-        const next = prev.map((s) =>
-          s.id === sectionId ? { ...s, isExpanded: true } : s,
+      const scrollPanel = getCourseWizardScrollElement();
+      const header = clickedSectionHeader ?? null;
+      const dirtyLessons = currentSections
+        .filter((section) => section.id !== sectionId && section.isExpanded)
+        .flatMap((section) =>
+          section.lessons
+            .filter(
+              (lesson) =>
+                isLessonDirty(lesson) && !lesson.isPendingCreation,
+            )
+            .map((lesson) => ({ sectionId: section.id, lessonId: lesson.id })),
         );
+
+      if (
+        dirtyLessons.length > 0 &&
+        (isCollapsingSectionRef.current || isSavingAllDirtyLessonsRef.current)
+      ) {
+        return;
+      }
+
+      if (dirtyLessons.length > 0) {
+        isCollapsingSectionRef.current = true;
+        try {
+          for (const dirtyLesson of dirtyLessons) {
+            const success = await persistLesson(
+              dirtyLesson.sectionId,
+              dirtyLesson.lessonId,
+              { collapseOnSuccess: true },
+            );
+            if (!success) return;
+          }
+        } finally {
+          isCollapsingSectionRef.current = false;
+        }
+      }
+
+      const previouslyExpandedSection = currentSections.find(
+        (section) => section.id !== sectionId && section.isExpanded,
+      );
+
+      if (scrollPanel && header && previouslyExpandedSection) {
+        let userCancelledRestore = false;
+        const pendingAnchor = {
+          sectionId,
+          collapsingSectionId: previouslyExpandedSection.id,
+          header,
+          scrollPanel,
+          top:
+            header.getBoundingClientRect().top -
+            scrollPanel.getBoundingClientRect().top,
+          timerId: 0,
+          cleanupUserInput: () => {},
+        };
+        const removeUserInputListeners = () => {
+          scrollPanel.removeEventListener("wheel", cancelOnUserInput);
+          scrollPanel.removeEventListener("touchstart", cancelOnUserInput);
+          scrollPanel.removeEventListener("pointerdown", cancelOnUserInput);
+          scrollPanel.removeEventListener("keydown", cancelOnUserInput);
+        };
+        const cancelOnUserInput = () => {
+          userCancelledRestore = true;
+          if (pendingSectionAnchorRef.current !== pendingAnchor) return;
+          window.clearTimeout(pendingAnchor.timerId);
+          removeUserInputListeners();
+          pendingSectionAnchorRef.current = null;
+        };
+        pendingAnchor.cleanupUserInput = removeUserInputListeners;
+        pendingSectionAnchorRef.current = pendingAnchor;
+        scrollPanel.addEventListener("wheel", cancelOnUserInput, {
+          passive: true,
+        });
+        scrollPanel.addEventListener("touchstart", cancelOnUserInput, {
+          passive: true,
+        });
+        scrollPanel.addEventListener("pointerdown", cancelOnUserInput);
+        scrollPanel.addEventListener("keydown", cancelOnUserInput);
+        pendingAnchor.timerId = window.setTimeout(
+          () =>
+            restoreSectionAnchorAfterCollapse(
+              previouslyExpandedSection.id,
+            ),
+          500,
+        );
+
+        // With reduced motion there may be no transitionend event to wait for.
+        window.requestAnimationFrame(() => {
+          const collapsingBody = Array.from(
+            document.querySelectorAll<HTMLElement>(
+              "[data-curriculum-section-body]",
+            ),
+          ).find(
+            (body) =>
+              body.dataset.curriculumSectionBody ===
+              previouslyExpandedSection.id,
+          );
+          const duration = collapsingBody
+            ? Number.parseFloat(
+                window.getComputedStyle(collapsingBody).transitionDuration,
+              )
+            : 0;
+          if (userCancelledRestore || duration > 0) return;
+          restoreSectionAnchorAfterCollapse(previouslyExpandedSection.id);
+        });
+      }
+
+      setSections((prev) => {
+        const next = prev.map((s) => ({
+          ...s,
+          isExpanded: s.id === sectionId,
+        }));
         sectionsRef.current = next;
         return next;
       });
@@ -10816,8 +11019,11 @@ export function CourseCreatePage({
                   >
                     {/* Section Header */}
                     <div
+                      data-curriculum-section-header={sec.id}
                       className="flex items-center justify-between px-[18px] py-3.5 bg-[color-mix(in_srgb,var(--text)_2%,transparent)] select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]"
-                      onClick={() => handleToggleSectionExpand(sec.id)}
+                      onClick={(event) =>
+                        handleToggleSectionExpand(sec.id, event.currentTarget)
+                      }
                       title="Click to toggle section"
                     >
                       <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
@@ -11023,7 +11229,12 @@ export function CourseCreatePage({
                           }
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleToggleSectionExpand(sec.id);
+                            handleToggleSectionExpand(
+                              sec.id,
+                              e.currentTarget.closest<HTMLElement>(
+                                "[data-curriculum-section-header]",
+                              ),
+                            );
                           }}
                         >
                           <CaretDown size={15} />
@@ -11033,6 +11244,16 @@ export function CourseCreatePage({
 
                     {/* Section Body with CSS expand transition */}
                     <div
+                      data-curriculum-section-body={sec.id}
+                      onTransitionEnd={(event) => {
+                        if (
+                          event.target !== event.currentTarget ||
+                          event.propertyName !== "grid-template-rows"
+                        ) {
+                          return;
+                        }
+                        restoreSectionAnchorAfterCollapse(sec.id);
+                      }}
                       className={`grid transition-[grid-template-rows] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                         sec.isExpanded
                           ? "is-open grid-rows-[1fr]"
@@ -11050,6 +11271,7 @@ export function CourseCreatePage({
                           <VirtualizedLessonList
                             items={sec.lessons}
                             forceVirtualized={shouldVirtualizeCurriculum}
+                            getScrollElement={getCourseWizardScrollElement}
                             getItemKey={getCurriculumLessonId}
                             pinnedItemIds={virtualPinnedLessonIds}
                             onItemFocusChange={handleLessonFocusChange}

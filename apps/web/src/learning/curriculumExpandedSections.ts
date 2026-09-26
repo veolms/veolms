@@ -10,14 +10,15 @@ export function getInitialCurriculumExpandedSections(
 ): number[] {
   const sectionIds = sections.map(({ id }) => id);
   if (options.expandAllSections) return [...sectionIds];
+  const currentSection = sections.find((section) =>
+    section.lessons.some(([number]) => number === selectedLesson),
+  );
   if (options.hideHero) {
-    const currentSection = sections.find((section) =>
-      section.lessons.some(([number]) => number === selectedLesson),
-    );
     if (currentSection) return [currentSection.id];
     return sectionIds.length > 0 ? [sectionIds[0]!] : [];
   }
-  return [1, 2];
+  if (currentSection) return [currentSection.id];
+  return sectionIds.length > 0 ? [sectionIds[0]!] : [1];
 }
 
 export function getCurriculumSectionForLesson(

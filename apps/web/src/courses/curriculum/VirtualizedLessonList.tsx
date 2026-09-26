@@ -29,6 +29,7 @@ interface VirtualizedLessonListProps<T> {
   forceVirtualized?: boolean;
   estimatedItemSize?: number;
   itemGap?: number;
+  getScrollElement?: () => HTMLElement | null;
   getItemKey: (item: T) => string;
   pinnedItemIds: ReadonlySet<string>;
   onItemFocusChange?: (itemId: string, focused: boolean) => void;
@@ -58,6 +59,7 @@ export function VirtualizedLessonList<T>({
   forceVirtualized = false,
   estimatedItemSize = LESSON_ROW_ESTIMATE,
   itemGap = LESSON_ROW_GAP,
+  getScrollElement: getScrollElementOverride,
   getItemKey,
   pinnedItemIds,
   onItemFocusChange,
@@ -72,22 +74,24 @@ export function VirtualizedLessonList<T>({
   } | null>(null);
   const virtualized =
     items.length >= VIRTUALIZE_AFTER || (forceVirtualized && items.length > 0);
+  const getScrollElement =
+    getScrollElementOverride ?? getApplicationScrollElement;
 
   useLayoutEffect(() => {
     const syncScrollMode = () => {
-      setUseWindowScroll(getApplicationScrollElement() === null);
+      setUseWindowScroll(getScrollElement() === null);
     };
 
     syncScrollMode();
     window.addEventListener("resize", syncScrollMode);
     return () => window.removeEventListener("resize", syncScrollMode);
-  }, []);
+  }, [getScrollElement]);
 
   useLayoutEffect(() => {
     const syncScrollMargin = () => {
       const next = getListScrollMargin(
         listRef.current,
-        useWindowScroll ? null : getApplicationScrollElement(),
+        useWindowScroll ? null : getScrollElement(),
       );
       setScrollMargin((current) =>
         Math.abs(current - next) > 1 ? next : current,
@@ -97,7 +101,7 @@ export function VirtualizedLessonList<T>({
     syncScrollMargin();
     window.addEventListener("resize", syncScrollMargin);
     return () => window.removeEventListener("resize", syncScrollMargin);
-  }, [items.length, renderItem, useWindowScroll]);
+  }, [getScrollElement, items.length, renderItem, useWindowScroll]);
 
   const indexById = useMemo(() => {
     const indexes = new Map<string, number>();
@@ -173,7 +177,7 @@ export function VirtualizedLessonList<T>({
     count: virtualized && !useWindowScroll ? items.length : 0,
     estimateSize: () => estimatedItemSize + itemGap,
     getItemKey: itemKey,
-    getScrollElement: () => getApplicationScrollElement(),
+    getScrollElement,
     overscan: LESSON_ROW_OVERSCAN,
     rangeExtractor,
     scrollMargin: useWindowScroll ? 0 : scrollMargin,

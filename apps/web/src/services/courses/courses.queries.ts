@@ -36,7 +36,8 @@ export function useCourses(options?: {
     // catalogue request during the initial course-page hydration.
     initialDataUpdatedAt: hasStaticData ? Date.now() : undefined,
     refetchOnMount: hasStaticData ? false : undefined,
-    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: hasStaticData ? false : undefined,
+    staleTime: hasStaticData ? Number.POSITIVE_INFINITY : 5 * 60 * 1000,
   });
 }
 
@@ -93,7 +94,10 @@ export function useCourse(slug: string) {
 
 export function useCourseOverview(
   idOrSlug: string | null | undefined,
-  options?: { enabled?: boolean },
+  options?: {
+    enabled?: boolean;
+    initialData?: CourseOverviewResponse;
+  },
 ) {
   return useQuery<CourseOverviewResponse, ApiError>({
     queryKey: idOrSlug
@@ -101,7 +105,10 @@ export function useCourseOverview(
       : ["courses", "overview", null],
     queryFn: () => coursesService.getOverview(idOrSlug!),
     enabled: Boolean(idOrSlug && (options?.enabled ?? true)),
-    staleTime: 60 * 1000,
+    initialData: options?.initialData,
+    initialDataUpdatedAt: options?.initialData ? Date.now() : undefined,
+    refetchOnMount: options?.initialData ? false : undefined,
+    staleTime: options?.initialData ? Number.POSITIVE_INFINITY : 60 * 1000,
     retry: false,
   });
 }

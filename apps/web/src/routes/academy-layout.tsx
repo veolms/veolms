@@ -18,7 +18,10 @@ import {
   useParams,
   useRouteLoaderData,
 } from "react-router";
-import type { CourseListResponse } from "@veolms/contracts";
+import type {
+  CourseListResponse,
+  CourseOverviewResponse,
+} from "@veolms/contracts";
 import "../academy-shell.css";
 import { CoursesPage } from "../CoursesPage";
 import {
@@ -327,6 +330,8 @@ export default function AcademyLayout() {
     { publicCourses?: CourseListResponse | null } | undefined;
   const rootCourseRouteData = useRouteLoaderData("root-courses") as
     { publicCourses?: CourseListResponse | null } | undefined;
+  const courseOverviewRouteData = useRouteLoaderData("course-overview") as
+    { publicCourseOverview?: CourseOverviewResponse | null } | undefined;
   const prerenderedPublicCourses =
     courseRouteData?.publicCourses ??
     rootCourseRouteData?.publicCourses ??
@@ -1302,6 +1307,9 @@ export default function AcademyLayout() {
           activeUser={activeUser ?? null}
           authUserFetched={authUserFetched}
           initialPublishedCourses={prerenderedPublicCourses}
+          initialCourseOverview={
+            courseOverviewRouteData?.publicCourseOverview ?? null
+          }
           page={route.page}
           section={route.section}
           settingsTab={route.settingsTab}

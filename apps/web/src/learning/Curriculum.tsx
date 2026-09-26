@@ -29,6 +29,7 @@ import {
 import type { LessonDrawerHeroControlProps } from "./useLessonDrawerHeroControl";
 import { CurriculumLessonRows } from "./CurriculumLessonRows";
 import { useCurriculumLayoutRevision } from "./useCurriculumLayoutRevision";
+import { useCurriculumSectionScrollAnchor } from "./useCurriculumSectionScrollAnchor";
 
 const LESSON_PROGRESS_COMPLETE_THRESHOLD = 99.5;
 const EMPTY_LESSON_PROGRESS: Readonly<Record<number, number>> = {};
@@ -99,6 +100,10 @@ export function Curriculum({
     controlledExpandedSectionIds ?? uncontrolledExpandedSectionIds;
   const expandedRef = useRef(expanded);
   expandedRef.current = expanded;
+  const isSectionExpanded = useCallback(
+    (sectionId: number) => expandedRef.current.includes(sectionId),
+    [],
+  );
   const setExpanded = useCallback(
     (
       value:
@@ -136,6 +141,8 @@ export function Curriculum({
   const lessonListRef = useRef<HTMLDivElement>(null);
   const layoutRevision = useCurriculumLayoutRevision(lessonListRef);
   const curriculumRef = useRef<HTMLElement>(null);
+  const { prepareSectionChange, handleCollapseTransitionEnd } =
+    useCurriculumSectionScrollAnchor(curriculumRef, isSectionExpanded);
   const contextMenuPortalHostRef = useRef<HTMLElement | null>(null);
   const scrollControlRef = useRef<ElasticScrollerHandle>(null);
   const handledFocusRequestRef = useRef(0);
@@ -152,6 +159,12 @@ export function Curriculum({
   );
   const currentLesson =
     lessonsById?.get(selectedLesson) || lessonsById?.get(1) || fallbackLesson;
+  const shouldVirtualizeCurriculum = useMemo(
+    () =>
+      sections.reduce((total, section) => total + section.lessons.length, 0) >=
+      80,
+    [sections],
+  );
   useEffect(() => {
     if (expandAllSections || !hideHero || isExpandedControlled) return;
     if (
@@ -256,9 +269,7 @@ export function Curriculum({
     sectionId: number,
   ) => {
     setSearchOpen(false);
-    setExpanded((current) =>
-      current.includes(sectionId) ? current : [...current, sectionId],
-    );
+    setExpanded([sectionId]);
 
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
@@ -330,12 +341,18 @@ export function Curriculum({
     lessonList.style.setProperty("--curriculum-reveal-space", "0px");
   }, [selectedLesson]);
 
-  const toggleSection = (id: number) => {
-    setExpanded((current) =>
-      current.includes(id)
-        ? current.filter((item) => item !== id)
-        : [...current, id],
+  const toggleSection = (id: number, header: HTMLElement) => {
+    if (expandedRef.current.includes(id)) {
+      setExpanded((current) => current.filter((item) => item !== id));
+      return;
+    }
+
+    prepareSectionChange(
+      id,
+      expandedRef.current.filter((sectionId) => sectionId !== id),
+      header,
     );
+    setExpanded([id]);
   };
 
   useEffect(() => {
@@ -343,11 +360,7 @@ export function Curriculum({
       return undefined;
 
     handledFocusRequestRef.current = focusRequest;
-    setExpanded((current) =>
-      current.includes(currentSection.id)
-        ? current
-        : [...current, currentSection.id],
-    );
+    setExpanded([currentSection.id]);
 
     let firstFrame: number;
     let secondFrame: number | undefined;
@@ -633,7 +646,9 @@ export function Curriculum({
                 >
                   <button
                     type="button"
-                    onClick={() => toggleSection(section.id)}
+                    onClick={(event) =>
+                      toggleSection(section.id, event.currentTarget)
+                    }
                     aria-expanded={isOpen}
                     className="learning-curriculum__section-toggle"
                   >
@@ -652,6 +667,25 @@ export function Curriculum({
                   </button>
                   {matchingLessons.length > 0 && (
                     <div
+                      data-curriculum-section-panel={section.id}
+                      onTransitionEnd={(event) => {
+                        if (
+                          event.target !== event.currentTarget ||
+                          event.propertyName !== "grid-template-rows"
+                        ) {
+                          return;
+                        }
+                        handleCollapseTransitionEnd(section.id);
+                      }}
+                      onTransitionCancel={(event) => {
+                        if (
+                          event.target !== event.currentTarget ||
+                          event.propertyName !== "grid-template-rows"
+                        ) {
+                          return;
+                        }
+                        handleCollapseTransitionEnd(section.id);
+                      }}
                       className={`learning-curriculum__section-lessons ${isOpen ? "is-open" : ""}`}
                       aria-hidden={!isOpen ? true : undefined}
                       inert={!isOpen ? true : undefined}
@@ -666,6 +700,7 @@ export function Curriculum({
                             lessonProgress={lessonProgress}
                             onSelectLesson={onSelectLesson}
                             isLessonAvailable={isLessonAvailable}
+                            forceVirtualized={shouldVirtualizeCurriculum}
                             onClose={onClose}
                             activeLessonRef={activeLessonRef}
                             scrollportRef={curriculumRef}

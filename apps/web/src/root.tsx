@@ -1,5 +1,12 @@
 import { useLayoutEffect, type ReactNode } from "react";
-import { Links, Meta, Outlet, Scripts, useLocation } from "react-router";
+import {
+  Links,
+  Meta,
+  Outlet,
+  Scripts,
+  useLocation,
+  useRouteLoaderData,
+} from "react-router";
 import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
 import { fullAppStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
@@ -161,6 +168,13 @@ export function Layout({ children }: LayoutProps) {
   // the server uses the deterministic defaults above.
   const initialLayoutDomState = getInitialLayoutDomState();
   const location = useLocation();
+  const courseRouteData = useRouteLoaderData("courses") as
+    { publicCourses?: { courses?: unknown } | null } | undefined;
+  const rootCourseRouteData = useRouteLoaderData("root-courses") as
+    { publicCourses?: { courses?: unknown } | null } | undefined;
+  const staticPublicCourses =
+    courseRouteData?.publicCourses ?? rootCourseRouteData?.publicCourses;
+  const hasStaticCourseData = Array.isArray(staticPublicCourses?.courses);
   const courseLcp = isCoursesDocumentPath(location.pathname)
     ? readPrerenderedCourseLcp()
     : null;
@@ -257,6 +271,7 @@ export function Layout({ children }: LayoutProps) {
           dangerouslySetInnerHTML={{
             __html: getEarlyCourseCatalogueScript(
               getApiRequestUrl("courses?limit=50"),
+              hasStaticCourseData || !isCoursesDocumentPath(location.pathname),
             ),
           }}
         />

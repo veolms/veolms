@@ -114,6 +114,7 @@ interface CurriculumLessonRowsProps {
   sectionId: number;
   sectionTitle: string;
   lessons: readonly Lesson[];
+  forceVirtualized?: boolean;
   selectedLesson: number;
   lessonProgress: Readonly<Record<number, number>>;
   onSelectLesson: (lessonNumber: number) => void;
@@ -125,7 +126,10 @@ interface CurriculumLessonRowsProps {
 }
 
 export function CurriculumLessonRows(props: CurriculumLessonRowsProps) {
-  if (props.lessons.length < VIRTUALIZED_LESSON_THRESHOLD) {
+  if (
+    !props.forceVirtualized &&
+    props.lessons.length < VIRTUALIZED_LESSON_THRESHOLD
+  ) {
     return (
       <>
         {props.lessons.map((lesson) => (

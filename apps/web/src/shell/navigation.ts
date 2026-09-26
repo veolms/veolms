@@ -154,9 +154,8 @@ export function getPublicNavigationItems(): readonly NavigationItem[] {
 }
 
 /**
- * Sidebar items for the current session. The navigation endpoint is the sole
- * source of truth for effective menus and RBAC visibility; `/auth/me` only
- * supplies identity/session data.
+ * Server menus control RBAC visibility. If the endpoint has no menu data,
+ * expose only the public Courses and Settings links.
  */
 export function resolveShellNavigation(
   menus: readonly AuthMenuNode[] | null | undefined,
@@ -164,6 +163,10 @@ export function resolveShellNavigation(
   items: readonly NavigationItemWithMetadata[];
   isDefault: boolean;
 } {
+  if (!menus?.length) {
+    return { items: publicNavigation, isDefault: true };
+  }
+
   const serverItems = getNavigationItemsFromMenus(menus);
   const hasStaffMenus = serverItems.some(([label]) =>
     ["Dashboard", "Courses", "Students", "Analytics", "Orders", "Quizzes", "Reviews"].includes(label),

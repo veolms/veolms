@@ -38,7 +38,6 @@ import {
 } from "./catalogue";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
 import type { CourseSection } from "../learning/courseContent";
-import { VirtualizedLessonList } from "./curriculum/VirtualizedLessonList";
 import {
   getCoursePlayerLaunchPath,
   getCoursePlayerPath,
@@ -58,10 +57,6 @@ import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMark
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
 import { formatDuration, resolveCourseDurationSeconds } from "./courseAdapter";
 
-const OVERVIEW_VIRTUALIZATION_THRESHOLD = 80;
-const NO_PINNED_LESSONS: ReadonlySet<string> = new Set();
-const getOverviewLessonKey = (lesson: CourseSection["lessons"][number]) =>
-  String(lesson[0]);
 // ─── Helpers for Currency, Sale Window, Language, and Price Sizing ────────────
 
 export type PriceSizeVariant = "normal" | "medium" | "large" | "xlarge";
@@ -284,7 +279,6 @@ interface CurriculumSectionProps {
   isOpen: boolean;
   onToggle: () => void;
   onSelectLesson?: (lessonNumber: number) => void;
-  shouldVirtualizeLessons?: boolean;
   isReadOnlyPreview?: boolean;
   isPaidCourse?: boolean;
 }
@@ -301,7 +295,6 @@ function CurriculumSectionItem({
   isOpen,
   onToggle,
   onSelectLesson,
-  shouldVirtualizeLessons = false,
   isReadOnlyPreview = false,
   isPaidCourse = false,
 }: CurriculumSectionProps) {
@@ -421,109 +414,7 @@ function CurriculumSectionItem({
           <div className="overflow-hidden min-h-0">
             <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,var(--text))]">
               {section.lessons.length > 0 ? (
-                shouldVirtualizeLessons ? (
-                  <VirtualizedLessonList
-                    items={section.lessons}
-                    forceVirtualized
-                    estimatedItemSize={46}
-                    itemGap={0}
-                    getItemKey={getOverviewLessonKey}
-                    pinnedItemIds={NO_PINNED_LESSONS}
-                    renderItem={renderLesson}
-                  />
-                ) : (
-                section.lessons.map(
-                  ([
-                    number,
-                    title,
-                    duration,
-                    status,
-                    isPreview,
-                    contentType,
-                  ]) => {
-                    const isDoc = contentType === "document";
-                    const isQuiz = contentType === "quiz";
-                    return (
-                      <button
-                        type="button"
-                        className={`group/lesson flex items-center gap-3 w-full min-h-11.5 border-0 bg-transparent px-4.5 py-1.5 text-(--text-secondary) text-[0.85rem] text-left transition-colors duration-140 ${
-                          isReadOnlyPreview
-                            ? "cursor-default opacity-85 hover:bg-transparent hover:text-(--text-secondary)"
-                            : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-inset"
-                        }`}
-                        key={number}
-                        disabled={isReadOnlyPreview}
-                        onClick={() => {
-                          if (isReadOnlyPreview) return;
-                          onSelectLesson?.(number);
-                        }}
-                        aria-label={`Lesson ${number}: ${title}${duration ? `, ${duration}` : ""}`}
-                      >
-                        {/* Content type icon */}
-                        <span
-                          className={`inline-flex w-5 shrink-0 items-center justify-center text-(--muted) transition-colors duration-140 ${
-                            isReadOnlyPreview
-                              ? ""
-                              : "group-hover/lesson:text-(--accent)"
-                          }`}
-                          aria-hidden="true"
-                        >
-                          {isDoc ? (
-                            <FileText size={16} weight="regular" />
-                          ) : isQuiz ? (
-                            <Question size={16} weight="regular" />
-                          ) : (
-                            <PlayCircle size={16} weight="regular" />
-                          )}
-                        </span>
-
-                        {/* Lesson title */}
-                        <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-(--text-secondary)">
-                          {title}
-                        </span>
-
-                        {/* Duration */}
-                        {duration ? (
-                          <span className="text-(--muted) text-[0.78rem] shrink-0 w-11.25 text-right">
-                            {duration}
-                          </span>
-                        ) : null}
-
-                        {/* Free preview badge: only displayed when course is paid and lesson is marked as free preview */}
-                        {isPaidCourse && isPreview ? (
-                          <span
-                            className="shrink-0 inline-flex items-center rounded-[5px] px-[6px] py-[2px] text-[0.7rem] font-[700] leading-none bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent) border border-[color-mix(in_srgb,var(--accent)_30%,transparent)]"
-                            aria-label="Free preview"
-                          >
-                            Free
-                          </span>
-                        ) : null}
-
-                        {/* Progress status */}
-                        {status === "done" ? (
-                          <span
-                            className="inline-flex items-center justify-center shrink-0"
-                            aria-hidden="true"
-                          >
-                            <CheckCircle
-                              size={16}
-                              weight="fill"
-                              className="text-[#10b981]"
-                            />
-                          </span>
-                        ) : status === "todo" ? (
-                          <span
-                            className="inline-flex items-center justify-center shrink-0"
-                            aria-hidden="true"
-                          >
-                            <Circle size={16} className="text-(--muted)" />
-                          </span>
-                        ) : null}
-                      </button>
-                    );
-                  },
-                )
-                )
+                section.lessons.map(renderLesson)
               ) : (
                 <div className="px-3.5 py-3 text-(--muted) text-[0.82rem] italic">
                   No lessons added yet
@@ -1703,9 +1594,6 @@ function CourseCurriculumCard({
               isOpen={openSections.has(index)}
               onToggle={() => onToggleSection(index)}
               onSelectLesson={onSelectLesson}
-              shouldVirtualizeLessons={
-                course.lectures >= OVERVIEW_VIRTUALIZATION_THRESHOLD
-              }
               isReadOnlyPreview={isReadOnlyPreview}
               isPaidCourse={isPaidCourse}
             />
@@ -1720,6 +1608,7 @@ function CourseCurriculumCard({
 
 export interface CourseOverviewPageProps {
   courseSlug?: string | undefined;
+  initialOverview?: CourseOverviewResponse;
   onNavigateCourses?: () => void;
   onNavigatePage?: NavigateTo;
   onSelectLesson?: (lessonNumber: number) => void;
@@ -2058,6 +1947,7 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
     courseSlug,
     {
       enabled: !props.previewData && !props.customCourse && Boolean(courseSlug),
+      initialData: props.initialOverview,
     },
   );
 

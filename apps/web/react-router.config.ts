@@ -22,6 +22,26 @@ const staticApplicationPages = [
   "/settings/account",
 ];
 
+const publicCourseSlugs: string[] = (() => {
+  try {
+    const value: unknown = JSON.parse(
+      process.env.VEO_PUBLIC_COURSE_SLUGS || "[]",
+    );
+    return Array.isArray(value)
+      ? value.filter(
+          (slug): slug is string =>
+            typeof slug === "string" && /^[a-z0-9-]+$/i.test(slug),
+        )
+      : [];
+  } catch {
+    return [];
+  }
+})();
+
+const publicCourseOverviewPages = publicCourseSlugs.map(
+  (slug) => `/courses/${encodeURIComponent(slug)}/overview`,
+);
+
 const learningPrerenderScope =
   process.env.VEO_LEARNING_PRERENDER_SCOPE === "first-section"
     ? "first-section"
@@ -43,7 +63,11 @@ const prerenderConfig = {
   // loader; development stays focused on it and the small Tailwind CSS course.
   paths: isDevelopment
     ? developmentPrerenderPaths
-    : [...staticApplicationPages, ...staticLearningPages],
+    : [
+        ...staticApplicationPages,
+        ...publicCourseOverviewPages,
+        ...staticLearningPages,
+      ],
   concurrency: 1,
   timeout: 120_000,
   retryCount: 2,

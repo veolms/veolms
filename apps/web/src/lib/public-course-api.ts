@@ -11,7 +11,9 @@ function resolveApiUrl(requestUrl: string, path: string): URL {
   const runtimeBase = (globalThis as RuntimeProcess).process?.env
     ?.VEO_PUBLIC_API_BASE_URL;
   const configuredBase = (
-    runtimeBase || import.meta.env.VITE_API_BASE_URL || "/v1"
+    runtimeBase ||
+    import.meta.env.VITE_API_BASE_URL ||
+    "/v1"
   ).replace(/\/api(?=\/v1\/?$)/u, "");
   const normalizedBase = configuredBase.endsWith("/")
     ? configuredBase
@@ -19,15 +21,19 @@ function resolveApiUrl(requestUrl: string, path: string): URL {
   return new URL(path.replace(/^\/+/, ""), new URL(normalizedBase, requestUrl));
 }
 
-function isBuildPrerenderWithoutPublicApi(): boolean {
+export function isBuildPrerenderRequest(): boolean {
+  const runtimeEnv = (globalThis as RuntimeProcess).process?.env;
+  return Boolean(
+    runtimeEnv?.IS_RR_BUILD_REQUEST === "yes" ||
+    Boolean(runtimeEnv?.VEO_BUILD_DIRECTORY),
+  );
+}
+
+export function isBuildPrerenderWithoutPublicApi(): boolean {
   const runtimeEnv = (globalThis as RuntimeProcess).process?.env;
   // Browser API config does not opt build-time prerenders into public API I/O.
   // Only the explicit server-side public API override enables these requests.
-  return Boolean(
-    (runtimeEnv?.IS_RR_BUILD_REQUEST === "yes" ||
-      Boolean(runtimeEnv?.VEO_BUILD_DIRECTORY)) &&
-    !runtimeEnv.VEO_PUBLIC_API_BASE_URL,
-  );
+  return isBuildPrerenderRequest() && !runtimeEnv?.VEO_PUBLIC_API_BASE_URL;
 }
 
 async function requestPublicData<T>(

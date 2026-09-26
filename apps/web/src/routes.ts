@@ -2,14 +2,18 @@ import type { RouteConfig } from "@react-router/dev/routes";
 import { index, layout, route } from "@react-router/dev/routes";
 
 const marker = "routes/academy-marker.tsx";
+const courseCatalogueMarker = "routes/course-catalogue-marker.tsx";
 const homeMarker = "routes/home-marker.tsx";
 
 export default [
   layout("routes/academy-layout.tsx", { id: "academy-layout" }, [
-    index(marker, { id: "root-courses" }),
+    index(courseCatalogueMarker, { id: "root-courses" }),
     route("home", homeMarker, { id: "home-alias", caseSensitive: true }),
     route("dashboard", homeMarker, { id: "dashboard", caseSensitive: true }),
-    route("courses", marker, { id: "courses", caseSensitive: true }),
+    route("courses", courseCatalogueMarker, {
+      id: "courses",
+      caseSensitive: true,
+    }),
     route("courses/create", marker, {
       id: "course-create",
       caseSensitive: true,
@@ -86,7 +90,7 @@ export default [
       caseSensitive: true,
     }),
     route("logout", marker, { id: "logout", caseSensitive: true }),
-    route("courses/:courseSlug/overview", marker, {
+    route("courses/:courseSlug/overview", courseCatalogueMarker, {
       id: "course-overview",
       caseSensitive: true,
     }),
