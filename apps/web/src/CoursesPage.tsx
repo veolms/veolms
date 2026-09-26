@@ -2722,6 +2722,7 @@ export function CoursesPage({
       SIDEBAR_COLLAPSED_WIDTH + SIDEBAR_CONTENT_REVEAL_DISTANCE;
   const sidebarClassName = [
     "courses-app",
+    isDashboardRoute ? "courses-app--dashboard" : "",
     sidebarVisuallyCollapsed ? "courses-app--collapsed" : "",
     sidebarPresentedAsOverlay ? "courses-app--hidden" : "",
     sidebarPresentedAsOverlay && edgeSidebarOpen
@@ -3347,6 +3348,7 @@ export function CoursesPage({
         <CreatorDashboard
           onNavigatePage={onNavigatePage}
           academyTheme={appliedAcademyTheme}
+          resolvedTheme={resolvedTheme}
         />
       );
     }

@@ -1,5 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import {
+  memo,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import type { PointerEvent, ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type {
   DashboardRange,
   DashboardRevenueOverview,
@@ -7,6 +15,7 @@ import type {
   DashboardYourCourse,
 } from "@veolms/contracts";
 import { ArrowDownRightIcon as ArrowDownRight } from "@phosphor-icons/react/ArrowDownRight";
+import { ArrowClockwiseIcon as ArrowClockwise } from "@phosphor-icons/react/ArrowClockwise";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/ArrowUpRight";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
@@ -22,9 +31,12 @@ import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import type { Icon } from "@phosphor-icons/react";
 import { handleRovingTabKeyDown } from "./accessibility/rovingTabFocus";
-import { useDashboard } from "./services/analytics";
-import { useRecentEnrollments } from "./services/enrollments";
-import { useDashboardRecentDiscussions } from "./services/learning-interactions";
+import { analyticsKeys, useDashboard } from "./services/analytics";
+import { enrollmentKeys, useRecentEnrollments } from "./services/enrollments";
+import {
+  learningInteractionKeys,
+  useDashboardRecentDiscussions,
+} from "./services/learning-interactions";
 import { adaptDiscussionWorkspaceItem } from "./workspace/discussions-workspace.adapter";
 import { formatRelativeTime } from "./learning/learning-notes.adapter";
 import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
@@ -42,8 +54,12 @@ interface DashboardPanelProps {
   action?: string;
   onAction?: () => void;
   infoLabel?: string;
+  infoTitle?: string;
+  infoDescription?: string;
   children: ReactNode;
 }
+
+type InfoPopoverPlacement = "top" | "left" | "bottom";
 
 interface DataCanvasProps {
   kind: "revenue" | "activity";
@@ -66,6 +82,7 @@ interface NavigateProps {
 
 interface CreatorDashboardProps extends NavigateProps {
   academyTheme?: string;
+  resolvedTheme?: "light" | "dark";
 }
 
 function Trend({
@@ -180,28 +197,57 @@ function EnrollmentActivityComparison({
   unavailable: boolean;
 }) {
   if (unavailable) {
-    return <span className="creator-trend is-neutral">—</span>;
+    return (
+      <span className="creator-activity-comparison is-neutral">
+        <strong className="creator-activity-comparison-value">
+          No comparison
+        </strong>
+        <small className="creator-activity-comparison-context">
+          vs previous 7 days
+        </small>
+      </span>
+    );
   }
   if (changePercent === null) {
     return (
-      <span className="creator-trend is-neutral">
-        No comparison vs previous 7 days
+      <span className="creator-activity-comparison is-neutral">
+        <strong className="creator-activity-comparison-value">
+          No comparison
+        </strong>
+        <small className="creator-activity-comparison-context">
+          vs previous 7 days
+        </small>
       </span>
     );
   }
 
   if (changePercent === 0) {
     return (
-      <span className="creator-trend is-neutral">0.0% vs previous 7 days</span>
+      <span className="creator-activity-comparison is-neutral">
+        <strong className="creator-activity-comparison-value">0%</strong>
+        <small className="creator-activity-comparison-context">
+          vs previous 7 days
+        </small>
+      </span>
     );
   }
 
   const isNegative = changePercent < 0;
   const Icon = isNegative ? ArrowDownRight : ArrowUpRight;
   return (
-    <span className={`creator-trend ${isNegative ? "is-negative" : ""}`}>
-      <Icon size={14} weight="bold" /> {Math.abs(changePercent).toFixed(1)}% vs
-      previous 7 days
+    <span
+      className={`creator-activity-comparison ${
+        isNegative ? "is-negative" : ""
+      }`}
+    >
+      <strong className="creator-activity-comparison-value">
+        <Icon size={13} weight="bold" />
+        {formatEnrollmentComparisonPercent(Math.abs(changePercent))}
+        {isNegative ? " fewer enrollments" : " more enrollments"}
+      </strong>
+      <small className="creator-activity-comparison-context">
+        vs previous 7 days
+      </small>
     </span>
   );
 }
@@ -224,28 +270,155 @@ function formatDashboardPercent(value: number) {
   }).format(value)}%`;
 }
 
+function formatEnrollmentComparisonPercent(value: number) {
+  return `${new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 1,
+  }).format(value)}%`;
+}
+
 function DashboardPanel({
   className = "",
   title,
   action,
   onAction,
   infoLabel,
+  infoTitle,
+  infoDescription,
   children,
 }: DashboardPanelProps) {
+  const infoPopoverId = useId();
+  const infoControlRef = useRef<HTMLDivElement>(null);
+  const infoButtonRef = useRef<HTMLButtonElement>(null);
+  const infoPopoverRef = useRef<HTMLDivElement>(null);
+  const [isInfoPinned, setIsInfoPinned] = useState(false);
+  const [isInfoHovered, setIsInfoHovered] = useState(false);
+  const [isInfoFocused, setIsInfoFocused] = useState(false);
+  const [isInfoDismissed, setIsInfoDismissed] = useState(false);
+  const [infoPopoverPlacement, setInfoPopoverPlacement] =
+    useState<InfoPopoverPlacement>("top");
+  const hasInfoPopover = Boolean(infoLabel && infoTitle && infoDescription);
+  const isInfoOpen =
+    hasInfoPopover &&
+    !isInfoDismissed &&
+    (isInfoPinned || isInfoHovered || isInfoFocused);
+
+  useLayoutEffect(() => {
+    if (!isInfoOpen) return undefined;
+
+    const updateInfoPopoverPlacement = () => {
+      const buttonBounds = infoButtonRef.current?.getBoundingClientRect();
+      const popoverBounds = infoPopoverRef.current?.getBoundingClientRect();
+      if (!buttonBounds || !popoverBounds) return;
+
+      const collisionPadding = 12;
+      const sideOffset = 8;
+      const fitsAbove =
+        buttonBounds.top - popoverBounds.height - sideOffset >=
+        collisionPadding;
+      const fitsLeft =
+        buttonBounds.left - popoverBounds.width - sideOffset >=
+        collisionPadding;
+      const nextPlacement: InfoPopoverPlacement = fitsAbove
+        ? "top"
+        : fitsLeft
+          ? "left"
+          : "bottom";
+
+      setInfoPopoverPlacement((current) =>
+        current === nextPlacement ? current : nextPlacement,
+      );
+    };
+
+    updateInfoPopoverPlacement();
+    window.addEventListener("resize", updateInfoPopoverPlacement);
+    window.addEventListener("scroll", updateInfoPopoverPlacement, true);
+    return () => {
+      window.removeEventListener("resize", updateInfoPopoverPlacement);
+      window.removeEventListener("scroll", updateInfoPopoverPlacement, true);
+    };
+  }, [isInfoOpen]);
+
+  useEffect(() => {
+    if (!isInfoOpen) return undefined;
+
+    const dismissInfo = () => {
+      setIsInfoPinned(false);
+      setIsInfoDismissed(true);
+      setInfoPopoverPlacement("top");
+    };
+    const handleOutsidePointerDown = (event: globalThis.PointerEvent) => {
+      if (!infoControlRef.current?.contains(event.target as Node)) {
+        dismissInfo();
+      }
+    };
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        dismissInfo();
+      }
+    };
+
+    document.addEventListener("pointerdown", handleOutsidePointerDown);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isInfoOpen]);
+
+  const handleInfoToggle = () => {
+    const nextPinned = !isInfoPinned;
+    setIsInfoPinned(nextPinned);
+    setIsInfoDismissed(!nextPinned);
+    if (nextPinned && !isInfoOpen) setInfoPopoverPlacement("top");
+  };
+
   return (
     <section className={`creator-dashboard-panel ${className}`}>
       <header className="creator-panel-heading">
         <h2>{title}</h2>
         <div className="creator-panel-actions">
-          {infoLabel && (
-            <button
-              type="button"
-              className="creator-panel-info"
-              aria-label={infoLabel}
-              title={infoLabel}
+          {hasInfoPopover && (
+            <div
+              ref={infoControlRef}
+              className="creator-panel-info-wrap"
+              onMouseEnter={() => {
+                setIsInfoHovered(true);
+                setIsInfoDismissed(false);
+                if (!isInfoOpen) setInfoPopoverPlacement("top");
+              }}
+              onMouseLeave={() => setIsInfoHovered(false)}
             >
-              <Info size={16} />
-            </button>
+              <button
+                type="button"
+                className="creator-panel-info"
+                ref={infoButtonRef}
+                aria-label={infoLabel}
+                aria-controls={infoPopoverId}
+                aria-expanded={isInfoOpen}
+                aria-describedby={isInfoOpen ? infoPopoverId : undefined}
+                onFocus={() => {
+                  setIsInfoFocused(true);
+                  setIsInfoDismissed(false);
+                  if (!isInfoOpen) setInfoPopoverPlacement("top");
+                }}
+                onBlur={() => setIsInfoFocused(false)}
+                onClick={handleInfoToggle}
+              >
+                <Info size={16} aria-hidden="true" />
+              </button>
+              {isInfoOpen && (
+                <div
+                  id={infoPopoverId}
+                  className="creator-panel-info-popover"
+                  ref={infoPopoverRef}
+                  data-placement={infoPopoverPlacement}
+                  role="tooltip"
+                >
+                  <strong>{infoTitle}</strong>
+                  <p>{infoDescription}</p>
+                </div>
+              )}
+            </div>
           )}
           {action && (
             <button
@@ -263,6 +436,712 @@ function DashboardPanel({
   );
 }
 
+interface RevenuePlotBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+interface RevenuePointPosition {
+  x: number;
+  y: number;
+}
+
+interface ActiveRevenuePoint extends RevenuePointPosition {
+  index: number;
+  width: number;
+  height: number;
+  trend: DashboardRevenueOverview["trend"];
+}
+
+type ActivityBuckets =
+  DashboardSummaryResponse["learningActivity"]["enrollmentActivity"]["buckets"];
+
+interface ActiveActivityPoint extends RevenuePointPosition {
+  index: number;
+  width: number;
+  height: number;
+  buckets: ActivityBuckets;
+}
+
+const REVENUE_GRID_RATIOS = [0, 0.2, 0.4, 0.6, 0.8, 1] as const;
+const ACTIVITY_GRID_RATIOS = [0, 0.25, 0.5, 0.75, 1] as const;
+
+function drawHorizontalChartGrid({
+  context,
+  left,
+  right,
+  top,
+  bottom,
+  ratios,
+  gridColor,
+  gridOpacity,
+  baselineOpacity,
+  devicePixelRatio,
+}: {
+  context: CanvasRenderingContext2D;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  ratios: readonly number[];
+  gridColor: string;
+  gridOpacity: number;
+  baselineOpacity: number;
+  devicePixelRatio: number;
+}) {
+  const ratio = Math.max(1, devicePixelRatio);
+  context.save();
+  context.strokeStyle = gridColor;
+  context.lineWidth = 1 / ratio;
+  context.lineCap = "butt";
+  ratios.forEach((level) => {
+    const y = bottom - level * (bottom - top);
+    const alignedY = (Math.round(y * ratio) + 0.5) / ratio;
+    context.globalAlpha = level === 0 ? baselineOpacity : gridOpacity;
+    context.beginPath();
+    context.moveTo(left, alignedY);
+    context.lineTo(right, alignedY);
+    context.stroke();
+  });
+  context.restore();
+}
+
+function getRevenuePlotBounds(width: number, height: number): RevenuePlotBounds {
+  const isNarrowRevenueChart = width <= 640;
+  const left = isNarrowRevenueChart
+    ? width < 360
+      ? 30
+      : 34
+    : width < 360
+      ? 34
+      : 42;
+  const right =
+    width -
+    (isNarrowRevenueChart
+      ? width < 360
+        ? 12
+        : 14
+      : width < 360
+        ? 14
+        : 16);
+
+  return { left, right, top: 22, bottom: height - 33 };
+}
+
+function getActivityPlotBounds(width: number, height: number): RevenuePlotBounds {
+  return {
+    left: width < 360 ? 26 : 30,
+    right: width - 10,
+    top: 14,
+    bottom: height - 25,
+  };
+}
+
+function getActivityBarPosition(
+  index: number,
+  value: number,
+  count: number,
+  max: number,
+  width: number,
+  height: number,
+) {
+  const { left, right, bottom, top } = getActivityPlotBounds(width, height);
+  const gap = (right - left) / count;
+  const barWidth = Math.max(3, gap * 0.46);
+  const x = left + index * gap + gap * 0.22;
+  const finalHeight = (value / max) * (bottom - top);
+
+  return {
+    x,
+    centerX: left + (index + 0.5) * gap,
+    finalHeight,
+    y: bottom - finalHeight,
+    width: barWidth,
+    baseline: bottom,
+  };
+}
+
+function getRevenuePointPosition(
+  index: number,
+  values: readonly number[],
+  width: number,
+  height: number,
+): RevenuePointPosition {
+  const { left, right, top, bottom } = getRevenuePlotBounds(width, height);
+  const maxValue = Math.max(...values, 0);
+  const scaleMax = maxValue > 0 ? Math.ceil(maxValue / 4) * 4 : 1;
+  const x =
+    values.length === 1
+      ? (left + right) / 2
+      : left + (index / (values.length - 1)) * (right - left);
+  const y = bottom - ((values[index] ?? 0) / scaleMax) * (bottom - top);
+
+  return { x, y };
+}
+
+function formatRevenueTooltipDate(date: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T00:00:00Z`));
+}
+
+function getRevenueTooltipPosition(
+  point: ActiveRevenuePoint,
+): RevenuePointPosition {
+  const tooltipWidth = Math.min(150, Math.max(112, point.width * 0.42));
+  const tooltipHeight = 46;
+  const gap = 8;
+  const left = point.x > point.width - tooltipWidth - 24
+    ? point.x - tooltipWidth - gap
+    : point.x + gap;
+  const top = point.y - tooltipHeight - gap;
+
+  return {
+    x: Math.max(8, Math.min(left, point.width - tooltipWidth - 8)),
+    y: Math.max(
+      8,
+      Math.min(
+        top >= 8 ? top : point.y + gap,
+        point.height - tooltipHeight - 8,
+      ),
+    ),
+  };
+}
+
+function getActivityTooltipPosition(
+  point: ActiveActivityPoint,
+): RevenuePointPosition {
+  const tooltipWidth = Math.min(164, Math.max(136, point.width * 0.48));
+  const tooltipHeight = 62;
+  const gap = 8;
+  const left = point.x > point.width - tooltipWidth - 24
+    ? point.x - tooltipWidth - gap
+    : point.x + gap;
+  const top = point.y - tooltipHeight - gap;
+
+  return {
+    x: Math.max(8, Math.min(left, point.width - tooltipWidth - 8)),
+    y: Math.max(
+      8,
+      Math.min(
+        top >= 8 ? top : point.y + gap,
+        point.height - tooltipHeight - 8,
+      ),
+    ),
+  };
+}
+
+function formatActivityTooltipDate(date: string) {
+  const value = new Date(date);
+  const dateFormatter = new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  const timeText = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const end = new Date(value.getTime() + 8 * 60 * 60 * 1000);
+  const startDate = dateFormatter.format(value);
+  const endDate = dateFormatter.format(end);
+
+  return {
+    date: startDate === endDate ? startDate : `${startDate}–${endDate}`,
+    range: `${timeText.format(value)}–${timeText.format(end)}`,
+  };
+}
+
+function getLocalCalendarDateKey(value: Date) {
+  return [
+    value.getFullYear(),
+    String(value.getMonth() + 1).padStart(2, "0"),
+    String(value.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+interface ActivityDayGroup {
+  dateKey: string;
+  firstIndex: number;
+  lastIndex: number;
+  label: string;
+}
+
+interface ActivityDayLabel extends ActivityDayGroup {
+  centerX: number;
+  width: number;
+}
+
+function getActivityDayLabelX(
+  label: ActivityDayLabel,
+  left: number,
+  right: number,
+) {
+  const minimum = left + label.width / 2;
+  const maximum = right - label.width / 2;
+  return Math.max(minimum, Math.min(label.centerX, maximum));
+}
+
+function activityDayLabelsFit(
+  labels: readonly ActivityDayLabel[],
+  left: number,
+  right: number,
+) {
+  return labels.every((label, index) => {
+    const x = getActivityDayLabelX(label, left, right);
+    if (index === 0) return true;
+
+    const previous = labels[index - 1]!;
+    const previousX = getActivityDayLabelX(previous, left, right);
+    return x - previousX >= (previous.width + label.width) / 2 + 6;
+  });
+}
+
+function selectActivityDayLabels(
+  context: CanvasRenderingContext2D,
+  dayGroups: readonly ActivityDayGroup[],
+  left: number,
+  right: number,
+  gap: number,
+) {
+  const labels = dayGroups.map((group) => ({
+    ...group,
+    centerX: left + ((group.firstIndex + group.lastIndex + 1) / 2) * gap,
+    width: context.measureText(group.label).width,
+  }));
+
+  if (labels.length <= 2 || activityDayLabelsFit(labels, left, right)) {
+    return labels;
+  }
+
+  for (let labelCount = labels.length - 1; labelCount >= 2; labelCount -= 1) {
+    const candidate = Array.from(
+      { length: labelCount },
+      (_, labelIndex) =>
+        labels[
+          Math.round(
+            (labelIndex * (labels.length - 1)) / (labelCount - 1),
+          )
+        ]!,
+    );
+    if (activityDayLabelsFit(candidate, left, right)) {
+      return candidate;
+    }
+  }
+
+  return [labels[0]!, labels.at(-1)!];
+}
+
+function drawRevenueChart({
+  context,
+  width,
+  height,
+  revenueTrend,
+  revenueCurrency,
+  revenueStatus,
+  activeIndex,
+  progress = 1,
+  accent,
+  muted,
+  danger,
+  gridColor,
+  gridOpacity,
+  baselineGridOpacity,
+  surface,
+  devicePixelRatio,
+}: {
+  context: CanvasRenderingContext2D;
+  width: number;
+  height: number;
+  revenueTrend: DashboardRevenueOverview["trend"];
+  revenueCurrency: string;
+  revenueStatus?: "loading" | "empty" | "error";
+  activeIndex: number | null;
+  progress?: number;
+  accent: string;
+  muted: string;
+  danger: string;
+  gridColor: string;
+  gridOpacity: number;
+  baselineGridOpacity: number;
+  surface: string;
+  devicePixelRatio: number;
+}) {
+  context.clearRect(0, 0, width, height);
+  context.font = "10px Manrope, sans-serif";
+
+  const { left, right, top, bottom } = getRevenuePlotBounds(width, height);
+
+  if (revenueStatus === "loading" && revenueTrend.length === 0) {
+    const skeletonValues = [0.72, 0.58, 0.66, 0.42, 0.52, 0.3, 0.44];
+    const skeletonX = (index: number) =>
+      skeletonValues.length === 1
+        ? (left + right) / 2
+        : left + (index / (skeletonValues.length - 1)) * (right - left);
+    const skeletonY = (value: number) =>
+      bottom - value * (bottom - top);
+
+    drawHorizontalChartGrid({
+      context,
+      left,
+      right,
+      top,
+      bottom,
+      ratios: REVENUE_GRID_RATIOS,
+      gridColor,
+      gridOpacity,
+      baselineOpacity: baselineGridOpacity,
+      devicePixelRatio,
+    });
+    context.save();
+    context.globalAlpha = 0.28;
+    context.strokeStyle = muted;
+    context.lineWidth = 2;
+    context.setLineDash([4, 5]);
+    context.beginPath();
+    skeletonValues.forEach((value, index) =>
+      index
+        ? context.lineTo(skeletonX(index), skeletonY(value))
+        : context.moveTo(skeletonX(index), skeletonY(value)),
+    );
+    context.stroke();
+    context.restore();
+    context.globalAlpha = 0.72;
+    context.fillStyle = muted;
+    context.textAlign = "center";
+    context.fillText("Loading revenue data…", width / 2, height / 2 + 22);
+    context.globalAlpha = 1;
+    context.setLineDash([]);
+    return;
+  }
+
+  if (revenueTrend.length === 0) {
+    context.fillStyle = revenueStatus === "error" ? danger : muted;
+    context.textAlign = "center";
+    context.fillText(
+      revenueStatus === "error"
+        ? "Unable to load revenue data."
+        : "No revenue data for this period.",
+      width / 2,
+      height / 2 - 3,
+    );
+    context.globalAlpha = 0.72;
+    context.fillStyle = muted;
+    context.font = "9px Manrope, sans-serif";
+    context.fillText(
+      revenueStatus === "error"
+        ? "Revenue could not be displayed right now."
+        : "Try another range to explore activity.",
+      width / 2,
+      height / 2 + 14,
+    );
+    context.globalAlpha = 1;
+    return;
+  }
+
+  const values = revenueTrend.map((point) => point.value);
+  const maxValue = Math.max(...values, 0);
+  const scaleMax = maxValue > 0 ? Math.ceil(maxValue / 4) * 4 : 1;
+  const x = (index: number) =>
+    values.length === 1
+      ? (left + right) / 2
+      : left + (index / (values.length - 1)) * (right - left);
+  const y = (value: number) =>
+    bottom - (value / scaleMax) * (bottom - top);
+  const animatedY = (value: number) =>
+    bottom - (bottom - y(value)) * progress;
+
+  drawHorizontalChartGrid({
+    context,
+    left,
+    right,
+    top,
+    bottom,
+    ratios: REVENUE_GRID_RATIOS,
+    gridColor,
+    gridOpacity,
+    baselineOpacity: baselineGridOpacity,
+    devicePixelRatio,
+  });
+  context.beginPath();
+  values.forEach((value, index) =>
+    index
+      ? context.lineTo(x(index), animatedY(value))
+      : context.moveTo(x(index), animatedY(value)),
+  );
+  context.lineTo(right, bottom);
+  context.lineTo(left, bottom);
+  context.closePath();
+  context.fillStyle = accent;
+  context.globalAlpha = 0.18;
+  context.fill();
+  context.globalAlpha = 1;
+  context.beginPath();
+  values.forEach((value, index) =>
+    index
+      ? context.lineTo(x(index), animatedY(value))
+      : context.moveTo(x(index), animatedY(value)),
+  );
+  context.strokeStyle = accent;
+  context.lineWidth = 2.25;
+  context.stroke();
+
+  if (activeIndex !== null && activeIndex < values.length && progress >= 0.999) {
+    context.save();
+    context.strokeStyle = accent;
+    context.globalAlpha = 0.26;
+    context.lineWidth = 1;
+    context.setLineDash([3, 4]);
+    context.beginPath();
+    context.moveTo(x(activeIndex), top);
+    context.lineTo(x(activeIndex), bottom);
+    context.stroke();
+    context.restore();
+  }
+
+  if (revenueTrend.length <= 31) {
+    values.forEach((value, index) => {
+      context.beginPath();
+      context.arc(x(index), animatedY(value), 2.5, 0, Math.PI * 2);
+      context.fillStyle = accent;
+      context.fill();
+    });
+  }
+  context.fillStyle = muted;
+  context.globalAlpha = 0.78;
+  context.textAlign = "right";
+  [1, 0.8, 0.6, 0.4, 0.2, 0].forEach((ratio) => {
+    const mark = scaleMax * ratio;
+    context.fillText(
+      new Intl.NumberFormat(
+        revenueCurrency === "INR" ? "en-IN" : "en-US",
+        { notation: "compact", maximumFractionDigits: 1 },
+      ).format(mark),
+      left - 6,
+      y(mark) + 3,
+    );
+  });
+  context.globalAlpha = 1;
+  const isNarrowRevenueChart = width <= 640;
+  const labelCount = Math.min(
+    isNarrowRevenueChart
+      ? Math.min(6, Math.max(3, Math.floor((right - left) / 56)))
+      : revenueTrend.length > 180
+        ? 6
+        : 7,
+    revenueTrend.length,
+  );
+  const dateLabels = Array.from({ length: labelCount }, (_, labelIndex) => {
+    const index =
+      labelCount === 1
+        ? 0
+        : Math.round(
+            (labelIndex * (revenueTrend.length - 1)) / (labelCount - 1),
+          );
+    return [index, formatRevenueTooltipDate(revenueTrend[index]!.date)] as const;
+  });
+  context.globalAlpha = 0.84;
+  dateLabels.forEach(([index, dateLabel], labelIndex) => {
+    context.textAlign =
+      labelIndex === 0
+        ? "left"
+        : labelIndex === dateLabels.length - 1
+          ? "right"
+          : "center";
+    context.fillText(dateLabel, x(index), height - 5);
+  });
+  context.globalAlpha = 1;
+  context.save();
+  context.shadowColor = accent;
+  context.shadowBlur = 9;
+  context.beginPath();
+  context.arc(
+    x(values.length - 1),
+    animatedY(values.at(-1)!),
+    3.4,
+    0,
+    Math.PI * 2,
+  );
+  context.fillStyle = accent;
+  context.fill();
+  context.restore();
+
+  if (activeIndex !== null && activeIndex < values.length && progress >= 0.999) {
+    context.save();
+    context.shadowColor = accent;
+    context.shadowBlur = 10;
+    context.beginPath();
+    context.arc(
+      x(activeIndex),
+      animatedY(values[activeIndex]!),
+      4.5,
+      0,
+      Math.PI * 2,
+    );
+    context.fillStyle = accent;
+    context.fill();
+    context.shadowBlur = 0;
+    context.lineWidth = 2;
+    context.strokeStyle = surface;
+    context.stroke();
+    context.restore();
+  }
+  context.globalAlpha = 1;
+  context.setLineDash([]);
+}
+
+function drawActivityChart({
+  context,
+  width,
+  height,
+  activityBuckets,
+  activityStatus,
+  activeIndex,
+  progress,
+  accent,
+  muted,
+  gridColor,
+  gridOpacity,
+  baselineGridOpacity,
+  devicePixelRatio,
+}: {
+  context: CanvasRenderingContext2D;
+  width: number;
+  height: number;
+  activityBuckets: ActivityBuckets;
+  activityStatus?: "loading" | "empty" | "error";
+  activeIndex: number | null;
+  progress: number;
+  accent: string;
+  muted: string;
+  gridColor: string;
+  gridOpacity: number;
+  baselineGridOpacity: number;
+  devicePixelRatio: number;
+}) {
+  context.clearRect(0, 0, width, height);
+  context.font = "11px Manrope, sans-serif";
+
+  if (activityBuckets.length === 0) {
+    context.fillStyle = muted;
+    context.textAlign = "center";
+    context.fillText(
+      activityStatus === "loading"
+        ? "Loading enrollment activity…"
+        : activityStatus === "error"
+          ? "Unable to load enrollment activity."
+          : "No enrollment activity for this period.",
+      width / 2,
+      height / 2,
+    );
+    return;
+  }
+
+  const { left, right, top, bottom } = getActivityPlotBounds(width, height);
+  const values = activityBuckets.map((bucket) => bucket.value);
+  const maxValue = Math.max(...values, 0);
+  const max = maxValue > 0 ? Math.ceil(maxValue / 4) * 4 : 1;
+
+  drawHorizontalChartGrid({
+    context,
+    left,
+    right,
+    top,
+    bottom,
+    ratios: ACTIVITY_GRID_RATIOS,
+    gridColor,
+    gridOpacity,
+    baselineOpacity: baselineGridOpacity,
+    devicePixelRatio,
+  });
+
+  values.forEach((value, index) => {
+    const bar = getActivityBarPosition(
+      index,
+      value,
+      values.length,
+      max,
+      width,
+      height,
+    );
+    const animatedHeight = bar.finalHeight * progress;
+    const isActive = activeIndex === index && progress >= 0.999;
+
+    context.save();
+    context.fillStyle = accent;
+    context.globalAlpha = isActive ? 1 : 0.86;
+    if (isActive) {
+      context.shadowColor = accent;
+      context.shadowBlur = 6;
+    }
+    context.beginPath();
+    context.roundRect(
+      bar.x,
+      bar.baseline - animatedHeight,
+      bar.width,
+      animatedHeight,
+      3,
+    );
+    context.fill();
+    context.restore();
+  });
+
+  context.fillStyle = muted;
+  context.textAlign = "right";
+  [1, 0.75, 0.5, 0.25, 0].forEach((ratio) => {
+    const mark = max * ratio;
+    context.fillText(
+      String(Math.round(mark)),
+      left - 5,
+      bottom - (mark / max) * (bottom - top) + 3,
+    );
+  });
+
+  const dayGroups: ActivityDayGroup[] = [];
+  const dayFormatter = new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  activityBuckets.forEach((bucket, index) => {
+    const value = new Date(bucket.start);
+    const dateKey = getLocalCalendarDateKey(value);
+    const lastGroup = dayGroups.at(-1);
+    if (lastGroup?.dateKey === dateKey) {
+      lastGroup.lastIndex = index;
+      return;
+    }
+    dayGroups.push({
+      dateKey,
+      firstIndex: index,
+      lastIndex: index,
+      label: dayFormatter.format(value),
+    });
+  });
+
+  const gap = (right - left) / values.length;
+  const dateLabels = selectActivityDayLabels(
+    context,
+    dayGroups,
+    left,
+    right,
+    gap,
+  );
+
+  context.globalAlpha = 0.84;
+  dateLabels.forEach((group) => {
+    context.textAlign = "center";
+    context.fillText(
+      group.label,
+      getActivityDayLabelX(group, left, right),
+      height - 5,
+    );
+  });
+  context.globalAlpha = 1;
+}
+
 function DataCanvas({
   kind,
   label,
@@ -274,233 +1153,431 @@ function DataCanvas({
   activityStatus,
 }: DataCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const previousRevenueTrendRef = useRef<DashboardRevenueOverview["trend"] | null>(
+    null,
+  );
+  const previousActivityBucketsRef = useRef<ActivityBuckets | null>(null);
+  const activeRevenueIndexRef = useRef<number | null>(null);
+  const activeActivityIndexRef = useRef<number | null>(null);
+  const renderRevenueRef = useRef<(() => void) | null>(null);
+  const renderActivityRef = useRef<(() => void) | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const activityAnimationFrameRef = useRef<number | null>(null);
+  const animationRunningRef = useRef(false);
+  const activityAnimationRunningRef = useRef(false);
+  const [activeRevenuePoint, setActiveRevenuePoint] =
+    useState<ActiveRevenuePoint | null>(null);
+  const [activeActivityPoint, setActiveActivityPoint] =
+    useState<ActiveActivityPoint | null>(null);
+  const [isRangeTransitioning, setIsRangeTransitioning] = useState(false);
+
+  activeRevenueIndexRef.current =
+    activeRevenuePoint?.trend === revenueTrend
+      ? activeRevenuePoint.index
+      : null;
+  activeActivityIndexRef.current =
+    activeActivityPoint?.buckets === activityBuckets
+      ? activeActivityPoint.index
+      : null;
+
+  const handleRevenuePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (kind !== "revenue" || revenueTrend.length === 0) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const bounds = canvas.getBoundingClientRect();
+    const plot = getRevenuePlotBounds(bounds.width, bounds.height);
+    const values = revenueTrend.map((point) => point.value);
+    const pointerX = Math.max(
+      plot.left,
+      Math.min(plot.right, event.clientX - bounds.left),
+    );
+    const index =
+      values.length === 1
+        ? 0
+        : Math.max(
+            0,
+            Math.min(
+              values.length - 1,
+              Math.round(
+                ((pointerX - plot.left) / (plot.right - plot.left)) *
+                  (values.length - 1),
+              ),
+            ),
+          );
+    const point = getRevenuePointPosition(
+      index,
+      values,
+      bounds.width,
+      bounds.height,
+    );
+
+    setActiveRevenuePoint((current) =>
+      current?.index === index && current.trend === revenueTrend
+        ? current
+        : {
+            index,
+            x: point.x,
+            y: point.y,
+            width: bounds.width,
+            height: bounds.height,
+            trend: revenueTrend,
+          },
+    );
+  };
+
+  const handleRevenuePointerLeave = () => {
+    setActiveRevenuePoint(null);
+  };
+
+  const handleActivityPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (
+      kind !== "activity" ||
+      activityBuckets.length === 0 ||
+      activityAnimationRunningRef.current
+    ) {
+      return;
+    }
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const bounds = canvas.getBoundingClientRect();
+    const { left, right } = getActivityPlotBounds(bounds.width, bounds.height);
+    const pointerX = Math.max(
+      left,
+      Math.min(right, event.clientX - bounds.left),
+    );
+    const gap = (right - left) / activityBuckets.length;
+    const index = Math.max(
+      0,
+      Math.min(
+        activityBuckets.length - 1,
+        Math.floor((pointerX - left) / gap),
+      ),
+    );
+    const values = activityBuckets.map((bucket) => bucket.value);
+    const maxValue = Math.max(...values, 0);
+    const max = maxValue > 0 ? Math.ceil(maxValue / 4) * 4 : 1;
+    const bar = getActivityBarPosition(
+      index,
+      activityBuckets[index]!.value,
+      activityBuckets.length,
+      max,
+      bounds.width,
+      bounds.height,
+    );
+
+    setActiveActivityPoint((current) =>
+      current?.index === index && current.buckets === activityBuckets
+        ? current
+        : {
+            index,
+            x: bar.centerX,
+            y: bar.y,
+            width: bounds.width,
+            height: bounds.height,
+            buckets: activityBuckets,
+          },
+    );
+  };
+
+  const handleActivityPointerLeave = () => {
+    setActiveActivityPoint(null);
+  };
+
+  useEffect(() => {
+    if (kind === "revenue" && !animationRunningRef.current) {
+      renderRevenueRef.current?.();
+    }
+  }, [activeRevenuePoint?.index, activeRevenuePoint?.trend, kind]);
+
+  useEffect(() => {
+    if (kind === "activity" && !activityAnimationRunningRef.current) {
+      renderActivityRef.current?.();
+    }
+  }, [activeActivityPoint?.index, activeActivityPoint?.buckets, kind]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return undefined;
-    const context = canvas.getContext("2d")!;
-    const observer = new ResizeObserver(() => {
+
+    const resizeCanvas = (target: HTMLCanvasElement, ratio: number) => {
+      const context = target.getContext("2d")!;
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      return context;
+    };
+
+    let resizeTimer: number | null = null;
+    let hasRendered = false;
+
+    const renderAtCurrentSize = () => {
+      if (kind === "revenue" && animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+        animationRunningRef.current = false;
+      }
+      if (
+        kind === "activity" &&
+        activityAnimationFrameRef.current !== null
+      ) {
+        cancelAnimationFrame(activityAnimationFrameRef.current);
+        activityAnimationFrameRef.current = null;
+        activityAnimationRunningRef.current = false;
+      }
       const bounds = canvas.getBoundingClientRect();
       const ratio = window.devicePixelRatio || 1;
       canvas.width = Math.max(1, Math.floor(bounds.width * ratio));
       canvas.height = Math.max(1, Math.floor(bounds.height * ratio));
-      context.setTransform(ratio, 0, 0, ratio, 0, 0);
       const width = bounds.width;
       const height = bounds.height;
       const rootStyles = getComputedStyle(document.documentElement);
       const accent =
         rootStyles.getPropertyValue("--accent").trim() || "#8b68ff";
       const muted = rootStyles.getPropertyValue("--muted").trim() || "#919592";
+      const danger = rootStyles.getPropertyValue("--danger").trim() || "#fb7185";
       const track = rootStyles.getPropertyValue("--track").trim() || "#202324";
-      context.clearRect(0, 0, width, height);
-      context.font = "11px Manrope, sans-serif";
+      const isDarkTheme = document.documentElement.dataset.theme !== "light";
+      const gridColor = isDarkTheme ? muted : track;
+      const gridOpacity = isDarkTheme ? 0.24 : 0.72;
+      const baselineGridOpacity = isDarkTheme ? 0.32 : 0.9;
+      const surface =
+        rootStyles.getPropertyValue("--card-surface").trim() ||
+        rootStyles.getPropertyValue("--surface").trim() ||
+        "#ffffff";
 
       if (kind === "revenue") {
-        if (revenueTrend.length === 0) {
-          context.fillStyle = muted;
-          context.textAlign = "center";
-          context.fillText(
-            revenueStatus === "loading"
-              ? "Loading revenue data…"
-              : revenueStatus === "error"
-                ? "Unable to load revenue data."
-                : "No revenue data for this period.",
-            width / 2,
-            height / 2,
-          );
-          return;
-        }
+        const context = resizeCanvas(canvas, ratio);
+        const previousTrend = previousRevenueTrendRef.current;
+        const drawFrame = (
+          trend: DashboardRevenueOverview["trend"],
+          status: "loading" | "empty" | "error" | undefined,
+          progress: number,
+        ) => {
+          drawRevenueChart({
+            context,
+            width,
+            height,
+            revenueTrend: trend,
+            revenueCurrency,
+            revenueStatus: status,
+            activeIndex: animationRunningRef.current
+              ? null
+              : activeRevenueIndexRef.current,
+            progress,
+            accent,
+            muted,
+            danger,
+            gridColor,
+            gridOpacity,
+            baselineGridOpacity,
+            surface,
+            devicePixelRatio: ratio,
+          });
+        };
 
-        const values = revenueTrend.map((point) => point.value);
-        const left = 29;
-        const right = width - 8;
-        const top = 14;
-        const bottom = height - 23;
-        const x = (index: number) =>
-          values.length === 1
-            ? (left + right) / 2
-            : left + (index / (values.length - 1)) * (right - left);
-        const maxValue = Math.max(...values, 0);
-        const scaleMax = maxValue > 0 ? Math.ceil(maxValue / 4) * 4 : 1;
-        const y = (value: number) =>
-          bottom - (value / scaleMax) * (bottom - top);
-        context.strokeStyle = track;
-        context.lineWidth = 1;
-        [0, 0.25, 0.5, 0.75, 1].forEach((ratio) => {
-          const mark = scaleMax * ratio;
-          context.beginPath();
-          context.moveTo(left, y(mark));
-          context.lineTo(right, y(mark));
-          context.stroke();
-        });
-        context.beginPath();
-        values.forEach((value, index) =>
-          index
-            ? context.lineTo(x(index), y(value))
-            : context.moveTo(x(index), y(value)),
-        );
-        context.lineTo(right, bottom);
-        context.lineTo(left, bottom);
-        context.closePath();
-        context.fillStyle = accent;
-        context.globalAlpha = 0.18;
-        context.fill();
-        context.globalAlpha = 1;
-        context.beginPath();
-        values.forEach((value, index) =>
-          index
-            ? context.lineTo(x(index), y(value))
-            : context.moveTo(x(index), y(value)),
-        );
-        context.strokeStyle = accent;
-        context.lineWidth = 2.25;
-        context.stroke();
-        values.forEach((value, index) => {
-          context.beginPath();
-          context.arc(x(index), y(value), 2.5, 0, Math.PI * 2);
-          context.fillStyle = accent;
-          context.fill();
-        });
-        context.fillStyle = muted;
-        context.textAlign = "right";
-        [1, 0.8, 0.6, 0.4, 0.2, 0].forEach((ratio) => {
-          const mark = scaleMax * ratio;
-          context.fillText(
-            new Intl.NumberFormat(
-              revenueCurrency === "INR" ? "en-IN" : "en-US",
-              { notation: "compact", maximumFractionDigits: 1 },
-            ).format(mark),
-            left - 6,
-            y(mark) + 3,
-          );
-        });
-        const labelCount = Math.min(7, revenueTrend.length);
-        const dateLabels = Array.from({ length: labelCount }, (_, labelIndex) => {
-          const index =
-            labelCount === 1
-              ? 0
-              : Math.round(
-                  (labelIndex * (revenueTrend.length - 1)) /
-                    (labelCount - 1),
-                );
-          return [
-            index,
-            new Intl.DateTimeFormat(undefined, {
-              month: "short",
-              day: "numeric",
-            }).format(new Date(`${revenueTrend[index]!.date}T00:00:00Z`)),
-          ] as const;
-        });
-        context.globalAlpha = 0.84;
-        dateLabels.forEach(([index, dateLabel], labelIndex) => {
-          context.textAlign =
-            labelIndex === 0
-              ? "left"
-              : labelIndex === dateLabels.length - 1
-                ? "right"
-                : "center";
-          context.fillText(dateLabel, x(index), height - 5);
-        });
-        context.globalAlpha = 1;
-        context.save();
-        context.shadowColor = accent;
-        context.shadowBlur = 9;
-        context.beginPath();
-        context.arc(
-          x(values.length - 1),
-          y(values.at(-1)!),
-          3.4,
-          0,
-          Math.PI * 2,
-        );
-        context.fillStyle = accent;
-        context.fill();
-        context.restore();
+        renderRevenueRef.current = () => {
+          const currentBounds = canvas.getBoundingClientRect();
+          const currentRatio = window.devicePixelRatio || 1;
+          canvas.width = Math.max(1, Math.floor(currentBounds.width * currentRatio));
+          canvas.height = Math.max(1, Math.floor(currentBounds.height * currentRatio));
+          const currentContext = resizeCanvas(canvas, currentRatio);
+          drawRevenueChart({
+            context: currentContext,
+            width: currentBounds.width,
+            height: currentBounds.height,
+            revenueTrend,
+            revenueCurrency,
+            revenueStatus,
+            activeIndex: activeRevenueIndexRef.current,
+            progress: 1,
+            accent,
+            muted,
+            danger,
+            gridColor,
+            gridOpacity,
+            baselineGridOpacity,
+            surface,
+            devicePixelRatio: currentRatio,
+          });
+        };
+
+        const reducedMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+        const hasPreviousData = Boolean(previousTrend?.length);
+        const hasNextData = revenueTrend.length > 0;
+        const shouldTransition =
+          previousTrend !== null &&
+          previousTrend !== revenueTrend &&
+          (hasPreviousData || hasNextData) &&
+          !reducedMotion;
+
+        if (!shouldTransition) {
+          animationRunningRef.current = false;
+          setIsRangeTransitioning(false);
+          drawFrame(revenueTrend, revenueStatus, 1);
+          previousRevenueTrendRef.current = revenueTrend;
+        } else {
+          if (animationFrameRef.current !== null) {
+            cancelAnimationFrame(animationFrameRef.current);
+          }
+          animationRunningRef.current = true;
+          setActiveRevenuePoint(null);
+          setIsRangeTransitioning(true);
+          previousRevenueTrendRef.current = revenueTrend;
+          const downDuration = hasPreviousData ? 170 : 0;
+          const upDuration = hasNextData ? 220 : 0;
+          const start = performance.now();
+          const ease = (value: number) => 1 - (1 - value) ** 3;
+
+          const animate = (now: number) => {
+            const elapsed = now - start;
+            if (hasPreviousData && elapsed < downDuration) {
+              drawFrame(previousTrend!, undefined, 1 - ease(elapsed / downDuration));
+            } else if (!hasNextData) {
+              drawFrame(revenueTrend, revenueStatus, 1);
+            } else {
+              const upElapsed = Math.max(0, elapsed - downDuration);
+              drawFrame(
+                revenueTrend,
+                revenueStatus,
+                Math.min(1, ease(upElapsed / upDuration)),
+              );
+            }
+
+            const complete = elapsed >= downDuration + upDuration;
+            if (complete) {
+              animationRunningRef.current = false;
+              animationFrameRef.current = null;
+              setIsRangeTransitioning(false);
+              renderRevenueRef.current?.();
+            } else {
+              animationFrameRef.current = requestAnimationFrame(animate);
+            }
+          };
+
+          animationFrameRef.current = requestAnimationFrame(animate);
+        }
       } else {
-        if (activityBuckets.length === 0) {
-          context.fillStyle = muted;
-          context.textAlign = "center";
-          context.fillText(
-            activityStatus === "loading"
-              ? "Loading enrollment activity…"
-              : activityStatus === "error"
-                ? "Unable to load enrollment activity."
-                : "No enrollment activity for this period.",
-            width / 2,
-            height / 2,
-          );
-          return;
-        }
+        setIsRangeTransitioning(false);
+        const context = resizeCanvas(canvas, ratio);
+        const previousBuckets = previousActivityBucketsRef.current;
+        const drawFrame = (progress: number) => {
+          drawActivityChart({
+            context,
+            width,
+            height,
+            activityBuckets,
+            activityStatus,
+            activeIndex: activityAnimationRunningRef.current
+              ? null
+              : activeActivityIndexRef.current,
+            progress,
+            accent,
+            muted,
+            gridColor,
+            gridOpacity,
+            baselineGridOpacity,
+            devicePixelRatio: ratio,
+          });
+        };
 
-        const values = activityBuckets.map((bucket) => bucket.value);
-        const left = 20;
-        const right = width - 8;
-        const top = 12;
-        const bottom = height - 22;
-        const maxValue = Math.max(...values, 0);
-        const max = maxValue > 0 ? Math.ceil(maxValue / 4) * 4 : 1;
-        context.strokeStyle = track;
-        context.lineWidth = 1;
-        [0, 0.25, 0.5, 0.75, 1].forEach((ratio) => {
-          const mark = max * ratio;
-          const y = bottom - (mark / max) * (bottom - top);
-          context.beginPath();
-          context.moveTo(left, y);
-          context.lineTo(right, y);
-          context.stroke();
-        });
-        values.forEach((value, index) => {
-          const gap = (right - left) / values.length;
-          const barWidth = Math.max(3, gap * 0.46);
-          const x = left + index * gap + gap * 0.22;
-          const y = bottom - (value / max) * (bottom - top);
-          context.fillStyle = accent;
-          context.globalAlpha = 0.86;
-          context.beginPath();
-          context.roundRect(x, y, barWidth, bottom - y, 3);
-          context.fill();
-          context.globalAlpha = 1;
-        });
-        context.fillStyle = muted;
-        context.textAlign = "right";
-        [1, 0.75, 0.5, 0.25, 0].forEach((ratio) => {
-          const mark = max * ratio;
-          context.fillText(
-            String(Math.round(mark)),
-            left - 5,
-            bottom - (mark / max) * (bottom - top) + 3,
-          );
-        });
-        const dateLabels = activityBuckets
-          .map((bucket, index) => ({
-            index,
-            text: new Intl.DateTimeFormat(undefined, {
-              month: "short",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-              hour12: false,
-              timeZone: "UTC",
-            }).format(new Date(bucket.start)),
-          }))
-          .filter(({ index }) => index % 3 === 0);
-        const gap = (right - left) / values.length;
-        context.globalAlpha = 0.84;
-        dateLabels.forEach(({ index, text }, labelIndex) => {
-          const center = left + index * gap + gap / 2;
-          context.textAlign =
-            labelIndex === 0
-              ? "left"
-              : labelIndex === dateLabels.length - 1
-                ? "right"
-                : "center";
-          context.fillText(text, center, height - 5);
-        });
-        context.globalAlpha = 1;
+        renderActivityRef.current = () => {
+          const currentBounds = canvas.getBoundingClientRect();
+          const currentRatio = window.devicePixelRatio || 1;
+          canvas.width = Math.max(1, Math.floor(currentBounds.width * currentRatio));
+          canvas.height = Math.max(1, Math.floor(currentBounds.height * currentRatio));
+          const currentContext = resizeCanvas(canvas, currentRatio);
+          drawActivityChart({
+            context: currentContext,
+            width: currentBounds.width,
+            height: currentBounds.height,
+            activityBuckets,
+            activityStatus,
+            activeIndex: activeActivityIndexRef.current,
+            progress: 1,
+            accent,
+            muted,
+            gridColor,
+            gridOpacity,
+            baselineGridOpacity,
+            devicePixelRatio: currentRatio,
+          });
+        };
+
+        const reducedMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+        const shouldAnimate =
+          activityBuckets.length > 0 &&
+          previousBuckets !== activityBuckets &&
+          (!previousBuckets || previousBuckets.length === 0) &&
+          !reducedMotion;
+
+        if (!shouldAnimate) {
+          activityAnimationRunningRef.current = false;
+          drawFrame(1);
+          previousActivityBucketsRef.current = activityBuckets;
+        } else {
+          if (activityAnimationFrameRef.current !== null) {
+            cancelAnimationFrame(activityAnimationFrameRef.current);
+          }
+          activityAnimationRunningRef.current = true;
+          setActiveActivityPoint(null);
+          previousActivityBucketsRef.current = activityBuckets;
+          const duration = 280;
+          const start = performance.now();
+          const ease = (value: number) => 1 - (1 - value) ** 3;
+
+          const animate = (now: number) => {
+            const progress = Math.min(1, ease((now - start) / duration));
+            drawFrame(progress);
+            if (progress >= 1) {
+              activityAnimationRunningRef.current = false;
+              activityAnimationFrameRef.current = null;
+              renderActivityRef.current?.();
+            } else {
+              activityAnimationFrameRef.current = requestAnimationFrame(animate);
+            }
+          };
+
+          activityAnimationFrameRef.current = requestAnimationFrame(animate);
+        }
       }
+    };
+
+    const observer = new ResizeObserver(() => {
+      if (!hasRendered) {
+        hasRendered = true;
+        renderAtCurrentSize();
+        return;
+      }
+
+      if (resizeTimer !== null) window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => {
+        resizeTimer = null;
+        renderAtCurrentSize();
+      }, 90);
     });
     observer.observe(canvas);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (resizeTimer !== null) window.clearTimeout(resizeTimer);
+      resizeTimer = null;
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      animationFrameRef.current = null;
+      animationRunningRef.current = false;
+      if (activityAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(activityAnimationFrameRef.current);
+      }
+      activityAnimationFrameRef.current = null;
+      activityAnimationRunningRef.current = false;
+      renderRevenueRef.current = null;
+      renderActivityRef.current = null;
+      setIsRangeTransitioning(false);
+    };
   }, [
     activityBuckets,
     activityStatus,
@@ -511,13 +1588,110 @@ function DataCanvas({
     themeKey,
   ]);
 
+  const isActiveRevenuePoint =
+    kind === "revenue" &&
+    !isRangeTransitioning &&
+    activeRevenuePoint?.trend === revenueTrend;
+  const tooltipPosition = isActiveRevenuePoint
+    ? getRevenueTooltipPosition(activeRevenuePoint)
+    : null;
+  const tooltipData = isActiveRevenuePoint
+    ? revenueTrend[activeRevenuePoint.index]
+    : undefined;
+  const isActiveActivityPoint =
+    kind === "activity" &&
+    !activityAnimationRunningRef.current &&
+    activeActivityPoint?.buckets === activityBuckets;
+  const activityTooltipPosition = isActiveActivityPoint
+    ? getActivityTooltipPosition(activeActivityPoint)
+    : null;
+  const activityTooltipData = isActiveActivityPoint
+    ? activityBuckets[activeActivityPoint.index]
+    : undefined;
+  const activityTooltipDate = activityTooltipData
+    ? formatActivityTooltipDate(activityTooltipData.start)
+    : null;
+
   return (
-    <canvas
-      ref={canvasRef}
-      className="creator-chart-canvas"
-      role="img"
-      aria-label={label}
-    />
+    <div
+      className={`creator-chart-canvas-wrap ${
+        kind === "revenue"
+          ? "creator-chart-canvas-wrap--revenue"
+          : kind === "activity"
+            ? "creator-chart-canvas-wrap--activity"
+            : ""
+      }`}
+      onPointerDown={
+        kind === "revenue"
+          ? handleRevenuePointerMove
+          : kind === "activity"
+            ? handleActivityPointerMove
+            : undefined
+      }
+      onPointerMove={
+        kind === "revenue"
+          ? handleRevenuePointerMove
+          : kind === "activity"
+            ? handleActivityPointerMove
+            : undefined
+      }
+      onPointerLeave={
+        kind === "revenue"
+          ? handleRevenuePointerLeave
+          : kind === "activity"
+            ? handleActivityPointerLeave
+            : undefined
+      }
+      onPointerCancel={
+        kind === "revenue"
+          ? handleRevenuePointerLeave
+          : kind === "activity"
+            ? handleActivityPointerLeave
+            : undefined
+      }
+    >
+      <canvas
+        ref={canvasRef}
+        className="creator-chart-canvas"
+        role="img"
+        aria-label={label}
+      />
+      {tooltipData && tooltipPosition && (
+        <div
+          className="creator-chart-tooltip"
+          role="tooltip"
+          style={{
+            left: `${tooltipPosition.x}px`,
+            top: `${tooltipPosition.y}px`,
+          }}
+        >
+          <span>{formatRevenueTooltipDate(tooltipData.date)}</span>
+          <strong>
+            {formatDashboardCurrency(tooltipData.value, revenueCurrency)}
+          </strong>
+        </div>
+      )}
+      {activityTooltipData &&
+        activityTooltipDate &&
+        activityTooltipPosition && (
+          <div
+            className="creator-chart-tooltip"
+            role="tooltip"
+            style={{
+              left: `${activityTooltipPosition.x}px`,
+              top: `${activityTooltipPosition.y}px`,
+            }}
+          >
+            <span>{activityTooltipDate.date}</span>
+            <span>{activityTooltipDate.range}</span>
+            <strong>
+              {activityTooltipData.value} {activityTooltipData.value === 1
+                ? "enrollment"
+                : "enrollments"}
+            </strong>
+          </div>
+        )}
+    </div>
   );
 }
 
@@ -548,16 +1722,27 @@ function RevenuePanel({
   const summaryUnavailable = isLoading || isError;
 
   return (
-    <DashboardPanel className="creator-revenue-panel" title="Revenue Overview">
+    <DashboardPanel
+      className="creator-revenue-panel"
+      title="Revenue Overview"
+      infoLabel="About Revenue Overview"
+      infoTitle="Revenue Overview"
+      infoDescription="Shows revenue and order activity for the selected time period. The chart tracks revenue over time, while the summary below shows gross sales, net revenue, orders, and refunds."
+    >
       <div className="creator-chart-toolbar">
         <span>
           <i /> Revenue ({currency === "INR" ? "₹" : currency})
         </span>
         <div
           className="creator-range-tabs"
+          data-active-range={range}
           role="tablist"
           aria-label="Revenue range"
         >
+          <span
+            className="creator-range-tabs-indicator"
+            aria-hidden="true"
+          />
           {(
             [
               ["7d", "7D"],
@@ -700,7 +1885,9 @@ function LearningActivityPanel({
     <DashboardPanel
       className="creator-activity-panel"
       title="Learning Activity"
-      infoLabel="About learning activity"
+      infoLabel="About Learning Activity"
+      infoTitle="Learning Activity"
+      infoDescription="Shows learner progress, course completion, and new enrollments. The chart displays enrollment activity across the last 7 days in 8-hour intervals. Chart times are shown in your device's local time."
     >
       <div className="creator-activity-list">
         {rows.map(([label, value, Icon, tone]) => (
@@ -726,12 +1913,12 @@ function LearningActivityPanel({
         <DataCanvas
           kind="activity"
           themeKey={themeKey}
-          label="New enrollments over the last 7 days in UTC 8-hour buckets"
+          label="New enrollments over the last 7 days in local time, using 8-hour buckets"
           activityBuckets={activityBuckets}
           activityStatus={activityStatus}
         />
       </div>
-      <p className="creator-activity-meta">Last 7 days · 8h buckets · UTC</p>
+      <p className="creator-activity-meta">Last 7 days · 8h buckets · Local time</p>
     </DashboardPanel>
   );
 }
@@ -1024,11 +2211,15 @@ function EnrollmentsPanel({ onNavigatePage }: NavigateProps) {
   );
 }
 
-export function CreatorDashboard({
+export const CreatorDashboard = memo(function CreatorDashboard({
   onNavigatePage,
   academyTheme = "default",
+  resolvedTheme = "dark",
 }: CreatorDashboardProps) {
   const [range, setRange] = useState<DashboardRange>("30d");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const refreshInFlightRef = useRef(false);
+  const queryClient = useQueryClient();
   const currentUser = useAuthStore((state) => state.user);
   const {
     data: dashboardResponse,
@@ -1044,6 +2235,35 @@ export function CreatorDashboard({
     currentUser?.username?.trim() ||
     "Your name";
   const dashboardGreeting = getDashboardGreeting();
+  const chartThemeKey = `${academyTheme}:${resolvedTheme}`;
+  const handleDashboardRefresh = async () => {
+    if (refreshInFlightRef.current) return;
+
+    refreshInFlightRef.current = true;
+    setIsRefreshing(true);
+    try {
+      await Promise.allSettled([
+        queryClient.refetchQueries({
+          queryKey: analyticsKeys.dashboard(range),
+          exact: true,
+          type: "active",
+        }),
+        queryClient.refetchQueries({
+          queryKey: learningInteractionKeys.dashboardRecentDiscussions(),
+          exact: true,
+          type: "active",
+        }),
+        queryClient.refetchQueries({
+          queryKey: enrollmentKeys.recent(10),
+          exact: true,
+          type: "active",
+        }),
+      ]);
+    } finally {
+      refreshInFlightRef.current = false;
+      setIsRefreshing(false);
+    }
+  };
   const metricCards = [
     {
       label: "Revenue This Month",
@@ -1114,6 +2334,22 @@ export function CreatorDashboard({
         <div className="creator-dashboard-actions">
           <button
             type="button"
+            className="creator-outline-action creator-dashboard-refresh-action"
+            onClick={() => void handleDashboardRefresh()}
+            disabled={isRefreshing}
+            aria-busy={isRefreshing}
+          >
+            <ArrowClockwise
+              className={`creator-dashboard-refresh-icon${
+                isRefreshing ? " is-refreshing" : ""
+              }`}
+              size={17}
+              aria-hidden="true"
+            />
+            Refresh
+          </button>
+          <button
+            type="button"
             className="creator-primary-action"
             onClick={() => onNavigatePage?.("Create Course")}
           >
@@ -1165,13 +2401,13 @@ export function CreatorDashboard({
         <RevenuePanel
           range={range}
           setRange={setRange}
-          themeKey={academyTheme}
+          themeKey={chartThemeKey}
           revenueOverview={dashboardResponse?.revenueOverview}
           isLoading={isDashboardLoading}
           isError={isDashboardError}
         />
         <LearningActivityPanel
-          themeKey={academyTheme}
+          themeKey={chartThemeKey}
           learningActivity={dashboardResponse?.learningActivity}
           isLoading={isDashboardLoading}
           isError={isDashboardError}
@@ -1187,4 +2423,4 @@ export function CreatorDashboard({
       </div>
     </div>
   );
-}
+});
