@@ -282,6 +282,25 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
     return await studentsRepo.getActiveLearnerCount(database, filters);
   }
 
+  async function getStudentPopulationCounts(filters: {
+    courseId?: string | string[];
+    createdFrom: Date;
+    createdTo: Date;
+  }) {
+    const [total, newThisMonth] = await Promise.all([
+      studentsRepo.countTotalStudents(database, {
+        courseId: filters.courseId,
+      }),
+      studentsRepo.countStudentsCreatedBetween(database, {
+        courseId: filters.courseId,
+        from: filters.createdFrom,
+        to: filters.createdTo,
+      }),
+    ]);
+
+    return { total, newThisMonth };
+  }
+
   async function getStudentByUsername(
     username: string,
   ): Promise<StudentDetailResponse> {
@@ -423,6 +442,7 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
     listStudents,
     getStudentByUsername,
     getActiveLearnerCount,
+    getStudentPopulationCounts,
   };
 }
 

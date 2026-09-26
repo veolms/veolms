@@ -15,3 +15,4 @@ export * from "./quiz.ts";
 export * from "./permissions.ts";
 export * from "./student.ts";
 export * from "./analytics.ts";
+export * from "./dashboard.ts";

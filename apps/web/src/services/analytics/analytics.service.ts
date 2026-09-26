@@ -1,5 +1,8 @@
 import { api } from "../../lib/api-client";
-import { analyticsOverviewResponseSchema } from "@veolms/contracts";
+import {
+  analyticsOverviewResponseSchema,
+  dashboardSummaryResponseSchema,
+} from "@veolms/contracts";
 
 export interface AnalyticsFilterParams {
   from?: string;
@@ -15,5 +18,9 @@ export const analyticsService = {
   getInstructorOverview: async (params: AnalyticsFilterParams = {}) =>
     analyticsOverviewResponseSchema.parse(
       await api.get<unknown>("/analytics/instructor/overview", { params }),
+    ),
+  getDashboard: async () =>
+    dashboardSummaryResponseSchema.parse(
+      await api.get<unknown>("/analytics/dashboard"),
     ),
 };

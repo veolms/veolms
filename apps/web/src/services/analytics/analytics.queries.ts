@@ -25,3 +25,12 @@ export function useInstructorAnalyticsOverview(
     staleTime: 30_000,
   });
 }
+
+export function useDashboard(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: analyticsKeys.dashboard(),
+    queryFn: () => analyticsService.getDashboard(),
+    enabled: options?.enabled ?? true,
+    staleTime: 30_000,
+  });
+}

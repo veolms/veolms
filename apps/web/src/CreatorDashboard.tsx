@@ -20,6 +20,7 @@ import { VideoCameraIcon as VideoCamera } from "@phosphor-icons/react/VideoCamer
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import type { Icon } from "@phosphor-icons/react";
 import { handleRovingTabKeyDown } from "./accessibility/rovingTabFocus";
+import { useDashboard } from "./services/analytics";
 import typescriptThumbnail from "./assets/course-thumbnails/typescript-960.webp";
 import nodeThumbnail from "./assets/course-thumbnails/nodejs-960.webp";
 import veolmsThumbnail from "./assets/learning-thumbnails/veolms-course.webp";
@@ -806,6 +807,17 @@ export function CreatorDashboard({
   academyTheme = "default",
 }: CreatorDashboardProps) {
   const [range, setRange] = useState("30D");
+  const { data: dashboardResponse } = useDashboard();
+
+  useEffect(() => {
+    if (import.meta.env.DEV && dashboardResponse) {
+      console.debug(
+        "[CreatorDashboard][SS1] dashboard response",
+        dashboardResponse,
+      );
+    }
+  }, [dashboardResponse]);
+
   return (
     <div className="creator-dashboard">
       <header className="creator-dashboard-heading">

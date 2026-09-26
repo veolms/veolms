@@ -4,4 +4,5 @@ export const analyticsKeys = {
     [...analyticsKeys.all, "admin-overview", query] as const,
   instructorOverview: (query: object) =>
     [...analyticsKeys.all, "instructor-overview", query] as const,
+  dashboard: () => [...analyticsKeys.all, "dashboard"] as const,
 };

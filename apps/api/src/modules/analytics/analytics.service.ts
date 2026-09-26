@@ -5,6 +5,7 @@ import type {
   AnalyticsKpi,
   AnalyticsOverviewResponse,
   CoursePerformanceRow,
+  DashboardSummaryResponse,
 } from "@veolms/contracts";
 import type { OrderScope } from "@veolms/contracts";
 import type { OrderService } from "../commerce/orders/order.service.ts";
@@ -12,7 +13,10 @@ import type { EnrollmentService } from "../commerce/enrollments/enrollment.servi
 import type { StudentsService } from "../students/students.service.ts";
 import type { CourseService } from "../courses/course/course.service.ts";
 import type { LearningProgressService } from "../learning-progress/learning-progress.service.ts";
-import type { AnalyticsActor } from "./analytics.types.ts";
+import type {
+  AnalyticsActor,
+  AnalyticsDashboardScope,
+} from "./analytics.types.ts";
 import { isAdmin } from "./analytics.types.ts";
 
 export interface AnalyticsServiceOptions {
@@ -35,6 +39,30 @@ interface ScopedCourse {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RANGE_DAYS = 30;
 const TOP_COURSES_LIMIT = 8;
+
+function resolveDashboardDateRanges(now = new Date()) {
+  const currentMonthFrom = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+  );
+  const previousMonthFrom = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1),
+  );
+  const previousMonthTo = new Date(currentMonthFrom.getTime() - 1);
+
+  const activeCurrentFrom = new Date(now.getTime() - 7 * DAY_MS);
+  const activePreviousFrom = new Date(activeCurrentFrom.getTime() - 7 * DAY_MS);
+  const activePreviousTo = new Date(activeCurrentFrom.getTime() - 1);
+
+  return {
+    now,
+    currentMonthFrom,
+    previousMonthFrom,
+    previousMonthTo,
+    activeCurrentFrom,
+    activePreviousFrom,
+    activePreviousTo,
+  };
+}
 
 function kpi(value: number, previousValue: number): AnalyticsKpi {
   let changePercent: number | null;
@@ -314,6 +342,107 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     };
   }
 
+  async function buildDashboard(
+    actor: AnalyticsActor,
+    dashboardScope: AnalyticsDashboardScope,
+  ): Promise<DashboardSummaryResponse> {
+    const { courseIds, isPlatformWide } =
+      dashboardScope === "platform"
+        ? { courseIds: [], isPlatformWide: true }
+        : await resolveCoursesInScope(actor, undefined);
+    if (!isPlatformWide && courseIds.length === 0) {
+      return {
+        revenue: {
+          value: 0,
+          previousValue: 0,
+          changePercent: 0,
+          currency: "INR",
+        },
+        students: { total: 0, newThisMonth: 0 },
+        activeLearners: kpi(0, 0),
+        watchHours: kpi(0, 0),
+      };
+    }
+
+    const courseIdFilter: string | string[] | undefined = isPlatformWide
+      ? undefined
+      : courseIds.length === 1
+        ? courseIds[0]
+        : courseIds;
+    const scope = await orderService.getAcademyScope();
+    const {
+      now,
+      currentMonthFrom,
+      previousMonthFrom,
+      previousMonthTo,
+      activeCurrentFrom,
+      activePreviousFrom,
+      activePreviousTo,
+    } = resolveDashboardDateRanges();
+
+    const currentRevenue = await orderService.getRawStatsForCourses(scope, {
+      courseId: courseIdFilter,
+      from: currentMonthFrom,
+      to: now,
+    });
+
+    const [
+      previousRevenue,
+      studentCounts,
+      activeLearnersCurrent,
+      activeLearnersPrevious,
+      watchHoursCurrent,
+      watchHoursPrevious,
+    ] = await Promise.all([
+      // Pin the previous period to the current period's currency so a
+      // multi-currency academy never compares different currencies.
+      orderService.getRawStatsForCourses(scope, {
+        courseId: courseIdFilter,
+        from: previousMonthFrom,
+        to: previousMonthTo,
+        currency: currentRevenue.currency,
+      }),
+      studentsService.getStudentPopulationCounts({
+        courseId: courseIdFilter,
+        createdFrom: currentMonthFrom,
+        createdTo: now,
+      }),
+      studentsService.getActiveLearnerCount({
+        courseId: courseIdFilter,
+        from: activeCurrentFrom,
+        to: now,
+      }),
+      studentsService.getActiveLearnerCount({
+        courseId: courseIdFilter,
+        from: activePreviousFrom,
+        to: activePreviousTo,
+      }),
+      learningProgressService.getEstimatedWatchHours({
+        courseId: courseIdFilter,
+        from: currentMonthFrom,
+        to: now,
+      }),
+      learningProgressService.getEstimatedWatchHours({
+        courseId: courseIdFilter,
+        from: previousMonthFrom,
+        to: previousMonthTo,
+      }),
+    ]);
+
+    return {
+      revenue: {
+        ...kpi(
+          currentRevenue.grossPaid - currentRevenue.refundedAmount,
+          previousRevenue.grossPaid - previousRevenue.refundedAmount,
+        ),
+        currency: currentRevenue.currency,
+      },
+      students: studentCounts,
+      activeLearners: kpi(activeLearnersCurrent, activeLearnersPrevious),
+      watchHours: kpi(watchHoursCurrent, watchHoursPrevious),
+    };
+  }
+
   function buildEmptyResponse(query: AnalyticsFilterQuery): AnalyticsOverviewResponse {
     const emptyKpi = kpi(0, 0);
     return {
@@ -339,6 +468,10 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       buildOverview(actor, query),
     instructorOverview: (actor: AnalyticsActor, query: AnalyticsFilterQuery) =>
       buildOverview(actor, query),
+    dashboard: (
+      actor: AnalyticsActor,
+      dashboardScope: AnalyticsDashboardScope,
+    ) => buildDashboard(actor, dashboardScope),
   };
 }
 

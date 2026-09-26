@@ -1,6 +1,7 @@
 import {
   analyticsFilterQuerySchema,
   analyticsOverviewResponseSchema,
+  dashboardSummaryResponseSchema,
 } from "@veolms/contracts";
 import { createAuthContext } from "../auth/shared/auth.context.ts";
 import {
@@ -95,6 +96,34 @@ const analyticsRoutes: RoutePlugin = async (app, options) => {
       ],
     },
     controller.instructorOverview,
+  );
+
+  app.get(
+    "/analytics/dashboard",
+    {
+      schema: {
+        operationId: "getDashboardSummary",
+        tags: ["Analytics"],
+        summary: "Get the dashboard summary",
+        description:
+          "Returns the four top dashboard card metrics using calendar-month and seven-day comparison windows. Requires analytics.revenue.read or analytics.course.read and scopes the data to the caller's authorized analytics surface.",
+        response: {
+          200: jsonResponse(
+            "Dashboard summary",
+            dashboardSummaryResponseSchema,
+          ),
+          ...errors,
+        },
+      },
+      preHandler: [
+        ...auth.mfaVerified,
+        authGuard.authorizeAny(
+          ["analytics.revenue.read", "analytics.course.read"],
+          "platform",
+        ),
+      ],
+    },
+    controller.dashboard,
   );
 };
 
