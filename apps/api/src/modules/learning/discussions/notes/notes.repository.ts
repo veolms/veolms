@@ -57,6 +57,7 @@ export interface CourseLessonRow {
 export type NoteFilterOptions = ListLearningNotesQuery & {
   pageCursor?: DiscussionListCursor;
   accessibleCourseIds?: readonly string[];
+  ids?: readonly string[];
 };
 
 // Kysely represents a `"learning_notes as n"` aliased query with the alias
@@ -164,6 +165,10 @@ function applyNoteFilters<O>(
 
   if (options.lessonId) {
     q = q.where("n.lesson_id", "=", options.lessonId);
+  }
+
+  if (options.ids) {
+    q = q.where("n.id", "in", [...options.ids]);
   }
 
   if (options.mine) {

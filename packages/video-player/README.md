@@ -376,12 +376,16 @@ Chapter resolution uses exactly one source in this order:
 3. timestamps parsed from `description`
 
 An empty or entirely invalid higher-priority source falls through to the next
-source. Normalization trims titles, drops invalid entries and duplicate start
-times, sorts by time, produces stable IDs, derives each end time from the next
-chapter, and uses the known media duration for the final chapter.
+source. Explicit sources and description candidates are normalized by the
+same helper: titles are trimmed, invalid entries and duplicate start times
+are dropped, entries are sorted by time, stable IDs are produced, and each
+end time is derived from the next chapter or the known media duration.
 
-The description parser accepts a timestamp followed by a title in `MM:SS` or
-`HH:MM:SS` form. Optional bullets or numbered-list prefixes are supported:
+The description parser builds a Markdown AST with the package's existing
+`remark-parse`/GFM stack. It recognizes timestamp-plus-title content in
+paragraphs and headings, the leading paragraph of a list item, and the
+leading paragraph or heading in a blockquote. Plain newline-separated chapter
+lines remain supported:
 
 ```text
 00:00 Welcome
@@ -389,10 +393,17 @@ The description parser accepts a timestamp followed by a title in `MM:SS` or
 3. 01:04:30 Final review
 ```
 
-Incidental numbers, URLs, negative values, malformed timestamps, and lines
-without titles are ignored. `parseChaptersFromDescription`,
-`normalizeChapters`, `resolveChapters`, and `getActiveChapter` are exported for
-server preprocessing or custom presentation.
+Strong/emphasis formatting around timestamps is interpreted semantically, and
+formatting in titles is reduced to its visible text. A link or inline-code
+timestamp at the semantic start is intentionally ignored; links and inline
+code later in a valid title are supported. Incidental numbers, URLs, negative
+values, malformed timestamps, raw-HTML candidates, and content without titles
+are ignored. Description-derived chapter sets must normalize to a first
+chapter at `00:00`; manual and metadata sources are not subject to that rule.
+
+`parseChaptersFromDescription`, `normalizeChapters`, `resolveChapters`, and
+`getActiveChapter` are exported for server preprocessing or custom
+presentation.
 
 ## Storyboard previews
 

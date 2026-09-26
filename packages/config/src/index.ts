@@ -213,11 +213,11 @@ const serverConfigSchema = z.object({
 
 const webConfigSchema = z.object({
   WEB_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
-  VITE_API_BASE_URL: z.string().default("http://localhost:4000/api/v1"),
+  VITE_API_BASE_URL: z.string().default("http://localhost:4000/v1"),
   VITE_COURSE_MEDIA_BASE_URL: cdnUrlSchema.optional(),
   VITE_CDN_URL: cdnUrlSchema.default("/cdn"),
   CDN_URL: cdnUrlSchema.default("/cdn"),
-  STATIC_BUILD_API_URL: z.url().default("http://localhost:4000/api/v1"),
+  STATIC_BUILD_API_URL: z.url().default("http://localhost:4000/v1"),
 });
 
 const INSECURE_DEFAULTS: Record<string, string> = {

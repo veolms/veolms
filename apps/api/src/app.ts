@@ -20,7 +20,7 @@ import { createServices, type AppServices } from "./services/index.ts";
 import { config } from "./config.ts";
 import { registerBackgroundJobs } from "./background-jobs.ts";
 
-export const API_ROUTE_PREFIX = "/api/v1";
+export const API_ROUTE_PREFIX = "/v1";
 
 /**
  * Must stay above the longest path parameter any contract accepts (currently
@@ -64,7 +64,7 @@ export async function createApp({
   // registered plugin only apply to that plugin's own routes, not siblings).
 
   app.addHook("preSerialization", async (request, reply, payload) => {
-    if (request.url.startsWith("/api/docs")) {
+    if (request.url.startsWith("/docs")) {
       return payload;
     }
 

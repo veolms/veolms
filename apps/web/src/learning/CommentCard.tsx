@@ -155,6 +155,7 @@ interface CommentCardProps {
   canEdit?: boolean;
   canDelete?: boolean;
   isDeepLinkTarget?: boolean;
+  constrainToContainer?: boolean;
 }
 
 export const CommentCard = React.memo(function CommentCard({
@@ -178,6 +179,7 @@ export const CommentCard = React.memo(function CommentCard({
   canEdit = true,
   canDelete = true,
   isDeepLinkTarget = false,
+  constrainToContainer = false,
 }: CommentCardProps) {
   const queryClient = useContext(QueryClientContext);
   const [localLiked, setLocalLiked] = useState(comment.liked ?? false);
@@ -439,7 +441,7 @@ export const CommentCard = React.memo(function CommentCard({
       aria-current={isDeepLinkTarget ? "location" : undefined}
       tabIndex={isDeepLinkTarget ? -1 : undefined}
       data-deletion-pending={deletion.hidden || undefined}
-      className={`relative -mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4 ${hasReplies ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${isDeepLinkTarget ? "focus:outline-2 focus:outline-offset-2 focus:outline-(--accent)" : ""} ${deletion.hidden ? "min-h-19" : ""}`}
+      className={`relative ${constrainToContainer ? "py-3.5 sm:py-4" : "-mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4"} ${hasReplies ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${isDeepLinkTarget ? "focus:outline-2 focus:outline-offset-2 focus:outline-(--accent)" : ""} ${deletion.hidden ? "min-h-19" : ""}`}
       onClick={(event) => {
         if (!hasReplies) return;
         const target = event.target;
@@ -964,7 +966,7 @@ function ReplyCard({
     <article
       id={`discussion-entry-${reply.id}`}
       data-deletion-pending={deletion.hidden || undefined}
-      className={`relative pl-8 sm:pl-14 ${deletion.hidden ? "min-h-9" : ""}`}
+      className={`relative pl-8 sm:pl-14 ${deletion.hidden ? "min-h-10" : ""}`}
     >
       <div
         inert={deletion.hidden ? true : undefined}
@@ -1184,7 +1186,8 @@ function ReplyCard({
           name={reply.name}
           seconds={deletion.seconds}
           onUndo={deletion.undo}
-          className="absolute top-0 right-0"
+          compact
+          className="absolute top-0 right-2"
         />
       )}
     </article>
