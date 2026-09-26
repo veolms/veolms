@@ -1,5 +1,5 @@
 import { useLayoutEffect, type ReactNode } from "react";
-import { Links, Meta, Outlet, Scripts, useLocation } from "react-router";
+import { Links, Meta, Outlet, Scripts } from "react-router";
 import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
 import { fullAppStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
@@ -10,17 +10,11 @@ import {
   getInitialLearningShellState,
   getLearningShellBootstrapScript,
 } from "./learning/learningShellPreferences";
-import { getEarlyCourseCatalogueScript } from "./courses/courseCatalogueBootstrap";
-import {
-  isCoursesDocumentPath,
-  readPrerenderedCourseLcp,
-} from "./courses/courseLcpPreload";
-import { API_BASE_URL_ORIGIN, getApiRequestUrl } from "./lib/apiBaseUrl";
 import {
   EARLY_HLS_PRELOAD_URL_PLACEHOLDER,
   getEarlyHlsPreloadInlineScript,
-} from "./learning/learningHlsInlineScript";
-import { getVideoPlaybackCdnOrigin } from "./learning/videoPlaybackCdn";
+} from "./learning/learningHlsBootstrap";
+import { getVideoPlaybackCdnOrigin } from "./learning/videoPlaybackBootstrap";
 import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
@@ -41,24 +35,6 @@ import {
   DEFAULT_ACADEMY_THEME,
   academyThemes,
 } from "./themes";
-
-function preloadMobileSettingsTab() {
-  if (
-    typeof window === "undefined" ||
-    !window.matchMedia("(max-width: 820px)").matches ||
-    !/^\/settings(?:\/|$)/.test(window.location.pathname)
-  ) {
-    return;
-  }
-
-  const tab =
-    window.location.pathname.split("/").filter(Boolean)[1] ?? "profile";
-  void import("./SettingsPage")
-    .then((module) => module.preloadSettingsTab(tab))
-    .catch(() => undefined);
-}
-
-preloadMobileSettingsTab();
 
 interface LayoutProps {
   children: ReactNode;
@@ -160,10 +136,6 @@ export function Layout({ children }: LayoutProps) {
   // flashes. Snapshot the already-mutated document into React's first render;
   // the server uses the deterministic defaults above.
   const initialLayoutDomState = getInitialLayoutDomState();
-  const location = useLocation();
-  const courseLcp = isCoursesDocumentPath(location.pathname)
-    ? readPrerenderedCourseLcp()
-    : null;
 
   return (
     <html
@@ -209,34 +181,11 @@ export function Layout({ children }: LayoutProps) {
           content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
         />
         <meta name="theme-color" content="#151718" />
-        <link rel="preload" href={fullAppStylesheet} as="style" />
-        {API_BASE_URL_ORIGIN ? (
+        {videoPlaybackCdnOrigin ? (
           <link
             rel="preconnect"
-            href={API_BASE_URL_ORIGIN}
-            crossOrigin="use-credentials"
-          />
-        ) : null}
-        {videoPlaybackCdnOrigin ? (
-          <>
-            <link
-              rel="preconnect"
-              href={videoPlaybackCdnOrigin}
-              crossOrigin="anonymous"
-            />
-            {/* Image requests are no-cors, so they cannot reuse the CORS
-                connection opened for video. */}
-            <link rel="preconnect" href={videoPlaybackCdnOrigin} />
-          </>
-        ) : null}
-        {courseLcp ? (
-          <link
-            rel="preload"
-            as="image"
-            href={courseLcp.src}
-            imageSrcSet={courseLcp.srcSet || undefined}
-            imageSizes={courseLcp.sizes}
-            fetchPriority="high"
+            href={videoPlaybackCdnOrigin}
+            crossOrigin="anonymous"
           />
         ) : null}
         <link rel="icon" type="image/svg+xml" href={procodrrLogoMark} />
@@ -253,13 +202,6 @@ export function Layout({ children }: LayoutProps) {
           }}
         />
         <Meta />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: getEarlyCourseCatalogueScript(
-              getApiRequestUrl("courses?limit=50"),
-            ),
-          }}
-        />
         <script
           dangerouslySetInnerHTML={{
             __html: getEarlyHlsPreloadInlineScript(
@@ -285,19 +227,15 @@ export function Layout({ children }: LayoutProps) {
           }}
         />
         <link rel="stylesheet" href={fullAppStylesheet} />
-        {/* Shared shell styles stay linked for the initial view. Feature
-            styles are loaded with their lazy page modules. In development,
-            keep React Router from adding a second route stylesheet request. */}
+        {/* The complete app stylesheet is linked above. In development,
+            React Router otherwise synthesizes an additional route-critical
+            stylesheet on every document request, delaying first paint by
+            seconds in this large app. Production still receives route links
+            and preloads through Links. */}
         {!import.meta.env.DEV && <Links />}
       </head>
       <body {...initialLayoutDomState.bodyAttributes}>
         <div id="root">{children}</div>
-        <script
-          dangerouslySetInnerHTML={{
-            __html:
-              '(()=>{const s=document.getElementById("settings-hydrate-fallback");if(s){s.style.display=/^\\/settings(?:\\/|$)/.test(location.pathname)&&typeof matchMedia==="function"&&matchMedia("(max-width: 820px)").matches?"":"none"}})();',
-          }}
-        />
         <Scripts />
         <ReadingModeEffects />
       </body>
@@ -315,44 +253,10 @@ export const meta = () => [
 ];
 
 export function HydrateFallback() {
-  return (
-    <>
-      <div
-        id="settings-hydrate-fallback"
-        aria-hidden="true"
-        className="courses-app"
-        style={{ display: "none" }}
-      >
-        <aside className="courses-sidebar" />
-        <div className="courses-main-frame">
-          <main className="courses-main">
-            <div className="mx-auto w-full max-w-screen-2xl px-4 py-5">
-              <header className="mb-6 space-y-1">
-                <h1 className="text-[clamp(2.25rem,9vw,3rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
-                  Settings
-                </h1>
-                <p className="text-sm text-(--muted)">
-                  Manage your personal preferences and interface experience.
-                </p>
-              </header>
-              <nav
-                className="mb-4 flex gap-2 overflow-hidden"
-                aria-hidden="true"
-              >
-                <div className="h-10 w-20 shrink-0 rounded-full bg-(--track)" />
-                <div className="h-10 w-24 shrink-0 rounded-full bg-(--track)" />
-                <div className="h-10 w-18 shrink-0 rounded-full bg-(--track)" />
-                <div className="h-10 w-20 shrink-0 rounded-full bg-(--track)" />
-              </nav>
-              <div className="grid min-h-[55vh] w-full place-items-center">
-                <span className="size-6 animate-spin rounded-full border-2 border-(--border) border-t-(--accent) motion-reduce:animate-none" />
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
-    </>
-  );
+  // Route loaders decide whether the user belongs in the academy or auth
+  // flow. Keep the build-time SPA fallback neutral so it cannot expose the
+  // wrong screen while that secure session check is in flight.
+  return <div aria-hidden="true" className="fixed inset-0 bg-(--canvas)" />;
 }
 
 function SessionInitializer({ children }: { children: ReactNode }) {

@@ -112,7 +112,7 @@ export function useDiscussionWorkspaceCardLongPress<T extends HTMLElement>({
         callbackRef.current();
       }, HOLD_DURATION_MS);
     },
-    [cancelCandidate, enabled],
+    [cancelCandidate, clearClickSuppression, enabled],
   );
 
   const onPointerMoveCapture: PointerEventHandler<T> = useCallback(

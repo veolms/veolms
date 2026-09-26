@@ -97,7 +97,6 @@ export function AvatarStylePicker({
   );
   const [shuffleCount, setShuffleCount] = useState(0);
   const [previewFailed, setPreviewFailed] = useState(false);
-  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [failedThumbnails, setFailedThumbnails] = useState<
     Record<string, boolean>
   >({});
@@ -156,7 +155,6 @@ export function AvatarStylePicker({
     // Only initialize when dialog transitions from closed to open
     if (open && !prevOpenRef.current) {
       setPreviewFailed(false);
-      setIsPreviewLoading(false);
       setFailedThumbnails({});
       setShuffleCount(0);
       setUserSelectedSavedId(null);
@@ -178,20 +176,6 @@ export function AvatarStylePicker({
   useEffect(() => {
     setPreviewFailed(false);
   }, [selectedStyle, shuffleCount, activeTab, effectiveSelectedSavedId]);
-
-  useEffect(() => {
-    if (!isPreviewLoading) return;
-    const timeoutId = setTimeout(() => {
-      setIsPreviewLoading(false);
-    }, 8000);
-    return () => clearTimeout(timeoutId);
-  }, [isPreviewLoading]);
-
-  const handleShuffle = () => {
-    if (isSaving || isPreviewLoading) return;
-    setIsPreviewLoading(true);
-    setShuffleCount((count) => count + 1);
-  };
 
   if (!open) return null;
 
@@ -281,39 +265,15 @@ export function AvatarStylePicker({
                 Preview unavailable
               </span>
             ) : (
-              <>
-                <img
-                  key={generatedPreviewUrl}
-                  src={generatedPreviewUrl}
-                  alt="Generated avatar preview"
-                  width={152}
-                  height={152}
-                  className={`settings-profile__avatar-preview-img${
-                    isPreviewLoading
-                      ? " opacity-40 transition-opacity duration-200"
-                      : ""
-                  }`}
-                  onError={() => {
-                    setPreviewFailed(true);
-                    setIsPreviewLoading(false);
-                  }}
-                  onLoad={() => {
-                    setPreviewFailed(false);
-                    setIsPreviewLoading(false);
-                  }}
-                />
-                {isPreviewLoading && (
-                  <div
-                    className="absolute inset-0 flex items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--canvas)_60%,transparent)] backdrop-blur-[2px] z-10"
-                    aria-label="Generating avatar"
-                  >
-                    <CircleNotch
-                      size={32}
-                      className="animate-spin text-(--accent)"
-                    />
-                  </div>
-                )}
-              </>
+              <img
+                src={generatedPreviewUrl}
+                alt="Generated avatar preview"
+                width={152}
+                height={152}
+                className="settings-profile__avatar-preview-img"
+                onError={() => setPreviewFailed(true)}
+                onLoad={() => setPreviewFailed(false)}
+              />
             )}
           </div>
           <span className="settings-profile__avatar-preview-caption">
@@ -323,32 +283,12 @@ export function AvatarStylePicker({
             <button
               type="button"
               className="settings-profile__avatar-style-shuffle"
-              disabled={isSaving || isPreviewLoading}
-              onClick={handleShuffle}
-              title={
-                isPreviewLoading ? "Generating avatar..." : "Shuffle avatar look"
-              }
-              aria-busy={isPreviewLoading}
+              disabled={isSaving}
+              onClick={() => setShuffleCount((count) => count + 1)}
+              title="Shuffle avatar look"
             >
-              {isPreviewLoading ? (
-                <>
-                  <CircleNotch
-                    size={13}
-                    className="animate-spin text-(--accent)"
-                    aria-hidden="true"
-                  />
-                  Shuffling...
-                </>
-              ) : (
-                <>
-                  <ArrowsClockwise
-                    size={13}
-                    weight="bold"
-                    aria-hidden="true"
-                  />
-                  Shuffle look
-                </>
-              )}
+              <ArrowsClockwise size={13} weight="bold" aria-hidden="true" />
+              Shuffle look
             </button>
           )}
         </div>
@@ -369,10 +309,7 @@ export function AvatarStylePicker({
               className={`settings-profile__avatar-dialog-tab${
                 activeTab === "saved" ? " is-active" : ""
               }`}
-              onClick={() => {
-                setActiveTab("saved");
-                setIsPreviewLoading(false);
-              }}
+              onClick={() => setActiveTab("saved")}
             >
               Sync &amp; saved
             </button>
@@ -512,12 +449,7 @@ export function AvatarStylePicker({
                     className={`settings-profile__avatar-style-option${
                       selectedStyle === option ? " is-selected" : ""
                     }`}
-                    onClick={() => {
-                      if (selectedStyle !== option) {
-                        setSelectedStyle(option);
-                        setIsPreviewLoading(true);
-                      }
-                    }}
+                    onClick={() => setSelectedStyle(option)}
                   >
                     {failedThumbnails[option] ? (
                       <span
@@ -567,7 +499,6 @@ export function AvatarStylePicker({
           onClick={confirm}
           disabled={
             isSaving ||
-            isPreviewLoading ||
             (activeTab === "generate" && previewFailed) ||
             (activeTab === "saved" && !selectedSavedAvatar)
           }

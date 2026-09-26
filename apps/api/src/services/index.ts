@@ -11,10 +11,6 @@ import {
 
 import type { PaymentGateway } from "@veolms/contracts";
 import { createPaymentGateway } from "../modules/commerce/payments/gateways/gateway.factory.ts";
-import {
-  createCourseStaticPageRefreshService,
-  type CourseStaticPageRefreshService,
-} from "./course-static-page-refresh.service.ts";
 
 export * from "./email/index.ts";
 export * from "./sms/index.ts";
@@ -27,7 +23,6 @@ export interface AppServices {
   storage: S3StorageService;
   videoDispatch: VideoDispatchService;
   paymentGateway: PaymentGateway;
-  courseStaticPages: CourseStaticPageRefreshService;
 }
 
 export interface CreateServicesOptions {
@@ -139,12 +134,5 @@ export function createServices({
     }),
 
     paymentGateway: createPaymentGateway(config),
-    courseStaticPages: createCourseStaticPageRefreshService({
-      githubToken: config.COURSE_STATIC_REFRESH_GITHUB_TOKEN,
-      repository: config.COURSE_STATIC_REFRESH_REPOSITORY,
-      ref: config.COURSE_STATIC_REFRESH_REF,
-      workflow: config.COURSE_STATIC_REFRESH_WORKFLOW,
-      logger,
-    }),
   };
 }

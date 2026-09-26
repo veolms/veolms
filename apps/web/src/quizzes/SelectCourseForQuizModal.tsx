@@ -1,11 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
-import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
-import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
-import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
-import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
-import { PuzzlePieceIcon as PuzzlePiece } from "@phosphor-icons/react/PuzzlePiece";
-import { XIcon as X } from "@phosphor-icons/react/X";
+import {
+  BookOpenIcon as BookOpen,
+  CircleNotchIcon as CircleNotch,
+  MagnifyingGlassIcon as MagnifyingGlass,
+  PlusIcon as Plus,
+  PuzzlePieceIcon as PuzzlePiece,
+  XIcon as X,
+} from "@phosphor-icons/react";
 import { useMyCourses } from "../services/courses";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 
@@ -23,7 +31,6 @@ export function SelectCourseForQuizModal({
   const coursesQuery = useMyCourses({ enabled: isOpen });
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
-  const rawCourses = coursesQuery.data?.courses;
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
 
@@ -65,9 +72,7 @@ export function SelectCourseForQuizModal({
         modalRef.current.querySelectorAll<HTMLElement>(
           'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
-      ).filter(
-        (el) => el.offsetParent !== null || el === searchInputRef.current,
-      );
+      ).filter((el) => el.offsetParent !== null || el === searchInputRef.current);
 
       if (!focusableElements.length) return;
       const first = focusableElements[0]!;
@@ -90,11 +95,12 @@ export function SelectCourseForQuizModal({
     };
   }, [isOpen, dismissModal]);
 
+  const rawCourses = coursesQuery.data?.courses ?? [];
+
   const filteredCourses = useMemo(() => {
-    const courses = rawCourses ?? [];
-    if (!searchQuery.trim()) return courses;
+    if (!searchQuery.trim()) return rawCourses;
     const lower = searchQuery.toLowerCase().trim();
-    return courses.filter((course) =>
+    return rawCourses.filter((course) =>
       course.title.toLowerCase().includes(lower),
     );
   }, [rawCourses, searchQuery]);
@@ -103,9 +109,7 @@ export function SelectCourseForQuizModal({
     (courseId: string) => {
       dismissThen(() => {
         onClose();
-        onNavigatePage?.(
-          `/courses/create?edit=${encodeURIComponent(courseId)}&tab=curriculum`,
-        );
+        onNavigatePage?.(`/courses/create?edit=${encodeURIComponent(courseId)}&tab=curriculum`);
       });
     },
     [dismissThen, onClose, onNavigatePage],
@@ -160,7 +164,7 @@ export function SelectCourseForQuizModal({
         </div>
 
         {/* Search */}
-        {(rawCourses?.length ?? 0) > 0 && (
+        {rawCourses.length > 0 && (
           <div className="pt-4 pb-2">
             <div className="relative flex items-center w-full">
               <MagnifyingGlass
@@ -186,7 +190,7 @@ export function SelectCourseForQuizModal({
               <CircleNotch size={22} className="animate-spin text-(--accent)" />
               <span>Loading your courses...</span>
             </div>
-          ) : (rawCourses?.length ?? 0) === 0 ? (
+          ) : rawCourses.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] text-(--accent) mb-3">
                 <BookOpen size={24} weight="duotone" />
@@ -195,8 +199,7 @@ export function SelectCourseForQuizModal({
                 No courses found
               </h4>
               <p className="text-xs text-(--muted) max-w-xs mb-4">
-                You need at least one course to create and attach quizzes in the
-                curriculum.
+                You need at least one course to create and attach quizzes in the curriculum.
               </p>
               <button
                 type="button"
@@ -252,13 +255,9 @@ export function SelectCourseForQuizModal({
                               : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted)"
                           }`}
                         >
-                          {course.status === "published"
-                            ? "Published"
-                            : "Draft"}
+                          {course.status === "published" ? "Published" : "Draft"}
                         </span>
-                        {course.difficulty && (
-                          <span>• {course.difficulty}</span>
-                        )}
+                        {course.difficulty && <span>• {course.difficulty}</span>}
                       </div>
                     </div>
                   </div>

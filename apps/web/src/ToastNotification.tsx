@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
-import { InfoIcon as Info } from "@phosphor-icons/react/Info";
-import { LinkIcon as Link } from "@phosphor-icons/react/Link";
-import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
-import { XCircleIcon as XCircle } from "@phosphor-icons/react/XCircle";
-import { XIcon as X } from "@phosphor-icons/react/X";
+import {
+  CheckCircle,
+  Info,
+  Link,
+  WarningCircle,
+  XCircle,
+  X,
+} from "@phosphor-icons/react";
 
 export type ToastType = "success" | "info" | "warning" | "error";
 export type ToastIcon = "default" | "link";
@@ -52,18 +54,6 @@ export function ToastNotification({
   const remainingTimeRef = useRef(duration);
   const startTimeRef = useRef<number>(Date.now());
 
-  function handleStartExit() {
-    setIsExiting(true);
-    if (exitTimerRef.current) {
-      window.clearTimeout(exitTimerRef.current);
-    }
-    exitTimerRef.current = window.setTimeout(() => {
-      setCurrentNotice(null);
-      setIsExiting(false);
-      onDismiss?.();
-    }, 240); // Matches toastSlideOut duration
-  }
-
   // Handle incoming message changes
   useEffect(() => {
     if (message) {
@@ -91,9 +81,19 @@ export function ToastNotification({
       if (timerRef.current) window.clearTimeout(timerRef.current);
       if (exitTimerRef.current) window.clearTimeout(exitTimerRef.current);
     };
-    // State changes should not restart the toast's full display timer.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [message, duration, type]);
+
+  const handleStartExit = () => {
+    setIsExiting(true);
+    if (exitTimerRef.current) {
+      window.clearTimeout(exitTimerRef.current);
+    }
+    exitTimerRef.current = window.setTimeout(() => {
+      setCurrentNotice(null);
+      setIsExiting(false);
+      onDismiss?.();
+    }, 240); // Matches toastSlideOut duration
+  };
 
   const handleMouseEnter = () => {
     isPausedRef.current = true;

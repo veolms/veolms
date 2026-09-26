@@ -1,4 +1,3 @@
-import "../styles/features/settings/learning.css";
 import { useEffect, useState } from "react";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";

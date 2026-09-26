@@ -10,11 +10,6 @@ const throttleNetwork = process.env.BENCHMARK_NETWORK !== "off";
 
 const routes = [
   {
-    name: "Courses",
-    path: "/courses",
-    ready: 'section[aria-label="Courses"]',
-  },
-  {
     name: "Home",
     path: "/",
     ready: ".home-resume-card",
@@ -45,18 +40,6 @@ const routes = [
     interaction: ".lesson-tool-tab:nth-child(2)",
   },
 ];
-const requestedRoute = process.env.BENCHMARK_ROUTE?.toLowerCase();
-const benchmarkRoutes = requestedRoute
-  ? routes.filter(
-      (route) =>
-        route.name.toLowerCase() === requestedRoute ||
-        route.path.toLowerCase() === requestedRoute,
-    )
-  : routes;
-
-if (benchmarkRoutes.length === 0) {
-  throw new Error(`Unknown benchmark route: ${process.env.BENCHMARK_ROUTE}`);
-}
 
 const median = (values) => {
   const sorted = [...values].sort((a, b) => a - b);
@@ -71,7 +54,7 @@ const round = (value) => Math.round(value * 10) / 10;
 const browser = await chromium.launch({ headless: true });
 const results = [];
 
-for (const route of benchmarkRoutes) {
+for (const route of routes) {
   const samples = [];
 
   for (let sampleIndex = 0; sampleIndex < samplesPerRoute; sampleIndex += 1) {
@@ -108,7 +91,6 @@ for (const route of benchmarkRoutes) {
         interactionLatency: 0,
         interactionId: 0,
         interactionStart: 0,
-        lcpEntry: null,
         lcp: 0,
         longTaskCount: 0,
         tbt: 0,
@@ -117,31 +99,7 @@ for (const route of benchmarkRoutes) {
       new PerformanceObserver((list) => {
         const entries = list.getEntries();
         const lastEntry = entries.at(-1);
-        if (lastEntry) {
-          const element = lastEntry.element;
-          const bounds = element?.getBoundingClientRect();
-          const rawUrl =
-            lastEntry.url || element?.currentSrc || element?.src || "";
-          let resourceUrl = "";
-          try {
-            const url = new URL(rawUrl, location.href);
-            resourceUrl = `${url.origin}${url.pathname}`;
-          } catch {}
-          window.__veolmsVitals.lcp = lastEntry.startTime;
-          window.__veolmsVitals.lcpEntry = {
-            className:
-              typeof element?.className === "string" ? element.className : "",
-            fetchPriority: element?.getAttribute("fetchpriority") ?? null,
-            height: bounds?.height ?? null,
-            id: element?.id ?? "",
-            loadTime: lastEntry.loadTime,
-            renderTime: lastEntry.renderTime,
-            resourceUrl,
-            size: lastEntry.size,
-            tagName: element?.tagName.toLowerCase() ?? "",
-            width: bounds?.width ?? null,
-          };
-        }
+        if (lastEntry) window.__veolmsVitals.lcp = lastEntry.startTime;
       }).observe({ type: "largest-contentful-paint", buffered: true });
 
       new PerformanceObserver((list) => {
@@ -246,16 +204,14 @@ for (const route of benchmarkRoutes) {
     }
     await page.locator(route.ready).first().waitFor({
       state: "visible",
-      timeout: 90_000,
+      timeout: 30_000,
     });
     await page.waitForTimeout(1_000);
 
-    if (route.interaction) {
-      const interactionTarget = page.locator(route.interaction).first();
-      if (await interactionTarget.isVisible()) {
-        await interactionTarget.click();
-        await page.waitForTimeout(350);
-      }
+    const interactionTarget = page.locator(route.interaction).first();
+    if (await interactionTarget.isVisible()) {
+      await interactionTarget.click();
+      await page.waitForTimeout(350);
     }
 
     const metrics = await page.evaluate(() => {
@@ -267,31 +223,9 @@ for (const route of benchmarkRoutes) {
       const jsResources = resources.filter(
         (entry) =>
           entry.initiatorType === "script" ||
-          /\.(?:js|mjs|jsx|tsx?)(?:$|[?#])/.test(entry.name),
+          entry.name.includes(".js") ||
+          entry.name.includes(".mjs"),
       );
-      const safeUrl = (value) => {
-        try {
-          const url = new URL(value, location.href);
-          return `${url.origin}${url.pathname}`;
-        } catch {
-          return value;
-        }
-      };
-      const resourceSummary = resources.map((entry) => ({
-        duration: entry.duration,
-        initiatorType: entry.initiatorType,
-        path: safeUrl(entry.name),
-        responseEnd: entry.responseEnd,
-        responseStart: entry.responseStart,
-        startTime: entry.startTime,
-        transferBytes: entry.transferSize,
-      }));
-      const lcpEntry = window.__veolmsVitals.lcpEntry;
-      const lcpResource = lcpEntry?.resourceUrl
-        ? resources.find(
-            (entry) => safeUrl(entry.name) === lcpEntry.resourceUrl,
-          )
-        : undefined;
 
       return {
         cls: window.__veolmsVitals.cls,
@@ -304,30 +238,10 @@ for (const route of benchmarkRoutes) {
           (total, entry) => total + entry.transferSize,
           0,
         ),
-        lcpBreakdown: {
-          elementRenderDelay: lcpResource
-            ? Math.max(0, window.__veolmsVitals.lcp - lcpResource.responseEnd)
-            : null,
-          resourceLoadDelay: lcpResource
-            ? Math.max(0, lcpResource.startTime - navigation.responseStart)
-            : null,
-          resourceLoadTime: lcpResource ? lcpResource.duration : null,
-          ttfb: navigation.responseStart,
-        },
-        lcpEntry,
         lcp: window.__veolmsVitals.lcp,
         load: navigation.loadEventEnd,
         longTaskCount: window.__veolmsVitals.longTaskCount,
         requestCount: resources.length + 1,
-        apiResources: resourceSummary.filter((resource) =>
-          /^\/v1(?:\/|$)/u.test(new URL(resource.path).pathname),
-        ),
-        largestResources: [...resourceSummary]
-          .sort((left, right) => right.transferBytes - left.transferBytes)
-          .slice(0, 15),
-        slowestResources: [...resourceSummary]
-          .sort((left, right) => right.duration - left.duration)
-          .slice(0, 15),
         tbt: window.__veolmsVitals.tbt,
         transferBytes:
           navigation.transferSize +
@@ -338,19 +252,14 @@ for (const route of benchmarkRoutes) {
 
     samples.push({
       ...Object.fromEntries(
-        Object.entries(metrics).map(([key, value]) => [
-          key,
-          typeof value === "number" ? round(value) : value,
-        ]),
+        Object.entries(metrics).map(([key, value]) => [key, round(value)]),
       ),
       wallTime: Date.now() - startedAt,
     });
     await context.close();
   }
 
-  const numericKeys = Object.keys(samples[0]).filter(
-    (key) => typeof samples[0][key] === "number",
-  );
+  const numericKeys = Object.keys(samples[0]);
   const medians = Object.fromEntries(
     numericKeys.map((key) => [
       key,

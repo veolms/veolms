@@ -13,7 +13,6 @@ import {
 import { learningInteractionKeys } from "./learning-interactions.keys";
 import { optimisticEditCoordinator } from "./optimistic-edit-coordinator";
 import { isInfiniteCacheData, mapPaginatedCache } from "./paginated-cache";
-import { registerLearningInteractionReset } from "./lifecycle";
 
 export const UNDO_DELETE_TIMEOUT_MS = 10_000;
 
@@ -453,7 +452,6 @@ export class OptimisticDeletionCoordinator {
 
 export const optimisticDeletionCoordinator =
   new OptimisticDeletionCoordinator();
-registerLearningInteractionReset(() => optimisticDeletionCoordinator.reset());
 
 /** React bridge for projections and tombstone presentation. */
 export function useOptimisticDeletionRevision(): number {

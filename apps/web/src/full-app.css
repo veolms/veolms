@@ -1,5 +1,14 @@
 @import "./styles.css";
-@import "./styles/shell/mobile-navigation.css";
+@import "./shell-theme.css";
+@import "./reading-mode.css";
+/* Auth routes are client-hydrated and may initially serve HydrateFallback in
+   the static build, so their namespaced styles must be available globally. */
+@import "./auth/auth.css";
+@import "./auth/mfa-setup.css";
+/* Scrollbar pseudo-elements cannot be expressed with Tailwind. Keep their
+   application-wide preference styles owned by the settings feature. */
+@import "./settings/scrollbars/scrollbarPreferences.css";
+@import "./accessibility/tabFocusVisibility.css";
 
 @font-face {
   font-family: "Manrope Variable";

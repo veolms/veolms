@@ -7,7 +7,6 @@ import type {
   CourseEditorDataResponse,
   CoursePricing,
   CourseSettings,
-  CourseStaticPageRefreshStatus,
   CourseIncludeItem,
   CreateCategoryRequest,
   CreateCourseIncludeRequest,
@@ -32,29 +31,6 @@ import type { ApiError } from "../../lib/api-error";
 import { courseKeys } from "./courses.keys";
 import { coursesService } from "./courses.service";
 
-function invalidatePublicPageRefreshStatus(
-  queryClient: ReturnType<typeof useQueryClient>,
-  courseId: string,
-  courseWillRefresh?: boolean,
-) {
-  const key = courseKeys.publicPageRefresh(courseId);
-  const currentStatus = queryClient.getQueryData<CourseStaticPageRefreshStatus>(
-    key,
-  );
-  if (currentStatus?.status === "queued" || currentStatus?.status === "running") {
-    return;
-  }
-
-  const isPublished =
-    courseWillRefresh ??
-    queryClient.getQueryData<CourseEditorDataResponse>(
-      courseKeys.editor(courseId),
-    )?.course.status === "published";
-  if (!isPublished) return;
-
-  void queryClient.invalidateQueries({ queryKey: key });
-}
-
 export function useCreateCourse() {
   const queryClient = useQueryClient();
 
@@ -77,12 +53,7 @@ export function useUpdateCourseBasics() {
   >({
     mutationFn: ({ id, payload }) =>
       coursesService.updateCourseBasics(id, payload),
-    onSuccess: (updatedCourse, variables) => {
-      invalidatePublicPageRefreshStatus(
-        queryClient,
-        variables.id,
-        updatedCourse.status === "published",
-      );
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.id),
       });
@@ -102,27 +73,12 @@ export function useDeleteCourse() {
   return useMutation<CourseDeleteResponse, ApiError, string>({
     mutationFn: (courseId) => coursesService.deleteCourse(courseId),
     onSuccess: (_, courseId) => {
-      invalidatePublicPageRefreshStatus(queryClient, courseId);
       queryClient.invalidateQueries({ queryKey: courseKeys.mine() });
       queryClient.invalidateQueries({ queryKey: courseKeys.lists() });
       queryClient.invalidateQueries({ queryKey: courseKeys.bin() });
       queryClient.removeQueries({ queryKey: courseKeys.editor(courseId) });
       queryClient.removeQueries({ queryKey: courseKeys.preview(courseId) });
       queryClient.removeQueries({ queryKey: courseKeys.overviews() });
-    },
-  });
-}
-
-export function useRetryPublicCoursePageRefresh() {
-  const queryClient = useQueryClient();
-
-  return useMutation<CourseStaticPageRefreshStatus, ApiError, string>({
-    mutationFn: (courseId) => coursesService.retryPublicPageRefresh(courseId),
-    onSuccess: (status) => {
-      queryClient.setQueryData(
-        courseKeys.publicPageRefresh(status.courseId),
-        status,
-      );
     },
   });
 }
@@ -173,7 +129,6 @@ export function useCreateSection() {
     mutationFn: ({ courseId, payload }) =>
       coursesService.createSection(courseId, payload),
     onSuccess: (_, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
@@ -202,7 +157,6 @@ export function useUpdateCourseSection() {
     mutationFn: ({ courseId, sectionId, payload }) =>
       coursesService.updateSection(courseId, sectionId, payload),
     onSuccess: (_, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
@@ -228,7 +182,6 @@ export function useDeleteCourseSection() {
     mutationFn: ({ courseId, sectionId }) =>
       coursesService.deleteSection(courseId, sectionId),
     onSuccess: (_, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
@@ -303,7 +256,6 @@ export function useReorderCourseSections() {
       }
     },
     onSettled: (_, __, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
@@ -333,7 +285,6 @@ export function useCreateLesson() {
     mutationFn: ({ courseId, sectionId, payload }) =>
       coursesService.createLesson(courseId, sectionId, payload),
     onSuccess: (_, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
@@ -362,7 +313,6 @@ export function useUpdateCourseLesson() {
     mutationFn: ({ courseId, lessonId, payload }) =>
       coursesService.updateLesson(courseId, lessonId, payload),
     onSuccess: (_, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
@@ -388,7 +338,6 @@ export function useDeleteCourseLesson() {
     mutationFn: ({ courseId, lessonId }) =>
       coursesService.deleteLesson(courseId, lessonId),
     onSuccess: (_, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
@@ -418,7 +367,6 @@ export function useCreateLessonResource() {
     mutationFn: ({ courseId, lessonId, payload }) =>
       coursesService.createLessonResource(courseId, lessonId, payload),
     onSuccess: (_, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
@@ -440,7 +388,6 @@ export function useDeleteLessonResource() {
     mutationFn: ({ courseId, resourceId }) =>
       coursesService.deleteLessonResource(courseId, resourceId),
     onSuccess: (_, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
@@ -520,7 +467,6 @@ export function useReorderSectionLessons() {
       }
     },
     onSettled: (_, __, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
@@ -546,7 +492,6 @@ export function useUpsertAccessRules() {
     mutationFn: ({ courseId, payload }) =>
       coursesService.upsertAccessRules(courseId, payload),
     onSuccess: (data, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.setQueryData<CourseEditorDataResponse>(
         courseKeys.editor(variables.courseId),
         (old) => {
@@ -576,7 +521,6 @@ export function useUpsertSettings() {
     mutationFn: ({ courseId, payload }) =>
       coursesService.upsertSettings(courseId, payload),
     onSuccess: (data, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.setQueryData<CourseEditorDataResponse>(
         courseKeys.editor(variables.courseId),
         (old) => {
@@ -609,7 +553,6 @@ export function useUpsertPricing() {
     mutationFn: ({ courseId, payload }) =>
       coursesService.upsertPricing(courseId, payload),
     onSuccess: (data, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.setQueryData<CourseEditorDataResponse>(
         courseKeys.editor(variables.courseId),
         (old) => {
@@ -634,11 +577,6 @@ export function usePublishCourse() {
   return useMutation<Course, ApiError, string>({
     mutationFn: (courseId) => coursesService.publishCourse(courseId),
     onSuccess: (updatedCourse) => {
-      invalidatePublicPageRefreshStatus(
-        queryClient,
-        updatedCourse.id,
-        true,
-      );
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(updatedCourse.id),
       });
@@ -661,11 +599,6 @@ export function useUnpublishCourse() {
   return useMutation<Course, ApiError, string>({
     mutationFn: (courseId) => coursesService.unpublishCourse(courseId),
     onSuccess: (updatedCourse) => {
-      invalidatePublicPageRefreshStatus(
-        queryClient,
-        updatedCourse.id,
-        true,
-      );
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(updatedCourse.id),
       });
@@ -693,7 +626,6 @@ export function useCreateCourseInclude() {
     mutationFn: ({ courseId, payload }) =>
       coursesService.createInclude(courseId, payload),
     onSuccess: (_, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
@@ -715,7 +647,6 @@ export function useUpdateCourseInclude() {
     mutationFn: ({ courseId, includeId, payload }) =>
       coursesService.updateInclude(courseId, includeId, payload),
     onSuccess: (_, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
@@ -737,7 +668,6 @@ export function useDeleteCourseInclude() {
     mutationFn: ({ courseId, includeId }) =>
       coursesService.deleteInclude(courseId, includeId),
     onSuccess: (_, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });
@@ -759,7 +689,6 @@ export function useReorderCourseIncludes() {
     mutationFn: ({ courseId, payload }) =>
       coursesService.reorderIncludes(courseId, payload),
     onSuccess: (_, variables) => {
-      invalidatePublicPageRefreshStatus(queryClient, variables.courseId);
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
       });

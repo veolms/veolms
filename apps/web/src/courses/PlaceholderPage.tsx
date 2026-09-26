@@ -1,4 +1,3 @@
-import "../styles/features/placeholders.css";
 import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";

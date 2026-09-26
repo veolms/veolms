@@ -1,4 +1,4 @@
-import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
+import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react";
 import type { Icon } from "@phosphor-icons/react";
 import {
   createContext,

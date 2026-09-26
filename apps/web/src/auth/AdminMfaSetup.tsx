@@ -1,7 +1,6 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import type { FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import "./mfa-setup.css";
 import { AuthBrandMark } from "./AuthBrandPanel.tsx";
 import { MFA_CONFIG } from "./mfa.config.ts";
 import { OtpCodeInput } from "./OtpCodeInput.tsx";
@@ -21,7 +20,6 @@ export type AdminMfaMethod = "passkey" | "authenticator";
 export interface AdminMfaSetupProps {
   onDone: () => void;
   onError: (message: string) => void;
-  onClearError: () => void;
 }
 
 const STEP_LABELS = {
@@ -117,18 +115,13 @@ function BackupCodesScreen({ codes, onContinue }: BackupCodesScreenProps) {
 type Screen =
   "chooseMethod" | "totpQr" | "totpVerify" | "backupCodes" | "passkeyPending";
 
-export function AdminMfaSetup({
-  onDone,
-  onError,
-  onClearError,
-}: AdminMfaSetupProps) {
+export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
   const [screen, setScreen] = useState<Screen>("chooseMethod");
   const [totpSecret, setTotpSecret] = useState("");
   const [totpUri, setTotpUri] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [codeError, setCodeError] = useState<string | null>(null);
-  const passkeyAttempt = useRef(0);
 
   const queryClient = useQueryClient();
   const setupTotpMutation = useSetupTotp();
@@ -139,46 +132,25 @@ export function AdminMfaSetup({
   const passkeySupported = isPasskeySupported();
 
   const handleSetupPasskey = async () => {
-    onClearError();
-    const attempt = ++passkeyAttempt.current;
     setScreen("passkeyPending");
     try {
       const serverOptions = await passkeyOptionsMutation.mutateAsync();
-      if (passkeyAttempt.current !== attempt) return;
-
       const credential = await startPasskeyRegistration(serverOptions);
-      if (passkeyAttempt.current !== attempt) return;
-
       await passkeyVerifyMutation.mutateAsync(credential);
-      if (passkeyAttempt.current !== attempt) return;
-
       await queryClient.invalidateQueries({ queryKey: authKeys.me() });
-      if (passkeyAttempt.current !== attempt) return;
-
       await queryClient.invalidateQueries({ queryKey: authKeys.sessions() });
-      if (passkeyAttempt.current !== attempt) return;
-
       onDone();
     } catch (err: unknown) {
-      if (passkeyAttempt.current !== attempt) return;
-
       const errorObj = err as { message?: string };
       const message =
         errorObj?.message ||
         "Passkey registration failed. Please try again or use an authenticator app.";
-
-      if (message !== "Passkey registration was cancelled.") {
-        onError(message);
-      } else {
-        onClearError();
-      }
-
+      onError(message);
       setScreen("chooseMethod");
     }
   };
 
   const handleSetupTotp = async () => {
-    onClearError();
     try {
       const data = await setupTotpMutation.mutateAsync();
       setTotpSecret(data.secret);
@@ -262,11 +234,7 @@ export function AdminMfaSetup({
 
           <button
             className="auth-two-factor__alternate"
-            onClick={() => {
-              passkeyAttempt.current += 1;
-              onClearError();
-              setScreen("chooseMethod");
-            }}
+            onClick={() => setScreen("chooseMethod")}
             type="button"
           >
             ← Cancel
@@ -348,7 +316,6 @@ export function AdminMfaSetup({
                 disabled={enableTotpMutation.isPending}
                 invalid={codeError !== null}
                 label="Authentication code"
-                autoFocus
                 onChange={(code) => {
                   setTotpCode(code);
                   setCodeError(null);

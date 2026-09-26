@@ -12,7 +12,6 @@ import type {
   UpdateCourseBasicsRequest,
   CourseSummary,
   CoursePricingSummary,
-  CourseListResponse,
 } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import type { AppServices } from "../../../services/index.ts";
@@ -204,8 +203,8 @@ export function createCourseService({
   authService = createAuthService({ database }),
   categoryService = createCategoryService({ database }),
   curriculumService = createCurriculumService({ database, services }),
-  configurationService = createConfigurationService({ database, services }),
-  includesService = createIncludesService({ database, services }),
+  configurationService = createConfigurationService({ database }),
+  includesService = createIncludesService({ database }),
   mediaService = createMediaService({ database, services }),
   deletionService = createCourseDeletionService({
     database,
@@ -314,28 +313,10 @@ export function createCourseService({
    */
   async function listPublishedCourses(filters?: {
     creatorId?: string;
-    cursor?: string;
-    limit: number;
-  }): Promise<CourseListResponse> {
-    const cursor = courseRepo.decodePublishedCourseCursor(filters?.cursor);
-    if (filters?.cursor && !cursor) {
-      throw new AppError(
-        400,
-        "INVALID_CURSOR",
-        "The course cursor is invalid.",
-      );
-    }
-
-    const limit = filters?.limit ?? 15;
-    const rows = await courseRepo.listPublishedCourses(database, {
-      creatorId: filters?.creatorId,
-      cursor: cursor ?? undefined,
-      limit,
-    });
-    const hasNextPage = rows.length > limit;
-    const pageRows = hasNextPage ? rows.slice(0, limit) : rows;
-    const courses = await Promise.all(
-      pageRows.map(async (row) => {
+  }): Promise<CourseSummary[]> {
+    const rows = await courseRepo.listPublishedCourses(database, filters);
+    return await Promise.all(
+      rows.map(async (row) => {
         const lessonDuration = Number(row.lesson_duration_seconds ?? 0);
         const totalDurationSeconds =
           lessonDuration > 0
@@ -391,18 +372,6 @@ export function createCourseService({
         };
       }),
     );
-
-    const lastRow = pageRows.at(-1);
-    return {
-      courses,
-      nextCursor:
-        hasNextPage && lastRow
-          ? courseRepo.encodePublishedCourseCursor({
-              createdAt: lastRow.created_at.toISOString(),
-              id: lastRow.id,
-            })
-          : null,
-    };
   }
 
   /**
@@ -727,13 +696,6 @@ export function createCourseService({
       },
     );
     assertOptimisticUpdate(updateResult);
-
-    if (course.status === "published") {
-      services.courseStaticPages.requestRefresh({
-        courseId: course.id,
-        courseSlug: course.slug,
-      });
-    }
 
     let transcodeJobInfo: {
       should202: boolean;
@@ -1074,11 +1036,15 @@ export function createCourseService({
         ? allLessons
         : allLessons.filter((l) => l.is_published);
 
-    const mediaAssets = await mediaService.getMediaAssets(
-      lessons
-        .map((l) => l.content_media_id)
-        .filter((id): id is string => Boolean(id)),
-    );
+    const lessonIds = lessons.map((l) => l.id);
+    const [resources, mediaAssets] = await Promise.all([
+      curriculumService.listResourcesForLessons(lessonIds),
+      mediaService.getMediaAssets(
+        lessons
+          .map((l) => l.content_media_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ]);
 
     const mediaDurationMap = new Map<string, number>();
     for (const m of mediaAssets) {
@@ -1097,21 +1063,33 @@ export function createCourseService({
     const fullSections = sections.map((sec) => {
       const secLessons = lessons
         .filter((l) => l.section_id === sec.id)
-        .map((les) => ({
-          id: les.id,
-          courseId: les.course_id,
-          sectionId: les.section_id,
-          title: les.title,
-          description: les.description,
-          contentType: les.content_type as "video" | "document" | "quiz",
-          contentMediaId: les.content_media_id,
-          durationSeconds: les.content_media_id
-            ? (mediaDurationMap.get(les.content_media_id) ?? 0)
-            : 0,
-          position: les.position,
-          isPreview: les.is_preview,
-          isPublished: les.is_published,
-        }));
+        .map((les) => {
+          const lesResources = resources.filter((r) => r.lesson_id === les.id);
+          return {
+            id: les.id,
+            courseId: les.course_id,
+            sectionId: les.section_id,
+            title: les.title,
+            description: les.description,
+            contentType: les.content_type as "video" | "document" | "quiz",
+            contentMediaId: les.content_media_id,
+            durationSeconds: les.content_media_id
+              ? (mediaDurationMap.get(les.content_media_id) ?? 0)
+              : 0,
+            position: les.position,
+            isPreview: les.is_preview,
+            isPublished: les.is_published,
+            resources: lesResources.map((res) => ({
+              id: res.id,
+              lessonId: res.lesson_id,
+              mediaAssetId: res.media_asset_id,
+              title: res.title,
+              description: res.description,
+              position: res.position,
+              createdAt: res.created_at.toISOString(),
+            })),
+          };
+        });
 
       return {
         id: sec.id,
@@ -1214,19 +1192,11 @@ export function createCourseService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
-    const result = await deletionService.scheduleCourseDeletion(
+    return await deletionService.scheduleCourseDeletion(
       courseId,
       creatorId,
       userRoles,
     );
-    if (course.status === "published") {
-      services.courseStaticPages.requestRefresh({
-        courseId: course.id,
-        courseSlug: course.slug,
-      });
-    }
-    return result;
   }
 
   async function findLessonById(courseId: string, lessonId: string) {
@@ -1237,14 +1207,6 @@ export function createCourseService({
    * their own actor authorization (for example platform-admin analytics). */
   async function findCourseById(courseId: string) {
     return courseRepo.findCourseById(database, courseId);
-  }
-
-  async function findCoursesByIds(courseIds: readonly string[]) {
-    return courseRepo.findCoursesByIds(database, [...courseIds]);
-  }
-
-  async function findLessonsByIds(lessonIds: readonly string[]) {
-    return curriculumService.findLessonsByIds(lessonIds);
   }
 
   async function formatCourseDto(
@@ -1263,9 +1225,7 @@ export function createCourseService({
       title: c.title,
       shortDescription: c.short_description ?? null,
       description: c.description ?? null,
-      difficulty:
-        (c.difficulty as "beginner" | "intermediate" | "advanced" | null) ??
-        null,
+      difficulty: (c.difficulty as "beginner" | "intermediate" | "advanced" | null) ?? null,
       status: c.status as "draft" | "published" | "archived",
       creatorId: c.creator_id as string,
       categoryId: c.category_id ?? null,
@@ -1275,15 +1235,9 @@ export function createCourseService({
       thumbnailSrcSet: thumbnail.thumbnailSrcSet,
       instructorAlias: c.instructor_alias ?? null,
       version: c.version,
-      createdAt: c.created_at
-        ? new Date(c.created_at).toISOString()
-        : new Date().toISOString(),
-      updatedAt: c.updated_at
-        ? new Date(c.updated_at).toISOString()
-        : new Date().toISOString(),
-      publishedAt: c.published_at
-        ? new Date(c.published_at).toISOString()
-        : null,
+      createdAt: c.created_at ? new Date(c.created_at).toISOString() : new Date().toISOString(),
+      updatedAt: c.updated_at ? new Date(c.updated_at).toISOString() : new Date().toISOString(),
+      publishedAt: c.published_at ? new Date(c.published_at).toISOString() : null,
     };
   }
 
@@ -1302,12 +1256,6 @@ export function createCourseService({
     });
 
     const updated = await courseRepo.findCourseById(database, courseId);
-    if (updated?.status === "published") {
-      services.courseStaticPages.requestRefresh({
-        courseId: updated.id,
-        courseSlug: updated.slug,
-      });
-    }
     return await formatCourseDto(updated!);
   }
 
@@ -1329,24 +1277,15 @@ export function createCourseService({
 
     const updates: Record<string, unknown> = {};
     if (payload.title !== undefined) updates.title = payload.title;
-    if (payload.subtitle !== undefined)
-      updates.short_description = payload.subtitle;
-    if (payload.description !== undefined)
-      updates.description = payload.description;
-    if (payload.categoryId !== undefined)
-      updates.category_id = payload.categoryId;
+    if (payload.subtitle !== undefined) updates.short_description = payload.subtitle;
+    if (payload.description !== undefined) updates.description = payload.description;
+    if (payload.categoryId !== undefined) updates.category_id = payload.categoryId;
     if (payload.level !== undefined && payload.level !== "all_levels") {
       updates.difficulty = payload.level;
     }
 
     await courseRepo.updateCourseDirect(database, courseId, updates);
     const updated = await courseRepo.findCourseById(database, courseId);
-    if (updated?.status === "published") {
-      services.courseStaticPages.requestRefresh({
-        courseId: updated.id,
-        courseSlug: updated.slug,
-      });
-    }
     return await formatCourseDto(updated!);
   }
 
@@ -1360,30 +1299,8 @@ export function createCourseService({
       status: "archived",
     });
 
-    if (course.status === "published") {
-      services.courseStaticPages.requestRefresh({
-        courseId: course.id,
-        courseSlug: course.slug,
-      });
-    }
-
     const updated = await courseRepo.findCourseById(database, courseId);
     return await formatCourseDto(updated!);
-  }
-
-  function getStaticPageRefreshStatus(courseId: string) {
-    return services.courseStaticPages.getStatus(courseId);
-  }
-
-  async function retryStaticPageRefresh(courseId: string) {
-    const course = await courseRepo.findCourseById(database, courseId);
-    if (!course) {
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    }
-    return services.courseStaticPages.requestRefresh({
-      courseId: course.id,
-      courseSlug: course.slug,
-    });
   }
 
   return {
@@ -1396,16 +1313,12 @@ export function createCourseService({
     updateCourseBasics,
     updateCourseThumbnail,
     updateCourseDetails,
-    getStaticPageRefreshStatus,
-    retryStaticPageRefresh,
     archiveCourse,
     getCourseEditorData,
     getCourseOverviewData,
     deleteCourse,
     findLessonById,
     findCourseById,
-    findCoursesByIds,
-    findLessonsByIds,
   };
 }
 

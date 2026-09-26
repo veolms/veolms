@@ -53,6 +53,7 @@ export interface ThreadsController {
     }>,
     reply: FastifyReply,
   ): Promise<void>;
+
   getDiscussionsWorkspace(
     request: FastifyRequest<{
       Querystring: ListLearningThreadsQuery;
@@ -87,8 +88,10 @@ export function createThreadsController({
         attachmentIds: body.attachmentIds,
       });
 
-      reply.status(201).send(thread);
+      return reply.status(201).send(thread);
     },
+
+
 
     async listLessonThreads(request, reply) {
       const user = request.user!;
@@ -103,7 +106,7 @@ export function createThreadsController({
         roles: user.roles,
       });
 
-      reply.status(200).send(result);
+      return reply.status(200).send(result);
     },
 
     async listHubThreads(request, reply) {
@@ -116,7 +119,7 @@ export function createThreadsController({
         roles: user.roles,
       });
 
-      reply.status(200).send(result);
+      return reply.status(200).send(result);
     },
 
     async getThread(request, reply) {
@@ -128,7 +131,7 @@ export function createThreadsController({
         threadId,
         discussionActor(user),
       );
-      reply.status(200).send(thread);
+      return reply.status(200).send(thread);
     },
 
     async updateThread(request, reply) {
@@ -142,7 +145,7 @@ export function createThreadsController({
         discussionActor(user),
         body,
       );
-      reply.status(200).send(thread);
+      return reply.status(200).send(thread);
     },
 
     async deleteThread(request, reply) {
@@ -150,7 +153,7 @@ export function createThreadsController({
       const { threadId } = request.params;
 
       await service.deleteThread(database, threadId, discussionActor(user));
-      reply
+      return reply
         .status(200)
         .send({ message: "Discussion thread deleted successfully." });
     },

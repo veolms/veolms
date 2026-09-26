@@ -85,14 +85,10 @@ export function BufferingIndicator({
   );
   const visibleRef = useRef(visible);
   const holdForFirstFrameRef = useRef(false);
-
-  useEffect(() => {
-    visibleRef.current = visible;
-  }, [visible]);
-
-  useEffect(() => {
-    if (playInFlight) holdForFirstFrameRef.current = true;
-  }, [playInFlight]);
+  visibleRef.current = visible;
+  if (playInFlight) {
+    holdForFirstFrameRef.current = true;
+  }
 
   useEffect(() => {
     if (waitingForMedia) {

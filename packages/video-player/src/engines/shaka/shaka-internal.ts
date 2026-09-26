@@ -427,10 +427,6 @@ export function createShakaConfiguration(
       ...(streaming.abrRestrictions
         ? { restrictions: { ...streaming.abrRestrictions } }
         : {}),
-      ...(streaming.minTimeToSwitch !== undefined
-        ? { minTimeToSwitch: streaming.minTimeToSwitch }
-        : {}),
-      clearBufferSwitch: false,
     };
   }
 

@@ -1,5 +1,7 @@
-import { isBuiltInPlayerThemeId } from "@veolms/video-player/theme-ids";
-import type { BuiltInPlayerThemeId } from "@veolms/video-player/theme-ids";
+import {
+  isBuiltInPlayerThemeId,
+  type BuiltInPlayerThemeId,
+} from "@veolms/video-player";
 
 export const SIDEBAR_MAX_WIDTH_MIN = 220;
 export const SIDEBAR_MAX_WIDTH_DEFAULT = 300;

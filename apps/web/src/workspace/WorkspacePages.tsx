@@ -1,4 +1,3 @@
-import "../styles/features/workspace.css";
 import { useState } from "react";
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import type { CourseRole } from "../courses/catalogue";

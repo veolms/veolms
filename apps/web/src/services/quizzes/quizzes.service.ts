@@ -2,7 +2,6 @@ import { api } from "../../lib/api-client";
 import {
   bulkQuizAnswersRequestSchema,
   courseQuizAnalyticsSchema,
-  quizAnalyticsOverviewSchema,
   courseQuizAssignmentsResponseSchema,
   learnerQuizAttemptSchema,
   myQuizAssignmentsResponseSchema,
@@ -175,10 +174,6 @@ export const quizzesService = {
       await api.get<unknown>(
         `/courses/${encodeURIComponent(courseId)}/quiz-analytics`,
       ),
-    ),
-  analyticsOverview: async (courseIds: readonly string[]) =>
-    quizAnalyticsOverviewSchema.parse(
-      await api.post<unknown>("/quiz-analytics/overview", { courseIds }),
     ),
   studentReport: async (studentId: string) =>
     studentQuizReportSchema.parse(

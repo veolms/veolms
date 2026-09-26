@@ -1,10 +1,6 @@
 import type { Route } from "./+types/academy-marker";
 import { getRouteMeta } from "../routing/routeDescriptors";
 
-export function clientLoader() {
-  return { publicCourses: null };
-}
-
 export function meta({ location, matches, params }: Route.MetaArgs) {
   return Object.entries(
     getRouteMeta(matches.at(-1)?.id, params, location.pathname),

@@ -217,7 +217,7 @@ export function PersistentLearningPlayerHost({
     }
 
     restoreCleanupRef.current = runLearningPlayerFlipRestore(host, startRect);
-  }, [player.anchor, presentation]);
+  }, [presentation]);
 
   useEffect(
     () => () => {

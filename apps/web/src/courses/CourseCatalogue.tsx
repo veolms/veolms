@@ -1,13 +1,11 @@
-import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
-import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
-import { memo, useCallback, useState } from "react";
+import { HeartIcon as Heart, PlusIcon as Plus } from "@phosphor-icons/react";
+import { useState } from "react";
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
 import { ExpandableSearch } from "../ExpandableSearch";
 import { ThemedSelect } from "../ThemedSelect";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
 import { CourseCard } from "./CourseCard";
 import { CourseCardSkeleton } from "./CourseCardSkeleton";
-import { getInitialCourseImagePriorityCount } from "./courseThumbnailSizing";
 import type {
   Course,
   CourseEnrollmentFilter,
@@ -17,7 +15,6 @@ import type {
   CourseStatusFilter,
 } from "./catalogue";
 import { getCourseRouteKey } from "./catalogue";
-import type { NavigateTo } from "../routing/navigation";
 
 export interface CourseCatalogueProps {
   activeSection: string;
@@ -38,7 +35,7 @@ export interface CourseCatalogueProps {
   courseMenu: string | null;
   setCourseMenu: (courseId: string | null) => void;
   setNotice: (notice: string) => void;
-  onNavigatePage: NavigateTo;
+  onNavigatePage: (destination: string) => void;
   onResetCatalogue: () => void;
   isAdmin?: boolean;
   currentUserId?: string;
@@ -48,7 +45,7 @@ export interface CourseCatalogueProps {
   deletingCourseIds?: ReadonlySet<string>;
 }
 
-export const CourseCatalogue = memo(function CourseCatalogue({
+export function CourseCatalogue({
   activeSection,
   role,
   isAdmin = false,
@@ -131,51 +128,6 @@ export const CourseCatalogue = memo(function CourseCatalogue({
     role === "creator"
       ? "grid grid-cols-1 gap-4 min-[560px]:grid-cols-2 xl:grid-cols-3"
       : "grid grid-cols-1 gap-4 min-[560px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4";
-  const imagePriorityCount =
-    typeof window === "undefined"
-      ? 0
-      : getInitialCourseImagePriorityCount(window.innerWidth);
-
-  const handleOpenCourse = useCallback(
-    (selected: Course) =>
-      onOpenCourse(
-        selected,
-        role === "student" && !selected.enrolled
-          ? { preview: true }
-          : undefined,
-      ),
-    [onOpenCourse, role],
-  );
-  const handleExploreCourse = useCallback(
-    (selected: Course) => {
-      onNavigatePage(
-        `/courses/${encodeURIComponent(getCourseRouteKey(selected))}/overview`,
-        { skipAutosync: true },
-      );
-    },
-    [onNavigatePage],
-  );
-  const handleEditCourse = useCallback(
-    (selected: Course) =>
-      onNavigatePage(
-        `/courses/${encodeURIComponent(selected.id)}/edit/basics`,
-      ),
-    [onNavigatePage],
-  );
-  const handleManageCourse = useCallback(
-    (selected: Course) =>
-      onNavigatePage(
-        `/courses/${encodeURIComponent(selected.id)}/edit/curriculum`,
-      ),
-    [onNavigatePage],
-  );
-  const handlePublishCourse = useCallback(
-    (selected: Course) =>
-      onNavigatePage(
-        `/courses/${encodeURIComponent(selected.id)}/edit/publish`,
-      ),
-    [onNavigatePage],
-  );
 
   const renderCard = (course: Course, index: number) => (
     <CourseCard
@@ -186,18 +138,41 @@ export const CourseCatalogue = memo(function CourseCatalogue({
       currentUserId={currentUserId}
       wishlisted={wishlisted.has(course.id)}
       onWishlist={onWishlist}
-      onOpen={handleOpenCourse}
-      onExplore={handleExploreCourse}
-      onEdit={handleEditCourse}
-      onManage={handleManageCourse}
-      onPublish={handlePublishCourse}
+      onOpen={(selected) =>
+        onOpenCourse(
+          selected,
+          role === "student" && !selected.enrolled
+            ? { preview: true }
+            : undefined,
+        )
+      }
+      onExplore={(selected) =>
+        onNavigatePage(
+          `/courses/${encodeURIComponent(getCourseRouteKey(selected))}/overview`,
+        )
+      }
+      onEdit={(selected) =>
+        onNavigatePage(
+          `/courses/${encodeURIComponent(selected.id)}/edit/basics`,
+        )
+      }
+      onManage={(selected) =>
+        onNavigatePage(
+          `/courses/${encodeURIComponent(selected.id)}/edit/curriculum`,
+        )
+      }
+      onPublish={(selected) =>
+        onNavigatePage(
+          `/courses/${encodeURIComponent(selected.id)}/edit/publish`,
+        )
+      }
       onDeleteRequested={setPendingDelete}
       onRestoreRequested={onRestoreCourse}
       onNavigatePage={onNavigatePage}
       menuOpen={courseMenu === course.id}
       setMenuOpen={setCourseMenu}
       setNotice={setNotice}
-      imagePriority={index < imagePriorityCount}
+      imagePriority={index === 0}
       isBin={enrollmentFilter === "bin"}
       isDeleting={isCourseDeleting(course.id)}
     />
@@ -390,4 +365,4 @@ export const CourseCatalogue = memo(function CourseCatalogue({
       />
     </section>
   );
-});
+}

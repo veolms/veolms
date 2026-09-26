@@ -1,10 +1,4 @@
 import { getLessonSlug, resolveLessonIdentifier } from "./courseContent";
-import {
-  getCourseKeyAliases,
-  migrateStoredCourseResumeKeys,
-  resolveContinueLessonId,
-  writeStoredCourseLessonId,
-} from "./courseResumeState";
 
 export type CoursePlayerOrigin = "home" | "courses" | "wishlist";
 
@@ -440,18 +434,15 @@ export function getCoursePlayerLaunchPath(
 export function getStoredCourseLessonId(
   courseId: string,
   storage: CoursePlayerStorage | null = getBrowserStorage(),
-  options?: { userId?: string; courseId?: string },
 ): number {
-  const aliases = new Set(getCourseKeyAliases(courseId, [options?.courseId ?? ""]));
-  const session = readCoursePlayerSessionState(storage).sessions.find(
-    (openSession) => aliases.has(openSession.courseId),
-  );
-  return resolveContinueLessonId(courseId, {
-    userId: options?.userId,
-    courseId: options?.courseId,
-    sessionLessonId: session?.lessonId,
-    storage,
-  });
+  try {
+    const courseKey = encodeURIComponent(courseId);
+    const savedLesson =
+      storage?.getItem(`veolms-last-lesson-${courseKey}`) ?? 1;
+    return resolveLessonIdentifier(savedLesson) ?? 1;
+  } catch {
+    return 1;
+  }
 }
 
 export function getOpenCoursePlayerSessions(
@@ -498,7 +489,6 @@ export function migrateCoursePlayerSessionKey(
   const previousSession = state.sessions.find(
     (session) => session.courseId === previousCourseId,
   );
-  migrateStoredCourseResumeKeys(previousCourseId, nextCourseId, storage);
   if (!previousSession) return;
 
   const previousSearch = new URL(
@@ -528,12 +518,6 @@ export function migrateCoursePlayerSessionKey(
   );
   remainingSessions.push(migratedSession);
   persistCoursePlayerSessions(remainingSessions, storage);
-  writeStoredCourseLessonId(
-    nextCourseId,
-    migratedSession.lessonId,
-    [previousCourseId],
-    storage,
-  );
 }
 
 export function upsertCoursePlayerSessionFromRoute(

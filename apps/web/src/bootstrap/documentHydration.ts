@@ -38,14 +38,14 @@ const isDarkModeInjected = (element: Element) =>
 export function prepareDocumentForHydration(
   documentNode: Document | null =
     typeof document === "undefined" ? null : document,
-): { hasForeignMutations: boolean; restore: () => void } {
+): () => void {
   const restorers: Array<() => void> = [];
   const html = documentNode?.documentElement ?? null;
   const head = documentNode?.head ?? null;
   const body = documentNode?.body ?? null;
 
   if (!documentNode || !html || !body) {
-    return { hasForeignMutations: false, restore: () => {} };
+    return () => {};
   }
 
   const park = (node: Node) => {
@@ -114,12 +114,9 @@ export function prepareDocumentForHydration(
     }
   }
 
-  return {
-    hasForeignMutations: restorers.length > 0,
-    restore: () => {
-      for (let index = restorers.length - 1; index >= 0; index -= 1) {
-        restorers[index]?.();
-      }
-    },
+  return () => {
+    for (let index = restorers.length - 1; index >= 0; index -= 1) {
+      restorers[index]?.();
+    }
   };
 }

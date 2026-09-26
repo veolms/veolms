@@ -2,7 +2,7 @@ import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CommentFormattingToolbar } from "./CommentFormattingToolbar";
 import { CommentPublishingOptions } from "./CommentPublishingOptions";
 import { DiscussionAvatar } from "./DiscussionAvatar";
@@ -11,7 +11,10 @@ import {
   type DiscussionVisibility,
   type DiscussionDraft,
 } from "./discussion-editor/types";
-import type { DiscussionEditorController } from "./discussion-editor/DiscussionEditor";
+import {
+  DiscussionEditor,
+  type DiscussionEditorController,
+} from "./discussion-editor/DiscussionEditor";
 import type { DiscussionFormattingState } from "./discussion-editor/commands";
 import type { InteractionCapabilities } from "./discussionFeed";
 import {
@@ -26,12 +29,6 @@ import {
   extractFirstUrl,
   useLinkPreview,
 } from "../services/learning-interactions";
-
-const DiscussionEditor = lazy(() =>
-  import("./discussion-editor/DiscussionEditor").then((module) => ({
-    default: module.DiscussionEditor,
-  })),
-);
 
 interface CommentComposerProps {
   draft: DiscussionDraft;
@@ -189,44 +186,31 @@ export function CommentComposer({
           <div
             className={`relative ${presentation === "drawer" ? "min-h-0 flex-1 overflow-y-auto overscroll-contain" : ""}`}
           >
-            <Suspense
-              fallback={
-                <div
-                  aria-hidden="true"
-                  className={
-                    presentation === "drawer" ? "min-h-full" : "min-h-34"
-                  }
-                />
+            <DiscussionEditor
+              documentId={documentId}
+              resetToken={editorResetToken}
+              value={draft}
+              label={getEditorLabel(entryKind, editing)}
+              placeholderText={
+                capabilities && !capabilities.allowComments
+                  ? capabilities.allowQa && !capabilities.allowNotes
+                    ? "Ask a question…"
+                    : !capabilities.allowQa && capabilities.allowNotes
+                      ? "Write a note…"
+                      : "Write something…"
+                  : "Write something…"
               }
-            >
-              <DiscussionEditor
-                documentId={documentId}
-                resetToken={editorResetToken}
-                value={draft}
-                label={getEditorLabel(entryKind, editing)}
-                placeholderText={
-                  capabilities && !capabilities.allowComments
-                    ? capabilities.allowQa && !capabilities.allowNotes
-                      ? "Ask a question…"
-                      : !capabilities.allowQa && capabilities.allowNotes
-                        ? "Write a note…"
-                        : "Write something…"
-                    : "Write something…"
-                }
-                invalid={invalid}
-                autoFocus={autoFocus}
-                className={
-                  presentation === "drawer" ? "min-h-full" : "min-h-34"
-                }
-                courseId={courseId}
-                mentionsEnabled={entryKind !== "note"}
-                onChange={onDraftChange}
-                onControllerChange={setEditorController}
-                onFormattingStateChange={setFormattingState}
-                onAttachmentError={setAttachmentError}
-                onAttachmentSelected={handleAttachmentSelected}
-              />
-            </Suspense>
+              invalid={invalid}
+              autoFocus={autoFocus}
+              className={presentation === "drawer" ? "min-h-full" : "min-h-34"}
+              courseId={courseId}
+              mentionsEnabled={entryKind !== "note"}
+              onChange={onDraftChange}
+              onControllerChange={setEditorController}
+              onFormattingStateChange={setFormattingState}
+              onAttachmentError={setAttachmentError}
+              onAttachmentSelected={handleAttachmentSelected}
+            />
             {presentation !== "drawer" && (
               <AttachmentComposerPreview
                 attachments={effectiveAttachments}

@@ -1,4 +1,3 @@
-import "../styles/features/workspace.css";
 import { useEffect, useState } from "react";
 import { ArchiveIcon as Archive } from "@phosphor-icons/react/Archive";
 import { CreditCardIcon as CreditCard } from "@phosphor-icons/react/CreditCard";

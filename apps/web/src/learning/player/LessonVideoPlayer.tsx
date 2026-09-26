@@ -48,11 +48,11 @@ import {
   consumeMiniPlayerRestore,
   lessonPlayerStorageKeys,
   readAmbientPreference,
-  readResumePositionFromKeys,
+  readResumePosition,
   writeAmbientPreference,
   writeMutedPreference,
   writePlaybackRatePreference,
-  writeResumePositionToKeys,
+  writeResumePosition,
   writeVolumePreference,
 } from "./lessonPlayerPersistence";
 import { createLearningLessonVideoSource } from "./lessonVideoSource";
@@ -130,7 +130,6 @@ export interface LessonVideoPlayerProps {
   ) => void | (() => void);
   presentation?: "full" | "mini";
   resumePersistenceKey?: string;
-  resumePersistenceKeys?: readonly string[];
   /** Runtime playback data returned by the authorized bootstrap endpoint. */
   playbackBootstrap?: VideoPlaybackBootstrap | null;
   /** Refreshes only the short-lived CDN segment token when playback runs long. */
@@ -183,7 +182,6 @@ export function LessonVideoPlayer({
   onTheaterToggle,
   onSeekToTimestampReady,
   resumePersistenceKey,
-  resumePersistenceKeys,
   theaterMode,
   presentation = "full",
   playbackBootstrap,
@@ -214,12 +212,6 @@ export function LessonVideoPlayer({
   const [autoplayCancelled, setAutoplayCancelled] = useState(false);
   const playerTheme = useLearningPlayerTheme();
   const mediaKey = resumePersistenceKey ?? media.fileName;
-  const resumeKeys = useMemo(() => {
-    const keys = [mediaKey, ...(resumePersistenceKeys ?? [])].filter(Boolean);
-    return [...new Set(keys)];
-  }, [mediaKey, resumePersistenceKeys]);
-  const resumeKeysRef = useRef(resumeKeys);
-  resumeKeysRef.current = resumeKeys;
   const activeMediaKeyRef = useRef(mediaKey);
   const requestedMediaKeyRef = useRef(mediaKey);
   const restoreAutoplayRef = useRef(consumeMiniPlayerRestore(mediaKey));
@@ -282,9 +274,7 @@ export function LessonVideoPlayer({
       media: playbackMedia,
       lessonTitle,
       mediaKey,
-      startTime: resumeFromLastPosition
-        ? readResumePositionFromKeys(resumeKeys)
-        : 0,
+      startTime: resumeFromLastPosition ? readResumePosition(mediaKey) : 0,
       protectedPlayback: playbackBootstrap
         ? playbackBootstrap.source === "paid-bootstrap-api"
         : protectedPlayback,
@@ -299,7 +289,6 @@ export function LessonVideoPlayer({
     lessonTitle,
     mediaKey,
     playbackBootstrap,
-    resumeKeys,
     playbackMedia,
     protectedPlayback,
     refreshPlaybackToken,
@@ -333,10 +322,7 @@ export function LessonVideoPlayer({
       return;
     }
 
-    writeResumePositionToKeys(
-      [activeMediaKeyRef.current, ...resumeKeysRef.current],
-      position,
-    );
+    writeResumePosition(activeMediaKeyRef.current, position);
     lastPersistedAtRef.current = now;
   }, []);
 
@@ -437,21 +423,7 @@ export function LessonVideoPlayer({
         if (clampedPosition !== loadedPosition) {
           playerRef.current?.seekTo(clampedPosition);
         }
-        const storedResume = readResumePositionFromKeys(
-          resumeKeysRef.current,
-          actualDuration,
-        );
-        const shouldRestoreDropOff =
-          restoreAutoplayRef.current === null &&
-          readLearningPreferences().resumeFromLastPosition &&
-          storedResume > 1 &&
-          clampedPosition < 1;
-        if (shouldRestoreDropOff) {
-          playerRef.current?.seekTo(storedResume);
-          latestPositionRef.current = storedResume;
-        } else {
-          latestPositionRef.current = clampedPosition;
-        }
+        latestPositionRef.current = clampedPosition;
         lastPersistedAtRef.current = null;
         applyingPlaybackPrefsRef.current = true;
         try {
@@ -479,14 +451,11 @@ export function LessonVideoPlayer({
             window.setTimeout(finishMiniPlayerRestore, 0);
           }
         }
-        if (latestPositionRef.current > 0 && actualDuration > 0) {
+        if (clampedPosition > 0 && actualDuration > 0) {
           onProgressChange?.(
             Math.max(
               0,
-              Math.min(
-                100,
-                (latestPositionRef.current / actualDuration) * 100,
-              ),
+              Math.min(100, (clampedPosition / actualDuration) * 100),
             ),
           );
         }
@@ -598,10 +567,7 @@ export function LessonVideoPlayer({
     const player = playerRef.current;
     if (!player) return;
     latestPositionRef.current = 0;
-    writeResumePositionToKeys(
-      [activeMediaKeyRef.current, ...resumeKeysRef.current],
-      0,
-    );
+    writeResumePosition(activeMediaKeyRef.current, 0);
     player.seekTo(0);
     void player.play().catch(() => undefined);
   }, []);
@@ -647,17 +613,7 @@ export function LessonVideoPlayer({
         playerRef.current?.setMuted(true);
       },
     });
-  }, [
-    courseTitle,
-    lessonIndex,
-    lessonTitle,
-    mediaKey,
-    muted,
-    onMinimize,
-    persistResumePosition,
-    source,
-    totalLessons,
-  ]);
+  }, [lessonTitle, mediaKey, muted, onMinimize, persistResumePosition, source]);
 
   const minimizeGesture = useLessonPlayerMinimizeGesture({
     enabled: presentation === "full" && Boolean(onMinimize),
@@ -770,17 +726,7 @@ export function LessonVideoPlayer({
   }, []);
 
   useEffect(() => {
-    const persist = () => persistResumePosition(true);
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") persist();
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("pagehide", persist);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("pagehide", persist);
-      persist();
-    };
+    return () => persistResumePosition(true);
   }, [mediaKey, persistResumePosition]);
 
   useEffect(() => {
