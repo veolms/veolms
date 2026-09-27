@@ -5,7 +5,6 @@ import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/Chat
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
 import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
-import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { TargetIcon as Target } from "@phosphor-icons/react/Target";
 import { useMemo, type CSSProperties } from "react";
@@ -21,6 +20,13 @@ import {
   type LearningCourse,
 } from "./StudentPages";
 import { useEnrolledCourses } from "./services/enrollments";
+import { useDashboardRecentDiscussions } from "./services/learning-interactions";
+import { adaptDiscussionWorkspaceItem } from "./workspace/discussions-workspace.adapter";
+import { DiscussionWorkspaceCard } from "./workspace/DiscussionsWorkspace";
+import {
+  DashboardDiscussionCardSkeletons,
+  DashboardDiscussionRetryContent,
+} from "./workspace/DashboardDiscussionPreview";
 
 interface StudentHomeProps {
   onOpenCourse: (course: LearningCourse) => void;
@@ -138,6 +144,21 @@ export function StudentHome({
   const enrolledCourses = useMemo(() => {
     return (enrolledData?.courses || []).map(adaptEnrolledCourseToLearningCourse);
   }, [enrolledData?.courses]);
+
+  const {
+    data: discussionsResponse,
+    isLoading: discussionsLoading,
+    isError: discussionsError,
+    isFetching: discussionsFetching,
+    refetch: refetchDiscussions,
+  } = useDashboardRecentDiscussions({ mine: true });
+  const hasDiscussionData = discussionsResponse !== undefined;
+  const discussionCards = useMemo(
+    () =>
+      discussionsResponse?.items.map((item) => adaptDiscussionWorkspaceItem(item)) ??
+      [],
+    [discussionsResponse?.items],
+  );
 
   const heroCourse = useMemo(() => {
     return (
@@ -389,52 +410,38 @@ export function StudentHome({
             action="View All"
             onAction={() => onNavigatePage("discussions")}
           />
-          <div className="home-discussion-list">
-            <article>
-              <img src="/assets/ethan-avatar-160.webp" alt="" />
-              <div>
-                <strong>
-                  Anurag Singh replied to your comment <b>NEW</b>
-                </strong>
-                <p>
-                  “That makes sense! I tried using the keyof operator and it
-                  worked perfectly.”
-                </p>
-                <small>The Ultimate TypeScript Course · Lecture 84</small>
+          <div
+            className="home-discussion-workspace-list creator-discussion-list discussion-hub"
+            data-dashboard-discussion-preview
+            aria-busy={discussionsLoading || discussionsFetching}
+          >
+            {discussionsLoading && !hasDiscussionData ? (
+              <DashboardDiscussionCardSkeletons />
+            ) : discussionsError && !hasDiscussionData ? (
+              <div className="creator-discussion-state" role="alert">
+                <DashboardDiscussionRetryContent
+                  title="Couldn't load discussions"
+                  message="Something went wrong while loading your discussions."
+                  isRetrying={discussionsFetching}
+                  onRetry={() => void refetchDiscussions()}
+                />
               </div>
-              <time>12 min ago</time>
-              <i />
-            </article>
-            <article>
-              <span>
-                <GraduationCap size={26} weight="duotone" />
-              </span>
-              <div>
-                <strong>Instructor replied to your question</strong>
-                <p>
-                  “Great question! Remember that conditional types are
-                  distributive when used with naked type params.”
-                </p>
-                <small>The Ultimate TypeScript Course · Lecture 83</small>
+            ) : discussionCards.length === 0 ? (
+              <div className="creator-discussion-state" role="status">
+                <strong>No discussions yet</strong>
+                <small>Questions and comments you create while learning will appear here.</small>
               </div>
-              <time>2h ago</time>
-              <i />
-            </article>
-            <article>
-              <span>
-                <ChatCircleDots size={26} weight="duotone" />
-              </span>
-              <div>
-                <strong>3 new replies in PostgreSQL queue discussion</strong>
-                <p>
-                  Discussion about EXPLAIN ANALYZE and query plans in large
-                  datasets.
-                </p>
-                <small>PostgreSQL Mastery · Lecture 21</small>
-              </div>
-              <time>1d ago</time>
-              <i />
-            </article>
+            ) : (
+              discussionCards.map((item) => (
+                <DiscussionWorkspaceCard
+                  key={`${item.itemType}:${item.id}`}
+                  card={item}
+                  onNavigatePage={onNavigatePage}
+                  variant="compact"
+                  expandable={false}
+                />
+              ))
+            )}
           </div>
         </section>
 

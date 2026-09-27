@@ -96,6 +96,10 @@
   overscroll-behavior: auto;
 }
 
+.home-discussion-workspace-list {
+  margin-top: 8px;
+}
+
 .home-discussion-list article:nth-child(n + 4) {
   display: none;
 }

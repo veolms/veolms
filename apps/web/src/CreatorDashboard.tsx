@@ -42,6 +42,10 @@ import {
   useDashboardRecentDiscussions,
 } from "./services/learning-interactions";
 import { adaptDiscussionWorkspaceItem } from "./workspace/discussions-workspace.adapter";
+import {
+  DashboardDiscussionCardSkeletons,
+  DashboardDiscussionRetryContent,
+} from "./workspace/DashboardDiscussionPreview";
 import { formatRelativeTime } from "./learning/learning-notes.adapter";
 import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
 import { useAuthStore } from "./store/auth.store";
@@ -2478,35 +2482,6 @@ function CoursesPanel({
   );
 }
 
-function DiscussionCardSkeletons() {
-  return (
-    <div
-      className="creator-discussion-skeleton-list"
-      role="status"
-      aria-label="Loading recent discussions"
-    >
-      {Array.from({ length: 3 }, (_, index) => (
-        <div
-          className="creator-discussion-skeleton-card"
-          key={`discussion-skeleton-${index}`}
-          aria-hidden="true"
-        >
-          <span className="creator-discussion-skeleton-avatar" />
-          <span className="creator-discussion-skeleton-body">
-            <i className="creator-discussion-skeleton-author" />
-            <i className="creator-discussion-skeleton-preview" />
-            <i className="creator-discussion-skeleton-context" />
-          </span>
-          <span className="creator-discussion-skeleton-rail">
-            <i className="creator-discussion-skeleton-badge" />
-            <i className="creator-discussion-skeleton-meta" />
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function DiscussionsPanel({
   onNavigatePage,
   isManualRefresh,
@@ -2540,10 +2515,10 @@ function DiscussionsPanel({
         aria-busy={showInitialLoading || isFetching}
       >
         {showInitialLoading ? (
-          <DiscussionCardSkeletons />
+          <DashboardDiscussionCardSkeletons />
         ) : showInitialError ? (
           <div className="creator-discussion-state" role="alert">
-            <DashboardRetryContent
+            <DashboardDiscussionRetryContent
               title="Couldn't load discussions"
               message="Something went wrong while loading recent discussions."
               isRetrying={isFetching}

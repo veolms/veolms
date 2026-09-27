@@ -750,8 +750,12 @@ export function useDiscussionsWorkspace(
 
 export function useDashboardRecentDiscussions(options?: {
   enabled?: boolean;
+  mine?: boolean;
 }) {
-  const queryKey = learningInteractionKeys.dashboardRecentDiscussions();
+  const mine = options?.mine === true;
+  const queryKey = learningInteractionKeys.dashboardRecentDiscussions(
+    mine ? "mine" : "all",
+  );
   return useQuery<DiscussionsWorkspaceResponse, ApiError>({
     queryKey,
     queryFn: () =>
@@ -759,6 +763,7 @@ export function useDashboardRecentDiscussions(options?: {
         tab: "all",
         sort: "activity",
         limit: 10,
+        ...(mine ? { mine: true } : {}),
       } as ListLearningThreadsQuery),
     enabled: options?.enabled ?? true,
     staleTime: 30 * 1000,
