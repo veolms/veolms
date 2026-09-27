@@ -7,6 +7,7 @@ import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircl
 import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { TargetIcon as Target } from "@phosphor-icons/react/Target";
+import type { LearningProgressResumeContextResponse } from "@veolms/contracts";
 import { useMemo, type CSSProperties } from "react";
 import { useNavigate } from "react-router";
 import javascriptThumbnail from "./assets/course-thumbnails/javascript-960.webp";
@@ -18,8 +19,10 @@ import {
   type LearningCourse,
 } from "./StudentPages";
 import { getCourseThumbnail } from "./learning/courseMetadata";
+import { getCoursePlayerPath } from "./learning/coursePlayerNavigation";
 import { formatRelativeTime } from "./learning/learning-notes.adapter";
 import { useEnrolledCourses } from "./services/enrollments";
+import { useLearningProgressResumeContext } from "./services/learning-progress";
 import { useDashboardRecentDiscussions } from "./services/learning-interactions";
 import { useRecentLearningUpdates } from "./services/recent-updates";
 import { adaptDiscussionWorkspaceItem } from "./workspace/discussions-workspace.adapter";
@@ -115,6 +118,24 @@ function compareContinueLearningCourses(
   return left.id.localeCompare(right.id);
 }
 
+function compareNewestEnrolledCourses(
+  left: LearningCourse,
+  right: LearningCourse,
+) {
+  const leftEnrolledAt = getCourseTimestamp(left.enrolledAt);
+  const rightEnrolledAt = getCourseTimestamp(right.enrolledAt);
+
+  if (leftEnrolledAt !== null || rightEnrolledAt !== null) {
+    if (leftEnrolledAt === null) return 1;
+    if (rightEnrolledAt === null) return -1;
+    if (leftEnrolledAt !== rightEnrolledAt) {
+      return rightEnrolledAt - leftEnrolledAt;
+    }
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
 function SectionHeader({
   icon: Icon,
   title,
@@ -185,7 +206,9 @@ function RecentUpdatesState({
   return (
     <div className="home-update-state" role="status">
       <strong>No recent updates</strong>
-      <small>New lesson updates from your enrolled courses will appear here.</small>
+      <small>
+        New lesson updates from your enrolled courses will appear here.
+      </small>
     </div>
   );
 }
@@ -243,7 +266,9 @@ function ContinueLearningState({
   return (
     <div className="home-continue-state" role="status">
       <strong>
-        {hasHeroCourse ? "Nothing else to continue yet" : "Nothing to continue yet"}
+        {hasHeroCourse
+          ? "Nothing else to continue yet"
+          : "Nothing to continue yet"}
       </strong>
       <small>
         {hasHeroCourse
@@ -255,6 +280,74 @@ function ContinueLearningState({
           Browse courses
         </button>
       ) : null}
+    </div>
+  );
+}
+
+function ResumeLessonContext({
+  context,
+  courseKey,
+  onNavigate,
+}: {
+  context: LearningProgressResumeContextResponse;
+  courseKey: string;
+  onNavigate: (path: string) => void;
+}) {
+  const { resumeLesson, previousLesson, nextLesson } = context;
+  if (!resumeLesson) return null;
+
+  const lessonPath = (lessonNumber: number) =>
+    getCoursePlayerPath(courseKey, "home", lessonNumber, "/home");
+
+  return (
+    <div className="home-resume-lesson-context">
+      <div className="home-resume-lesson-focus">
+        <span>Continue With</span>
+        <strong>{resumeLesson.title}</strong>
+        <small>
+          {resumeLesson.sectionTitle} · {resumeLesson.progressPercent}% complete
+        </small>
+      </div>
+      {(previousLesson || nextLesson) && (
+        <div className="home-resume-lesson-links">
+          {previousLesson && (
+            <button
+              type="button"
+              onClick={() =>
+                onNavigate(lessonPath(previousLesson.lessonNumber))
+              }
+              aria-label={`Previous lesson: ${previousLesson.title}`}
+            >
+              <span>Previous</span>
+              <strong>{previousLesson.title}</strong>
+            </button>
+          )}
+          {nextLesson && (
+            <button
+              type="button"
+              onClick={() => onNavigate(lessonPath(nextLesson.lessonNumber))}
+              aria-label={`Up next lesson: ${nextLesson.title}`}
+            >
+              <span>Up Next</span>
+              <strong>{nextLesson.title}</strong>
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ResumeLessonContextSkeleton() {
+  return (
+    <div
+      className="home-resume-lesson-context home-resume-lesson-context--skeleton"
+      role="status"
+      aria-busy="true"
+    >
+      <span>Continue With</span>
+      <i />
+      <i />
     </div>
   );
 }
@@ -298,7 +391,9 @@ export function StudentHome({
   } = useEnrolledCourses();
   const hasEnrolledCourseData = enrolledData !== undefined;
   const enrolledCourses = useMemo(() => {
-    return (enrolledData?.courses || []).map(adaptEnrolledCourseToLearningCourse);
+    return (enrolledData?.courses || []).map(
+      adaptEnrolledCourseToLearningCourse,
+    );
   }, [enrolledData?.courses]);
 
   const progressMetrics = useMemo(() => {
@@ -326,7 +421,9 @@ export function StudentHome({
         tone: "cyan",
       },
       {
-        value: String(progressValues.filter((progress) => progress >= 100).length),
+        value: String(
+          progressValues.filter((progress) => progress >= 100).length,
+        ),
         label: "Courses Completed",
         icon: CheckCircle,
         tone: "green",
@@ -350,8 +447,9 @@ export function StudentHome({
   const hasDiscussionData = discussionsResponse !== undefined;
   const discussionCards = useMemo(
     () =>
-      discussionsResponse?.items.map((item) => adaptDiscussionWorkspaceItem(item)) ??
-      [],
+      discussionsResponse?.items.map((item) =>
+        adaptDiscussionWorkspaceItem(item),
+      ) ?? [],
     [discussionsResponse?.items],
   );
 
@@ -378,10 +476,29 @@ export function StudentHome({
   const miniCourses = useMemo(() => {
     return continueLearningCourses.slice(1, 3);
   }, [continueLearningCourses]);
+  const readyToStartCourse = useMemo(() => {
+    return (
+      enrolledCourses
+        .filter((course) => course.progress === 0)
+        .sort(compareNewestEnrolledCourses)[0] ?? null
+    );
+  }, [enrolledCourses]);
   const initialEnrollmentLoading =
     enrolledCoursesLoading && !hasEnrolledCourseData;
-  const initialEnrollmentError =
-    enrolledCoursesError && !hasEnrolledCourseData;
+  const initialEnrollmentError = enrolledCoursesError && !hasEnrolledCourseData;
+  const primaryCourseKey = heroCourse?.slug ?? heroCourse?.id;
+  const { data: resumeContextData, isLoading: resumeContextLoading } =
+    useLearningProgressResumeContext(primaryCourseKey, {
+      enabled: hasEnrolledCourseData && Boolean(heroCourse),
+    });
+  const resumeContext = useMemo(() => {
+    if (!heroCourse || !primaryCourseKey || !resumeContextData) return null;
+    return resumeContextData.courseId === heroCourse.id ||
+      resumeContextData.courseSlug === primaryCourseKey
+      ? resumeContextData
+      : null;
+  }, [heroCourse, primaryCourseKey, resumeContextData]);
+  const heroFocusCourse = heroCourse ?? readyToStartCourse;
 
   return (
     <div className="student-home">
@@ -435,7 +552,9 @@ export function StudentHome({
         <section className="home-resume-card home-resume-card--state">
           <div className="home-resume-state" role="alert">
             <strong>Couldn&apos;t load your courses</strong>
-            <small>Something went wrong while loading your learning courses.</small>
+            <small>
+              Something went wrong while loading your learning courses.
+            </small>
             <button
               type="button"
               onClick={() => void refetchEnrolledCourses()}
@@ -445,41 +564,68 @@ export function StudentHome({
             </button>
           </div>
         </section>
-      ) : heroCourse ? (
+      ) : heroFocusCourse ? (
         <section
           className="home-resume-card"
-          aria-labelledby="continue-learning-title"
+          aria-labelledby={
+            heroCourse ? "continue-learning-title" : "ready-to-start-title"
+          }
         >
           <div className="home-resume-layout">
             <div className="home-resume-visual">
               <img
-                src={heroCourse.thumbnail}
+                src={heroFocusCourse.thumbnail}
                 alt=""
                 loading="eager"
                 decoding="async"
               />
             </div>
             <div className="home-resume-copy">
-              <span className="learning-status in-progress">In Progress</span>
-              <h2 id="continue-learning-title">{heroCourse.title}</h2>
+              <span
+                className={`learning-status ${heroCourse ? "in-progress" : "not-started"}`}
+              >
+                {heroCourse ? "Continue Learning" : "Ready to Start"}
+              </span>
+              <h2
+                id={
+                  heroCourse
+                    ? "continue-learning-title"
+                    : "ready-to-start-title"
+                }
+              >
+                {heroFocusCourse.title}
+              </h2>
               <strong>
-                {heroCourse.sections} Sections <i /> {heroCourse.lectures} Lectures
+                {heroFocusCourse.sections} Sections <i />{" "}
+                {heroFocusCourse.lectures} Lectures
               </strong>
               <p>
-                {heroCourse.enrolledOn
-                  ? `Enrolled on ${heroCourse.enrolledOn}`
-                  : "Ready to continue"}
+                {heroFocusCourse.enrolledOn
+                  ? `Enrolled on ${heroFocusCourse.enrolledOn}`
+                  : heroCourse
+                    ? "Ready to continue"
+                    : "Start with the first lesson"}
               </p>
+              {heroCourse && primaryCourseKey && resumeContext ? (
+                <ResumeLessonContext
+                  context={resumeContext}
+                  courseKey={resumeContext.courseSlug}
+                  onNavigate={navigate}
+                />
+              ) : heroCourse && resumeContextLoading ? (
+                <ResumeLessonContextSkeleton />
+              ) : null}
               <div className="home-resume-progress">
-                <ProgressBar value={heroCourse.progress} />
-                <span>{heroCourse.progress}%</span>
+                <ProgressBar value={heroFocusCourse.progress} />
+                <span>{heroFocusCourse.progress}%</span>
               </div>
               <button
                 type="button"
                 className="primary-learning-action"
-                onClick={() => onOpenCourse(heroCourse)}
+                onClick={() => onOpenCourse(heroFocusCourse)}
               >
-                <Play size={18} weight="fill" /> Continue Learning
+                <Play size={18} weight="fill" />
+                {heroCourse ? "Continue Learning" : "Start Learning"}
               </button>
             </div>
           </div>
@@ -501,15 +647,19 @@ export function StudentHome({
               />
             </div>
             <div className="home-resume-copy">
-              <span className="learning-status in-progress">Start Learning</span>
-              <h2 id="explore-courses-title">Discover Top Courses</h2>
-              <p>Explore our library and enroll in courses to begin your journey.</p>
+              <span className="learning-status in-progress">
+                Start Learning
+              </span>
+              <h2 id="explore-courses-title">Discover Your Next Course</h2>
+              <p>
+                Explore our library and enroll in courses to begin your journey.
+              </p>
               <button
                 type="button"
                 className="primary-learning-action mt-4"
                 onClick={() => onNavigatePage("courses")}
               >
-                <BookOpen size={18} weight="fill" /> Browse Course Catalogue
+                <BookOpen size={18} weight="fill" /> Browse Courses
               </button>
             </div>
           </div>
@@ -600,7 +750,10 @@ export function StudentHome({
             ) : discussionCards.length === 0 ? (
               <div className="creator-discussion-state" role="status">
                 <strong>No discussions yet</strong>
-                <small>Questions and comments you create while learning will appear here.</small>
+                <small>
+                  Questions and comments you create while learning will appear
+                  here.
+                </small>
               </div>
             ) : (
               discussionCards.map((item) => (
@@ -617,10 +770,7 @@ export function StudentHome({
         </section>
 
         <section className="dashboard-panel home-progress-panel">
-          <SectionHeader
-            icon={ChartLineUp}
-            title="Your Progress"
-          />
+          <SectionHeader icon={ChartLineUp} title="Your Progress" />
           <div
             className="home-metrics-grid"
             aria-busy={enrolledCoursesLoading || enrolledCoursesFetching}
@@ -630,7 +780,9 @@ export function StudentHome({
             ) : enrolledCoursesError && !hasEnrolledCourseData ? (
               <div className="home-progress-state" role="alert">
                 <strong>Couldn&apos;t load your progress</strong>
-                <small>Something went wrong while loading enrolled courses.</small>
+                <small>
+                  Something went wrong while loading enrolled courses.
+                </small>
                 <button
                   type="button"
                   onClick={() => void refetchEnrolledCourses()}

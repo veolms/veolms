@@ -10,7 +10,7 @@ export function listUserCourseProgress(
 ) {
   return database
     .selectFrom("learning_progress")
-    .select(["lesson_id", "progress_percent"])
+    .select(["lesson_id", "progress_percent", "updated_at"])
     .where("user_id", "=", userId)
     .where("course_id", "=", courseId)
     .execute();
@@ -65,7 +65,11 @@ export async function getAverageProgressAndCompletionRate(
   const courseIds = toIdList(filters.courseId);
   let query = database
     .selectFrom("learning_progress")
-    .select(["user_id", "course_id", sql<number>`avg(progress_percent)`.as("avg_percent")])
+    .select([
+      "user_id",
+      "course_id",
+      sql<number>`avg(progress_percent)`.as("avg_percent"),
+    ])
     .groupBy(["user_id", "course_id"]);
   if (courseIds.length > 0) {
     query = query.where("course_id", "in", courseIds);
@@ -129,14 +133,16 @@ export async function getStartedAndCompletedCounts(
   filters: { courseId?: string | string[]; from?: Date; to?: Date },
 ): Promise<{ started: number; completed: number }> {
   const courseIds = toIdList(filters.courseId);
-  let query = database.selectFrom("learning_progress").select([
-    sql<number>`count(distinct user_id) filter (where progress_percent > 0)::int`.as(
-      "started",
-    ),
-    sql<number>`count(distinct user_id) filter (where progress_percent >= 100)::int`.as(
-      "completed",
-    ),
-  ]);
+  let query = database
+    .selectFrom("learning_progress")
+    .select([
+      sql<number>`count(distinct user_id) filter (where progress_percent > 0)::int`.as(
+        "started",
+      ),
+      sql<number>`count(distinct user_id) filter (where progress_percent >= 100)::int`.as(
+        "completed",
+      ),
+    ]);
   if (courseIds.length > 0) {
     query = query.where("course_id", "in", courseIds);
   }
@@ -147,7 +153,10 @@ export async function getStartedAndCompletedCounts(
     query = query.where("updated_at", "<=", filters.to);
   }
   const row = await query.executeTakeFirst();
-  return { started: Number(row?.started ?? 0), completed: Number(row?.completed ?? 0) };
+  return {
+    started: Number(row?.started ?? 0),
+    completed: Number(row?.completed ?? 0),
+  };
 }
 
 /**

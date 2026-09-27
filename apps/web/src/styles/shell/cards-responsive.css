@@ -744,6 +744,10 @@
     margin-top: 10px;
   }
 
+  .home-resume-lesson-links {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .home-resume-progress {
     margin-top: 0;
     padding-top: 14px;

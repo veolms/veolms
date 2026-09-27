@@ -285,6 +285,112 @@
   font-size: 0.78rem;
 }
 
+.home-resume-lesson-context {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.home-resume-lesson-focus {
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--surface-strong) 74%, var(--border));
+  border-radius: 8px;
+  padding: 9px 11px;
+  background: color-mix(in srgb, var(--surface-strong) 32%, transparent);
+}
+
+.home-resume-lesson-focus > span,
+.home-resume-lesson-links button > span,
+.home-resume-lesson-context--skeleton > span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.61rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.home-resume-lesson-focus > strong,
+.home-resume-lesson-links button > strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.74rem;
+  font-weight: 650;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.home-resume-lesson-focus > strong {
+  margin-top: 4px;
+}
+
+.home-resume-lesson-focus > small {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.64rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-resume-lesson-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.home-resume-lesson-links button {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--surface) 58%, transparent);
+  text-align: left;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.home-resume-lesson-links button > strong {
+  margin-top: 3px;
+  font-size: 0.67rem;
+  -webkit-line-clamp: 1;
+}
+
+.home-resume-lesson-links button:hover,
+.home-resume-lesson-links button:focus-visible {
+  border-color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--surface-strong) 64%, transparent);
+}
+
+.home-resume-lesson-context--skeleton {
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--surface-strong) 74%, var(--border));
+  border-radius: 8px;
+  padding: 9px 11px;
+}
+
+.home-resume-lesson-context--skeleton > i {
+  display: block;
+  height: 9px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  animation: student-home-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.home-resume-lesson-context--skeleton > i:first-of-type {
+  width: min(88%, 18rem);
+}
+
+.home-resume-lesson-context--skeleton > i:last-child {
+  width: min(58%, 12rem);
+}
+
 .home-resume-progress,
 .home-mini-progress,
 .learning-card-progress {

@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import type {
   LearningProgressBatchRequest,
+  LearningProgressResumeContextResponse,
+  LearningProgressResumeLesson,
   LearningProgressResponse,
   LearningProgressSyncResponse,
 } from "@veolms/contracts";
@@ -31,11 +33,179 @@ interface OrderedLesson {
   id: string;
 }
 
+interface ResumeCurriculumLesson {
+  id: string;
+  sectionId: string;
+  title: string;
+  sectionTitle: string;
+  contentType: "video" | "document" | "quiz";
+}
+
+type ResumeProgressRow = {
+  lesson_id: string;
+  progress_percent: number;
+  updated_at: Date;
+};
+
+interface ResumeCurriculumSection {
+  id: string;
+  title: string;
+  position: number;
+}
+
+interface ResumeCurriculumLessonRecord {
+  id: string;
+  section_id: string;
+  title: string;
+  content_type: "video" | "document" | "quiz";
+  position: number;
+  is_published: boolean;
+}
+
+function orderAvailableLessons(
+  sections: readonly ResumeCurriculumSection[],
+  lessons: readonly ResumeCurriculumLessonRecord[],
+  canManageCourse: boolean,
+): ResumeCurriculumLesson[] {
+  const sectionById = new Map(sections.map((section) => [section.id, section]));
+
+  return [...lessons]
+    .filter((lesson) => sectionById.has(lesson.section_id))
+    .filter((lesson) => canManageCourse || lesson.is_published)
+    .sort((left, right) => {
+      const leftSection = sectionById.get(left.section_id)!;
+      const rightSection = sectionById.get(right.section_id)!;
+      const sectionDelta = leftSection.position - rightSection.position;
+      if (sectionDelta !== 0) return sectionDelta;
+      const lessonDelta = left.position - right.position;
+      return lessonDelta !== 0 ? lessonDelta : left.id.localeCompare(right.id);
+    })
+    .map((lesson) => ({
+      id: lesson.id,
+      sectionId: lesson.section_id,
+      title: lesson.title,
+      sectionTitle: sectionById.get(lesson.section_id)!.title,
+      contentType: lesson.content_type,
+    }));
+}
+
+function normalizeProgressPercent(value: number): number {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return 0;
+  return Math.max(0, Math.min(100, Math.trunc(numericValue)));
+}
+
+function progressUpdatedAt(row: ResumeProgressRow): number {
+  const timestamp =
+    row.updated_at instanceof Date
+      ? row.updated_at.getTime()
+      : new Date(row.updated_at).getTime();
+  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
+}
+
+/**
+ * Resolves a persisted-progress-based resume recommendation for one ordered
+ * course curriculum. The progress timestamp is used as a recency signal, not
+ * as literal last-viewed telemetry.
+ */
+function resolveResumeContext(
+  courseId: string,
+  courseSlug: string,
+  lessons: ResumeCurriculumLesson[],
+  rows: ResumeProgressRow[],
+): LearningProgressResumeContextResponse {
+  const progressByLessonId = new Map<string, number>();
+  const updatedRowsByLessonId = new Map<string, ResumeProgressRow>();
+
+  for (const row of rows) {
+    progressByLessonId.set(
+      row.lesson_id,
+      normalizeProgressPercent(row.progress_percent),
+    );
+    updatedRowsByLessonId.set(row.lesson_id, row);
+  }
+
+  const toResponseLesson = (
+    lesson: ResumeCurriculumLesson,
+    index: number,
+  ): LearningProgressResumeLesson => ({
+    lessonId: lesson.id,
+    lessonNumber: index + 1,
+    title: lesson.title,
+    sectionId: lesson.sectionId,
+    sectionTitle: lesson.sectionTitle,
+    contentType: lesson.contentType,
+    progressPercent: progressByLessonId.get(lesson.id) ?? 0,
+  });
+
+  const emptyResponse = (): LearningProgressResumeContextResponse => ({
+    courseId,
+    courseSlug,
+    resumeLesson: null,
+    previousLesson: null,
+    nextLesson: null,
+  });
+
+  if (lessons.length === 0) return emptyResponse();
+
+  const partialIndexes = lessons.flatMap((lesson, index) => {
+    const progressPercent = progressByLessonId.get(lesson.id) ?? 0;
+    return progressPercent > 0 && progressPercent < 100 ? [index] : [];
+  });
+
+  let resumeIndex: number;
+  if (partialIndexes.length > 0) {
+    resumeIndex = partialIndexes.reduce((selectedIndex, candidateIndex) => {
+      const selectedLesson = lessons[selectedIndex]!;
+      const candidateLesson = lessons[candidateIndex]!;
+      const selectedRow = updatedRowsByLessonId.get(selectedLesson.id);
+      const candidateRow = updatedRowsByLessonId.get(candidateLesson.id);
+      const timestampDelta =
+        progressUpdatedAt(candidateRow!) - progressUpdatedAt(selectedRow!);
+
+      if (timestampDelta !== 0) {
+        return timestampDelta > 0 ? candidateIndex : selectedIndex;
+      }
+
+      if (candidateIndex !== selectedIndex) {
+        return candidateIndex < selectedIndex ? candidateIndex : selectedIndex;
+      }
+
+      return candidateLesson.id.localeCompare(selectedLesson.id) < 0
+        ? candidateIndex
+        : selectedIndex;
+    });
+  } else {
+    resumeIndex = lessons.findIndex(
+      (lesson) => (progressByLessonId.get(lesson.id) ?? 0) < 100,
+    );
+    if (resumeIndex === -1) return emptyResponse();
+  }
+
+  return {
+    courseId,
+    courseSlug,
+    resumeLesson: toResponseLesson(lessons[resumeIndex]!, resumeIndex),
+    previousLesson:
+      resumeIndex > 0
+        ? toResponseLesson(lessons[resumeIndex - 1]!, resumeIndex - 1)
+        : null,
+    nextLesson:
+      resumeIndex < lessons.length - 1
+        ? toResponseLesson(lessons[resumeIndex + 1]!, resumeIndex + 1)
+        : null,
+  };
+}
+
 export interface LearningProgressService {
   getProgress(
     user: UserContext,
     courseKey: string,
   ): Promise<LearningProgressResponse>;
+  getResumeContext(
+    user: UserContext,
+    courseKey: string,
+  ): Promise<LearningProgressResumeContextResponse>;
   syncProgress(
     user: UserContext,
     courseKey: string,
@@ -149,6 +319,17 @@ export function createLearningProgressService({
       }));
   }
 
+  async function listAvailableResumeLessons(
+    courseId: string,
+    canManageCourse: boolean,
+  ): Promise<ResumeCurriculumLesson[]> {
+    const [sections, lessons] = await Promise.all([
+      curriculumService.findSectionsByCourseId(courseId),
+      curriculumService.findLessonsByCourseId(courseId),
+    ]);
+    return orderAvailableLessons(sections, lessons, canManageCourse);
+  }
+
   async function getCourseSnapshot(
     user: UserContext,
     course: Awaited<ReturnType<typeof findCourse>>,
@@ -218,6 +399,25 @@ export function createLearningProgressService({
     return await getCourseSnapshot(user, course);
   }
 
+  async function getResumeContext(
+    user: UserContext,
+    courseKey: string,
+  ): Promise<LearningProgressResumeContextResponse> {
+    const course = await requireCourse(user, courseKey);
+    const canManageCourse =
+      course.creator_id === user.id || user.roles.includes(ADMIN_ROLE);
+    const [lessons, rows] = await Promise.all([
+      listAvailableResumeLessons(course.id, canManageCourse),
+      learningProgressRepository.listUserCourseProgress(
+        database,
+        user.id,
+        course.id,
+      ),
+    ]);
+
+    return resolveResumeContext(course.id, course.slug, lessons, rows);
+  }
+
   async function syncProgress(
     user: UserContext,
     courseKey: string,
@@ -270,9 +470,11 @@ export function createLearningProgressService({
     );
   }
 
-  async function getAverageProgressByCourse(filters: {
-    courseId?: string | string[];
-  } = {}) {
+  async function getAverageProgressByCourse(
+    filters: {
+      courseId?: string | string[];
+    } = {},
+  ) {
     return await learningProgressRepository.getAverageProgressByCourse(
       database,
       filters,
@@ -303,6 +505,7 @@ export function createLearningProgressService({
 
   return {
     getProgress,
+    getResumeContext,
     syncProgress,
     getAverageProgressAndCompletionRate,
     getAverageProgressByCourse,
