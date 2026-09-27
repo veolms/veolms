@@ -1955,6 +1955,82 @@ function formatCourseStatus(status: DashboardYourCourse["status"]) {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
+function getCourseRowDestination(course: DashboardYourCourse) {
+  const editStep = course.status === "draft" ? "basics" : "curriculum";
+  return `/courses/${encodeURIComponent(course.id)}/edit/${editStep}`;
+}
+
+function clampCourseProgress(value: number) {
+  return Math.min(100, Math.max(0, value));
+}
+
+function CreatorCourseProgress({
+  value,
+  animated,
+}: {
+  value: number;
+  animated: boolean;
+}) {
+  const target = clampCourseProgress(value);
+  const displayedProgressRef = useRef(animated ? 0 : target);
+  const [displayedProgress, setDisplayedProgress] = useState(
+    displayedProgressRef.current,
+  );
+
+  useEffect(() => {
+    if (!animated) {
+      displayedProgressRef.current = target;
+      setDisplayedProgress(target);
+      return;
+    }
+
+    if (displayedProgressRef.current === target) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      displayedProgressRef.current = target;
+      setDisplayedProgress(target);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [animated, target]);
+
+  return (
+    <i>
+      <b
+        className={animated ? "creator-progress-fill" : "creator-progress-fill--static"}
+        style={{ width: `${displayedProgress}%` }}
+      />
+    </i>
+  );
+}
+
+function CourseTableSkeletonRows() {
+  return Array.from({ length: 5 }, (_, index) => (
+    <div
+      className="creator-table-row creator-course-skeleton-row"
+      key={`course-skeleton-${index}`}
+      aria-hidden="true"
+    >
+      <span className="creator-course-cell">
+        <span className="creator-course-skeleton-thumbnail" />
+        <span className="creator-course-skeleton-title" />
+      </span>
+      <span>
+        <span className="creator-course-skeleton-status" />
+      </span>
+      <span>
+        <span className="creator-course-skeleton-students" />
+      </span>
+      <span className="creator-progress-cell">
+        <span className="creator-course-skeleton-percent" />
+        <i className="creator-course-skeleton-track">
+          <b />
+        </i>
+      </span>
+    </div>
+  ));
+}
+
 function CoursesPanel({
   onNavigatePage,
   courses,
@@ -1966,12 +2042,15 @@ function CoursesPanel({
   isError: boolean;
 }) {
   const courseRows = courses ?? [];
+  const hasCourseData = courses !== undefined;
+  const showInitialLoading = isLoading && !hasCourseData;
+  const showInitialError = isError && !hasCourseData;
 
   return (
     <DashboardPanel
       className="creator-courses-panel"
       title="Your Courses"
-      action="View all"
+      action="Manage courses"
       onAction={() => onNavigatePage?.("courses")}
     >
       <div className="creator-table creator-courses-table">
@@ -1981,21 +2060,45 @@ function CoursesPanel({
           <span>Students</span>
           <span>Avg Progress</span>
         </div>
-        {isLoading ? (
-          <div className="creator-table-row creator-table-state" role="status">
-            <span>Loading courses…</span>
+        {showInitialLoading ? (
+          <div className="creator-course-skeleton" role="status" aria-label="Loading courses">
+            <CourseTableSkeletonRows />
           </div>
-        ) : isError ? (
+        ) : showInitialError ? (
           <div className="creator-table-row creator-table-state" role="alert">
             <span>Unable to load courses.</span>
           </div>
         ) : courseRows.length === 0 ? (
-          <div className="creator-table-row creator-table-state">
-            <span>No courses available.</span>
+          <div className="creator-table-row creator-table-state creator-courses-empty-state">
+            <span>
+              <strong>No courses yet</strong>
+              <small>
+                Create your first course to start tracking students and progress.
+              </small>
+              <button
+                type="button"
+                className="creator-panel-link"
+                onClick={() => onNavigatePage?.("Create Course")}
+              >
+                Create course <ArrowRight size={16} />
+              </button>
+            </span>
           </div>
         ) : (
           courseRows.map((course) => (
-            <div className="creator-table-row" key={course.id}>
+            <button
+              type="button"
+              className="creator-table-row creator-course-row"
+              key={course.id}
+              onClick={() =>
+                onNavigatePage?.(getCourseRowDestination(course))
+              }
+              title={
+                course.status === "draft"
+                  ? `Continue editing ${course.title}`
+                  : `Manage ${course.title}`
+              }
+            >
               <span className="creator-course-cell">
                 <CreatorCourseThumbnail course={course} />
                 <strong>{course.title}</strong>
@@ -2007,27 +2110,33 @@ function CoursesPanel({
                   {formatCourseStatus(course.status)}
                 </em>
               </span>
-              <span>{formatDashboardNumber(course.students)}</span>
-              <span className="creator-progress-cell">
+              <span className="creator-course-students">
+                <span className="creator-course-students-number">
+                  {formatDashboardNumber(course.students)}
+                </span>
+                <span className="creator-course-students-label">
+                  {course.students === 1 ? "student" : "students"}
+                </span>
+              </span>
+              <span
+                className="creator-progress-cell"
+                data-progress-unavailable={
+                  course.averageProgressPercent === null ? "" : undefined
+                }
+              >
                 <span>
                   {course.averageProgressPercent === null
                     ? "—"
                     : formatDashboardPercent(course.averageProgressPercent)}
                 </span>
                 {course.averageProgressPercent !== null && (
-                  <i>
-                    <b
-                      style={{
-                        width: `${Math.min(
-                          100,
-                          Math.max(0, course.averageProgressPercent),
-                        )}%`,
-                      }}
-                    />
-                  </i>
+                  <CreatorCourseProgress
+                    value={course.averageProgressPercent}
+                    animated={course.status === "published"}
+                  />
                 )}
               </span>
-            </div>
+            </button>
           ))
         )}
       </div>
