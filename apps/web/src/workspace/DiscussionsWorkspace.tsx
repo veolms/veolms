@@ -83,6 +83,7 @@ import {
 
 type DiscussionStatus = NonNullable<DiscussionWorkspaceCard["status"]>;
 type DiscussionEffectiveOwnership = "all" | "mine";
+type DiscussionWorkspaceCardVariant = "default" | "compact";
 
 const normalizeDiscussionRestorationValue = (
   value: string | undefined,
@@ -563,6 +564,7 @@ function DiscussionWorkspaceCardContent({
   expandedTitle,
   previewText,
   parentContext,
+  expandable = true,
 }: {
   thread: DiscussionWorkspaceCard;
   label: string;
@@ -571,6 +573,7 @@ function DiscussionWorkspaceCardContent({
   expandedTitle?: string | null;
   previewText?: string | null;
   parentContext?: string | null;
+  expandable?: boolean;
 }) {
   const isMobileOrCoarsePointer = useSyncExternalStore(
     subscribeToDiscussionSwipePreview,
@@ -590,7 +593,7 @@ function DiscussionWorkspaceCardContent({
   const hasAdditionalContent =
     (Boolean(normalizedTitle) && normalizedTitle !== collapsedPreview) ||
     (Boolean(normalizedBody) && normalizedBody !== collapsedPreview);
-  const canExpand = hasAdditionalContent || isPreviewTruncated;
+  const canExpand = expandable && (hasAdditionalContent || isPreviewTruncated);
   const content = useMemo<DiscussionContent>(
     () => ({
       format: "markdown",
@@ -794,6 +797,8 @@ function DiscussionWorkspaceCardShell({
   thread,
   className,
   expanded,
+  variant = "default",
+  expandable = true,
   navigation,
   onNavigate,
   actions,
@@ -804,6 +809,8 @@ function DiscussionWorkspaceCardShell({
   thread: DiscussionWorkspaceCard;
   className: string;
   expanded: boolean;
+  variant?: DiscussionWorkspaceCardVariant;
+  expandable?: boolean;
   navigation?: ReactNode;
   onNavigate?: () => void;
   actions?: ReactNode;
@@ -836,7 +843,7 @@ function DiscussionWorkspaceCardShell({
       return;
     }
 
-    if (isMobileOrCoarsePointer && !expanded) {
+    if (expandable && isMobileOrCoarsePointer && !expanded) {
       const readMore = getVisibleCollapsedCardToggle(event.currentTarget);
       if (readMore) {
         readMore.click();
@@ -856,6 +863,7 @@ function DiscussionWorkspaceCardShell({
         "select-none",
         className,
         navigation ? "is-navigable" : "is-static",
+        variant === "compact" ? "is-compact" : "",
         expanded ? "is-expanded" : "is-collapsed",
         onMobileActions
           ? "transition-transform duration-100 ease-out motion-reduce:transition-none"
@@ -903,6 +911,8 @@ function DiscussionWorkspaceQuestionCard({
   showActions,
   onRequestMobileActions,
   setNotice,
+  variant = "default",
+  expandable = true,
 }: {
   thread: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
@@ -912,6 +922,8 @@ function DiscussionWorkspaceQuestionCard({
     destination: string | null,
   ) => void;
   setNotice?: (message: string) => void;
+  variant?: DiscussionWorkspaceCardVariant;
+  expandable?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const metadataItems = getDiscussionWorkspaceMetadataItems(thread);
@@ -931,7 +943,9 @@ function DiscussionWorkspaceQuestionCard({
     <DiscussionWorkspaceCardShell
       thread={thread}
       className="discussion-thread--question"
-      expanded={expanded}
+      expanded={expandable && expanded}
+      variant={variant}
+      expandable={expandable}
       navigation={
         <DiscussionWorkspaceNavigationLink
           destination={destination}
@@ -997,9 +1011,10 @@ function DiscussionWorkspaceQuestionCard({
       <DiscussionWorkspaceCardContent
         thread={thread}
         label="Question"
-        expanded={expanded}
+        expanded={expandable && expanded}
         onExpandedChange={setExpanded}
         expandedTitle={thread.title}
+        expandable={expandable}
       />
       <DiscussionWorkspaceMetadataRow items={metadataItems} />
     </DiscussionWorkspaceCardShell>
@@ -1012,6 +1027,8 @@ function DiscussionWorkspaceCommentCard({
   showActions,
   onRequestMobileActions,
   setNotice,
+  variant = "default",
+  expandable = true,
 }: {
   thread: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
@@ -1021,6 +1038,8 @@ function DiscussionWorkspaceCommentCard({
     destination: string | null,
   ) => void;
   setNotice?: (message: string) => void;
+  variant?: DiscussionWorkspaceCardVariant;
+  expandable?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const metadataItems = getDiscussionWorkspaceMetadataItems(thread);
@@ -1036,7 +1055,9 @@ function DiscussionWorkspaceCommentCard({
     <DiscussionWorkspaceCardShell
       thread={thread}
       className="discussion-thread--comment"
-      expanded={expanded}
+      expanded={expandable && expanded}
+      variant={variant}
+      expandable={expandable}
       navigation={
         <DiscussionWorkspaceNavigationLink
           destination={destination}
@@ -1085,8 +1106,9 @@ function DiscussionWorkspaceCommentCard({
       <DiscussionWorkspaceCardContent
         thread={thread}
         label="Comment"
-        expanded={expanded}
+        expanded={expandable && expanded}
         onExpandedChange={setExpanded}
+        expandable={expandable}
       />
       <DiscussionWorkspaceMetadataRow items={metadataItems} />
     </DiscussionWorkspaceCardShell>
@@ -1351,6 +1373,8 @@ function DiscussionWorkspaceNoteCard({
   showActions,
   onRequestMobileActions,
   setNotice,
+  variant = "default",
+  expandable = true,
 }: {
   note: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
@@ -1360,6 +1384,8 @@ function DiscussionWorkspaceNoteCard({
     destination: string | null,
   ) => void;
   setNotice?: (message: string) => void;
+  variant?: DiscussionWorkspaceCardVariant;
+  expandable?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const timestampLabel = formatNoteTimestamp(note.timestampSeconds);
@@ -1375,7 +1401,9 @@ function DiscussionWorkspaceNoteCard({
     <DiscussionWorkspaceCardShell
       thread={note}
       className="discussion-thread--note"
-      expanded={expanded}
+      expanded={expandable && expanded}
+      variant={variant}
+      expandable={expandable}
       navigation={
         destination ? (
           <DiscussionWorkspaceNavigationLink
@@ -1428,12 +1456,61 @@ function DiscussionWorkspaceNoteCard({
       <DiscussionWorkspaceCardContent
         thread={note}
         label="Note"
-        expanded={expanded}
         onExpandedChange={setExpanded}
+        expanded={expandable && expanded}
         expandedTitle={note.title}
+        expandable={expandable}
       />
       <DiscussionWorkspaceMetadataRow items={metadataItems} />
     </DiscussionWorkspaceCardShell>
+  );
+}
+
+export function DiscussionWorkspaceCard({
+  card,
+  onNavigatePage,
+  variant = "default",
+  expandable = true,
+}: {
+  card: DiscussionWorkspaceCard;
+  onNavigatePage?: NavigateTo;
+  variant?: DiscussionWorkspaceCardVariant;
+  expandable?: boolean;
+}) {
+  const navigate = onNavigatePage ?? (() => undefined);
+
+  if (card.itemType === "note" || card.kind === "note") {
+    return (
+      <DiscussionWorkspaceNoteCard
+        note={card}
+        onNavigatePage={navigate}
+        showActions={false}
+        variant={variant}
+        expandable={expandable}
+      />
+    );
+  }
+
+  if (card.kind === "question" || card.kind === "qna") {
+    return (
+      <DiscussionWorkspaceQuestionCard
+        thread={card}
+        onNavigatePage={navigate}
+        showActions={false}
+        variant={variant}
+        expandable={expandable}
+      />
+    );
+  }
+
+  return (
+    <DiscussionWorkspaceCommentCard
+      thread={card}
+      onNavigatePage={navigate}
+      showActions={false}
+      variant={variant}
+      expandable={expandable}
+    />
   );
 }
 

@@ -41,6 +41,7 @@ import { adaptDiscussionWorkspaceItem } from "./workspace/discussions-workspace.
 import { formatRelativeTime } from "./learning/learning-notes.adapter";
 import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
 import { useAuthStore } from "./store/auth.store";
+import { DiscussionWorkspaceCard } from "./workspace/DiscussionsWorkspace";
 
 type ActivityRow = readonly [
   label: string,
@@ -1964,6 +1965,42 @@ function clampCourseProgress(value: number) {
   return Math.min(100, Math.max(0, value));
 }
 
+function DashboardRetryContent({
+  title,
+  message,
+  isRetrying,
+  onRetry,
+}: {
+  title: string;
+  message: string;
+  isRetrying: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <span className="creator-dashboard-state-content">
+      <strong>{title}</strong>
+      <small>{message}</small>
+      <button
+        type="button"
+        className="creator-dashboard-state-retry"
+        onClick={onRetry}
+        disabled={isRetrying}
+        aria-busy={isRetrying}
+      >
+        <ArrowClockwise
+          size={14}
+          aria-hidden="true"
+          className={
+            isRetrying ? "creator-dashboard-state-retry-icon is-retrying" :
+              "creator-dashboard-state-retry-icon"
+          }
+        />
+        {isRetrying ? "Retrying…" : "Retry"}
+      </button>
+    </span>
+  );
+}
+
 function CreatorCourseProgress({
   value,
   animated,
@@ -2036,10 +2073,14 @@ function CoursesPanel({
   courses,
   isLoading,
   isError,
+  isFetching,
+  onRetry,
 }: NavigateProps & {
   courses?: DashboardSummaryResponse["yourCourses"];
   isLoading: boolean;
   isError: boolean;
+  isFetching: boolean;
+  onRetry: () => void;
 }) {
   const courseRows = courses ?? [];
   const hasCourseData = courses !== undefined;
@@ -2066,7 +2107,12 @@ function CoursesPanel({
           </div>
         ) : showInitialError ? (
           <div className="creator-table-row creator-table-state" role="alert">
-            <span>Unable to load courses.</span>
+            <DashboardRetryContent
+              title="Couldn't load courses"
+              message="Something went wrong while loading your courses."
+              isRetrying={isFetching}
+              onRetry={onRetry}
+            />
           </div>
         ) : courseRows.length === 0 ? (
           <div className="creator-table-row creator-table-state creator-courses-empty-state">
@@ -2144,44 +2190,32 @@ function CoursesPanel({
   );
 }
 
-function getDiscussionActivityLabel(kind: string) {
-  switch (kind) {
-    case "question":
-    case "qna":
-      return "asked a question";
-    case "comment":
-      return "commented";
-    case "note":
-      return "added a note";
-    default:
-      return "started a discussion";
-  }
-}
-
-function CreatorDiscussionAvatar({ src }: { src?: string }) {
-  const [imageFailed, setImageFailed] = useState(false);
-
-  useEffect(() => {
-    setImageFailed(false);
-  }, [src]);
-
+function DiscussionCardSkeletons() {
   return (
-    <span className="creator-discussion-avatar" aria-hidden="true">
-      {src && !imageFailed ? (
-        <img
-          src={src}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          onError={(event) => {
-            event.currentTarget.style.display = "none";
-            setImageFailed(true);
-          }}
-        />
-      ) : (
-        <UserCircle className="creator-discussion-avatar-icon" weight="duotone" />
-      )}
-    </span>
+    <div
+      className="creator-discussion-skeleton-list"
+      role="status"
+      aria-label="Loading recent discussions"
+    >
+      {Array.from({ length: 3 }, (_, index) => (
+        <div
+          className="creator-discussion-skeleton-card"
+          key={`discussion-skeleton-${index}`}
+          aria-hidden="true"
+        >
+          <span className="creator-discussion-skeleton-avatar" />
+          <span className="creator-discussion-skeleton-body">
+            <i className="creator-discussion-skeleton-author" />
+            <i className="creator-discussion-skeleton-preview" />
+            <i className="creator-discussion-skeleton-context" />
+          </span>
+          <span className="creator-discussion-skeleton-rail">
+            <i className="creator-discussion-skeleton-badge" />
+            <i className="creator-discussion-skeleton-meta" />
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -2190,47 +2224,53 @@ function DiscussionsPanel({ onNavigatePage }: NavigateProps) {
     data: discussionsResponse,
     isLoading,
     isError,
+    isFetching,
+    refetch,
   } = useDashboardRecentDiscussions();
+  const hasDiscussionData = discussionsResponse !== undefined;
+  const showInitialLoading = isLoading && !hasDiscussionData;
+  const showInitialError = isError && !hasDiscussionData;
   const discussionCards =
-    discussionsResponse?.items.map((item) => ({
-      ...adaptDiscussionWorkspaceItem(item),
-      activityLabel: getDiscussionActivityLabel(item.kind),
-    })) ?? [];
+    discussionsResponse?.items.map((item) => adaptDiscussionWorkspaceItem(item)) ??
+    [];
 
   return (
     <DashboardPanel
       className="creator-discussions-panel"
       title="Recent Discussions"
-      action="View all"
+      action="Open discussions"
       onAction={() => onNavigatePage?.("Discussions")}
     >
-      <div className="creator-discussion-list">
-        {isLoading ? (
-          <p role="status">Loading recent discussions…</p>
-        ) : isError ? (
-          <p role="alert">Unable to load recent discussions.</p>
+      <div
+        className="creator-discussion-list discussion-hub"
+        data-dashboard-discussion-preview
+        aria-busy={showInitialLoading || isFetching}
+      >
+        {showInitialLoading ? (
+          <DiscussionCardSkeletons />
+        ) : showInitialError ? (
+          <div className="creator-discussion-state" role="alert">
+            <DashboardRetryContent
+              title="Couldn't load discussions"
+              message="Something went wrong while loading recent discussions."
+              isRetrying={isFetching}
+              onRetry={() => void refetch()}
+            />
+          </div>
         ) : discussionCards.length === 0 ? (
-          <p>No recent discussions.</p>
+          <div className="creator-discussion-state" role="status">
+            <strong>No discussions yet</strong>
+            <small>Learner questions and comments will appear here.</small>
+          </div>
         ) : (
           discussionCards.map((item) => (
-            <article key={item.id}>
-              <CreatorDiscussionAvatar src={item.avatar} />
-              <div>
-                <strong>
-                  {item.author} {item.activityLabel}
-                </strong>
-                {item.course && <small>{item.course}</small>}
-                {item.lesson && <small>{item.lesson}</small>}
-                <p>{item.excerpt}</p>
-              </div>
-              <time>{item.activity}</time>
-              <button
-                type="button"
-                onClick={() => onNavigatePage?.("Discussions")}
-              >
-                View
-              </button>
-            </article>
+            <DiscussionWorkspaceCard
+              key={`${item.itemType}:${item.id}`}
+              card={item}
+              onNavigatePage={onNavigatePage}
+              variant="compact"
+              expandable={false}
+            />
           ))
         )}
       </div>
@@ -2334,6 +2374,8 @@ export const CreatorDashboard = memo(function CreatorDashboard({
     data: dashboardResponse,
     isLoading: isDashboardLoading,
     isError: isDashboardError,
+    isFetching: isDashboardFetching,
+    refetch: refetchDashboard,
   } =
     useDashboard(range);
   const dashboardUnavailable =
@@ -2526,6 +2568,8 @@ export const CreatorDashboard = memo(function CreatorDashboard({
           courses={dashboardResponse?.yourCourses}
           isLoading={isDashboardLoading}
           isError={isDashboardError}
+          isFetching={isDashboardFetching}
+          onRetry={() => void refetchDashboard()}
         />
         <DiscussionsPanel onNavigatePage={onNavigatePage} />
         <EnrollmentsPanel onNavigatePage={onNavigatePage} />
