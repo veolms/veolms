@@ -12,10 +12,7 @@ import { useNavigate } from "react-router";
 import javascriptThumbnail from "./assets/course-thumbnails/javascript-960.webp";
 import nodeThumbnail from "./assets/course-thumbnails/nodejs-960.webp";
 import typescriptThumbnail from "./assets/course-thumbnails/typescript-960.webp";
-import typescriptInstructorHero512 from "./assets/learning-thumbnails/typescript-instructor-hero-512.webp";
-import typescriptInstructorHero640 from "./assets/learning-thumbnails/typescript-instructor-hero-640.webp";
 import typescriptInstructorHero800 from "./assets/learning-thumbnails/typescript-instructor-hero-800.webp";
-import typescriptInstructorHero from "./assets/learning-thumbnails/typescript-instructor-hero.webp";
 import {
   adaptEnrolledCourseToLearningCourse,
   type LearningCourse,
@@ -84,11 +81,39 @@ const legacyBackendCourse: LearningCourse = {
 };
 */
 
-const resumeLessons = [
-  { number: 1, title: "Course Introduction & Setup", duration: "12:30", active: true },
-  { number: 2, title: "Core Concepts Deep Dive", duration: "18:45" },
-  { number: 3, title: "Practical Application & Hands-on", duration: "22:10" },
-];
+function getCourseTimestamp(value: string | Date | null | undefined) {
+  if (!value) return null;
+  const timestamp = value instanceof Date ? value.getTime() : Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function compareContinueLearningCourses(
+  left: LearningCourse,
+  right: LearningCourse,
+) {
+  const leftAccessedAt = getCourseTimestamp(left.lastAccessedAt);
+  const rightAccessedAt = getCourseTimestamp(right.lastAccessedAt);
+
+  if (leftAccessedAt !== null || rightAccessedAt !== null) {
+    if (leftAccessedAt === null) return 1;
+    if (rightAccessedAt === null) return -1;
+    if (leftAccessedAt !== rightAccessedAt) {
+      return rightAccessedAt - leftAccessedAt;
+    }
+  }
+
+  const leftEnrolledAt = getCourseTimestamp(left.enrolledAt);
+  const rightEnrolledAt = getCourseTimestamp(right.enrolledAt);
+  if (leftEnrolledAt !== null || rightEnrolledAt !== null) {
+    if (leftEnrolledAt === null) return 1;
+    if (rightEnrolledAt === null) return -1;
+    if (leftEnrolledAt !== rightEnrolledAt) {
+      return rightEnrolledAt - leftEnrolledAt;
+    }
+  }
+
+  return left.id.localeCompare(right.id);
+}
 
 function SectionHeader({
   icon: Icon,
@@ -161,6 +186,75 @@ function RecentUpdatesState({
     <div className="home-update-state" role="status">
       <strong>No recent updates</strong>
       <small>New lesson updates from your enrolled courses will appear here.</small>
+    </div>
+  );
+}
+
+function ContinueLearningSkeletons() {
+  return (
+    <>
+      {[0, 1].map((item) => (
+        <article
+          key={item}
+          className="home-mini-course home-mini-course--skeleton"
+          aria-hidden="true"
+        >
+          <span className="home-mini-course-skeleton__media" />
+          <span className="home-mini-course-skeleton__copy">
+            <i />
+            <i />
+          </span>
+          <span className="home-mini-course-skeleton__progress">
+            <i />
+            <i />
+          </span>
+          <span className="home-mini-course-skeleton__button" />
+        </article>
+      ))}
+    </>
+  );
+}
+
+function ContinueLearningState({
+  error = false,
+  hasHeroCourse = false,
+  isRetrying = false,
+  onBrowse,
+  onRetry,
+}: {
+  error?: boolean;
+  hasHeroCourse?: boolean;
+  isRetrying?: boolean;
+  onBrowse?: () => void;
+  onRetry?: () => void;
+}) {
+  if (error) {
+    return (
+      <div className="home-continue-state" role="alert">
+        <strong>Couldn&apos;t load your courses</strong>
+        <small>Something went wrong while loading your learning courses.</small>
+        <button type="button" onClick={onRetry} disabled={isRetrying}>
+          {isRetrying ? "Retrying…" : "Retry"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="home-continue-state" role="status">
+      <strong>
+        {hasHeroCourse ? "Nothing else to continue yet" : "Nothing to continue yet"}
+      </strong>
+      <small>
+        {hasHeroCourse
+          ? "Keep going with the highlighted course above."
+          : "Start a course and your learning progress will appear here."}
+      </small>
+      {!hasHeroCourse && onBrowse ? (
+        <button type="button" onClick={onBrowse}>
+          Browse courses
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -271,17 +365,23 @@ export function StudentHome({
   const hasRecentUpdatesData = recentUpdatesResponse !== undefined;
   const recentUpdateCourses = recentUpdatesResponse?.courses ?? [];
 
-  const heroCourse = useMemo(() => {
-    return (
-      enrolledCourses.find((c) => c.status === "in-progress") ||
-      enrolledCourses[0] ||
-      null
-    );
+  const continueLearningCourses = useMemo(() => {
+    return enrolledCourses
+      .filter((course) => course.progress > 0 && course.progress < 100)
+      .sort(compareContinueLearningCourses);
   }, [enrolledCourses]);
 
+  const heroCourse = useMemo(() => {
+    return continueLearningCourses[0] || null;
+  }, [continueLearningCourses]);
+
   const miniCourses = useMemo(() => {
-    return enrolledCourses.filter((c) => c.id !== heroCourse?.id).slice(0, 2);
-  }, [enrolledCourses, heroCourse]);
+    return continueLearningCourses.slice(1, 3);
+  }, [continueLearningCourses]);
+  const initialEnrollmentLoading =
+    enrolledCoursesLoading && !hasEnrolledCourseData;
+  const initialEnrollmentError =
+    enrolledCoursesError && !hasEnrolledCourseData;
 
   return (
     <div className="student-home">
@@ -324,7 +424,28 @@ export function StudentHome({
         </div>
       </header>
 
-      {heroCourse ? (
+      {initialEnrollmentLoading ? (
+        <section className="home-resume-card home-resume-card--state">
+          <div className="home-resume-state" role="status" aria-busy="true">
+            <strong>Loading your courses…</strong>
+            <small>Preparing your Continue Learning view.</small>
+          </div>
+        </section>
+      ) : initialEnrollmentError ? (
+        <section className="home-resume-card home-resume-card--state">
+          <div className="home-resume-state" role="alert">
+            <strong>Couldn&apos;t load your courses</strong>
+            <small>Something went wrong while loading your learning courses.</small>
+            <button
+              type="button"
+              onClick={() => void refetchEnrolledCourses()}
+              disabled={enrolledCoursesFetching}
+            >
+              {enrolledCoursesFetching ? "Retrying…" : "Retry"}
+            </button>
+          </div>
+        </section>
+      ) : heroCourse ? (
         <section
           className="home-resume-card"
           aria-labelledby="continue-learning-title"
@@ -332,34 +453,22 @@ export function StudentHome({
           <div className="home-resume-layout">
             <div className="home-resume-visual">
               <img
-                src={typescriptInstructorHero800}
-                srcSet={`${typescriptInstructorHero512} 512w, ${typescriptInstructorHero640} 640w, ${typescriptInstructorHero800} 800w, ${typescriptInstructorHero} 1600w`}
-                sizes="(max-width: 820px) calc(100vw - 50px), (max-width: 1180px) 40vw, 430px"
-                alt="Course instructor"
-                width={1600}
-                height={900}
-                decoding="sync"
-                fetchPriority="high"
+                src={heroCourse.thumbnail}
+                alt=""
+                loading="eager"
+                decoding="async"
               />
             </div>
             <div className="home-resume-copy">
-              <span className={`learning-status ${heroCourse.status}`}>
-                {heroCourse.status === "completed"
-                  ? "Completed"
-                  : heroCourse.status === "not-started"
-                    ? "Not Started"
-                    : "In Progress"}
-              </span>
+              <span className="learning-status in-progress">In Progress</span>
               <h2 id="continue-learning-title">{heroCourse.title}</h2>
               <strong>
                 {heroCourse.sections} Sections <i /> {heroCourse.lectures} Lectures
               </strong>
               <p>
-                {heroCourse.lastLesson
-                  ? `Last watched: ${heroCourse.lastLesson}`
-                  : heroCourse.enrolledOn
-                    ? `Enrolled on ${heroCourse.enrolledOn}`
-                    : "Ready to learn"}
+                {heroCourse.enrolledOn
+                  ? `Enrolled on ${heroCourse.enrolledOn}`
+                  : "Ready to continue"}
               </p>
               <div className="home-resume-progress">
                 <ProgressBar value={heroCourse.progress} />
@@ -370,39 +479,7 @@ export function StudentHome({
                 className="primary-learning-action"
                 onClick={() => onOpenCourse(heroCourse)}
               >
-                <Play size={18} weight="fill" />{" "}
-                {heroCourse.status === "completed"
-                  ? "Review Course"
-                  : heroCourse.status === "not-started"
-                    ? "Start Learning"
-                    : "Continue Learning"}
-              </button>
-            </div>
-            <div className="home-resume-list">
-              <h3>Resume from</h3>
-              {resumeLessons.map((lesson) => (
-                <button
-                  key={lesson.number}
-                  type="button"
-                  className={lesson.active ? "is-active" : ""}
-                  onClick={() => onOpenCourse(heroCourse)}
-                >
-                  <span className="resume-play">
-                    <Play size={14} weight="fill" />
-                  </span>
-                  <span>
-                    <small>Lesson {lesson.number}</small>
-                    <strong>{lesson.title}</strong>
-                  </span>
-                  <time>{lesson.duration}</time>
-                </button>
-              ))}
-              <button
-                type="button"
-                className="resume-view-all"
-                onClick={() => onNavigatePage("courses")}
-              >
-                View all courses <ArrowRight size={17} />
+                <Play size={18} weight="fill" /> Continue Learning
               </button>
             </div>
           </div>
@@ -447,8 +524,19 @@ export function StudentHome({
             action="View All"
             onAction={() => onNavigatePage("courses")}
           />
-          <div className="home-mini-course-grid">
-            {miniCourses.length > 0 ? (
+          <div
+            className="home-mini-course-grid"
+            aria-busy={enrolledCoursesLoading || enrolledCoursesFetching}
+          >
+            {initialEnrollmentLoading ? (
+              <ContinueLearningSkeletons />
+            ) : initialEnrollmentError ? (
+              <ContinueLearningState
+                error
+                isRetrying={enrolledCoursesFetching}
+                onRetry={() => void refetchEnrolledCourses()}
+              />
+            ) : miniCourses.length > 0 ? (
               miniCourses.map((course) => (
                 <article key={course.id} className="home-mini-course">
                   <img
@@ -477,35 +565,11 @@ export function StudentHome({
                   </button>
                 </article>
               ))
-            ) : heroCourse ? (
-              <article className="home-mini-course">
-                <img
-                  src={heroCourse.thumbnail}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                />
-                <div>
-                  <h3>{heroCourse.title}</h3>
-                  <p>
-                    {heroCourse.sections} Sections · {heroCourse.lectures} Lectures
-                  </p>
-                </div>
-                <div className="home-mini-progress">
-                  <ProgressBar value={heroCourse.progress} />
-                  <span>{heroCourse.progress}%</span>
-                </div>
-                <button
-                  type="button"
-                  className="primary-learning-action home-mini-action"
-                  onClick={() => onOpenCourse(heroCourse)}
-                >
-                  <Play size={16} weight="fill" />
-                  <span>Continue Learning</span>
-                </button>
-              </article>
             ) : (
-              <p className="text-sm text-(--muted) p-4">No other enrolled courses yet.</p>
+              <ContinueLearningState
+                hasHeroCourse={Boolean(heroCourse)}
+                onBrowse={() => onNavigatePage("courses")}
+              />
             )}
           </div>
         </section>

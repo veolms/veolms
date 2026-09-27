@@ -42,6 +42,8 @@ export interface LearningCourse {
   lastLesson?: string;
   accessed?: string;
   enrolledOn?: string;
+  enrolledAt?: string | Date;
+  lastAccessedAt?: string | Date | null;
   completedOn?: string;
   thumbnail: string;
 }
@@ -72,6 +74,8 @@ export function adaptEnrolledCourseToLearningCourse(
     lectures: ec.totalLessons,
     status,
     progress: ec.progress ?? 0,
+    enrolledAt: ec.enrolledAt,
+    lastAccessedAt: ec.lastAccessedAt ?? null,
     enrolledOn: enrolledDateStr,
     thumbnail: ec.courseThumbnailUrl || getCourseThumbnail(ec.courseSlug),
   };
