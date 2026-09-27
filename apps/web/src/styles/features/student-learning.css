@@ -219,12 +219,33 @@
   object-fit: cover;
 }
 
+.student-home-thumbnail {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.student-home-thumbnail > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.home-resume-visual > .student-home-thumbnail {
+  width: 100%;
+  height: 100%;
+}
+
 .home-resume-copy {
   display: flex;
   min-width: 0;
   flex-direction: column;
   justify-content: flex-start;
   padding: 10px 6px 8px;
+}
+
+.home-resume-card--ready .home-resume-copy {
+  padding-left: 0;
 }
 
 .learning-status {
@@ -254,12 +275,17 @@
 }
 
 .home-resume-copy h2 {
+  display: -webkit-box;
+  overflow: hidden;
   margin-top: 12px;
   color: var(--text);
   font-size: clamp(1.1rem, 1.4vw, 1.3rem);
   font-weight: 650;
   line-height: 1.28;
   letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .home-resume-copy > strong {
@@ -470,6 +496,17 @@
   margin-top: 16px;
 }
 
+.home-dashboard-grid > .home-progress-panel,
+.home-dashboard-grid > .home-updates-panel {
+  align-self: stretch;
+}
+
+@media (min-width: 1181px) {
+  .home-dashboard-grid {
+    grid-template-rows: max-content max-content;
+  }
+}
+
 .home-dashboard-sentinel {
   width: 100%;
   height: 1px;
@@ -482,47 +519,80 @@
 
 .dashboard-section-heading {
   display: flex;
-  min-height: 28px;
+  min-height: 30px;
   align-items: center;
   justify-content: space-between;
-  gap: 15px;
+  gap: 12px;
 }
 
 .dashboard-section-heading h2 {
   display: flex;
+  min-width: 0;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   color: var(--text);
-  font-size: 0.83rem;
+  font-size: 0.86rem;
   font-weight: 650;
+  line-height: 1.2;
+}
+
+.dashboard-section-heading h2 > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dashboard-section-heading h2 svg,
 .dashboard-section-heading button {
+  flex: 0 0 auto;
   color: var(--accent-ink, var(--accent));
 }
 
 .dashboard-section-heading button {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  white-space: nowrap;
   font-size: 0.68rem;
   font-weight: 600;
+  transition:
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.dashboard-section-heading button:hover,
+.dashboard-section-heading button:focus-visible {
+  color: var(--text);
+}
+
+.dashboard-section-heading button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 68%, transparent);
+  outline-offset: 3px;
+}
+
+.dashboard-section-heading button svg {
+  transition: transform 150ms ease;
+}
+
+.dashboard-section-heading button:hover svg,
+.dashboard-section-heading button:focus-visible svg {
+  transform: translateX(2px);
 }
 
 .home-metrics-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 10px;
 }
 
-.home-metric {
+.home-progress-panel .home-metric {
   min-width: 0;
-  min-height: 134px;
+  min-height: 92px;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 13px 12px;
+  border-radius: 8px;
+  padding: 10px;
   background: color-mix(in srgb, var(--surface) 52%, transparent);
 }
 
@@ -533,6 +603,16 @@
   align-items: center;
   justify-content: center;
   border-radius: 8px;
+}
+
+.home-progress-panel .home-metric__lead {
+  gap: 8px;
+}
+
+.home-progress-panel .home-metric__lead > span {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
 }
 
 .tone-violet > span {
@@ -554,17 +634,48 @@
 
 .home-metric > strong {
   display: block;
-  margin-top: 13px;
+  margin-top: 9px;
   color: var(--text);
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   font-weight: 650;
 }
 
 .home-metric p {
-  margin-top: 5px;
+  margin-top: 4px;
   color: var(--text-secondary);
-  font-size: 0.68rem;
-  line-height: 1.55;
+  font-size: 0.64rem;
+  line-height: 1.35;
+}
+
+.home-progress-panel .home-metric__lead > strong {
+  font-size: 0.9rem;
+}
+
+.home-progress-panel .home-metric p {
+  margin-top: 6px;
+}
+
+.home-continue-panel > .home-mini-course-grid,
+.home-discussions-panel > .home-discussion-workspace-list,
+.home-progress-panel > .home-metrics-grid,
+.home-updates-panel > .home-update-list {
+  margin-top: 10px;
+}
+
+.home-discussions-panel .discussion-thread--workspace-card.is-compact {
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.home-discussions-panel
+  .discussion-thread--workspace-card.is-compact:is(:hover, :focus-within) {
+  background: color-mix(
+    in srgb,
+    var(--creator-discussion-card-surface, var(--surface-strong)) 92%,
+    var(--text) 8%
+  );
 }
 
 .home-update-list,
@@ -572,31 +683,133 @@
   margin-top: 8px;
 }
 
-.home-update-list > button {
+.home-update-course {
+  --home-update-column-gap: 11px;
+  --home-update-thumb-column: 52px;
+  position: relative;
   display: grid;
   width: 100%;
-  min-height: 74px;
-  grid-template-columns: 52px minmax(0, 1fr) 7px;
-  align-items: center;
-  gap: 11px;
-  border-top: 1px solid var(--border);
-  padding: 10px 3px;
-  text-align: left;
+  min-width: 0;
+  grid-template-columns: var(--home-update-thumb-column) minmax(0, 1fr);
+  column-gap: var(--home-update-column-gap);
+  row-gap: 0;
+  padding: 5px 3px;
+}
+
+.home-update-course + .home-update-course::before {
+  position: absolute;
+  top: 0;
+  right: 3px;
+  left: calc(
+    3px + var(--home-update-thumb-column) + var(--home-update-column-gap)
+  );
+  height: 1px;
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  content: "";
 }
 
 .home-update-skeleton {
   display: grid;
   width: 100%;
   min-height: 74px;
-  grid-template-columns: 52px minmax(0, 1fr) 7px;
+  grid-template-columns: 52px minmax(0, 1fr);
+  column-gap: 11px;
   align-items: center;
-  gap: 11px;
   border-top: 1px solid var(--border);
   padding: 10px 3px;
 }
 
-.home-update-skeleton > span,
-.home-update-skeleton > i {
+.home-update-course-header {
+  display: contents;
+}
+
+.home-update-course-header > .student-home-thumbnail {
+  width: 52px;
+  height: 52px;
+  grid-column: 1;
+  grid-row: 1;
+  border-radius: 8px;
+}
+
+.home-update-course-header > span {
+  display: grid;
+  min-width: 0;
+  grid-column: 2;
+  grid-row: 1;
+  align-content: center;
+  gap: 2px;
+}
+
+.home-update-course-header > span > strong {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.home-update-lessons {
+  display: grid;
+  min-width: 0;
+  grid-column: 2;
+  gap: 0;
+}
+
+.home-update-lesson {
+  display: flex;
+  width: 100%;
+  min-height: 26px;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  border: 0;
+  border-radius: 4px;
+  padding: 2px 0;
+  color: var(--text-secondary);
+  background: transparent;
+  font-size: 0.65rem;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+  transition: color 150ms ease;
+}
+
+.home-update-lesson > span {
+  flex: 0 1 auto;
+  max-width: calc(100% - 23px);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-update-lesson > svg {
+  flex: 0 0 auto;
+  color: currentColor;
+  transition: transform 150ms ease;
+}
+
+.home-update-lesson:hover,
+.home-update-lesson:focus-visible {
+  color: var(--accent-ink, var(--accent));
+}
+
+.home-update-lesson:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 68%, transparent);
+  outline-offset: 1px;
+}
+
+.home-update-lesson:hover > svg,
+.home-update-lesson:focus-visible > svg {
+  transform: translateX(2px);
+}
+
+.home-update-skeleton {
+  text-align: left;
+}
+
+.home-update-skeleton > span {
   display: block;
   background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
   animation: student-home-skeleton-pulse 1.4s ease-in-out infinite;
@@ -633,12 +846,6 @@
 
 .home-update-skeleton > span:nth-child(2) > i:nth-child(3) {
   width: 58%;
-}
-
-.home-update-skeleton > i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
 }
 
 .home-update-state {
@@ -692,25 +899,6 @@
   opacity: 0.65;
 }
 
-.home-update-list img {
-  width: 52px;
-  height: 52px;
-  border-radius: 8px;
-  object-fit: cover;
-}
-
-.home-update-list button > span {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.home-update-list button > span > em {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
 @keyframes student-home-skeleton-pulse {
   0%,
   100% {
@@ -730,7 +918,6 @@
 }
 
 .home-update-list small,
-.home-update-list em,
 .home-update-list time,
 .home-discussion-list p,
 .home-discussion-list time {
@@ -739,13 +926,6 @@
   font-style: normal;
 }
 
-.home-update-list em {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.home-update-list button > i,
 .home-discussion-list article > i {
   width: 6px;
   height: 6px;
@@ -864,7 +1044,12 @@
   object-fit: cover;
 }
 
-.home-mini-course > div:not(.home-mini-progress) {
+.home-mini-course > .student-home-thumbnail {
+  width: 100%;
+  aspect-ratio: 1.76 / 1;
+}
+
+.home-mini-course > div:not(.home-mini-progress):not(.student-home-thumbnail) {
   padding: 10px 12px 0;
 }
 
@@ -1367,6 +1552,11 @@
     grid-template-columns: 1fr;
   }
 
+  .home-dashboard-grid > .home-progress-panel,
+  .home-dashboard-grid > .home-updates-panel {
+    align-self: start;
+  }
+
   .learning-course-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1463,12 +1653,18 @@
     grid-template-columns: 1fr;
   }
 
-  .home-update-list > button {
-    grid-template-columns: 48px minmax(0, 1fr) 7px;
+  .home-update-course,
+  .home-update-skeleton {
+    grid-template-columns: 48px minmax(0, 1fr);
   }
 
-  .home-update-skeleton {
-    grid-template-columns: 48px minmax(0, 1fr) 7px;
+  .home-update-course {
+    --home-update-thumb-column: 48px;
+  }
+
+  .home-update-course-header > .student-home-thumbnail {
+    width: 48px;
+    height: 48px;
   }
 
   .home-update-skeleton > span:first-child {
@@ -1486,5 +1682,15 @@
 
   .learning-page-header {
     gap: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-section-heading button,
+  .dashboard-section-heading button svg,
+  .home-discussions-panel .discussion-thread--workspace-card.is-compact,
+  .home-update-lesson,
+  .home-update-lesson > svg {
+    transition: none;
   }
 }

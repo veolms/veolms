@@ -6,6 +6,7 @@ export interface RecentUpdateCourseRow {
   course_slug: string;
   course_title: string;
   course_thumbnail_url: string | null;
+  course_thumbnail_media_id: string | null;
   recent_lesson_count: number | bigint;
   latest_updated_at: Date;
 }
@@ -57,6 +58,7 @@ export function createRecentUpdatesRepository({
         "c.slug as course_slug",
         "c.title as course_title",
         "c.thumbnail_url as course_thumbnail_url",
+        "c.thumbnail_media_id as course_thumbnail_media_id",
         sql<number>`count(*)::int`.as("recent_lesson_count"),
         sql<Date>`max(l.updated_at)`.as("latest_updated_at"),
       ])
@@ -83,7 +85,13 @@ export function createRecentUpdatesRepository({
       .where("l.is_published", "=", true)
       .where("l.deleted_at", "is", null)
       .where("l.updated_at", ">=", cutoff)
-      .groupBy(["c.id", "c.slug", "c.title", "c.thumbnail_url"])
+      .groupBy([
+        "c.id",
+        "c.slug",
+        "c.title",
+        "c.thumbnail_url",
+        "c.thumbnail_media_id",
+      ])
       .orderBy("latest_updated_at", "desc")
       .orderBy("course_id", "asc")
       .limit(limit)

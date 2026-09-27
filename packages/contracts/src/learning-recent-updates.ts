@@ -20,6 +20,7 @@ export const recentUpdateCourseSchema = z.strictObject({
   courseSlug: z.string().min(1).max(160),
   courseTitle: z.string().min(1),
   courseThumbnailUrl: z.string().nullable(),
+  courseThumbnailMediaId: z.uuid().nullable(),
   recentLessonCount: z.number().int().nonnegative(),
   latestUpdatedAt: z.iso.datetime(),
   lessons: z.array(recentUpdateLessonSchema),

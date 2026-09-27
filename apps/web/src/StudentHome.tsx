@@ -8,17 +8,24 @@ import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { TargetIcon as Target } from "@phosphor-icons/react/Target";
 import type { LearningProgressResumeContextResponse } from "@veolms/contracts";
-import { useMemo, type CSSProperties } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ImgHTMLAttributes,
+} from "react";
 import { useNavigate } from "react-router";
 import javascriptThumbnail from "./assets/course-thumbnails/javascript-960.webp";
 import nodeThumbnail from "./assets/course-thumbnails/nodejs-960.webp";
 import typescriptThumbnail from "./assets/course-thumbnails/typescript-960.webp";
 import typescriptInstructorHero800 from "./assets/learning-thumbnails/typescript-instructor-hero-800.webp";
+import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
+import { getCourseThumbnailCdnUrl } from "./courses/courseMedia";
 import {
   adaptEnrolledCourseToLearningCourse,
   type LearningCourse,
 } from "./StudentPages";
-import { getCourseThumbnail } from "./learning/courseMetadata";
 import { getCoursePlayerPath } from "./learning/coursePlayerNavigation";
 import { formatRelativeTime } from "./learning/learning-notes.adapter";
 import { useEnrolledCourses } from "./services/enrollments";
@@ -145,7 +152,8 @@ function SectionHeader({
   return (
     <div className="dashboard-section-heading">
       <h2>
-        <Icon size={19} weight="duotone" /> {title}
+        <Icon size={19} weight="duotone" />
+        <span>{title}</span>
       </h2>
       {action && (
         <button type="button" onClick={onAction}>
@@ -156,10 +164,72 @@ function SectionHeader({
   );
 }
 
-function ProgressBar({ value }: { value: number }) {
+function StudentHomeThumbnail({
+  src,
+  fallbackSrcs = [],
+  alt,
+  loading = "lazy",
+  decoding = "async",
+  fetchPriority,
+}: {
+  src?: string | null;
+  fallbackSrcs?: readonly (string | null | undefined)[];
+  alt: string;
+  loading?: ImgHTMLAttributes<HTMLImageElement>["loading"];
+  decoding?: ImgHTMLAttributes<HTMLImageElement>["decoding"];
+  fetchPriority?: ImgHTMLAttributes<HTMLImageElement>["fetchPriority"];
+}) {
+  const imageSources = [src, ...fallbackSrcs]
+    .map((candidate) => candidate?.trim() ?? "")
+    .filter((candidate, index, candidates) =>
+      candidate ? candidates.indexOf(candidate) === index : false,
+    );
+  const imageSourcesKey = imageSources.join("\u0000");
+  const [imageSourceIndex, setImageSourceIndex] = useState(0);
+
+  useEffect(() => {
+    setImageSourceIndex(0);
+  }, [imageSourcesKey]);
+
+  const imageSrc = imageSources[imageSourceIndex] ?? "";
+
   return (
-    <span className="learning-progress-track" aria-hidden="true">
-      <span style={{ width: `${value}%` }} />
+    <div className="student-home-thumbnail">
+      {imageSrc ? (
+        <img
+          src={imageSrc}
+          alt={alt}
+          loading={loading}
+          decoding={decoding}
+          fetchPriority={fetchPriority}
+          onError={() =>
+            setImageSourceIndex((current) =>
+              Math.min(current + 1, imageSources.length),
+            )
+          }
+        />
+      ) : (
+        <CourseThumbnailPlaceholder />
+      )}
+    </div>
+  );
+}
+
+function ProgressBar({ value }: { value: number }) {
+  const normalizedValue = Number.isFinite(value)
+    ? Math.min(100, Math.max(0, value))
+    : 0;
+
+  return (
+    <span
+      className="learning-progress-track"
+      role="progressbar"
+      aria-label="Course progress"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={normalizedValue}
+    >
+      <span style={{ width: `${normalizedValue}%` }} />
     </span>
   );
 }
@@ -175,7 +245,6 @@ function RecentUpdatesSkeletons() {
             <i />
             <i />
           </span>
-          <i />
         </div>
       ))}
     </>
@@ -240,15 +309,11 @@ function ContinueLearningSkeletons() {
 
 function ContinueLearningState({
   error = false,
-  hasHeroCourse = false,
   isRetrying = false,
-  onBrowse,
   onRetry,
 }: {
   error?: boolean;
-  hasHeroCourse?: boolean;
   isRetrying?: boolean;
-  onBrowse?: () => void;
   onRetry?: () => void;
 }) {
   if (error) {
@@ -265,21 +330,10 @@ function ContinueLearningState({
 
   return (
     <div className="home-continue-state" role="status">
-      <strong>
-        {hasHeroCourse
-          ? "Nothing else to continue yet"
-          : "Nothing to continue yet"}
-      </strong>
+      <strong>You&apos;re all caught up here</strong>
       <small>
-        {hasHeroCourse
-          ? "Keep going with the highlighted course above."
-          : "Start a course and your learning progress will appear here."}
+        Your other courses will appear here as you start making progress.
       </small>
-      {!hasHeroCourse && onBrowse ? (
-        <button type="button" onClick={onBrowse}>
-          Browse courses
-        </button>
-      ) : null}
     </div>
   );
 }
@@ -391,9 +445,10 @@ export function StudentHome({
   } = useEnrolledCourses();
   const hasEnrolledCourseData = enrolledData !== undefined;
   const enrolledCourses = useMemo(() => {
-    return (enrolledData?.courses || []).map(
-      adaptEnrolledCourseToLearningCourse,
-    );
+    return (enrolledData?.courses || []).map((course) => ({
+      ...adaptEnrolledCourseToLearningCourse(course),
+      thumbnailUrl: course.courseThumbnailUrl,
+    }));
   }, [enrolledData?.courses]);
 
   const progressMetrics = useMemo(() => {
@@ -416,7 +471,7 @@ export function StudentHome({
           progressValues.filter((progress) => progress > 0 && progress < 100)
             .length,
         ),
-        label: "Courses in Progress",
+        label: "In Progress",
         icon: ChartLineUp,
         tone: "cyan",
       },
@@ -424,13 +479,13 @@ export function StudentHome({
         value: String(
           progressValues.filter((progress) => progress >= 100).length,
         ),
-        label: "Courses Completed",
+        label: "Completed",
         icon: CheckCircle,
         tone: "green",
       },
       {
         value: `${courses.length > 0 ? Math.round(totalProgress / courses.length) : 0}%`,
-        label: "Average Course Progress",
+        label: "Avg. Progress",
         icon: ChartBar,
         tone: "gold",
       },
@@ -566,15 +621,15 @@ export function StudentHome({
         </section>
       ) : heroFocusCourse ? (
         <section
-          className="home-resume-card"
+          className={`home-resume-card${heroCourse ? "" : " home-resume-card--ready"}`}
           aria-labelledby={
             heroCourse ? "continue-learning-title" : "ready-to-start-title"
           }
         >
           <div className="home-resume-layout">
             <div className="home-resume-visual">
-              <img
-                src={heroFocusCourse.thumbnail}
+              <StudentHomeThumbnail
+                src={heroFocusCourse.thumbnailUrl}
                 alt=""
                 loading="eager"
                 decoding="async"
@@ -584,7 +639,7 @@ export function StudentHome({
               <span
                 className={`learning-status ${heroCourse ? "in-progress" : "not-started"}`}
               >
-                {heroCourse ? "Continue Learning" : "Ready to Start"}
+                {heroCourse ? "Continue Learning" : "Ready when you are"}
               </span>
               <h2
                 id={
@@ -600,11 +655,11 @@ export function StudentHome({
                 {heroFocusCourse.lectures} Lectures
               </strong>
               <p>
-                {heroFocusCourse.enrolledOn
+                {heroCourse && heroFocusCourse.enrolledOn
                   ? `Enrolled on ${heroFocusCourse.enrolledOn}`
                   : heroCourse
                     ? "Ready to continue"
-                    : "Start with the first lesson"}
+                    : "Start this course whenever you're ready."}
               </p>
               {heroCourse && primaryCourseKey && resumeContext ? (
                 <ResumeLessonContext
@@ -617,7 +672,7 @@ export function StudentHome({
               ) : null}
               <div className="home-resume-progress">
                 <ProgressBar value={heroFocusCourse.progress} />
-                <span>{heroFocusCourse.progress}%</span>
+                <span aria-hidden="true">{heroFocusCourse.progress}%</span>
               </div>
               <button
                 type="button"
@@ -625,7 +680,7 @@ export function StudentHome({
                 onClick={() => onOpenCourse(heroFocusCourse)}
               >
                 <Play size={18} weight="fill" />
-                {heroCourse ? "Continue Learning" : "Start Learning"}
+                {heroCourse ? "Continue Learning" : "Start learning"}
               </button>
             </div>
           </div>
@@ -639,7 +694,7 @@ export function StudentHome({
             <div className="home-resume-visual">
               <img
                 src={typescriptInstructorHero800}
-                alt="Course explore"
+                alt=""
                 width={1600}
                 height={900}
                 decoding="sync"
@@ -647,19 +702,20 @@ export function StudentHome({
               />
             </div>
             <div className="home-resume-copy">
-              <span className="learning-status in-progress">
-                Start Learning
+              <span className="learning-status not-started">
+                Explore courses
               </span>
-              <h2 id="explore-courses-title">Discover Your Next Course</h2>
+              <h2 id="explore-courses-title">What will you learn next?</h2>
               <p>
-                Explore our library and enroll in courses to begin your journey.
+                Explore courses and find something you&apos;d like to learn
+                next.
               </p>
               <button
                 type="button"
                 className="primary-learning-action mt-4"
                 onClick={() => onNavigatePage("courses")}
               >
-                <BookOpen size={18} weight="fill" /> Browse Courses
+                <BookOpen size={18} weight="fill" /> Explore courses
               </button>
             </div>
           </div>
@@ -689,8 +745,8 @@ export function StudentHome({
             ) : miniCourses.length > 0 ? (
               miniCourses.map((course) => (
                 <article key={course.id} className="home-mini-course">
-                  <img
-                    src={course.thumbnail}
+                  <StudentHomeThumbnail
+                    src={course.thumbnailUrl}
                     alt=""
                     loading="lazy"
                     decoding="async"
@@ -703,7 +759,7 @@ export function StudentHome({
                   </div>
                   <div className="home-mini-progress">
                     <ProgressBar value={course.progress} />
-                    <span>{course.progress}%</span>
+                    <span aria-hidden="true">{course.progress}%</span>
                   </div>
                   <button
                     type="button"
@@ -716,10 +772,7 @@ export function StudentHome({
                 </article>
               ))
             ) : (
-              <ContinueLearningState
-                hasHeroCourse={Boolean(heroCourse)}
-                onBrowse={() => onNavigatePage("courses")}
-              />
+              <ContinueLearningState />
             )}
           </div>
         </section>
@@ -829,39 +882,55 @@ export function StudentHome({
             ) : recentUpdateCourses.length === 0 ? (
               <RecentUpdatesState />
             ) : (
-              recentUpdateCourses.map((course) => (
-                <button
-                  type="button"
-                  key={course.courseId}
-                  onClick={() =>
-                    navigate(
-                      `/courses/${encodeURIComponent(course.courseSlug)}/overview`,
-                    )
-                  }
-                >
-                  <img
-                    src={
-                      course.courseThumbnailUrl ||
-                      getCourseThumbnail(course.courseSlug)
-                    }
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                  />
-                  <span>
-                    <strong>{course.courseTitle}</strong>
-                    <small>
-                      {course.recentLessonCount} recent lesson
-                      {course.recentLessonCount === 1 ? "" : "s"} · Updated{" "}
-                      {formatRelativeTime(course.latestUpdatedAt)}
-                    </small>
-                    {course.lessons.slice(0, 2).map((lesson) => (
-                      <em key={lesson.lessonId}>{lesson.lessonTitle}</em>
-                    ))}
-                  </span>
-                  <i aria-hidden="true" />
-                </button>
-              ))
+              recentUpdateCourses.map((course) => {
+                return (
+                  <div className="home-update-course" key={course.courseId}>
+                    <div className="home-update-course-header">
+                      <StudentHomeThumbnail
+                        src={course.courseThumbnailUrl}
+                        fallbackSrcs={[
+                          getCourseThumbnailCdnUrl(
+                            course.courseThumbnailMediaId,
+                          ),
+                        ]}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <span>
+                        <strong>{course.courseTitle}</strong>
+                        <small>
+                          Updated {formatRelativeTime(course.latestUpdatedAt)}
+                        </small>
+                      </span>
+                    </div>
+                    {course.lessons.length > 0 && (
+                      <div className="home-update-lessons">
+                        {course.lessons.map((lesson) => (
+                          <button
+                            type="button"
+                            className="home-update-lesson"
+                            key={lesson.lessonId}
+                            onClick={() =>
+                              navigate(
+                                getCoursePlayerPath(
+                                  course.courseSlug,
+                                  "home",
+                                  lesson.lessonNumber,
+                                  "/home",
+                                ),
+                              )
+                            }
+                          >
+                            <span>{lesson.lessonTitle}</span>
+                            <ArrowRight size={15} aria-hidden="true" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </section>

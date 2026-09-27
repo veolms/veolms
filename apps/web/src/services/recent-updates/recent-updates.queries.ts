@@ -10,7 +10,7 @@ import {
 export const recentUpdatesHomeParams: RecentUpdatesRequest = {
   days: 14,
   limit: 2,
-  lessonsPerCourse: 3,
+  lessonsPerCourse: 2,
 };
 
 export function useRecentLearningUpdates(
