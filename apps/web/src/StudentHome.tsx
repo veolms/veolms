@@ -1,9 +1,9 @@
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
+import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
-import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
 import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { TargetIcon as Target } from "@phosphor-icons/react/Target";
@@ -90,23 +90,6 @@ const resumeLessons = [
   { number: 3, title: "Practical Application & Hands-on", duration: "22:10" },
 ];
 
-const progressMetrics = [
-  { value: "2", label: "Active Courses", icon: BookOpen, tone: "violet" },
-  {
-    value: "12",
-    label: "Lectures Completed This Week",
-    icon: CheckCircle,
-    tone: "green",
-  },
-  {
-    value: "4h 28m",
-    label: "Learning Time This Week",
-    icon: Clock,
-    tone: "cyan",
-  },
-  { value: "7", label: "Day Streak", icon: ChartLineUp, tone: "gold" },
-];
-
 function SectionHeader({
   icon: Icon,
   title,
@@ -182,6 +165,26 @@ function RecentUpdatesState({
   );
 }
 
+function ProgressMetricSkeletons() {
+  return (
+    <>
+      {[0, 1, 2, 3].map((item) => (
+        <article
+          key={item}
+          className="home-metric home-metric-skeleton"
+          aria-hidden="true"
+        >
+          <div className="home-metric__lead">
+            <span />
+            <i className="home-metric-skeleton__value" />
+          </div>
+          <i className="home-metric-skeleton__label" />
+        </article>
+      ))}
+    </>
+  );
+}
+
 export function StudentHome({
   onOpenCourse,
   onNavigatePage,
@@ -192,9 +195,55 @@ export function StudentHome({
   const firstName =
     (studentName?.trim() || "Ashi Singh").split(/\s+/)[0] || "Ashi";
 
-  const { data: enrolledData } = useEnrolledCourses();
+  const {
+    data: enrolledData,
+    isLoading: enrolledCoursesLoading,
+    isError: enrolledCoursesError,
+    isFetching: enrolledCoursesFetching,
+    refetch: refetchEnrolledCourses,
+  } = useEnrolledCourses();
+  const hasEnrolledCourseData = enrolledData !== undefined;
   const enrolledCourses = useMemo(() => {
     return (enrolledData?.courses || []).map(adaptEnrolledCourseToLearningCourse);
+  }, [enrolledData?.courses]);
+
+  const progressMetrics = useMemo(() => {
+    const courses = enrolledData?.courses ?? [];
+    const progressValues = courses.map((course) => course.progress ?? 0);
+    const totalProgress = progressValues.reduce(
+      (total, progress) => total + progress,
+      0,
+    );
+
+    return [
+      {
+        value: String(courses.length),
+        label: "Active Courses",
+        icon: BookOpen,
+        tone: "violet",
+      },
+      {
+        value: String(
+          progressValues.filter((progress) => progress > 0 && progress < 100)
+            .length,
+        ),
+        label: "Courses in Progress",
+        icon: ChartLineUp,
+        tone: "cyan",
+      },
+      {
+        value: String(progressValues.filter((progress) => progress >= 100).length),
+        label: "Courses Completed",
+        icon: CheckCircle,
+        tone: "green",
+      },
+      {
+        value: `${courses.length > 0 ? Math.round(totalProgress / courses.length) : 0}%`,
+        label: "Average Course Progress",
+        icon: ChartBar,
+        tone: "gold",
+      },
+    ] as const;
   }, [enrolledData?.courses]);
 
   const {
@@ -507,21 +556,38 @@ export function StudentHome({
           <SectionHeader
             icon={ChartLineUp}
             title="Your Progress"
-            action="View Analytics"
-            onAction={() => onNavigatePage("analytics")}
           />
-          <div className="home-metrics-grid">
-            {progressMetrics.map(({ value, label, icon: Icon, tone }) => (
-              <article key={label} className={`home-metric tone-${tone}`}>
-                <div className="home-metric__lead">
-                  <span>
-                    <Icon size={20} weight="duotone" />
-                  </span>
-                  <strong>{value}</strong>
-                </div>
-                <p>{label}</p>
-              </article>
-            ))}
+          <div
+            className="home-metrics-grid"
+            aria-busy={enrolledCoursesLoading || enrolledCoursesFetching}
+          >
+            {enrolledCoursesLoading && !hasEnrolledCourseData ? (
+              <ProgressMetricSkeletons />
+            ) : enrolledCoursesError && !hasEnrolledCourseData ? (
+              <div className="home-progress-state" role="alert">
+                <strong>Couldn&apos;t load your progress</strong>
+                <small>Something went wrong while loading enrolled courses.</small>
+                <button
+                  type="button"
+                  onClick={() => void refetchEnrolledCourses()}
+                  disabled={enrolledCoursesFetching}
+                >
+                  {enrolledCoursesFetching ? "Retrying…" : "Retry"}
+                </button>
+              </div>
+            ) : (
+              progressMetrics.map(({ value, label, icon: Icon, tone }) => (
+                <article key={label} className={`home-metric tone-${tone}`}>
+                  <div className="home-metric__lead">
+                    <span>
+                      <Icon size={20} weight="duotone" aria-hidden="true" />
+                    </span>
+                    <strong>{value}</strong>
+                  </div>
+                  <p>{label}</p>
+                </article>
+              ))
+            )}
           </div>
         </section>
 
