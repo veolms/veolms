@@ -84,6 +84,8 @@ export function createEnrollmentService({
         "c.slug as course_slug",
         "c.title as course_title",
         "c.short_description as course_description",
+        "c.thumbnail_url as course_thumbnail_url",
+        "c.thumbnail_media_id as course_thumbnail_media_id",
         "e.created_at as enrolled_at",
         "e.status as enrollment_status",
         "e.source as enrollment_source",
@@ -181,9 +183,6 @@ export function createEnrollmentService({
       .orderBy("e.created_at", "desc")
       .execute();
 
-    // Thumbnail URL: courses store a thumbnail_media_id FK — we read it
-    // separately and convert to a URL.  For the MVP, we pass null and let
-    // the frontend fall back to its local slug-based thumbnail map.
     return rows.map((row) =>
       toEnrolledCourseContract({
         enrollment_id: row.enrollment_id,
@@ -191,7 +190,8 @@ export function createEnrollmentService({
         course_slug: row.course_slug,
         course_title: row.course_title,
         course_description: row.course_description ?? null,
-        course_thumbnail_url: null,
+        course_thumbnail_url: row.course_thumbnail_url,
+        course_thumbnail_media_id: row.course_thumbnail_media_id,
         total_sections: Number(row.total_sections) || 0,
         total_lessons: Number(row.total_lessons) || 0,
         total_duration_seconds: Number(row.total_duration_seconds) || 0,

@@ -447,7 +447,10 @@ export function StudentHome({
   const enrolledCourses = useMemo(() => {
     return (enrolledData?.courses || []).map((course) => ({
       ...adaptEnrolledCourseToLearningCourse(course),
-      thumbnailUrl: course.courseThumbnailUrl,
+      thumbnailUrl:
+        course.courseThumbnailUrl ||
+        getCourseThumbnailCdnUrl(course.courseThumbnailMediaId),
+      thumbnailMediaId: course.courseThumbnailMediaId,
     }));
   }, [enrolledData?.courses]);
 
@@ -630,6 +633,9 @@ export function StudentHome({
             <div className="home-resume-visual">
               <StudentHomeThumbnail
                 src={heroFocusCourse.thumbnailUrl}
+                fallbackSrcs={[
+                  getCourseThumbnailCdnUrl(heroFocusCourse.thumbnailMediaId),
+                ]}
                 alt=""
                 loading="eager"
                 decoding="async"
@@ -747,6 +753,9 @@ export function StudentHome({
                 <article key={course.id} className="home-mini-course">
                   <StudentHomeThumbnail
                     src={course.thumbnailUrl}
+                    fallbackSrcs={[
+                      getCourseThumbnailCdnUrl(course.thumbnailMediaId),
+                    ]}
                     alt=""
                     loading="lazy"
                     decoding="async"

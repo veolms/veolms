@@ -11,6 +11,7 @@ export const enrolledCourseSchema = z.strictObject({
   courseTitle: z.string(),
   courseDescription: z.string().nullable().optional(),
   courseThumbnailUrl: z.string().nullable().optional(),
+  courseThumbnailMediaId: z.uuid().nullable().optional(),
   totalSections: z.number().int().nonnegative(),
   totalLessons: z.number().int().nonnegative(),
   totalDurationSeconds: z.number().int().nonnegative(),
