@@ -177,6 +177,9 @@ export default defineConfig(({ command, mode }) => {
       include: ["react", "react-dom/client"],
     },
     define: {
+      "process.env.VEO_REACT_ROUTER_BUILD": JSON.stringify(
+        process.env.VEO_REACT_ROUTER_BUILD ?? "false",
+      ),
       "import.meta.env.STATIC_BUILD_API_URL": JSON.stringify(
         config.STATIC_BUILD_API_URL,
       ),
@@ -239,13 +242,8 @@ export default defineConfig(({ command, mode }) => {
         ],
       },
       proxy: {
-        "/api": {
-          target: config.STATIC_BUILD_API_URL
-            ? new URL(config.STATIC_BUILD_API_URL).origin.replace(
-                "localhost",
-                "127.0.0.1",
-              )
-            : "http://127.0.0.1:4000",
+        "/v1": {
+          target: "http://127.0.0.1:4000",
           changeOrigin: true,
           secure: false,
         },

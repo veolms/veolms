@@ -37,6 +37,7 @@ export interface MenuActionProps {
   icon?: ReactNode;
   label: string;
   onClick: () => void;
+  onIntent?: () => void;
   destructive?: boolean;
   disabled?: boolean;
 }
@@ -46,6 +47,7 @@ export function MenuAction({
   icon,
   label,
   onClick,
+  onIntent,
   destructive,
   disabled = false,
 }: MenuActionProps) {
@@ -65,6 +67,8 @@ export function MenuAction({
       }`}
       aria-disabled={disabled ? "true" : undefined}
       disabled={disabled}
+      onPointerEnter={onIntent}
+      onFocus={onIntent}
       onClick={(event) => {
         event.stopPropagation();
         if (dismissThen) dismissThen(onClick);

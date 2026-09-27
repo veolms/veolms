@@ -45,8 +45,15 @@ const studentStatusStyles = {
 // one column below 560px, two columns from 560px, three from 1280px, and
 // four from 1536px. Avoid `auto` here because eager images cannot use the
 // auto-size shortcut consistently across browsers.
-const courseThumbnailSizes =
+export const courseThumbnailSizes =
   "(min-width: 1536px) 23vw, (min-width: 1280px) 31vw, (min-width: 560px) 47vw, 100vw";
+
+export const getCourseThumbnailSrcSet = (
+  course: Pick<Course, "thumbnailSrcSet">,
+) =>
+  course.thumbnailSrcSet
+    ?.map((variant) => `${variant.url} ${variant.width}w`)
+    .join(", ");
 
 const getStudentStatus = (course: Course) => {
   if (!course.enrolled) return "not-enrolled" as const;
@@ -72,6 +79,7 @@ export interface CourseCardProps {
   onOpen: (course: Course) => void;
   onExplore: (course: Course) => void;
   onEdit?: (course: Course) => void;
+  onEditIntent?: (course: Course) => void;
   onManage?: (course: Course) => void;
   onPublish?: (course: Course) => void;
   onDeleteRequested?: (course: Course) => void;
@@ -95,6 +103,7 @@ export function CourseCard({
   onOpen,
   onExplore,
   onEdit,
+  onEditIntent,
   onManage,
   onPublish,
   onDeleteRequested,
@@ -206,7 +215,7 @@ export function CourseCard({
         {course.thumbnail ? (
           <img
             src={course.thumbnail}
-            srcSet={course.thumbnailSrcSet?.map((variant) => `${variant.url} ${variant.width}w`).join(", ")}
+            srcSet={getCourseThumbnailSrcSet(course)}
             sizes={courseThumbnailSizes}
             alt={course.title}
             className="h-full w-full object-cover"
@@ -354,6 +363,7 @@ export function CourseCard({
                   <MenuAction
                     Icon={PencilSimple}
                     label="Edit Course"
+                    onIntent={() => onEditIntent?.(course)}
                     onClick={() => closeThen(() => onEdit?.(course))}
                   />
                   <MenuAction
@@ -585,6 +595,36 @@ export function CourseCard({
                   : "flex justify-center gap-3 hover:bg-(--accent-hover)"
               }`}
               data-control-radius-action
+              onPointerEnter={() => {
+                if (
+                  role === "creator" &&
+                  canEdit &&
+                  !isBin &&
+                  !course.deletedAt
+                ) {
+                  onEditIntent?.(course);
+                }
+              }}
+              onFocus={() => {
+                if (
+                  role === "creator" &&
+                  canEdit &&
+                  !isBin &&
+                  !course.deletedAt
+                ) {
+                  onEditIntent?.(course);
+                }
+              }}
+              onPointerDown={() => {
+                if (
+                  role === "creator" &&
+                  canEdit &&
+                  !isBin &&
+                  !course.deletedAt
+                ) {
+                  onEditIntent?.(course);
+                }
+              }}
               onClick={() => {
                 if (isDeleting) return;
                 if (role === "creator") {

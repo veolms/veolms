@@ -16,6 +16,7 @@ import {
   useParams,
 } from "react-router";
 import { CoursesPage } from "../CoursesPage";
+import type { AcademyStaticPageData } from "./academyStaticPageData";
 import {
   getCourseRouteKey,
   type Course,
@@ -297,6 +298,8 @@ export default function AcademyLayout() {
   const selectLessonTokenRef = useRef(0);
   const currentLocationPath = `${location.pathname}${location.search}${location.hash}`;
   const route = getMatchedRouteDescriptor(matches, location.pathname);
+  const staticCourseRouteData = matches.find((match) => match.id === "root")
+    ?.loaderData as AcademyStaticPageData | undefined;
   const {
     data: authUser,
     isError: authUserError,
@@ -1250,6 +1253,8 @@ export default function AcademyLayout() {
   return (
     <AcademyRouteGuard>
       <CoursesPage
+        initialPublishedCourses={staticCourseRouteData?.publishedCourses}
+        initialCourseOverview={staticCourseRouteData?.courseOverview}
         page={route.page}
         section={route.section}
         settingsTab={route.settingsTab}

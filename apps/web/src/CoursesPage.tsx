@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { flushSync } from "react-dom";
 import type {
   CSSProperties,
@@ -19,6 +20,7 @@ import type {
   ReactNode,
   Ref,
 } from "react";
+import type { CourseOverviewResponse, CourseSummary } from "@veolms/contracts";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
@@ -35,7 +37,6 @@ import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
 import logoDarkSvg from "./assets/procodrr-logo-dark.svg?raw";
 import { StudentHome } from "./StudentHome";
 import type { LearningCourse } from "./StudentPages";
-import { SettingsPage } from "./SettingsPage";
 import { CourseCatalogue } from "./courses/CourseCatalogue";
 import { PlaceholderPage } from "./courses/PlaceholderPage";
 import {
@@ -47,8 +48,6 @@ import { useSecondPressHold } from "./gestures/useSecondPressHold";
 import { WorkspacePage } from "./workspace/WorkspacePages";
 import { ReviewsPage } from "./reviews/ReviewsPage";
 import { CouponsPage } from "./coupons/CouponsPage";
-import { OrdersPage } from "./orders/OrdersPage";
-import { OrderHistoryPage } from "./order-history/OrderHistoryPage";
 import { NotificationsPage } from "./notifications/NotificationsPage";
 import { QuizAnalyticsPage } from "./quizzes/QuizAnalyticsPage";
 import { QuizBuilderPage } from "./quizzes/QuizBuilderPage";
@@ -72,12 +71,18 @@ import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { useCurrentUser, useSignOut } from "./services/auth";
 import { useSidenav } from "./services/navigation";
-import { useAuthStore } from "./store/auth.store";
+import {
+  authStore,
+  useAuthIdentityHint,
+  useAuthStore,
+} from "./store/auth.store";
+
 import {
   useCourses,
   useDeleteCourse,
   useDeletedCourses,
   useMyCourses,
+  prefetchCourseEditor,
   useRestoreCourse,
 } from "./services/courses";
 import { useEnrolledCourses } from "./services/enrollments";
@@ -193,6 +198,14 @@ import {
   type DrawerDismissThen,
 } from "@/components/ui/drawer";
 import type { ProfilePreferences } from "./settings/profileTypes";
+const OrdersPageRoute = lazy(() =>
+  import("./orders/OrdersPage").then((module) => ({ default: module.OrdersPage })),
+);
+const OrderHistoryPageRoute = lazy(() =>
+  import("./order-history/OrderHistoryPage").then((module) => ({
+    default: module.OrderHistoryPage,
+  })),
+);
 const CreatorDashboard = lazy(() =>
   import("./CreatorDashboard").then((module) => ({
     default: module.CreatorDashboard,
@@ -214,9 +227,40 @@ const AnalyticsDashboardPage = lazy(() =>
   })),
 );
 
+const loadCourseCreatePage = () => import("./courses/CourseCreatePage");
+
 const CourseCreatePage = lazy(() =>
-  import("./courses/CourseCreatePage").then((module) => ({
+  loadCourseCreatePage().then((module) => ({
     default: module.CourseCreatePage,
+  })),
+);
+
+function CourseEditorRouteFallback() {
+  return (
+    <div
+      className="mx-auto w-full max-w-[1560px] animate-pulse p-6 max-[640px]:p-4"
+      role="status"
+      aria-label="Loading course editor"
+    >
+      <span className="sr-only">Opening course editor…</span>
+      <div className="mb-5 h-11 w-64 rounded-xl bg-(--surface-strong)" />
+      <div className="mb-6 h-12 rounded-xl bg-(--surface-strong)" />
+      <div className="mb-6 h-24 rounded-xl bg-(--surface-strong)" />
+      <div className="space-y-4">
+        {[0, 1, 2, 3].map((item) => (
+          <div
+            key={item}
+            className="h-18 rounded-xl border border-(--border) bg-(--surface)"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const SettingsPage = lazy(() =>
+  import("./SettingsPage").then((module) => ({
+    default: module.SettingsPage,
   })),
 );
 
@@ -226,6 +270,8 @@ type AppearanceSwipeSource = AppearanceOption;
 type NavigationDropPosition = "before" | "after";
 
 interface CoursesPageProps {
+  initialPublishedCourses?: CourseSummary[];
+  initialCourseOverview?: CourseOverviewResponse;
   onOpenCourse: (
     course: Course | LearningCourse,
     options?: CourseOpenOptions,
@@ -514,23 +560,35 @@ function LoginProfileButton({
   className,
   arrowSize,
   onLogin,
+  isCheckingSession = false,
+  displayName,
 }: {
   className: string;
   arrowSize: number;
   onLogin: () => void;
+  isCheckingSession?: boolean;
+  displayName?: string;
 }) {
   return (
     <button
       type="button"
       className={`${className} courses-profile__login-button`}
-      aria-label="Login. Access Your Learning Journey"
+      aria-label={
+        isCheckingSession
+          ? `Checking session${displayName ? ` for ${displayName}` : ""}`
+          : "Login. Access Your Learning Journey"
+      }
       onClick={onLogin}
     >
       <ShellProfileAvatar avatarUrl={null} />
       <span className="courses-profile__login-copy">
-        <strong className="courses-profile__login-title">Login</strong>
+        <strong className="courses-profile__login-title">
+          {isCheckingSession ? displayName || "Checking session…" : "Login"}
+        </strong>
         <small className="courses-profile__login-subtitle">
-          Access Your Learning Journey
+          {isCheckingSession
+            ? "Restoring your account"
+            : "Access Your Learning Journey"}
         </small>
       </span>
       <i
@@ -544,6 +602,8 @@ function LoginProfileButton({
 }
 
 export function CoursesPage({
+  initialPublishedCourses,
+  initialCourseOverview,
   onOpenCourse,
   onNavigatePage,
   onExitSettings,
@@ -561,6 +621,17 @@ export function CoursesPage({
   learningMotionStageRef,
   renderMain = null,
 }: CoursesPageProps) {
+  const queryClient = useQueryClient();
+  const warmCourseEditorChunk = useCallback((_course: Course) => {
+    void loadCourseCreatePage().catch(() => undefined);
+  }, []);
+  const prepareCourseEditorEdit = useCallback(
+    (course: Course) => {
+      warmCourseEditorChunk(course);
+      void prefetchCourseEditor(queryClient, course.id);
+    },
+    [queryClient, warmCourseEditorChunk],
+  );
   const [role, setRole] = useState<CourseRole>(() => {
     if (typeof window === "undefined") return "student";
     try {
@@ -725,6 +796,7 @@ export function CoursesPage({
     isError: authUserError,
     isFetched: authUserFetched,
   } = useCurrentUser();
+  const authIdentityHint = useAuthIdentityHint();
   const storeUser = useAuthStore((s) => s.user);
   // Once `/auth/me` has completed, its null result must win over any
   // in-memory login snapshot. Before that, the snapshot is useful only for
@@ -771,16 +843,33 @@ export function CoursesPage({
       if (typeof window !== "undefined") window.location.href = "/";
     }
   }, [signOut]);
+  const isCourseCataloguePage =
+    page === "courses" || learningBackground?.page === "courses";
   const shouldLoadCourseSurface =
     (!renderMain || Boolean(learningBackground)) && !isEditingOrCreatingCourse;
-  const shouldQueryCourses = isAuthReady && shouldLoadCourseSurface;
+  const shouldQueryCourses =
+    isCourseCataloguePage &&
+    isAuthReady &&
+    shouldLoadCourseSurface &&
+    (!isAuthenticated || isWorkspaceRoleHydrated);
 
   const { data: publishedCoursesData, isPending: isPublishedPending } =
     useCourses({
-      enabled: shouldQueryCourses && effectiveRole === "student",
+      enabled:
+        shouldQueryCourses &&
+        effectiveRole === "student" &&
+        !initialPublishedCourses,
+      initialData: initialPublishedCourses
+        ? { courses: initialPublishedCourses }
+        : undefined,
     });
   const { data: enrolledCoursesData } = useEnrolledCourses({
-    enabled: shouldLoadCourseSurface && effectiveRole === "student",
+    enabled:
+      isCourseCataloguePage &&
+      shouldLoadCourseSurface &&
+      effectiveRole === "student" &&
+      (isAuthenticated ||
+        (!authUserFetched && authStore.hasSessionHint())),
   });
   const { data: myCoursesData, isPending: isMyCoursesPending } = useMyCourses({
     enabled:
@@ -798,7 +887,8 @@ export function CoursesPage({
     });
 
   const isLoadingCourses =
-    !isAuthReady ||
+    (!isAuthReady && !initialPublishedCourses) ||
+    (isCourseCataloguePage && isAuthenticated && !isWorkspaceRoleHydrated) ||
     (effectiveRole === "student"
       ? isPublishedPending
       : enrollmentFilter === "bin"
@@ -820,7 +910,9 @@ export function CoursesPage({
   );
 
   const shellProfileDisplayName =
-    activeUser?.displayName?.trim() || "Your name";
+    activeUser?.displayName?.trim() ||
+    (!authUserFetched ? authIdentityHint?.displayName : undefined) ||
+    "Your name";
   const shellProfileAvatarUrl = activeUser?.avatarDataUrl ?? null;
   const shellProfileAvatarSrcSet = activeUser?.avatarSrcSet ?? [];
   const profileRef = useRef<HTMLDivElement>(null);
@@ -3307,7 +3399,8 @@ export function CoursesPage({
     }
     if (surfacePage === "settings") {
       return (
-        <SettingsPage
+        <Suspense fallback={null}>
+          <SettingsPage
           tab={surfaceSettingsTab}
           role={role}
           userRoles={userRoles}
@@ -3348,7 +3441,8 @@ export function CoursesPage({
               ),
             }))
           }
-        />
+          />
+        </Suspense>
       );
     }
     if (surfacePage === "workspace") {
@@ -3368,7 +3462,7 @@ export function CoursesPage({
     }
     if (surfacePage === "course-create") {
       return (
-        <Suspense fallback={null}>
+        <Suspense fallback={<CourseEditorRouteFallback />}>
           <CourseCreatePage
             onNavigatePage={onNavigatePage}
             bottomNavHidden={mobileBottomNavHidden}
@@ -3381,6 +3475,7 @@ export function CoursesPage({
         <Suspense fallback={null}>
           <CourseOverviewPage
             courseSlug={surfaceCourseSlug}
+            initialOverview={initialCourseOverview}
             onNavigateCourses={() => onNavigatePage("/courses")}
             onNavigatePage={onNavigatePage}
             role={role}
@@ -3426,7 +3521,15 @@ export function CoursesPage({
     }
     if (surfacePage === "orders" || surfaceActiveSection === "Orders") {
       return (
-        <OrdersPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+        <Suspense
+          fallback={
+            <div className="grid min-h-52 place-items-center" aria-label="Loading orders">
+              <CircleNotch size={26} className="animate-spin text-(--accent)" />
+            </div>
+          }
+        >
+          <OrdersPageRoute onNavigatePage={onNavigatePage} setNotice={setNotice} />
+        </Suspense>
       );
     }
     if (
@@ -3434,10 +3537,18 @@ export function CoursesPage({
       surfaceActiveSection === "Order History"
     ) {
       return (
-        <OrderHistoryPage
-          onNavigatePage={onNavigatePage}
-          setNotice={setNotice}
-        />
+        <Suspense
+          fallback={
+            <div className="grid min-h-52 place-items-center" aria-label="Loading order history">
+              <CircleNotch size={26} className="animate-spin text-(--accent)" />
+            </div>
+          }
+        >
+          <OrderHistoryPageRoute
+            onNavigatePage={onNavigatePage}
+            setNotice={setNotice}
+          />
+        </Suspense>
       );
     }
     if (
@@ -3519,6 +3630,7 @@ export function CoursesPage({
         isAdmin={isAdmin}
         currentUserId={activeUser?.id}
         isLoading={isLoadingCourses}
+        preloadFirstCourseImage={Boolean(initialPublishedCourses)}
         wishlisted={wishlisted}
         enrollmentFilter={enrollmentFilter}
         onEnrollmentFilterChange={setEnrollmentFilter}
@@ -3532,6 +3644,7 @@ export function CoursesPage({
         totalCoursesCount={totalCoursesCount}
         onWishlist={toggleWishlist}
         onOpenCourse={onOpenCourse}
+        onEditIntent={warmCourseEditorChunk}
         courseMenu={courseMenu}
         setCourseMenu={setCourseMenu}
         setNotice={setNotice}
@@ -3846,6 +3959,8 @@ export function CoursesPage({
                 <LoginProfileButton
                   className="courses-profile__button"
                   arrowSize={16}
+                  isCheckingSession={!isAuthReady}
+                  displayName={authIdentityHint?.displayName}
                   onLogin={() => onNavigatePage("/login")}
                 />
               )}
@@ -4343,6 +4458,8 @@ export function CoursesPage({
                 <LoginProfileButton
                   className="mobile-menu-sheet__profile"
                   arrowSize={17}
+                  isCheckingSession={!isAuthReady}
+                  displayName={authIdentityHint?.displayName}
                   onLogin={() => onNavigatePage("/login")}
                 />
               )}

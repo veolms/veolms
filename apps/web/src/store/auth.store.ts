@@ -9,6 +9,39 @@ export interface AuthState {
   isLoading: boolean;
 }
 
+export interface AuthIdentityHint {
+  // Display-only hint; roles and authenticated state still come from /auth/me.
+  displayName: string;
+}
+
+const AUTH_IDENTITY_HINT_KEY = "veolms-auth-identity";
+
+function readIdentityHint(): AuthIdentityHint | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const displayName = window.sessionStorage.getItem(AUTH_IDENTITY_HINT_KEY);
+    return displayName?.trim() ? { displayName: displayName.trim() } : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeIdentityHint(user: AuthUser | null) {
+  if (typeof window === "undefined") return;
+  try {
+    const displayName = user?.displayName?.trim();
+    if (displayName) {
+      window.sessionStorage.setItem(AUTH_IDENTITY_HINT_KEY, displayName);
+    } else {
+      window.sessionStorage.removeItem(AUTH_IDENTITY_HINT_KEY);
+    }
+  } catch {
+    // Session storage can be unavailable in privacy-restricted contexts.
+  }
+}
+
+let identityHint = readIdentityHint();
+
 let state: AuthState = {
   // The session cookie and `/auth/me` are the source of truth. Persisting the
   // complete user object here made stale RBAC menus survive a reload and could
@@ -43,8 +76,20 @@ export const authStore = {
     return writeGeneration;
   },
 
+  getIdentityHint(): AuthIdentityHint | null {
+    return identityHint;
+  },
+
+  hasSessionHint(): boolean {
+    return identityHint !== null;
+  },
+
   setUser(user: AuthUser | null) {
     writeGeneration += 1;
+    identityHint = user?.displayName?.trim()
+      ? { displayName: user.displayName.trim() }
+      : null;
+    writeIdentityHint(user);
     state = {
       ...state,
       user,
@@ -71,6 +116,8 @@ export const authStore = {
 
   clearAuth() {
     writeGeneration += 1;
+    identityHint = null;
+    writeIdentityHint(null);
     state = {
       user: null,
       isAuthenticated: false,
@@ -103,5 +150,13 @@ export function useAuthStore<T = AuthState>(
     authStore.subscribe,
     () => selector(authStore.getState()),
     () => selector(serverState),
+  );
+}
+
+export function useAuthIdentityHint(): AuthIdentityHint | null {
+  return useSyncExternalStore(
+    authStore.subscribe,
+    () => authStore.getIdentityHint(),
+    () => null,
   );
 }

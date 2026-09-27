@@ -40,6 +40,7 @@ import {
 } from "./catalogue";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
 import type { CourseSection } from "../learning/courseContent";
+import { VirtualizedLessonList } from "./curriculum/VirtualizedLessonList";
 import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
 import type { NavigateTo } from "../routing/navigation";
 import { useAuthStore } from "../store/auth.store";
@@ -57,6 +58,10 @@ import { formatDuration, resolveCourseDurationSeconds } from "./courseAdapter";
 // ─── Helpers for Currency, Sale Window, Language, and Price Sizing ────────────
 
 export type PriceSizeVariant = "normal" | "medium" | "large" | "xlarge";
+
+const NO_PINNED_LESSONS: ReadonlySet<string> = new Set();
+const getOverviewLessonKey = (lesson: CourseSection["lessons"][number]) =>
+  String(lesson[0]);
 
 declare global {
   interface Window {
@@ -276,6 +281,7 @@ interface CurriculumSectionProps {
   isOpen: boolean;
   onToggle: () => void;
   onSelectLesson?: (lessonNumber: number) => void;
+  shouldVirtualizeLessons?: boolean;
   isReadOnlyPreview?: boolean;
   isPaidCourse?: boolean;
 }
@@ -292,6 +298,7 @@ function CurriculumSectionItem({
   isOpen,
   onToggle,
   onSelectLesson,
+  shouldVirtualizeLessons = false,
   isReadOnlyPreview = false,
   isPaidCourse = false,
 }: CurriculumSectionProps) {
@@ -357,8 +364,16 @@ function CurriculumSectionItem({
         <div className="overflow-hidden min-h-0">
           <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,var(--text))]">
             {section.lessons.length > 0 ? (
-              section.lessons.map(
-                ([number, title, duration, status, isPreview, contentType]) => {
+              isOpen ? (
+                <VirtualizedLessonList
+                  items={section.lessons}
+                  forceVirtualized={shouldVirtualizeLessons}
+                  estimatedItemSize={46}
+                  itemGap={0}
+                  getItemKey={getOverviewLessonKey}
+                  pinnedItemIds={NO_PINNED_LESSONS}
+                  renderItem={
+                    ([number, title, duration, status, isPreview, contentType]) => {
                   const isDoc = contentType === "document";
                   const isQuiz = contentType === "quiz";
                   return (
@@ -439,8 +454,10 @@ function CurriculumSectionItem({
                       ) : null}
                     </button>
                   );
-                },
-              )
+                    }
+                  }
+                />
+              ) : null
             ) : (
               <div className="px-3.5 py-3 text-(--muted) text-[0.82rem] italic">
                 No lessons added yet
@@ -1613,10 +1630,11 @@ function CourseCurriculumCard({
               key={section.id}
               section={section}
               index={index}
-              isOpen={openSections.has(index)}
-              onToggle={() => onToggleSection(index)}
-              onSelectLesson={onSelectLesson}
-              isReadOnlyPreview={isReadOnlyPreview}
+                isOpen={openSections.has(index)}
+                onToggle={() => onToggleSection(index)}
+                onSelectLesson={onSelectLesson}
+                shouldVirtualizeLessons={course.lectures >= 80}
+                isReadOnlyPreview={isReadOnlyPreview}
               isPaidCourse={isPaidCourse}
             />
           ))}
@@ -1630,6 +1648,7 @@ function CourseCurriculumCard({
 
 export interface CourseOverviewPageProps {
   courseSlug?: string | undefined;
+  initialOverview?: CourseOverviewResponse;
   onNavigateCourses?: () => void;
   onNavigatePage?: NavigateTo;
   onSelectLesson?: (lessonNumber: number) => void;
@@ -1966,7 +1985,12 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
   const { data: apiOverview, isLoading: isOverviewLoading } = useCourseOverview(
     courseSlug,
     {
-      enabled: !props.previewData && !props.customCourse && Boolean(courseSlug),
+      enabled:
+        !props.initialOverview &&
+        !props.previewData &&
+        !props.customCourse &&
+        Boolean(courseSlug),
+      initialData: props.initialOverview,
     },
   );
 
@@ -1987,7 +2011,9 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
 
   const course = activeAdapted?.course ?? props.customCourse;
 
-  const { data: enrolledData } = useEnrolledCourses();
+  const { data: enrolledData } = useEnrolledCourses({
+    enabled: Boolean(authUser) && props.role !== "creator",
+  });
 
   const isEnrolled = useMemo(() => {
     if (!enrolledData?.courses) return false;

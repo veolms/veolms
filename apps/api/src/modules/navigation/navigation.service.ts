@@ -18,17 +18,7 @@ export function createNavigationService({ database }: NavigationServiceOptions) 
       };
     }
 
-    const [roles, permissions, menus] = await Promise.all([
-      navigationRepository.listUserRoleNames(database, userId),
-      navigationRepository.listUserPermissions(database, userId),
-      navigationRepository.listUserMenus(database, userId),
-    ]);
-
-    return {
-      menus,
-      permissions,
-      roles,
-    };
+    return navigationRepository.getUserSidenav(database, userId);
   }
 
   return {

@@ -4,7 +4,11 @@ import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
 import { ExpandableSearch } from "../ExpandableSearch";
 import { ThemedSelect } from "../ThemedSelect";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
-import { CourseCard } from "./CourseCard";
+import {
+  CourseCard,
+  courseThumbnailSizes,
+  getCourseThumbnailSrcSet,
+} from "./CourseCard";
 import { CourseCardSkeleton } from "./CourseCardSkeleton";
 import type {
   Course,
@@ -32,6 +36,7 @@ export interface CourseCatalogueProps {
   totalCoursesCount?: number;
   onWishlist: (courseId: string) => void;
   onOpenCourse: (course: Course, options?: CourseOpenOptions) => void;
+  onEditIntent?: (course: Course) => void;
   courseMenu: string | null;
   setCourseMenu: (courseId: string | null) => void;
   setNotice: (notice: string) => void;
@@ -40,6 +45,7 @@ export interface CourseCatalogueProps {
   isAdmin?: boolean;
   currentUserId?: string;
   isLoading?: boolean;
+  preloadFirstCourseImage?: boolean;
   onDeleteCourse?: (course: Course) => Promise<void> | void;
   onRestoreCourse?: (course: Course) => Promise<void> | void;
   deletingCourseIds?: ReadonlySet<string>;
@@ -51,6 +57,7 @@ export function CourseCatalogue({
   isAdmin = false,
   currentUserId,
   isLoading = false,
+  preloadFirstCourseImage = false,
   wishlisted,
   enrollmentFilter,
   onEnrollmentFilterChange,
@@ -64,6 +71,7 @@ export function CourseCatalogue({
   totalCoursesCount,
   onWishlist,
   onOpenCourse,
+  onEditIntent,
   courseMenu,
   setCourseMenu,
   setNotice,
@@ -151,11 +159,13 @@ export function CourseCatalogue({
           `/courses/${encodeURIComponent(getCourseRouteKey(selected))}/overview`,
         )
       }
-      onEdit={(selected) =>
+      onEdit={(selected) => {
+        onEditIntent?.(selected);
         onNavigatePage(
           `/courses/${encodeURIComponent(selected.id)}/edit/basics`,
-        )
-      }
+        );
+      }}
+      onEditIntent={onEditIntent}
       onManage={(selected) =>
         onNavigatePage(
           `/courses/${encodeURIComponent(selected.id)}/edit/curriculum`,
@@ -183,6 +193,16 @@ export function CourseCatalogue({
       aria-label={activeSection}
       className="mx-auto w-full max-w-[1800px]"
     >
+      {preloadFirstCourseImage && visibleCourses[0]?.thumbnail ? (
+        <link
+          rel="preload"
+          as="image"
+          href={visibleCourses[0].thumbnail}
+          imageSrcSet={getCourseThumbnailSrcSet(visibleCourses[0])}
+          imageSizes={courseThumbnailSizes}
+          fetchPriority="high"
+        />
+      ) : null}
       <header className="relative flex flex-col gap-4 border-b border-(--border) pb-0 min-[640px]:pb-4 min-[900px]:flex-row min-[900px]:items-center min-[900px]:gap-3">
         <ExpandableSearch
           inputId="courses-search-input"

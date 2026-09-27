@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import type { OrderSortOrder } from "@veolms/contracts";
 import {
   DEFAULT_DEBOUNCE_DELAY_MS,
   useDebounceValue,
 } from "../hooks/useDebounce";
-import type { OrderHistoryItem, OrderHistoryTabId } from "./orderHistoryData";
+import type { OrderHistoryItem } from "./orderHistoryData";
 import { useOrders } from "../services/orders";
 import { adaptOrderToOrderHistoryItem } from "../orders/orderAdapter";
 
@@ -12,12 +13,10 @@ export interface UseOrderHistoryFilterReturn {
   paginatedOrders: readonly OrderHistoryItem[];
   totalFilteredCount: number;
   totalLoadedCount: number;
-  activeTab: OrderHistoryTabId;
-  setActiveTab: (tab: OrderHistoryTabId) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   dateRangeFilter: string;
-  setDateRangeFilter: (dateRange: string) => void;
+  setDateRangeFilter: (range: string) => void;
   statusFilter: string;
   setStatusFilter: (status: string) => void;
   paymentMethodFilter: string;
@@ -26,7 +25,8 @@ export interface UseOrderHistoryFilterReturn {
   setCurrentPage: (page: number) => void;
   pageSize: number;
   totalPages: number;
-  tabCounts: Record<OrderHistoryTabId, number>;
+  sortOrder: OrderSortOrder;
+  toggleSortOrder: () => void;
   selectedReceiptOrder: OrderHistoryItem | null;
   setSelectedReceiptOrder: (order: OrderHistoryItem | null) => void;
   resetFilters: () => void;
@@ -38,9 +38,56 @@ export interface UseOrderHistoryFilterReturn {
   refetch: () => void;
 }
 
+function getDateBounds(range: string): { from?: Date; to?: Date } {
+  const now = new Date();
+  if (range === "all") return {};
+
+  if (range === "2024" || range === "2025") {
+    return {
+      from: new Date(Number(range), 0, 1),
+      to: new Date(Number(range), 11, 31, 23, 59, 59, 999),
+    };
+  }
+
+  const from = new Date(now);
+  if (range === "30d") from.setDate(from.getDate() - 30);
+  else if (range === "3m") from.setMonth(from.getMonth() - 3);
+  else if (range === "6m") from.setMonth(from.getMonth() - 6);
+  else return {};
+
+  return { from, to: now };
+}
+
 export function useOrderHistoryFilter(
-  setNotice?: (message: string) => void,
+  _setNotice?: (message: string) => void,
 ): UseOrderHistoryFilterReturn {
+  const [searchQuery, setSearchQueryState] = useState("");
+  const [debouncedSearch] = useDebounceValue(
+    searchQuery.trim(),
+    DEFAULT_DEBOUNCE_DELAY_MS,
+  );
+  const [dateRangeFilter, setDateRangeFilterState] = useState("all");
+  const [statusFilter, setStatusFilterState] = useState("all");
+  const [paymentMethodFilter, setPaymentMethodFilterState] = useState("all");
+  const [currentPage, setCurrentPageState] = useState(1);
+  const [sortOrder, setSortOrder] = useState<OrderSortOrder>("desc");
+  const [selectedReceiptOrder, setSelectedReceiptOrder] =
+    useState<OrderHistoryItem | null>(null);
+  const pageSize = 10;
+
+  const dateBounds = useMemo(
+    () => getDateBounds(dateRangeFilter),
+    [dateRangeFilter],
+  );
+  const queryParams = useMemo(
+    () => ({
+      view: "student" as const,
+      limit: 30,
+      sortOrder,
+      ...dateBounds,
+    }),
+    [dateBounds, sortOrder],
+  );
   const {
     data,
     isLoading,
@@ -49,127 +96,77 @@ export function useOrderHistoryFilter(
     isFetchingNextPage,
     fetchNextPage,
     refetch,
-  } = useOrders();
+  } = useOrders(queryParams);
 
-  const [activeTab, setActiveTab] = useState<OrderHistoryTabId>("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearch, setDebouncedSearchImmediately] = useDebounceValue(
-    searchQuery.trim(),
-    DEFAULT_DEBOUNCE_DELAY_MS,
+  const ordersList = useMemo(
+    () => (data?.pages.flatMap((page) => page.orders) ?? []).map(adaptOrderToOrderHistoryItem),
+    [data?.pages],
   );
-  const [dateRangeFilter, setDateRangeFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [paymentMethodFilter, setPaymentMethodFilter] = useState("all");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [selectedReceiptOrder, setSelectedReceiptOrder] =
-    useState<OrderHistoryItem | null>(null);
 
-  const pageSize = 10;
-
-  const rawOrders = useMemo(() => {
-    return data?.pages.flatMap((page) => page.orders) || [];
-  }, [data?.pages]);
-
-  const ordersList = useMemo(() => {
-    return rawOrders.map(adaptOrderToOrderHistoryItem);
-  }, [rawOrders]);
-
-  const resetFilters = () => {
-    setActiveTab("all");
-    setSearchQuery("");
-    setDebouncedSearchImmediately("");
-    setDateRangeFilter("all");
-    setStatusFilter("all");
-    setPaymentMethodFilter("all");
-    setCurrentPage(1);
-  };
-
-  // Compute live tab counts
-  const tabCounts = useMemo(() => {
-    const counts: Record<OrderHistoryTabId, number> = {
-      all: ordersList.length,
-      completed: 0,
-      processing: 0,
-      refunded: 0,
-      failed: 0,
-      canceled: 0,
-    };
-
-    for (const item of ordersList) {
-      if (item.status in counts) {
-        counts[item.status] += 1;
-      }
-    }
-
-    return counts;
-  }, [ordersList]);
-
-  // Filtered orders
   const filteredOrders = useMemo(() => {
-    let result = [...ordersList];
+    const search = debouncedSearch.toLocaleLowerCase();
+    return ordersList.filter((order) => {
+      if (statusFilter !== "all" && order.status !== statusFilter) return false;
+      if (paymentMethodFilter !== "all" && order.payment.type !== paymentMethodFilter) {
+        return false;
+      }
+      if (!search) return true;
+      return [
+        order.orderNumber,
+        order.invoiceNumber,
+        order.courseTitle,
+        order.payment.brand,
+        order.payment.label,
+      ].some((value) => value.toLocaleLowerCase().includes(search));
+    });
+  }, [debouncedSearch, ordersList, paymentMethodFilter, statusFilter]);
 
-    // Filter by Tab
-    if (activeTab !== "all") {
-      result = result.filter((item) => item.status === activeTab);
-    }
-
-    // Filter by Status dropdown
-    if (statusFilter !== "all") {
-      result = result.filter((item) => item.status === statusFilter);
-    }
-
-    // Filter by Payment Method dropdown
-    if (paymentMethodFilter !== "all") {
-      result = result.filter(
-        (item) => item.payment.type === paymentMethodFilter,
-      );
-    }
-
-    // Filter by Search Query
-    if (debouncedSearch) {
-      const query = debouncedSearch.toLowerCase();
-      result = result.filter(
-        (item) =>
-          item.orderNumber.toLowerCase().includes(query) ||
-          item.invoiceNumber.toLowerCase().includes(query) ||
-          item.courseTitle.toLowerCase().includes(query) ||
-          item.payment.label.toLowerCase().includes(query) ||
-          item.payment.brand.toLowerCase().includes(query),
-      );
-    }
-
-    return result;
-  }, [
-    ordersList,
-    activeTab,
-    statusFilter,
-    paymentMethodFilter,
-    debouncedSearch,
-  ]);
-
-  const totalFilteredCount = filteredOrders.length;
-  const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedOrders = useMemo(() => {
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredOrders.slice(start, start + pageSize);
+  }, [filteredOrders, pageSize, safeCurrentPage]);
 
-  const handleTabChange = (tab: OrderHistoryTabId) => {
-    setActiveTab(tab);
-    setCurrentPage(1);
-  };
-
-  const handleSearchChange = (query: string) => {
-    setSearchQuery(query);
-    setCurrentPage(1);
-  };
+  const setSearchQuery = useCallback((query: string) => {
+    setSearchQueryState(query);
+    setCurrentPageState(1);
+  }, []);
+  const setDateRangeFilter = useCallback((range: string) => {
+    setDateRangeFilterState(range);
+    setCurrentPageState(1);
+  }, []);
+  const setStatusFilter = useCallback((status: string) => {
+    setStatusFilterState(status);
+    setCurrentPageState(1);
+  }, []);
+  const setPaymentMethodFilter = useCallback((method: string) => {
+    setPaymentMethodFilterState(method);
+    setCurrentPageState(1);
+  }, []);
+  const setCurrentPage = useCallback((page: number) => {
+    setCurrentPageState(Math.max(1, page));
+  }, []);
+  const toggleSortOrder = useCallback(() => {
+    setSortOrder((current) => (current === "desc" ? "asc" : "desc"));
+    setCurrentPageState(1);
+  }, []);
+  const resetFilters = useCallback(() => {
+    setSearchQueryState("");
+    setDateRangeFilterState("all");
+    setStatusFilterState("all");
+    setPaymentMethodFilterState("all");
+    setCurrentPageState(1);
+    setSortOrder("desc");
+  }, []);
 
   return {
     orders: filteredOrders,
-    paginatedOrders: filteredOrders,
-    totalFilteredCount,
+    paginatedOrders,
+    totalFilteredCount: filteredOrders.length,
     totalLoadedCount: ordersList.length,
-    activeTab,
-    setActiveTab: handleTabChange,
     searchQuery,
-    setSearchQuery: handleSearchChange,
+    setSearchQuery,
     dateRangeFilter,
     setDateRangeFilter,
     statusFilter,
@@ -180,7 +177,8 @@ export function useOrderHistoryFilter(
     setCurrentPage,
     pageSize,
     totalPages,
-    tabCounts,
+    sortOrder,
+    toggleSortOrder,
     selectedReceiptOrder,
     setSelectedReceiptOrder,
     resetFilters,

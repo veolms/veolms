@@ -1,4 +1,5 @@
 import type { Config } from "@react-router/dev/config";
+import { courseListResponseSchema } from "@veolms/contracts";
 import { createLearningPrerenderPaths } from "./src/learning/prerenderLearningPaths";
 
 const staticApplicationPages = [
@@ -26,7 +27,11 @@ const learningPrerenderScope =
     ? "first-section"
     : "all-lectures";
 
-const isDevelopment = import.meta.env.DEV;
+// React Router evaluates this config through Vite's config runner, whose
+// environment is a dev server even during `react-router build`. The build
+// wrapper sets this explicit flag so production prerenders use the full path
+// set instead of the small development sample.
+const isDevelopment = process.env.VEO_REACT_ROUTER_BUILD !== "true";
 const developmentPrerenderCourseSlugs = ["tailwind-css"] as const;
 
 const staticLearningPages = createLearningPrerenderPaths({
@@ -36,6 +41,37 @@ const staticLearningPages = createLearningPrerenderPaths({
   scope: learningPrerenderScope,
 });
 
+function getStaticApiBaseUrl() {
+  const configured =
+    process.env.STATIC_BUILD_API_URL || "http://127.0.0.1:4000/v1";
+  const normalized = configured.replace(/\/+$/u, "").replace(/\/api\/v1$/u, "/v1");
+  return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`;
+}
+
+async function getStaticCataloguePaths() {
+  const response = await fetch(`${getStaticApiBaseUrl()}/courses`, {
+    signal: AbortSignal.timeout(30_000),
+    headers: { accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Unable to discover course overview pages from the build API (${response.status}).`,
+    );
+  }
+  const body: unknown = await response.json();
+  const payload =
+    body && typeof body === "object" && "success" in body && "data" in body
+      ? body.data
+      : body;
+  const result = courseListResponseSchema.safeParse(payload);
+  if (!result.success) {
+    throw new Error("The build API returned an invalid published course catalogue.");
+  }
+  return result.data.courses.map(
+    ({ slug }) => `/courses/${encodeURIComponent(slug)}/overview`,
+  );
+}
+
 const prerenderConfig = {
   // React Router still renders configured prerender paths through its dev
   // server. Keep development focused on the small Tailwind CSS course so
@@ -43,7 +79,11 @@ const prerenderConfig = {
   // set remains unchanged.
   paths: isDevelopment
     ? staticLearningPages
-    : [...staticApplicationPages, ...staticLearningPages],
+    : async () => [
+        ...staticApplicationPages,
+        ...(await getStaticCataloguePaths()),
+        ...staticLearningPages,
+      ],
   concurrency: 1,
   timeout: 120_000,
   retryCount: 2,

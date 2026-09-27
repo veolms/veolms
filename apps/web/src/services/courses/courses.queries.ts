@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import type {
   Category,
   CourseEditorDataResponse,
@@ -14,12 +15,16 @@ import type { ApiError } from "../../lib/api-error";
 import { courseKeys } from "./courses.keys";
 import { coursesService } from "./courses.service";
 
-export function useCourses(options?: { enabled?: boolean }) {
+export function useCourses(options?: {
+  enabled?: boolean;
+  initialData?: { courses: CourseSummary[] };
+}) {
   return useQuery<{ courses: CourseSummary[] }, ApiError>({
     queryKey: courseKeys.lists(),
     queryFn: () => coursesService.list(),
     enabled: options?.enabled ?? true,
-    staleTime: 5 * 60 * 1000,
+    initialData: options?.initialData,
+    staleTime: options?.initialData ? Infinity : 5 * 60 * 1000,
   });
 }
 
@@ -34,7 +39,10 @@ export function useCourse(slug: string) {
 
 export function useCourseOverview(
   idOrSlug: string | null | undefined,
-  options?: { enabled?: boolean },
+  options?: {
+    enabled?: boolean;
+    initialData?: CourseOverviewResponse;
+  },
 ) {
   return useQuery<CourseOverviewResponse, ApiError>({
     queryKey: idOrSlug
@@ -42,7 +50,8 @@ export function useCourseOverview(
       : ["courses", "overview", null],
     queryFn: () => coursesService.getOverview(idOrSlug!),
     enabled: Boolean(idOrSlug && (options?.enabled ?? true)),
-    staleTime: 60 * 1000,
+    initialData: options?.initialData,
+    staleTime: options?.initialData ? Infinity : 60 * 1000,
     retry: false,
   });
 }
@@ -75,6 +84,17 @@ export function useCourseEditor(courseId: string | null) {
       : ["courses", "editor", null],
     queryFn: () => coursesService.getCourseEditor(courseId!),
     enabled: Boolean(courseId),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function prefetchCourseEditor(
+  queryClient: QueryClient,
+  courseId: string,
+): Promise<void> {
+  return queryClient.prefetchQuery<CourseEditorDataResponse, ApiError>({
+    queryKey: courseKeys.editor(courseId),
+    queryFn: () => coursesService.getCourseEditor(courseId),
     staleTime: 30 * 1000,
   });
 }

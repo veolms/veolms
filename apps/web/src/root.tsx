@@ -1,5 +1,6 @@
 import { useLayoutEffect, type ReactNode } from "react";
 import { Links, Meta, Outlet, Scripts } from "react-router";
+import type { Route } from "./+types/root";
 import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
 import { fullAppStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
@@ -16,6 +17,7 @@ import {
 } from "./learning/learningHlsBootstrap";
 import { getVideoPlaybackCdnOrigin } from "./learning/videoPlaybackBootstrap";
 import { QueryProvider } from "./providers/query-provider";
+import { loadAcademyStaticPageData } from "./routes/academyStaticPageData";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
 import {
@@ -251,6 +253,10 @@ export const meta = () => [
       "Continue your courses, track learning progress, and explore practical developer education in ProCodrr.",
   },
 ];
+
+export function loader({ request, params }: Route.LoaderArgs) {
+  return loadAcademyStaticPageData(request, params.courseSlug);
+}
 
 export function HydrateFallback() {
   // Route loaders decide whether the user belongs in the academy or auth

@@ -391,6 +391,13 @@ export const orderPaymentMethodSchema = z.object({
 });
 export type OrderPaymentMethod = z.infer<typeof orderPaymentMethodSchema>;
 
+export const orderPaymentSummarySchema = z.strictObject({
+  provider: z.string(),
+  method: z.string(),
+  detail: z.string().nullable().optional(),
+});
+export type OrderPaymentSummary = z.infer<typeof orderPaymentSummarySchema>;
+
 export const orderAdminDetailsSchema = z.strictObject({
   student: orderStudentInfoSchema,
   coupon: z
@@ -455,6 +462,7 @@ export const purchaseSchema = z.strictObject({
   totalAmount: z.number().int().nonnegative(),
   couponId: z.uuid().nullable().optional(),
   idempotencyKey: z.string().nullable().optional(),
+  paymentSummary: orderPaymentSummarySchema.nullable().optional(),
   items: z.array(purchaseItemSnapshotSchema).optional(),
   expiresAt: z.string().or(z.date()),
   paidAt: z.string().or(z.date()).nullable().optional(),
