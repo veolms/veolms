@@ -39,6 +39,7 @@ export const academyEnrollmentListItemSchema = z.strictObject({
   enrollmentId: z.uuid(),
   student: z.strictObject({
     id: z.uuid(),
+    username: z.string(),
     displayName: z.string(),
     avatarUrl: z.string().nullable(),
   }),

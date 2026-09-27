@@ -18,8 +18,10 @@ import { ArrowDownRightIcon as ArrowDownRight } from "@phosphor-icons/react/Arro
 import { ArrowClockwiseIcon as ArrowClockwise } from "@phosphor-icons/react/ArrowClockwise";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/ArrowUpRight";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
+import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
 import { CurrencyInrIcon as CurrencyInr } from "@phosphor-icons/react/CurrencyInr";
@@ -28,8 +30,10 @@ import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { PlusCircleIcon as PlusCircle } from "@phosphor-icons/react/PlusCircle";
 import { PulseIcon as Pulse } from "@phosphor-icons/react/Pulse";
 import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
+import { UserPlusIcon as UserPlus } from "@phosphor-icons/react/UserPlus";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import type { Icon } from "@phosphor-icons/react";
+import { createPortal } from "react-dom";
 import { handleRovingTabKeyDown } from "./accessibility/rovingTabFocus";
 import { analyticsKeys, useDashboard } from "./services/analytics";
 import { enrollmentKeys, useRecentEnrollments } from "./services/enrollments";
@@ -51,12 +55,13 @@ type ActivityRow = readonly [
 ];
 interface DashboardPanelProps {
   className?: string;
+  icon: Icon;
   title: string;
   action?: string;
   onAction?: () => void;
   infoLabel?: string;
   infoTitle?: string;
-  infoDescription?: string;
+  infoDescription?: ReactNode;
   children: ReactNode;
 }
 
@@ -76,6 +81,15 @@ interface DataCanvasProps {
 const EMPTY_REVENUE_TREND: DashboardRevenueOverview["trend"] = [];
 const EMPTY_ACTIVITY_BUCKETS: DashboardSummaryResponse["learningActivity"]["enrollmentActivity"]["buckets"] =
   [];
+const CREATOR_DASHBOARD_ENROLLMENT_LIMIT = 10;
+
+function getCreatorDashboardRefreshQueryKeys(range: DashboardRange) {
+  return [
+    analyticsKeys.dashboard(range),
+    learningInteractionKeys.dashboardRecentDiscussions(),
+    enrollmentKeys.recent(CREATOR_DASHBOARD_ENROLLMENT_LIMIT),
+  ] as const;
+}
 
 interface NavigateProps {
   onNavigatePage?: (page: string) => void;
@@ -167,10 +181,16 @@ function DashboardMetricComparison({
 function RevenueMetricTrend({
   changePercent,
   refunds = false,
+  unavailable = false,
 }: {
   changePercent: number | null;
   refunds?: boolean;
+  unavailable?: boolean;
 }) {
+  if (unavailable) {
+    return <span className="creator-trend is-neutral">—</span>;
+  }
+
   if (changePercent === null) {
     return <span className="creator-trend is-neutral">No comparison</span>;
   }
@@ -277,16 +297,21 @@ function formatEnrollmentComparisonPercent(value: number) {
   }).format(value)}%`;
 }
 
-function DashboardPanel({
+interface DashboardInfoPopoverProps {
+  className?: string;
+  infoLabel: string;
+  infoTitle: string;
+  infoDescription: ReactNode;
+  portal?: boolean;
+}
+
+function DashboardInfoPopover({
   className = "",
-  title,
-  action,
-  onAction,
   infoLabel,
   infoTitle,
   infoDescription,
-  children,
-}: DashboardPanelProps) {
+  portal = false,
+}: DashboardInfoPopoverProps) {
   const infoPopoverId = useId();
   const infoControlRef = useRef<HTMLDivElement>(null);
   const infoButtonRef = useRef<HTMLButtonElement>(null);
@@ -297,11 +322,29 @@ function DashboardPanel({
   const [isInfoDismissed, setIsInfoDismissed] = useState(false);
   const [infoPopoverPlacement, setInfoPopoverPlacement] =
     useState<InfoPopoverPlacement>("top");
-  const hasInfoPopover = Boolean(infoLabel && infoTitle && infoDescription);
+  const [popoverPosition, setPopoverPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInfoOpen =
-    hasInfoPopover &&
     !isInfoDismissed &&
     (isInfoPinned || isInfoHovered || isInfoFocused);
+
+  const clearCloseTimeout = () => {
+    if (closeTimeoutRef.current !== null) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  };
+
+  const scheduleHoverClose = () => {
+    clearCloseTimeout();
+    closeTimeoutRef.current = setTimeout(() => {
+      setIsInfoHovered(false);
+      closeTimeoutRef.current = null;
+    }, 160);
+  };
 
   useLayoutEffect(() => {
     if (!isInfoOpen) return undefined;
@@ -325,8 +368,93 @@ function DashboardPanel({
           ? "left"
           : "bottom";
 
-      setInfoPopoverPlacement((current) =>
-        current === nextPlacement ? current : nextPlacement,
+      if (!portal) {
+        setInfoPopoverPlacement((current) =>
+          current === nextPlacement ? current : nextPlacement,
+        );
+        return;
+      }
+
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = window.innerHeight;
+      const section = infoControlRef.current?.closest(
+        ".creator-dashboard-panel",
+      );
+      const sectionBounds = section?.getBoundingClientRect();
+      if (portal && sectionBounds) {
+        const sectionPadding = 12;
+        const maxSectionLeft = Math.max(
+          sectionPadding,
+          sectionBounds.width - popoverBounds.width - sectionPadding,
+        );
+        const maxSectionTop = Math.max(
+          sectionPadding,
+          sectionBounds.height - popoverBounds.height - sectionPadding,
+        );
+        const preferredLeft =
+          buttonBounds.right -
+          popoverBounds.width -
+          sectionBounds.left;
+        const preferredTop =
+          buttonBounds.bottom + sideOffset - sectionBounds.top;
+
+        setInfoPopoverPlacement("bottom");
+        setPopoverPosition({
+          top: Math.min(
+            Math.max(preferredTop, sectionPadding),
+            maxSectionTop,
+          ),
+          left: Math.min(
+            Math.max(preferredLeft, sectionPadding),
+            maxSectionLeft,
+          ),
+        });
+        return;
+      }
+
+      const maxLeft = Math.max(
+        collisionPadding,
+        viewportWidth - popoverBounds.width - collisionPadding,
+      );
+      const maxTop = Math.max(
+        collisionPadding,
+        viewportHeight - popoverBounds.height - collisionPadding,
+      );
+      const centeredTop = Math.min(
+        Math.max(buttonBounds.top, collisionPadding),
+        maxTop,
+      );
+      const centeredLeft = Math.min(
+        Math.max(buttonBounds.right - popoverBounds.width, collisionPadding),
+        maxLeft,
+      );
+
+      setInfoPopoverPlacement(nextPlacement);
+      setPopoverPosition(
+        nextPlacement === "top"
+          ? {
+              top:
+                Math.max(
+                  collisionPadding,
+                  buttonBounds.top - popoverBounds.height - sideOffset,
+                ) - (sectionBounds?.top ?? 0),
+              left: centeredLeft - (sectionBounds?.left ?? 0),
+            }
+          : nextPlacement === "left"
+            ? {
+                top: centeredTop - (sectionBounds?.top ?? 0),
+                left:
+                  Math.max(
+                    collisionPadding,
+                    buttonBounds.left - popoverBounds.width - sideOffset,
+                  ) - (sectionBounds?.left ?? 0),
+              }
+            : {
+                top:
+                  Math.min(maxTop, buttonBounds.bottom + sideOffset) -
+                  (sectionBounds?.top ?? 0),
+                left: centeredLeft - (sectionBounds?.left ?? 0),
+              },
       );
     };
 
@@ -337,7 +465,7 @@ function DashboardPanel({
       window.removeEventListener("resize", updateInfoPopoverPlacement);
       window.removeEventListener("scroll", updateInfoPopoverPlacement, true);
     };
-  }, [isInfoOpen]);
+  }, [isInfoOpen, portal]);
 
   useEffect(() => {
     if (!isInfoOpen) return undefined;
@@ -353,9 +481,7 @@ function DashboardPanel({
       }
     };
     const handleEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        dismissInfo();
-      }
+      if (event.key === "Escape") dismissInfo();
     };
 
     document.addEventListener("pointerdown", handleOutsidePointerDown);
@@ -366,6 +492,10 @@ function DashboardPanel({
     };
   }, [isInfoOpen]);
 
+  useEffect(() => {
+    return () => clearCloseTimeout();
+  }, []);
+
   const handleInfoToggle = () => {
     const nextPinned = !isInfoPinned;
     setIsInfoPinned(nextPinned);
@@ -373,53 +503,115 @@ function DashboardPanel({
     if (nextPinned && !isInfoOpen) setInfoPopoverPlacement("top");
   };
 
+  const portalTarget =
+    portal && typeof document !== "undefined"
+      ? infoControlRef.current?.closest(".creator-dashboard-panel") ??
+        document.body
+      : null;
+
+  return (
+    <div
+      ref={infoControlRef}
+      className={`creator-panel-info-wrap ${className}`.trim()}
+      onMouseEnter={() => {
+        clearCloseTimeout();
+        setIsInfoHovered(true);
+        setIsInfoDismissed(false);
+        if (!isInfoOpen) setInfoPopoverPlacement("top");
+      }}
+      onMouseLeave={() => {
+        if (portal && !isInfoPinned && !isInfoFocused) {
+          scheduleHoverClose();
+        } else {
+          setIsInfoHovered(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        className="creator-panel-info"
+        ref={infoButtonRef}
+        aria-label={infoLabel}
+        aria-controls={infoPopoverId}
+        aria-expanded={isInfoOpen}
+        aria-describedby={isInfoOpen ? infoPopoverId : undefined}
+        onFocus={() => {
+          setIsInfoFocused(true);
+          setIsInfoDismissed(false);
+          if (!isInfoOpen) setInfoPopoverPlacement("top");
+        }}
+        onBlur={() => setIsInfoFocused(false)}
+        onClick={handleInfoToggle}
+      >
+        <Info size={16} aria-hidden="true" />
+      </button>
+      {isInfoOpen &&
+        (() => {
+          const popover = (
+            <div
+              id={infoPopoverId}
+              className={`creator-panel-info-popover${
+                portal ? " creator-panel-info-popover--portal" : ""
+              }`}
+              ref={infoPopoverRef}
+              data-placement={infoPopoverPlacement}
+              role="tooltip"
+              style={
+                portal && popoverPosition
+                  ? {
+                      top: popoverPosition.top,
+                      left: popoverPosition.left,
+                    }
+                  : portal
+                    ? { visibility: "hidden" }
+                    : undefined
+              }
+              onMouseEnter={portal ? clearCloseTimeout : undefined}
+              onMouseLeave={portal ? scheduleHoverClose : undefined}
+            >
+              <strong>{infoTitle}</strong>
+              <div className="creator-panel-info-content">
+                {infoDescription}
+              </div>
+            </div>
+          );
+
+          return portal && portalTarget
+            ? createPortal(popover, portalTarget)
+            : popover;
+        })()}
+    </div>
+  );
+}
+
+function DashboardPanel({
+  className = "",
+  icon,
+  title,
+  action,
+  onAction,
+  infoLabel,
+  infoTitle,
+  infoDescription,
+  children,
+}: DashboardPanelProps) {
+  const hasInfoPopover = Boolean(infoLabel && infoTitle && infoDescription);
+  const HeadingIcon = icon;
+
   return (
     <section className={`creator-dashboard-panel ${className}`}>
       <header className="creator-panel-heading">
-        <h2>{title}</h2>
+        <h2>
+          <HeadingIcon size={18} weight="regular" aria-hidden="true" />
+          <span>{title}</span>
+        </h2>
         <div className="creator-panel-actions">
           {hasInfoPopover && (
-            <div
-              ref={infoControlRef}
-              className="creator-panel-info-wrap"
-              onMouseEnter={() => {
-                setIsInfoHovered(true);
-                setIsInfoDismissed(false);
-                if (!isInfoOpen) setInfoPopoverPlacement("top");
-              }}
-              onMouseLeave={() => setIsInfoHovered(false)}
-            >
-              <button
-                type="button"
-                className="creator-panel-info"
-                ref={infoButtonRef}
-                aria-label={infoLabel}
-                aria-controls={infoPopoverId}
-                aria-expanded={isInfoOpen}
-                aria-describedby={isInfoOpen ? infoPopoverId : undefined}
-                onFocus={() => {
-                  setIsInfoFocused(true);
-                  setIsInfoDismissed(false);
-                  if (!isInfoOpen) setInfoPopoverPlacement("top");
-                }}
-                onBlur={() => setIsInfoFocused(false)}
-                onClick={handleInfoToggle}
-              >
-                <Info size={16} aria-hidden="true" />
-              </button>
-              {isInfoOpen && (
-                <div
-                  id={infoPopoverId}
-                  className="creator-panel-info-popover"
-                  ref={infoPopoverRef}
-                  data-placement={infoPopoverPlacement}
-                  role="tooltip"
-                >
-                  <strong>{infoTitle}</strong>
-                  <p>{infoDescription}</p>
-                </div>
-              )}
-            </div>
+            <DashboardInfoPopover
+              infoLabel={infoLabel!}
+              infoTitle={infoTitle!}
+              infoDescription={infoDescription!}
+            />
           )}
           {action && (
             <button
@@ -776,7 +968,7 @@ function drawRevenueChart({
 
   const { left, right, top, bottom } = getRevenuePlotBounds(width, height);
 
-  if (revenueStatus === "loading" && revenueTrend.length === 0) {
+  if (revenueStatus === "loading") {
     const skeletonValues = [0.72, 0.58, 0.66, 0.42, 0.52, 0.3, 0.44];
     const skeletonX = (index: number) =>
       skeletonValues.length === 1
@@ -1703,6 +1895,7 @@ function RevenuePanel({
   revenueOverview,
   isLoading,
   isError,
+  isManualRefresh,
 }: {
   range: DashboardRange;
   setRange: (range: DashboardRange) => void;
@@ -1710,25 +1903,63 @@ function RevenuePanel({
   revenueOverview?: DashboardRevenueOverview;
   isLoading: boolean;
   isError: boolean;
+  isManualRefresh: boolean;
 }) {
   const currency = revenueOverview?.currency ?? "INR";
   const trend = revenueOverview?.trend ?? [];
-  const revenueStatus = isLoading
+  const panelIsLoading = isLoading || isManualRefresh;
+  const revenueStatus = panelIsLoading
     ? "loading"
     : isError
       ? "error"
       : trend.length === 0
         ? "empty"
         : undefined;
-  const summaryUnavailable = isLoading || isError;
+  const summaryUnavailable = panelIsLoading || isError;
 
   return (
     <DashboardPanel
       className="creator-revenue-panel"
+      icon={ChartLineUp}
       title="Revenue Overview"
       infoLabel="About Revenue Overview"
       infoTitle="Revenue Overview"
-      infoDescription="Shows revenue and order activity for the selected time period. The chart tracks revenue over time, while the summary below shows gross sales, net revenue, orders, and refunds."
+      infoDescription={
+        <>
+          <p>Tracks sales and order activity for the selected time range.</p>
+          <ul>
+            <li>
+              <strong>Revenue chart</strong> — plots net revenue by UTC day for
+              the selected 7D, 30D, 3M, or 1Y range.
+            </li>
+            <li>
+              <strong>Gross Sales</strong> — sum of total order amounts for
+              paid, partially refunded, or refunded orders before processed
+              refunds are subtracted.
+            </li>
+            <li>
+              <strong>Net Revenue</strong> — Gross Sales minus processed refund
+              amounts associated with those same orders.
+            </li>
+            <li>
+              <strong>Orders</strong> — count of paid, partially refunded, or
+              refunded orders created during the selected range.
+            </li>
+            <li>
+              <strong>Refunds</strong> — count of orders marked partially
+              refunded or refunded; this is not a refund amount.
+            </li>
+            <li>
+              <strong>Comparison</strong> — compares the selected range with
+              the immediately preceding range of the same length when a prior
+              baseline is available.
+            </li>
+          </ul>
+          <p className="creator-panel-info-note">
+            Revenue chart dates use UTC day buckets.
+          </p>
+        </>
+      }
     >
       <div className="creator-chart-toolbar">
         <span>
@@ -1787,6 +2018,7 @@ function RevenuePanel({
           </strong>
           <RevenueMetricTrend
             changePercent={revenueOverview?.grossSales.changePercent ?? null}
+            unavailable={summaryUnavailable}
           />
         </div>
         <div>
@@ -1798,6 +2030,7 @@ function RevenuePanel({
           </strong>
           <RevenueMetricTrend
             changePercent={revenueOverview?.netRevenue.changePercent ?? null}
+            unavailable={summaryUnavailable}
           />
         </div>
         <div>
@@ -1809,6 +2042,7 @@ function RevenuePanel({
           </strong>
           <RevenueMetricTrend
             changePercent={revenueOverview?.orders.changePercent ?? null}
+            unavailable={summaryUnavailable}
           />
         </div>
         <div>
@@ -1821,6 +2055,7 @@ function RevenuePanel({
           <RevenueMetricTrend
             changePercent={revenueOverview?.refunds.changePercent ?? null}
             refunds
+            unavailable={summaryUnavailable}
           />
         </div>
       </div>
@@ -1833,13 +2068,16 @@ function LearningActivityPanel({
   learningActivity,
   isLoading,
   isError,
+  isManualRefresh,
 }: {
   themeKey: string;
   learningActivity?: DashboardSummaryResponse["learningActivity"];
   isLoading: boolean;
   isError: boolean;
+  isManualRefresh: boolean;
 }) {
-  const summaryUnavailable = isLoading || isError;
+  const panelIsLoading = isLoading || isManualRefresh;
+  const summaryUnavailable = panelIsLoading || isError;
   const rows: readonly ActivityRow[] = [
     [
       "Avg. Course Progress",
@@ -1873,7 +2111,7 @@ function LearningActivityPanel({
   const activityBuckets = summaryUnavailable
     ? []
     : (learningActivity?.enrollmentActivity.buckets ?? []);
-  const activityStatus = isLoading
+  const activityStatus = panelIsLoading
     ? "loading"
     : isError
       ? "error"
@@ -1885,10 +2123,42 @@ function LearningActivityPanel({
   return (
     <DashboardPanel
       className="creator-activity-panel"
+      icon={Pulse}
       title="Learning Activity"
       infoLabel="About Learning Activity"
       infoTitle="Learning Activity"
-      infoDescription="Shows learner progress, course completion, and new enrollments. The chart displays enrollment activity across the last 7 days in 8-hour intervals. Chart times are shown in your device's local time."
+      infoDescription={
+        <>
+          <p>Summarizes how learners are progressing and engaging with courses.</p>
+          <ul>
+            <li>
+              <strong>Avg. Course Progress</strong> — average stored progress
+              across learner-course pairs with progress records.
+            </li>
+            <li>
+              <strong>Course Completion Rate</strong> — percentage of those
+              learner-course pairs whose average progress is at least 100%.
+            </li>
+            <li>
+              <strong>New Enrollments</strong> — count of enrollment records
+              created during the current 7-day activity window.
+            </li>
+            <li>
+              <strong>Enrollment Activity</strong> — counts enrollment-record
+              creation events across the last 7 days in 8-hour buckets.
+            </li>
+            <li>
+              <strong>Previous 7 days comparison</strong> — compares the
+              current activity window with the immediately preceding 7-day
+              window when comparison data exists.
+            </li>
+          </ul>
+          <p className="creator-panel-info-note">
+            Buckets are created from UTC timestamps and displayed in your
+            device-local time.
+          </p>
+        </>
+      }
     >
       <div className="creator-activity-list">
         {rows.map(([label, value, Icon, tone]) => (
@@ -2074,22 +2344,25 @@ function CoursesPanel({
   isLoading,
   isError,
   isFetching,
+  isManualRefresh,
   onRetry,
 }: NavigateProps & {
   courses?: DashboardSummaryResponse["yourCourses"];
   isLoading: boolean;
   isError: boolean;
   isFetching: boolean;
+  isManualRefresh: boolean;
   onRetry: () => void;
 }) {
   const courseRows = courses ?? [];
   const hasCourseData = courses !== undefined;
-  const showInitialLoading = isLoading && !hasCourseData;
+  const showInitialLoading = isManualRefresh || (isLoading && !hasCourseData);
   const showInitialError = isError && !hasCourseData;
 
   return (
     <DashboardPanel
       className="creator-courses-panel"
+      icon={BookOpen}
       title="Your Courses"
       action="Manage courses"
       onAction={() => onNavigatePage?.("courses")}
@@ -2099,7 +2372,22 @@ function CoursesPanel({
           <span>Course</span>
           <span>Status</span>
           <span>Students</span>
-          <span>Avg Progress</span>
+          <div className="creator-table-head-label">
+            <span>Avg Progress</span>
+            <DashboardInfoPopover
+              className="creator-table-info-wrap"
+              portal
+              infoLabel="About average course progress"
+              infoTitle="Average Course Progress"
+              infoDescription={
+                <p>
+                  Average of each learner&apos;s stored course-progress records
+                  for this course. A missing value means no progress record is
+                  available.
+                </p>
+              }
+            />
+          </div>
         </div>
         {showInitialLoading ? (
           <div className="creator-course-skeleton" role="status" aria-label="Loading courses">
@@ -2219,7 +2507,10 @@ function DiscussionCardSkeletons() {
   );
 }
 
-function DiscussionsPanel({ onNavigatePage }: NavigateProps) {
+function DiscussionsPanel({
+  onNavigatePage,
+  isManualRefresh,
+}: NavigateProps & { isManualRefresh: boolean }) {
   const {
     data: discussionsResponse,
     isLoading,
@@ -2228,7 +2519,8 @@ function DiscussionsPanel({ onNavigatePage }: NavigateProps) {
     refetch,
   } = useDashboardRecentDiscussions();
   const hasDiscussionData = discussionsResponse !== undefined;
-  const showInitialLoading = isLoading && !hasDiscussionData;
+  const showInitialLoading =
+    isManualRefresh || (isLoading && !hasDiscussionData);
   const showInitialError = isError && !hasDiscussionData;
   const discussionCards =
     discussionsResponse?.items.map((item) => adaptDiscussionWorkspaceItem(item)) ??
@@ -2237,6 +2529,7 @@ function DiscussionsPanel({ onNavigatePage }: NavigateProps) {
   return (
     <DashboardPanel
       className="creator-discussions-panel"
+      icon={ChatCircleDots}
       title="Recent Discussions"
       action="Open discussions"
       onAction={() => onNavigatePage?.("Discussions")}
@@ -2302,58 +2595,191 @@ function CreatorStudentAvatar({ src }: { src?: string | null }) {
   );
 }
 
-function EnrollmentsPanel({ onNavigatePage }: NavigateProps) {
+function CreatorEnrollmentProgress({
+  value,
+}: {
+  value: number | null;
+}) {
+  if (value === null) {
+    return (
+      <span
+        className="creator-enrollment-progress-unavailable"
+        data-mobile-label="Progress"
+      >
+        Not started
+      </span>
+    );
+  }
+
+  return (
+    <span className="creator-progress-cell" data-mobile-label="Progress">
+      <span>{formatDashboardPercent(value)}</span>
+      <CreatorCourseProgress value={value} animated />
+    </span>
+  );
+}
+
+function EnrollmentTableSkeletonRows() {
+  return (
+    <div
+      className="creator-enrollment-skeleton-rows"
+      role="status"
+      aria-label="Loading recent enrollments"
+    >
+      {Array.from({ length: 6 }, (_, index) => (
+        <div
+          className="creator-table-row creator-enrollment-skeleton-row"
+          key={`enrollment-skeleton-${index}`}
+          aria-hidden="true"
+        >
+          <span className="creator-student-cell">
+            <span className="creator-enrollment-skeleton-avatar" />
+            <span className="creator-enrollment-skeleton-name" />
+          </span>
+          <span>
+            <span className="creator-enrollment-skeleton-course" />
+          </span>
+          <span className="creator-enrollment-mobile-meta">
+            <span className="creator-enrollment-progress-slot">
+              <span
+                className="creator-progress-cell"
+                data-mobile-label="Progress"
+              >
+                <span className="creator-enrollment-skeleton-percent" />
+                <i className="creator-enrollment-skeleton-track">
+                  <b />
+                </i>
+              </span>
+            </span>
+            <span
+              className="creator-enrollment-skeleton-time"
+              data-mobile-label="Enrolled"
+            />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EnrollmentsPanel({
+  onNavigatePage,
+  isManualRefresh,
+}: NavigateProps & { isManualRefresh: boolean }) {
   const {
     data: enrollmentsResponse,
     isLoading,
     isError,
-  } = useRecentEnrollments({ limit: 10 });
+    isFetching,
+    refetch,
+  } = useRecentEnrollments({ limit: CREATOR_DASHBOARD_ENROLLMENT_LIMIT });
+  const hasEnrollmentData = enrollmentsResponse !== undefined;
+  const showInitialLoading =
+    isManualRefresh || (isLoading && !hasEnrollmentData);
+  const showInitialError = isError && !hasEnrollmentData;
   const enrollments = enrollmentsResponse?.items ?? [];
 
   return (
     <DashboardPanel
       className="creator-enrollments-panel"
+      icon={UserPlus}
       title="Recent Enrollments"
-      action="View all"
+      action="Manage students"
       onAction={() => onNavigatePage?.("Students")}
     >
-      <div className="creator-table creator-enrollment-table">
+      <div
+        className="creator-table creator-enrollment-table"
+        aria-busy={showInitialLoading || isFetching}
+      >
         <div className="creator-table-head">
           <span>Student</span>
           <span>Course</span>
-          <span>Progress</span>
+          <div className="creator-table-head-label">
+            <span>Progress</span>
+            <DashboardInfoPopover
+              className="creator-table-info-wrap"
+              portal
+              infoLabel="About enrollment progress"
+              infoTitle="Enrollment Progress"
+              infoDescription={
+                <p>
+                  Average of the stored progress percentages for this learner
+                  and course. Not started means no matching progress records
+                  are available.
+                </p>
+              }
+            />
+          </div>
           <span>Enrolled</span>
         </div>
-        {isLoading ? (
-          <div className="creator-table-row creator-table-state" role="status">
-            <span>Loading recent enrollments…</span>
-          </div>
-        ) : isError ? (
+        {showInitialLoading ? (
+          <EnrollmentTableSkeletonRows />
+        ) : showInitialError ? (
           <div className="creator-table-row creator-table-state" role="alert">
-            <span>Unable to load recent enrollments.</span>
+            <DashboardRetryContent
+              title="Couldn't load enrollments"
+              message="Something went wrong while loading recent enrollments."
+              isRetrying={isFetching}
+              onRetry={() => void refetch()}
+            />
           </div>
         ) : enrollments.length === 0 ? (
-          <div className="creator-table-row creator-table-state">
-            <span>No recent enrollments.</span>
+          <div className="creator-table-row creator-table-state" role="status">
+            <span className="creator-dashboard-state-content">
+              <strong>No recent enrollments</strong>
+              <small>New student enrollments will appear here.</small>
+            </span>
           </div>
         ) : (
-          enrollments.map((item) => (
-            <div className="creator-table-row" key={item.enrollmentId}>
-              <span className="creator-student-cell">
-                <CreatorStudentAvatar src={item.student.avatarUrl} />
-                <strong>{item.student.displayName}</strong>
-              </span>
-              <span>{item.course.title}</span>
-              <span>
-                {item.averageProgressPercent === null
-                  ? "Not started"
-                  : `${Math.round(item.averageProgressPercent)}%`}
-              </span>
-              <time dateTime={new Date(item.enrolledAt).toISOString()}>
-                {formatRelativeTime(item.enrolledAt)}
-              </time>
-            </div>
-          ))
+          enrollments.map((item) => {
+            const studentUsername = item.student.username?.trim();
+            const rowContent = (
+              <>
+                <span className="creator-student-cell">
+                  <CreatorStudentAvatar src={item.student.avatarUrl} />
+                  <strong>{item.student.displayName}</strong>
+                </span>
+                <span>{item.course.title}</span>
+                <span className="creator-enrollment-mobile-meta">
+                  <span className="creator-enrollment-progress-slot">
+                    <CreatorEnrollmentProgress
+                      value={item.averageProgressPercent}
+                    />
+                  </span>
+                  <time
+                    dateTime={new Date(item.enrolledAt).toISOString()}
+                    data-mobile-label="Enrolled"
+                  >
+                    {formatRelativeTime(item.enrolledAt)}
+                  </time>
+                </span>
+              </>
+            );
+
+            if (!studentUsername) {
+              return (
+                <div className="creator-table-row" key={item.enrollmentId}>
+                  {rowContent}
+                </div>
+              );
+            }
+
+            return (
+              <button
+                type="button"
+                className="creator-table-row creator-enrollment-row"
+                key={item.enrollmentId}
+                onClick={() =>
+                  onNavigatePage?.(
+                    `/students/${encodeURIComponent(studentUsername)}`,
+                  )
+                }
+                aria-label={`View learner ${item.student.displayName}`}
+              >
+                {rowContent}
+              </button>
+            );
+          })
         )}
       </div>
     </DashboardPanel>
@@ -2379,7 +2805,7 @@ export const CreatorDashboard = memo(function CreatorDashboard({
   } =
     useDashboard(range);
   const dashboardUnavailable =
-    isDashboardLoading || isDashboardError || !dashboardResponse;
+    isRefreshing || isDashboardLoading || isDashboardError || !dashboardResponse;
   const dashboardCurrency = dashboardResponse?.revenue.currency ?? "INR";
   const dashboardDisplayName =
     currentUser?.displayName?.trim() ||
@@ -2393,23 +2819,15 @@ export const CreatorDashboard = memo(function CreatorDashboard({
     refreshInFlightRef.current = true;
     setIsRefreshing(true);
     try {
-      await Promise.allSettled([
-        queryClient.refetchQueries({
-          queryKey: analyticsKeys.dashboard(range),
-          exact: true,
-          type: "active",
-        }),
-        queryClient.refetchQueries({
-          queryKey: learningInteractionKeys.dashboardRecentDiscussions(),
-          exact: true,
-          type: "active",
-        }),
-        queryClient.refetchQueries({
-          queryKey: enrollmentKeys.recent(10),
-          exact: true,
-          type: "active",
-        }),
-      ]);
+      await Promise.allSettled(
+        getCreatorDashboardRefreshQueryKeys(range).map((queryKey) =>
+          queryClient.refetchQueries({
+            queryKey,
+            exact: true,
+            type: "active",
+          }),
+        ),
+      );
     } finally {
       refreshInFlightRef.current = false;
       setIsRefreshing(false);
@@ -2477,8 +2895,18 @@ export const CreatorDashboard = memo(function CreatorDashboard({
       <header className="creator-dashboard-heading">
         <div>
           <h1>
-            {dashboardGreeting}, {dashboardDisplayName}{" "}
-            <span aria-hidden="true">👋</span>
+            <span className="creator-dashboard-greeting">
+              {dashboardGreeting},{" "}
+              <span className="creator-dashboard-greeting-name">
+                {dashboardDisplayName}{" "}
+                <span
+                  className="creator-dashboard-greeting-emoji"
+                  aria-hidden="true"
+                >
+                  👋
+                </span>
+              </span>
+            </span>
           </h1>
           <p>Here&apos;s what&apos;s happening with your academy today.</p>
         </div>
@@ -2504,14 +2932,26 @@ export const CreatorDashboard = memo(function CreatorDashboard({
             className="creator-primary-action"
             onClick={() => onNavigatePage?.("Create Course")}
           >
-            <Plus size={18} /> Create Course
+            <Plus size={18} />
+            <span className="creator-action-label creator-action-label--full">
+              Create Course
+            </span>
+            <span className="creator-action-label creator-action-label--compact">
+              Course
+            </span>
           </button>
           <button
             type="button"
             className="creator-outline-action"
             onClick={() => onNavigatePage?.("Analytics")}
           >
-            <ChartBar size={17} /> View Analytics
+            <ChartBar size={17} />
+            <span className="creator-action-label creator-action-label--full">
+              View Analytics
+            </span>
+            <span className="creator-action-label creator-action-label--compact">
+              Analytics
+            </span>
           </button>
         </div>
       </header>
@@ -2556,12 +2996,14 @@ export const CreatorDashboard = memo(function CreatorDashboard({
           revenueOverview={dashboardResponse?.revenueOverview}
           isLoading={isDashboardLoading}
           isError={isDashboardError}
+          isManualRefresh={isRefreshing}
         />
         <LearningActivityPanel
           themeKey={chartThemeKey}
           learningActivity={dashboardResponse?.learningActivity}
           isLoading={isDashboardLoading}
           isError={isDashboardError}
+          isManualRefresh={isRefreshing}
         />
         <CoursesPanel
           onNavigatePage={onNavigatePage}
@@ -2569,10 +3011,17 @@ export const CreatorDashboard = memo(function CreatorDashboard({
           isLoading={isDashboardLoading}
           isError={isDashboardError}
           isFetching={isDashboardFetching}
+          isManualRefresh={isRefreshing}
           onRetry={() => void refetchDashboard()}
         />
-        <DiscussionsPanel onNavigatePage={onNavigatePage} />
-        <EnrollmentsPanel onNavigatePage={onNavigatePage} />
+        <DiscussionsPanel
+          onNavigatePage={onNavigatePage}
+          isManualRefresh={isRefreshing}
+        />
+        <EnrollmentsPanel
+          onNavigatePage={onNavigatePage}
+          isManualRefresh={isRefreshing}
+        />
       </div>
     </div>
   );

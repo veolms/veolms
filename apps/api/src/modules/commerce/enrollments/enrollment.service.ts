@@ -53,6 +53,7 @@ export function createEnrollmentService({
       enrollmentId: row.enrollment_id,
       student: {
         id: row.student_id,
+        username: row.student_username,
         displayName: row.student_display_name,
         avatarUrl: avatarUrls.get(row.student_id) ?? null,
       },
