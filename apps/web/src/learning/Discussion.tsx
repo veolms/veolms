@@ -3242,6 +3242,8 @@ function ThreadSurface({
   const composerHostRef = useRef<HTMLDivElement>(null);
   const feedSentinelRef = useRef<HTMLDivElement>(null);
   const discussionViewportRef = useRef<HTMLDivElement>(null);
+  // Description expansion moves the feed origin; refresh virtual scroll margin.
+  const [descriptionLayoutRevision, setDescriptionLayoutRevision] = useState(0);
   const compactComposerScrollHidden =
     mobileBottomNavigation && mobileBottomNavigationHidden;
   const [composerMode, setComposerMode] = useState<ComposerMode>("collapsed");
@@ -3550,6 +3552,7 @@ function ThreadSurface({
       description={lessonDescription}
       isLoading={isLessonDescriptionLoading}
       onSeekToTimestamp={onSeekToTimestamp}
+      onExpandedChange={() => setDescriptionLayoutRevision((revision) => revision + 1)}
     />
   );
   const hasDescriptionSurface =
@@ -3751,7 +3754,7 @@ function ThreadSurface({
         entries={entries}
         protectedEntryIndices={protectedEntryIndices}
         renderEntry={renderEntry}
-        layoutKey={`${composerMode}:${entryFilter}:${isLessonDescriptionLoading}`}
+        layoutKey={`${composerMode}:${entryFilter}:${isLessonDescriptionLoading}:${descriptionLayoutRevision}`}
         viewportRef={discussionViewportRef}
         isPhone={isPhone}
       />
