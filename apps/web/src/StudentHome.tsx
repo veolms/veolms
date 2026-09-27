@@ -8,6 +8,7 @@ import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { TargetIcon as Target } from "@phosphor-icons/react/Target";
 import { useMemo, type CSSProperties } from "react";
+import { useNavigate } from "react-router";
 import javascriptThumbnail from "./assets/course-thumbnails/javascript-960.webp";
 import nodeThumbnail from "./assets/course-thumbnails/nodejs-960.webp";
 import typescriptThumbnail from "./assets/course-thumbnails/typescript-960.webp";
@@ -19,8 +20,11 @@ import {
   adaptEnrolledCourseToLearningCourse,
   type LearningCourse,
 } from "./StudentPages";
+import { getCourseThumbnail } from "./learning/courseMetadata";
+import { formatRelativeTime } from "./learning/learning-notes.adapter";
 import { useEnrolledCourses } from "./services/enrollments";
 import { useDashboardRecentDiscussions } from "./services/learning-interactions";
+import { useRecentLearningUpdates } from "./services/recent-updates";
 import { adaptDiscussionWorkspaceItem } from "./workspace/discussions-workspace.adapter";
 import { DiscussionWorkspaceCard } from "./workspace/DiscussionsWorkspace";
 import {
@@ -131,11 +135,59 @@ function ProgressBar({ value }: { value: number }) {
   );
 }
 
+function RecentUpdatesSkeletons() {
+  return (
+    <>
+      {[0, 1].map((item) => (
+        <div className="home-update-skeleton" key={item} aria-hidden="true">
+          <span />
+          <span>
+            <i />
+            <i />
+            <i />
+          </span>
+          <i />
+        </div>
+      ))}
+    </>
+  );
+}
+
+function RecentUpdatesState({
+  error,
+  isRetrying,
+  onRetry,
+}: {
+  error?: boolean;
+  isRetrying?: boolean;
+  onRetry?: () => void;
+}) {
+  if (error) {
+    return (
+      <div className="home-update-state" role="alert">
+        <strong>Couldn&apos;t load recent updates</strong>
+        <small>Something went wrong while loading course updates.</small>
+        <button type="button" onClick={onRetry} disabled={isRetrying}>
+          {isRetrying ? "Retrying…" : "Retry"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="home-update-state" role="status">
+      <strong>No recent updates</strong>
+      <small>New lesson updates from your enrolled courses will appear here.</small>
+    </div>
+  );
+}
+
 export function StudentHome({
   onOpenCourse,
   onNavigatePage,
   studentName,
 }: StudentHomeProps) {
+  const navigate = useNavigate();
   const goalCompletion = 72;
   const firstName =
     (studentName?.trim() || "Ashi Singh").split(/\s+/)[0] || "Ashi";
@@ -160,6 +212,16 @@ export function StudentHome({
     [discussionsResponse?.items],
   );
 
+  const {
+    data: recentUpdatesResponse,
+    isLoading: recentUpdatesLoading,
+    isError: recentUpdatesError,
+    isFetching: recentUpdatesFetching,
+    refetch: refetchRecentUpdates,
+  } = useRecentLearningUpdates();
+  const hasRecentUpdatesData = recentUpdatesResponse !== undefined;
+  const recentUpdateCourses = recentUpdatesResponse?.courses ?? [];
+
   const heroCourse = useMemo(() => {
     return (
       enrolledCourses.find((c) => c.status === "in-progress") ||
@@ -171,10 +233,6 @@ export function StudentHome({
   const miniCourses = useMemo(() => {
     return enrolledCourses.filter((c) => c.id !== heroCourse?.id).slice(0, 2);
   }, [enrolledCourses, heroCourse]);
-
-  const updateCourses = useMemo(() => {
-    return enrolledCourses.slice(0, 2);
-  }, [enrolledCourses]);
 
   return (
     <div className="student-home">
@@ -470,39 +528,58 @@ export function StudentHome({
         <section className="dashboard-panel home-updates-panel">
           <SectionHeader
             icon={Target}
-            title="New in Your Courses"
+            title="Recently Updated"
             action="View All"
             onAction={() => onNavigatePage("courses")}
           />
-          <div className="home-update-list">
-            {updateCourses.length > 0 ? (
-              updateCourses.map((course, index) => (
+          <div
+            className="home-update-list"
+            aria-busy={recentUpdatesLoading || recentUpdatesFetching}
+          >
+            {recentUpdatesLoading && !hasRecentUpdatesData ? (
+              <RecentUpdatesSkeletons />
+            ) : recentUpdatesError && !hasRecentUpdatesData ? (
+              <RecentUpdatesState
+                error
+                isRetrying={recentUpdatesFetching}
+                onRetry={() => void refetchRecentUpdates()}
+              />
+            ) : recentUpdateCourses.length === 0 ? (
+              <RecentUpdatesState />
+            ) : (
+              recentUpdateCourses.map((course) => (
                 <button
                   type="button"
-                  key={course.id}
-                  onClick={() => onOpenCourse(course)}
+                  key={course.courseId}
+                  onClick={() =>
+                    navigate(
+                      `/courses/${encodeURIComponent(course.courseSlug)}/overview`,
+                    )
+                  }
                 >
                   <img
-                    src={course.thumbnail}
+                    src={
+                      course.courseThumbnailUrl ||
+                      getCourseThumbnail(course.courseSlug)
+                    }
                     alt=""
                     loading="lazy"
                     decoding="async"
                   />
                   <span>
-                    <strong>{course.title}</strong>
+                    <strong>{course.courseTitle}</strong>
                     <small>
-                      {index ? "2 new lectures added" : "3 new lectures added"}
+                      {course.recentLessonCount} recent lesson
+                      {course.recentLessonCount === 1 ? "" : "s"} · Updated{" "}
+                      {formatRelativeTime(course.latestUpdatedAt)}
                     </small>
-                    <em>
-                      {course.sections} Sections Available
-                    </em>
+                    {course.lessons.slice(0, 2).map((lesson) => (
+                      <em key={lesson.lessonId}>{lesson.lessonTitle}</em>
+                    ))}
                   </span>
-                  <time>{index ? "1d ago" : "2h ago"}</time>
                   <i aria-hidden="true" />
                 </button>
               ))
-            ) : (
-              <p className="text-sm text-(--muted) p-4">No recent updates.</p>
             )}
           </div>
         </section>

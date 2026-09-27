@@ -8,6 +8,7 @@ export * from "./discussion.ts";
 export * from "./interactions/index.ts";
 export * from "./notification.ts";
 export * from "./learning-progress.ts";
+export * from "./learning-recent-updates.ts";
 export * from "./health.ts";
 export * from "./error.ts";
 export * from "./fleet.ts";
