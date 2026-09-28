@@ -1097,8 +1097,8 @@ function DiscussionInner({
       orderUnifiedDiscussionEntries(visibleUnifiedDiscussionItems, [
         ...backendNotes,
         ...backendThreads,
-      ]),
-    [backendNotes, backendThreads, visibleUnifiedDiscussionItems],
+      ], feedSort),
+    [backendNotes, backendThreads, feedSort, visibleUnifiedDiscussionItems],
   );
 
   const storageBase = `veolms-learning-${persistenceKey}-discussion`;
