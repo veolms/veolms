@@ -4462,10 +4462,6 @@
   overflow-y: auto;
 }
 
-.discussion-hub__card-expanded-markdown a {
-  overflow-wrap: anywhere;
-}
-
 .discussion-hub__card-content-title {
   margin: 0 0 6px;
   color: var(--text);

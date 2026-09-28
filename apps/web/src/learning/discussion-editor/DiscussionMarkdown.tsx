@@ -392,7 +392,7 @@ export function DiscussionMarkdown({
     <div
       role="document"
       aria-label={label}
-      className={`max-w-[72ch] text-sm leading-6 text-(--text-secondary) sm:text-[15px] ${className}`}
+      className={`max-w-[72ch] wrap-anywhere text-sm leading-6 text-(--text-secondary) sm:text-[15px] ${className}`}
     >
       <ReactMarkdown
         remarkPlugins={
@@ -444,7 +444,7 @@ export function DiscussionMarkdown({
             const language = /language-([^\s]+)/.exec(codeClassName ?? "")?.[1];
             if (!language && !code.includes("\n")) {
               return (
-                <code className="rounded bg-[color-mix(in_srgb,var(--text)_9%,transparent)] px-1.5 py-0.5 font-mono text-[0.9em] text-(--text)">
+                <code className="rounded bg-[color-mix(in_srgb,var(--text)_9%,transparent)] px-1.5 py-0.5 font-mono text-[0.9em] text-(--text) [overflow-wrap:normal]">
                   {children}
                 </code>
               );
@@ -627,7 +627,7 @@ function HighlightedCodeBlock({ code, language }: HighlightedCodeBlockProps) {
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="max-w-full overflow-x-auto p-3 font-mono text-[13px] leading-6 [scrollbar-width:thin]">
+      <pre className="max-w-full overflow-x-auto p-3 font-mono text-[13px] leading-6 [overflow-wrap:normal] [scrollbar-width:thin]">
         <code>
           {(tokens ?? fallbackTokens(code)).map((line, lineIndex) => (
             <span key={lineIndex} className="block min-h-6">
