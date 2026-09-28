@@ -2560,6 +2560,7 @@ function DiscussionInner({
         onToggleBookmark={handleToggleBookmark}
         onToggleFollow={handleToggleFollow}
         onSeekToTimestamp={onSeekToTimestamp}
+        onCopyTextNotice={setNotice}
         onReplyEditFailure={() =>
           setNotice("Failed to update reply. Please try again.")
         }
@@ -2626,6 +2627,7 @@ function DiscussionInner({
         onToggleBookmark={handleToggleBookmark}
         onToggleFollow={handleToggleFollow}
         onSeekToTimestamp={onSeekToTimestamp}
+        onCopyTextNotice={setNotice}
         onReplyCreateError={() =>
           setCreationToast({
             message: "Couldn't post your reply. Please try again.",
@@ -2771,6 +2773,7 @@ interface ThreadSurfaceProps {
     following: boolean,
   ) => Promise<boolean> | void;
   onSeekToTimestamp?: (seconds: number) => void;
+  onCopyTextNotice?: (message: string) => void;
   onReplyEditFailure?: () => void;
   onDeleteFailure?: (message: string) => void;
   courseId?: string;
@@ -3233,6 +3236,7 @@ function ThreadSurface({
   onToggleBookmark,
   onToggleFollow,
   onSeekToTimestamp,
+  onCopyTextNotice,
   onReplyEditFailure,
   onDeleteFailure,
   courseId,
@@ -3512,6 +3516,7 @@ function ThreadSurface({
         onToggleBookmark={onToggleBookmark}
         onToggleFollow={onToggleFollow}
         onSeekToTimestamp={onSeekToTimestamp}
+        onCopyTextNotice={onCopyTextNotice}
         courseId={courseId}
         constrainToContainer
         canEdit={entry.entryKind !== "note" || capabilities.allowNotes}
@@ -3540,6 +3545,7 @@ function ThreadSurface({
       onToggleBookmark,
       onToggleFollow,
       onSeekToTimestamp,
+      onCopyTextNotice,
       onToggleLockThread,
       capabilities.allowNotes,
       noteDeepLinkTargetId,

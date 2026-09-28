@@ -5,6 +5,7 @@ import { BookmarkSimpleIcon as BookmarkSimple } from "@phosphor-icons/react/Book
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { CopySimpleIcon as CopySimple } from "@phosphor-icons/react/CopySimple";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
@@ -30,6 +31,7 @@ import {
 } from "./discussion-editor/types";
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { DiscussionEditor } from "./discussion-editor/DiscussionEditor";
+import { copyTextToClipboard } from "../lib/clipboard";
 import { UndoDeleteButton } from "./useUndoableDeletion";
 import { QueryClientContext } from "@tanstack/react-query";
 import {
@@ -148,6 +150,7 @@ interface CommentCardProps {
     following: boolean,
   ) => Promise<boolean> | void;
   onSeekToTimestamp?: (seconds: number) => void;
+  onCopyTextNotice?: (message: string) => void;
   isBackendMode?: boolean;
   currentUserId?: string;
   userRole?: string;
@@ -172,6 +175,7 @@ export const CommentCard = React.memo(function CommentCard({
   onToggleBookmark,
   onToggleFollow,
   onSeekToTimestamp,
+  onCopyTextNotice,
   isBackendMode = false,
   currentUserId,
   userRole,
@@ -570,6 +574,8 @@ export const CommentCard = React.memo(function CommentCard({
                 <CommentActionMenu
                   name={comment.name}
                   kind={entryKind}
+                  textToCopy={comment.content?.markdown ?? comment.text}
+                  onCopyTextNotice={onCopyTextNotice}
                   isOwn={Boolean(comment.isOwn)}
                   canEdit={
                     canEdit &&
@@ -842,6 +848,7 @@ export const CommentCard = React.memo(function CommentCard({
                       })
                     }
                     onSeekToTimestamp={onSeekToTimestamp}
+                    onCopyTextNotice={onCopyTextNotice}
                     parentThreadId={comment.id}
                     courseId={courseId}
                   />
@@ -913,6 +920,7 @@ interface ReplyCardProps {
   onLike: (replyId: string | number) => void;
   onReport: () => void;
   onSeekToTimestamp?: (seconds: number) => void;
+  onCopyTextNotice?: (message: string) => void;
   courseId?: string;
 }
 
@@ -929,6 +937,7 @@ function ReplyCard({
   onLike,
   onReport,
   onSeekToTimestamp,
+  onCopyTextNotice,
   courseId,
 }: ReplyCardProps) {
   const [editing, setEditing] = useState(false);
@@ -1017,6 +1026,8 @@ function ReplyCard({
                 <CommentActionMenu
                   name={reply.name}
                   kind="reply"
+                  textToCopy={reply.content?.markdown ?? reply.text}
+                  onCopyTextNotice={onCopyTextNotice}
                   isOwn={Boolean(reply.isOwn)}
                   canEdit={!isBackendMode || Boolean(getServerEntityId(reply))}
                   canAcceptAnswer={
@@ -1277,6 +1288,8 @@ interface CommentActionMenuProps {
   onToggleBookmark?: () => void;
   isFollowing?: boolean;
   onToggleFollow?: () => void;
+  textToCopy?: string;
+  onCopyTextNotice?: (message: string) => void;
   onEdit: () => void;
   onShare: () => void;
   onDelete: () => void;
@@ -1300,6 +1313,8 @@ export function CommentActionMenu({
   onToggleBookmark,
   isFollowing = false,
   onToggleFollow,
+  textToCopy,
+  onCopyTextNotice,
   onEdit,
   onShare,
   onDelete,
@@ -1316,6 +1331,15 @@ export function CommentActionMenu({
   const canBookmark = Boolean(onToggleBookmark);
   const canFollow =
     (kind === "comment" || kind === "question") && Boolean(onToggleFollow);
+  const copyTextAction = textToCopy?.trim() ? (
+    <MenuAction
+      Icon={CopySimple}
+      label="Copy text"
+      onClick={() => {
+        void copyTextToClipboard(textToCopy, onCopyTextNotice);
+      }}
+    />
+  ) : null;
 
   return (
     <CourseActionMenu
@@ -1345,6 +1369,7 @@ export function CommentActionMenu({
                 onClick={onToggleBookmark}
               />
             )}
+            {copyTextAction}
             <MenuDivider />
             {canDelete && (
               <MenuAction
@@ -1369,6 +1394,7 @@ export function CommentActionMenu({
               label={`Share ${actionLabel}`}
               onClick={onShare}
             />
+            {copyTextAction}
             <MenuDivider />
             <MenuAction
               Icon={Flag}
@@ -1405,6 +1431,7 @@ export function CommentActionMenu({
             label={`Share ${actionLabel}`}
             onClick={onShare}
           />
+          {copyTextAction}
           {canLock && onToggleLock && (
             <MenuAction
               Icon={isLocked ? LockOpen : Lock}
@@ -1450,6 +1477,7 @@ export function CommentActionMenu({
             label={`Share ${actionLabel}`}
             onClick={onShare}
           />
+          {copyTextAction}
           {canLock && onToggleLock && (
             <MenuAction
               Icon={isLocked ? LockOpen : Lock}

@@ -155,6 +155,7 @@ interface DiscussionThreadPanelProps {
     following: boolean,
   ) => Promise<boolean> | void;
   onSeekToTimestamp?: (seconds: number) => void;
+  onCopyTextNotice?: (message: string) => void;
   onReplyCreateError?: () => void;
   onReplyEditError?: () => void;
   onReplyDeleteError?: () => void;
@@ -184,6 +185,7 @@ export function DiscussionThreadPanel({
   onToggleBookmark,
   onToggleFollow,
   onSeekToTimestamp,
+  onCopyTextNotice,
   onReplyCreateError,
   onReplyEditError,
   onReplyDeleteError,
@@ -717,6 +719,7 @@ export function DiscussionThreadPanel({
                   onToggleBookmark={onToggleBookmark}
                   onToggleFollow={onToggleFollow}
                   onSeekToTimestamp={onSeekToTimestamp}
+                  onCopyTextNotice={onCopyTextNotice}
                   onReplyCreateError={onReplyCreateError}
                   onReplyEditError={onReplyEditError}
                   onReplyDeleteError={onReplyDeleteError}
@@ -780,6 +783,7 @@ interface ThreadSlideProps {
     following: boolean,
   ) => Promise<boolean> | void;
   onSeekToTimestamp?: (seconds: number) => void;
+  onCopyTextNotice?: (message: string) => void;
   onReplyCreateError?: () => void;
   onReplyEditError?: () => void;
   onReplyDeleteError?: () => void;
@@ -808,6 +812,7 @@ function ThreadSlide({
   onToggleBookmark,
   onToggleFollow,
   onSeekToTimestamp,
+  onCopyTextNotice,
   onReplyCreateError,
   onReplyEditError,
   onReplyDeleteError,
@@ -1062,6 +1067,7 @@ function ThreadSlide({
           onToggleBookmark={onToggleBookmark}
           onToggleFollow={onToggleFollow}
           onSeekToTimestamp={onSeekToTimestamp}
+          onCopyTextNotice={onCopyTextNotice}
           onLike={onLike}
           onReply={entry.isLocked ? () => {} : focusComposer}
           onEdit={() => onEditEntry(entry)}
@@ -1128,6 +1134,7 @@ function ThreadSlide({
                 onLikeReply={handleLikeReply}
                 onReport={onReport}
                 onSeekToTimestamp={onSeekToTimestamp}
+                onCopyTextNotice={onCopyTextNotice}
                 courseId={courseId}
               />
             ))
@@ -1198,6 +1205,7 @@ function ThreadRootEntry({
   onToggleBookmark,
   onToggleFollow,
   onSeekToTimestamp,
+  onCopyTextNotice,
   onLike,
   onReply,
   onEdit,
@@ -1222,6 +1230,7 @@ function ThreadRootEntry({
   onDelete: () => void;
   onReport: () => void;
   onSeekToTimestamp?: (seconds: number) => void;
+  onCopyTextNotice?: (message: string) => void;
 }) {
   const isEntryLiked = Boolean(entry.liked);
   const isNote = entry.entryKind === "note" || (entry as any).kind === "note";
@@ -1296,6 +1305,8 @@ function ThreadRootEntry({
               kind={
                 entry.entryKind ?? (entry.isQuestion ? "question" : "comment")
               }
+              textToCopy={entry.content?.markdown ?? entry.text}
+              onCopyTextNotice={onCopyTextNotice}
               isOwn={Boolean(entry.isOwn)}
               canEdit={!isBackendMode || (Boolean(serverId) && !isEditing)}
               canDelete={!isBackendMode || (Boolean(serverId) && !isEditing)}
@@ -1411,6 +1422,7 @@ function ThreadReplyEntry({
   onLikeReply,
   onReport,
   onSeekToTimestamp,
+  onCopyTextNotice,
   courseId,
 }: {
   parentId: string | number;
@@ -1441,6 +1453,7 @@ function ThreadReplyEntry({
       | (string | number),
   ) => void;
   onSeekToTimestamp?: (seconds: number) => void;
+  onCopyTextNotice?: (message: string) => void;
   courseId?: string;
 }) {
   const canAcceptReply =
@@ -1524,6 +1537,8 @@ function ThreadReplyEntry({
                 <CommentActionMenu
                   name={reply.name}
                   kind="reply"
+                  textToCopy={reply.content?.markdown ?? reply.text}
+                  onCopyTextNotice={onCopyTextNotice}
                   isOwn={Boolean(reply.isOwn)}
                   canEdit={
                     !isBackendMode || (Boolean(replyServerId) && !isEditing)

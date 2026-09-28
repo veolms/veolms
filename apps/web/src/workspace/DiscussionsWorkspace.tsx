@@ -2354,6 +2354,9 @@ export function DiscussionsWorkspace({
             <ThemedSelect
               onValueChange={setCourse}
               ariaLabel="Filter discussions by course"
+              searchable
+              searchPlaceholder="Search courses..."
+              defaultLimit={8}
               triggerClassName="discussion-hub__select-trigger"
               contentClassName={selectContentClassName}
               menuMaxWidth={inSheet ? Number.POSITIVE_INFINITY : undefined}
