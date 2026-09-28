@@ -121,8 +121,9 @@ export function createOtpService({
       now,
     });
 
+    const otpId = crypto.randomUUID();
     await otpRepository.insertOtp(database, {
-      id: crypto.randomUUID(),
+      id: otpId,
       identifier,
       identifierType,
       purpose,
@@ -130,26 +131,36 @@ export function createOtpService({
       expiresAt: new Date(now.getTime() + OTP_TTL_MS),
     });
 
-    if (identifierType === "email") {
-      void services.email.send(
-        identifier,
-        otpVerificationEmail({
-          code,
-          academyName,
-          expiresInMinutes: OTP_TTL_MINUTES,
-        }),
-      );
-      return;
-    }
+    const delivery =
+      identifierType === "email"
+        ? await services.email.send(
+            identifier,
+            otpVerificationEmail({
+              code,
+              academyName,
+              expiresInMinutes: OTP_TTL_MINUTES,
+            }),
+          )
+        : await services.sms.send(
+            identifier,
+            otpVerificationSms({
+              code,
+              academyName,
+              expiresInMinutes: OTP_TTL_MINUTES,
+            }),
+          );
 
-    void services.sms.send(
-      identifier,
-      otpVerificationSms({
-        code,
-        academyName,
-        expiresInMinutes: OTP_TTL_MINUTES,
-      }),
-    );
+    // "logged" (console transport) counts as delivered so local dev keeps working.
+    if (delivery.status === "failed") {
+      // Drop the undelivered code so the user can retry without hitting the
+      // resend window or burning their daily quota.
+      await otpRepository.deleteOtp(database, otpId);
+      throw new AppError(
+        503,
+        "OTP_DELIVERY_FAILED",
+        "We could not deliver a verification code. Please try again later.",
+      );
+    }
   }
 
   async function sendPhoneVerificationOtp(phoneNo: string): Promise<void> {
