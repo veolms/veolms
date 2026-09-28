@@ -637,6 +637,7 @@ export const CommentCard = React.memo(function CommentCard({
                 linkedAttachments={comment.attachments}
                 enableInlineTimestamps={Boolean(onSeekToTimestamp)}
                 onSeekToTimestamp={onSeekToTimestamp}
+                preserveSoftBreaks
                 className="mt-0.5 pr-9 sm:pr-10"
               />
 
@@ -1090,6 +1091,7 @@ function ReplyCard({
                   linkedAttachments={reply.attachments}
                   enableInlineTimestamps={Boolean(onSeekToTimestamp)}
                   onSeekToTimestamp={onSeekToTimestamp}
+                  preserveSoftBreaks
                   className="mt-0.5 pr-9 sm:pr-10"
                 />
               )}

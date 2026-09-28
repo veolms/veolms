@@ -152,7 +152,8 @@ export function LessonDescription({
               label="Lesson description content"
               chapterDeclarations={chapterDeclarations}
               onSeekToTimestamp={onSeekToTimestamp}
-              className="[&>:first-child]:mt-0"
+              preserveSoftBreaks
+              className="wrap-anywhere [&>:first-child]:mt-0"
             />
           ) : (
             <p className="m-0 text-(--muted) text-sm italic">

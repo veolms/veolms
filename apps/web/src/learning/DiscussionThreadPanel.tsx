@@ -1339,6 +1339,7 @@ function ThreadRootEntry({
             linkedAttachments={entry.attachments}
             enableInlineTimestamps={Boolean(onSeekToTimestamp)}
             onSeekToTimestamp={onSeekToTimestamp}
+            preserveSoftBreaks
             className="mt-0.5 max-w-3xl pr-9 sm:pr-10"
           />
           {entry.attachments && entry.attachments.length > 0 ? (
@@ -1605,6 +1606,7 @@ function ThreadReplyEntry({
                   linkedAttachments={reply.attachments}
                   enableInlineTimestamps={Boolean(onSeekToTimestamp)}
                   onSeekToTimestamp={onSeekToTimestamp}
+                  preserveSoftBreaks
                   className="mt-0.5 max-w-3xl pr-9 sm:pr-10"
                 />
               )}

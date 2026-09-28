@@ -340,13 +340,13 @@ export const reorderSectionsRequestSchema = z.object({
 
 export const createCourseLessonRequestSchema = z.object({
   title: z.string().min(1).max(255),
-  description: z.string().max(1500).nullable().optional(),
+  description: z.string().max(10000).nullable().optional(),
   contentType: z.enum(["video", "document", "quiz"]),
 });
 
 export const updateCourseLessonRequestSchema = z.object({
   title: z.string().min(1).max(255).optional(),
-  description: z.string().max(1500).nullable().optional(),
+  description: z.string().max(10000).nullable().optional(),
   contentType: z.enum(["video", "document", "quiz"]).optional(),
   contentMediaId: z.uuid().nullable().optional(),
   isPreview: z.boolean().optional(),

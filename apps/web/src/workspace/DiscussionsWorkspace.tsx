@@ -669,6 +669,7 @@ function DiscussionWorkspaceCardContent({
             content={content}
             label={`${label} by ${thread.author}`}
             enableLinkPreview={!isMobileOrCoarsePointer}
+            preserveSoftBreaks
             className="max-w-none"
           />
           {utility(true)}
