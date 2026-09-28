@@ -457,6 +457,7 @@ export type CourseWizardStepId =
 type WizardStepIcon = ComponentType<{
   size?: number;
   weight?: "bold" | "duotone" | "fill" | "regular";
+  className?: string;
 }>;
 
 export interface WizardStepDefinition {
@@ -2900,6 +2901,7 @@ export function CourseCreatePage({
       }
     };
     updateIndicator();
+    const rafId = requestAnimationFrame(updateIndicator);
     window.addEventListener("resize", updateIndicator);
 
     const observer = new MutationObserver(updateIndicator);
@@ -2914,6 +2916,7 @@ export function CourseCreatePage({
     });
 
     return () => {
+      cancelAnimationFrame(rafId);
       window.removeEventListener("resize", updateIndicator);
       observer.disconnect();
     };
@@ -9694,14 +9697,14 @@ export function CourseCreatePage({
                 actionLoading !== null ||
                 (!isDownstreamUnlocked && step.id !== "basics")
               }
-              className={`!border-b-transparent shrink-0 whitespace-nowrap disabled:!opacity-50 disabled:!cursor-not-allowed ${isActive ? "is-active" : ""}`}
+              className={`inline-flex flex-row items-center gap-2 !border-b-transparent shrink-0 whitespace-nowrap disabled:!opacity-50 disabled:!cursor-not-allowed ${isActive ? "is-active" : ""}`}
               onClick={() => {
                 if (isInitialLoadingCourse) return;
                 void navigateToStep(step.id);
               }}
               onKeyDown={handleRovingTabKeyDown}
             >
-              <Icon size={17} weight={isActive ? "fill" : "regular"} />
+              <Icon size={17} weight={isActive ? "fill" : "regular"} className="shrink-0" />
               <span className="inline-flex items-center gap-1.5">
                 <span>{step.label}</span>
                 {isDirty && (
@@ -9724,23 +9727,31 @@ export function CourseCreatePage({
           className="min-h-80 w-full flex-1"
         />
       ) : (
-      <SwipeableTabPanel
-        tabs={WIZARD_STEP_IDS}
-        activeTab={activeStep}
-        onTabChange={(newStep) => {
-          void navigateToStep(newStep);
-        }}
-        tabListRef={stepsNavRef}
-        id="course-wizard-tab-panel"
-        className="course-wizard-tab-content relative min-h-0 flex-1 flex flex-col pt-4 pb-6 max-[640px]:pt-3"
-        stateAttribute="data-wizard-step"
-        labelledBy={`course-wizard-tab-${activeStep}`}
-        disabled={
-          actionLoading !== null ||
-          (!isDownstreamUnlocked && activeStep === "basics")
-        }
-        spaceBetween={32}
-      >
+        <Suspense
+          fallback={
+            <CenteredLoadingSpinner
+              label="Loading course details"
+              className="min-h-80 w-full flex-1"
+            />
+          }
+        >
+          <SwipeableTabPanel
+            tabs={WIZARD_STEP_IDS}
+            activeTab={activeStep}
+            onTabChange={(newStep) => {
+              void navigateToStep(newStep);
+            }}
+            tabListRef={stepsNavRef}
+            id="course-wizard-tab-panel"
+            className="course-wizard-tab-content relative min-h-0 flex-1 flex flex-col pt-4 pb-6 max-[640px]:pt-3"
+            stateAttribute="data-wizard-step"
+            labelledBy={`course-wizard-tab-${activeStep}`}
+            disabled={
+              actionLoading !== null ||
+              (!isDownstreamUnlocked && activeStep === "basics")
+            }
+            spaceBetween={32}
+          >
         {(panelStep) =>
           !mountedTabs.has(panelStep) ? null : panelStep === "basics" ? (
             <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
@@ -13795,7 +13806,8 @@ export function CourseCreatePage({
             </div>
           )
         }
-      </SwipeableTabPanel>
+          </SwipeableTabPanel>
+        </Suspense>
       )}
 
       {/* Sticky Bottom Action Bar (Desktop / Tablet) */}

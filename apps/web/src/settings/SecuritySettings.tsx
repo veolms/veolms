@@ -297,6 +297,7 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
               disabled={enableMutation.isPending}
               invalid={codeError !== null}
               label="Authentication code"
+              autoFocus
               onChange={(v) => {
                 setCode(v);
                 setCodeError(null);

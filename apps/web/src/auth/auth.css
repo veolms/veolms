@@ -519,8 +519,9 @@
 .auth-otp {
   display: grid;
   grid-template-columns: repeat(6, var(--auth-h-field));
-  justify-content: start;
+  justify-content: center;
   gap: 8px;
+  width: 100%;
   min-width: 0;
 }
 

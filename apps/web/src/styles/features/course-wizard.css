@@ -18,9 +18,15 @@
 /* Sticky Course Wizard Tabs Navigation */
 .course-wizard-steps-nav {
   --wizard-tab-nav-bleed: var(--application-page-inline-gutter, 25px);
+  --page-tab-indicator-left: 0px;
+  --page-tab-indicator-width: 0px;
+  --page-tab-indicator-color: var(--accent);
   position: sticky !important;
   top: var(--page-tabs-sticky-top, 0px) !important;
   z-index: 30 !important;
+  display: flex !important;
+  align-items: center !important;
+  overflow-x: auto !important;
   width: calc(100% + (2 * var(--wizard-tab-nav-bleed))) !important;
   max-width: none !important;
   align-self: stretch !important;
@@ -39,43 +45,126 @@
   background: color-mix(in srgb, var(--main-surface) 84%, transparent) !important;
 }
 
+.course-wizard-steps-nav [role="tab"] {
+  --page-tab-active-ink: var(--accent-ink, var(--accent));
+  --page-tab-active-indicator: var(--accent);
+}
+
+.course-wizard-steps-nav [data-page-tab-tone="blue"] {
+  --page-tab-tone: #5da9ff;
+}
+.course-wizard-steps-nav [data-page-tab-tone="violet"] {
+  --page-tab-tone: #ad7cff;
+}
+.course-wizard-steps-nav [data-page-tab-tone="cyan"] {
+  --page-tab-tone: #63c8d5;
+}
+.course-wizard-steps-nav [data-page-tab-tone="green"] {
+  --page-tab-tone: #55d98b;
+}
+.course-wizard-steps-nav [data-page-tab-tone="gold"] {
+  --page-tab-tone: #f1be4b;
+}
+.course-wizard-steps-nav [data-page-tab-tone="orange"] {
+  --page-tab-tone: #f09c4e;
+}
+.course-wizard-steps-nav [data-page-tab-tone="rose"] {
+  --page-tab-tone: #ff6684;
+}
+
+:root[data-theme="light"] .course-wizard-steps-nav [data-page-tab-tone="blue"] {
+  --page-tab-tone: #1769aa;
+}
+:root[data-theme="light"] .course-wizard-steps-nav [data-page-tab-tone="violet"] {
+  --page-tab-tone: #6741b8;
+}
+:root[data-theme="light"] .course-wizard-steps-nav [data-page-tab-tone="cyan"] {
+  --page-tab-tone: #0b6d79;
+}
+:root[data-theme="light"] .course-wizard-steps-nav [data-page-tab-tone="green"] {
+  --page-tab-tone: #14763f;
+}
+:root[data-theme="light"] .course-wizard-steps-nav [data-page-tab-tone="gold"] {
+  --page-tab-tone: #7b5b00;
+}
+:root[data-theme="light"] .course-wizard-steps-nav [data-page-tab-tone="orange"] {
+  --page-tab-tone: #9a4d00;
+}
+:root[data-theme="light"] .course-wizard-steps-nav [data-page-tab-tone="rose"] {
+  --page-tab-tone: #b82b52;
+}
+
+:root[data-page-tab-colors="multicolor"]
+  .course-wizard-steps-nav
+  [role="tab"][data-page-tab-tone],
+:root[data-page-tab-colors="follow-sidebar"][data-sidebar-icon-style="multicolor"]
+  .course-wizard-steps-nav
+  [role="tab"][data-page-tab-tone] {
+  --page-tab-active-ink: var(--page-tab-tone);
+  --page-tab-active-indicator: var(--page-tab-tone);
+}
+
 .course-wizard-steps-nav button,
 .course-wizard-steps-nav [role="tab"] {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-direction: row !important;
+  gap: 8px !important;
   min-height: 48px !important;
   padding: 0 14px !important;
   font-size: 0.82rem !important;
   font-weight: 600 !important;
+  color: var(--muted) !important;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 8px 8px 0 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease !important;
+}
+
+.course-wizard-steps-nav button svg,
+.course-wizard-steps-nav [role="tab"] svg {
+  display: inline-block !important;
+  flex-shrink: 0 !important;
 }
 
 .course-wizard-steps-nav .page-tabs__indicator {
-  opacity: 1;
+  position: absolute !important;
+  z-index: 2 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: var(--page-tab-indicator-width) !important;
+  height: 2px !important;
+  border-radius: 999px 999px 0 0 !important;
+  background: var(--page-tab-indicator-color, var(--accent)) !important;
+  opacity: 1 !important;
+  pointer-events: none !important;
+  transform: translate3d(var(--page-tab-indicator-left, 0px), 0, 0) !important;
   transition:
     width 260ms cubic-bezier(0.16, 1, 0.3, 1),
     transform 260ms cubic-bezier(0.16, 1, 0.3, 1),
-    background-color 200ms ease-out;
+    background-color 200ms ease-out !important;
+  will-change: width, transform !important;
 }
 
 /* Active tab label + icon color follows the tone (same as settings tabs) */
-.course-wizard-steps-nav [role="tab"].is-active {
-  color: var(--page-tab-active-ink);
+.course-wizard-steps-nav [role="tab"].is-active,
+.course-wizard-steps-nav button.is-active {
+  color: var(--page-tab-active-ink, var(--accent)) !important;
 }
 
-/* Non-focus border and shadow resets on tabs */
-.course-wizard-steps-nav [role="tab"],
-.course-wizard-steps-nav button {
-  box-shadow: none !important;
-  border-left: 0 !important;
-  border-right: 0 !important;
-  border-top: 0 !important;
-  border-bottom: 2px solid transparent !important;
-  background: transparent !important;
-}
-
-.course-wizard-steps-nav [role="tab"]:hover,
-.course-wizard-steps-nav button:hover {
+.course-wizard-steps-nav [role="tab"]:hover:not(.is-active):not(:disabled),
+.course-wizard-steps-nav button:hover:not(.is-active):not(:disabled) {
   color: var(--text) !important;
   background: transparent !important;
-  background-color: transparent !important;
 }
 
 .course-wizard-steps-nav [role="tab"]:focus-visible,

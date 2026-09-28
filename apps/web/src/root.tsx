@@ -2,10 +2,7 @@ import { useLayoutEffect, type ReactNode } from "react";
 import { Links, Meta, Outlet, Scripts } from "react-router";
 import type { Route } from "./+types/root";
 import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
-import {
-  getAuthIdentityHintBootstrapScript,
-  getEarlyApiBootstrapScript,
-} from "./bootstrap/earlyApiBootstrap";
+import { getEarlyApiBootstrapScript } from "./bootstrap/earlyApiBootstrap";
 import { appBaseStylesheet, fullAppStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
@@ -195,11 +192,6 @@ export function Layout({ children }: LayoutProps) {
         <meta name="theme-color" content="#151718" />
         <script
           dangerouslySetInnerHTML={{ __html: getEarlyApiBootstrapScript() }}
-        />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: getAuthIdentityHintBootstrapScript(),
-          }}
         />
         {videoPlaybackCdnOrigin ? (
           <link

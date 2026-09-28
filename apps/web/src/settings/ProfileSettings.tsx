@@ -43,7 +43,6 @@ import {
 import type { CountryOption } from "../auth/identifier";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { AvatarStylePicker } from "./AvatarStylePicker";
-import { DicebearAvatar } from "./DicebearAvatar";
 import type {
   ProfileIdentity,
   ProfilePreferences,
@@ -60,10 +59,7 @@ import {
   useVerifyPhoneNumber,
 } from "../services/auth";
 import { authStore, useAuthStore, type AuthUser } from "../store/auth.store";
-import {
-  DICEBEAR_BASE_URL,
-  type ProfileUpdateRequest,
-} from "@veolms/contracts";
+import type { ProfileUpdateRequest } from "@veolms/contracts";
 import { CircularCheckbox } from "../components/CircularCheckbox";
 import { AutosaveStatus, useAutosync } from "../lib/autosync";
 import {
@@ -994,19 +990,9 @@ export function ProfileSettings({
       .finally(() => setPhotoUploading(false));
   };
 
-  const isDicebearAvatar = Boolean(
-    draftProfile.avatarDataUrl?.startsWith(DICEBEAR_BASE_URL),
-  );
-
   const avatar = (className: string) => (
     <span className={className} aria-hidden="true">
-      {showAvatar && isDicebearAvatar ? (
-        <DicebearAvatar
-          url={draftProfile.avatarDataUrl!}
-          size={160}
-          onError={() => setAvatarFailed(true)}
-        />
-      ) : showAvatar ? (
+      {showAvatar ? (
         <ResponsiveAvatar
           src={draftProfile.avatarDataUrl ?? undefined}
           srcSet={draftProfile.avatarSrcSet}
