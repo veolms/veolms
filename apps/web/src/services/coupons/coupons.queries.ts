@@ -8,10 +8,12 @@ export function useCouponsList(options?: {
   courseId?: string | null;
   limit?: number;
   enabled?: boolean;
+  refetchInterval?: number | false;
 }) {
   const limit = options?.limit ?? 30;
   const courseId = options?.courseId ?? undefined;
   const enabled = options?.enabled ?? true;
+  const refetchInterval = options?.refetchInterval ?? 30_000;
 
   return useInfiniteQuery<CouponListResponse, ApiError>({
     queryKey: couponKeys.list({ courseId, limit }),
@@ -24,7 +26,7 @@ export function useCouponsList(options?: {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: 30 * 1000,
-    refetchInterval: 30_000,
+    refetchInterval,
     enabled,
   });
 }

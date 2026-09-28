@@ -96,8 +96,11 @@ export async function removeAvatarVariants(
 const AVATAR_VARIANT_URL_PATTERN =
   /^(.*\/public\/avatars\/[A-Za-z0-9_-]{1,200})\/(?:45|96|160)\.webp([?#].*)?$/u;
 
+const AVATAR_STORED_URL_PATTERN =
+  /^(.*\/public\/avatars\/[A-Za-z0-9_-]{1,200})\/(?:(?:45|96|160)\.webp|original\.(?:jpg|jpeg|png|webp|gif))([?#].*)?$/u;
+
 export function isStoredAvatarUrl(value: string | null | undefined): boolean {
-  return Boolean(value && AVATAR_VARIANT_URL_PATTERN.test(value));
+  return Boolean(value && AVATAR_STORED_URL_PATTERN.test(value));
 }
 
 /** Builds the responsive source set for the canonical 160px CDN URL. */
@@ -123,9 +126,8 @@ export function avatarSrcSetFromUrl(
  * public/avatars/{userId--avatarId}/original.{extension}
  * public/avatars/{userId--avatarId}/{width}.webp
  *
- * The database keeps the CDN URL for the 160px variant so browsers never
- * download the original. Each upload owns its namespace, so avatar history
- * remains stable while the Worker can continue using the existing path shape.
+ * The database keeps the CDN URL for the original or 160px variant.
+ * Each upload owns its namespace, so avatar history remains stable.
  */
 export async function storeAvatarBuffer(
   storage: S3StorageService,
@@ -139,7 +141,9 @@ export async function storeAvatarBuffer(
   await removeAvatarVariants(storage, userId, avatarId);
   await removeOtherAvatarOriginals(storage, userId, contentType, avatarId);
 
-  const avatarUrl = avatarCdnUrl(storage, userId, 160, avatarId);
+  const avatarUrl =
+    storage.getPublicObjectUrl(originalKey) ??
+    avatarCdnUrl(storage, userId, 160, avatarId);
   if (!avatarUrl) {
     await storage.deleteObject(originalKey).catch(() => undefined);
     throw new Error("A public CDN URL is required to serve profile avatars.");

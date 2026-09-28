@@ -20,7 +20,10 @@ import veolmsThumbnail from "./assets/learning-thumbnails/veolms-course.webp";
 import illustratorThumbnail from "./assets/learning-thumbnails/illustrator-course.webp";
 import reactThumbnail from "./assets/learning-thumbnails/react-course.webp";
 import d3Thumbnail from "./assets/learning-thumbnails/d3-course.webp";
-import { getCourseThumbnail } from "./learning/courseMetadata";
+import {
+  getCourseThumbnail,
+  getCourseThumbnailSrcSet,
+} from "./learning/courseMetadata";
 import { useEnrolledCourses } from "./services/enrollments";
 import {
   isStoredString,
@@ -42,8 +45,11 @@ export interface LearningCourse {
   lastLesson?: string;
   accessed?: string;
   enrolledOn?: string;
+  enrolledAt?: string | Date;
+  lastAccessedAt?: string | Date | null;
   completedOn?: string;
   thumbnail: string;
+  thumbnailSrcSet?: string;
 }
 
 export function adaptEnrolledCourseToLearningCourse(
@@ -72,8 +78,13 @@ export function adaptEnrolledCourseToLearningCourse(
     lectures: ec.totalLessons,
     status,
     progress: ec.progress ?? 0,
+    enrolledAt: ec.enrolledAt,
+    lastAccessedAt: ec.lastAccessedAt ?? null,
     enrolledOn: enrolledDateStr,
     thumbnail: ec.courseThumbnailUrl || getCourseThumbnail(ec.courseSlug),
+    thumbnailSrcSet: ec.courseThumbnailUrl
+      ? undefined
+      : getCourseThumbnailSrcSet(ec.courseSlug),
   };
 }
 
@@ -234,6 +245,8 @@ function LearningCourseCard({
       <div className="learning-card-media">
         <img
           src={course.thumbnail}
+          srcSet={course.thumbnailSrcSet}
+          sizes="(max-width: 560px) calc(100vw - 2rem), (max-width: 1180px) calc(50vw - 2rem), 320px"
           alt=""
           width={960}
           height={540}
@@ -450,9 +463,12 @@ export function MyCoursesPage({
       </div>
 
       {isLoading ? (
-        <div className="learning-load-state" role="status">
+        <div
+          className="learning-load-state"
+          role="status"
+          aria-label="Loading enrolled courses"
+        >
           <CircleNotch size={32} className="animate-spin" />
-          <p>Loading your enrolled courses...</p>
         </div>
       ) : isError ? (
         <div className="learning-empty" role="alert">

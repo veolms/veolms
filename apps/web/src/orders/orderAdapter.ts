@@ -152,7 +152,7 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
     (order.items && order.items.length > 1
       ? `${order.items[0]?.titleSnapshot} + ${order.items.length - 1} more`
       : "Course Order");
-  const courseId = firstItem?.courseId || firstItem?.bundleId || order.id;
+  const courseId = firstItem?.courseId || "";
 
   let status: OrderHistoryStatus = "processing";
   let statusLabel = "Processing";
@@ -233,6 +233,17 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
       ? `${order.items.length} Courses`
       : "1 Course";
 
+  const paymentMethod = order.paymentSummary?.method.toLowerCase() ?? "";
+  const paymentType = paymentMethod.includes("upi")
+    ? "upi"
+    : paymentMethod.includes("visa")
+      ? "visa"
+      : paymentMethod.includes("mastercard")
+        ? "mastercard"
+        : paymentMethod.includes("paypal")
+          ? "paypal"
+          : "other";
+
   return {
     id: order.id,
     orderNumber: cleanOrderNumber,
@@ -244,9 +255,12 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
     date,
     time,
     payment: {
-      type: "visa",
-      brand: "Visa",
-      label: "•••• 4242",
+      type: paymentType,
+      brand: order.paymentSummary?.provider || "Payment",
+      label:
+        [order.paymentSummary?.method, order.paymentSummary?.detail]
+          .filter(Boolean)
+          .join(" · ") || "Payment method unavailable",
     },
     amount,
     formattedAmount,

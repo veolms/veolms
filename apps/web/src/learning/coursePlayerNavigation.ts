@@ -706,7 +706,7 @@ export function postPendingCourseCommentDraft(
           id: Date.now(),
           name: "Sofia Chen",
           time: "Just now",
-          avatar: "/assets/sofia-avatar-160.webp",
+          avatar: "/static/sofia-avatar-160.webp",
           text: draft.text,
           likes: 0,
         },

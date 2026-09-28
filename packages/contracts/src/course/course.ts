@@ -97,8 +97,32 @@ export const publicCourseSchema: z.ZodType<PublicCourse> =
 export const courseListResponseSchema = z.strictObject({
   courses: z
     .array(courseSummarySchema)
-    .meta({ description: "Published courses, oldest first." }),
+    .meta({ description: "Published courses in stable catalogue order." }),
+  nextCursor: z.string().min(1).max(256).optional(),
 });
+
+export const courseOptionsResponseSchema = z.strictObject({
+  courses: z.array(
+    z.strictObject({
+      id: z.uuid(),
+      title: z.string().min(1).max(255),
+    }),
+  ),
+});
+
+export const courseListQuerySchema = z.object({
+  creatorId: z.uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(60).optional(),
+  cursor: z.string().min(1).max(256).optional(),
+  search: z.string().trim().max(120).optional(),
+  sort: z.enum(["latest", "title"]).optional(),
+});
+
+export type CourseListResponse = z.infer<typeof courseListResponseSchema>;
+export type CourseOptionsResponse = z.infer<
+  typeof courseOptionsResponseSchema
+>;
+export type CourseListQuery = z.infer<typeof courseListQuerySchema>;
 
 export const courseSlugSchema = z
   .string()
@@ -340,13 +364,13 @@ export const reorderSectionsRequestSchema = z.object({
 
 export const createCourseLessonRequestSchema = z.object({
   title: z.string().min(1).max(255),
-  description: z.string().max(1500).nullable().optional(),
+  description: z.string().max(10000).nullable().optional(),
   contentType: z.enum(["video", "document", "quiz"]),
 });
 
 export const updateCourseLessonRequestSchema = z.object({
   title: z.string().min(1).max(255).optional(),
-  description: z.string().max(1500).nullable().optional(),
+  description: z.string().max(10000).nullable().optional(),
   contentType: z.enum(["video", "document", "quiz"]).optional(),
   contentMediaId: z.uuid().nullable().optional(),
   isPreview: z.boolean().optional(),
@@ -381,6 +405,8 @@ export type UpdateCourseLessonRequest = z.infer<
 export type ReorderLessonsRequest = z.infer<typeof reorderLessonsRequestSchema>;
 export type LessonResource = z.infer<typeof lessonResourceSchema>;
 
+export const courseStatusSchema = z.enum(["draft", "published", "archived"]);
+
 export const courseSchema = z.object({
   id: z.uuid(),
   slug: z.string(),
@@ -391,7 +417,7 @@ export const courseSchema = z.object({
     .enum(["beginner", "intermediate", "advanced"])
     .nullable()
     .optional(),
-  status: z.enum(["draft", "published", "archived"]),
+  status: courseStatusSchema,
   creatorId: z.uuid().nullable(),
   categoryId: z.uuid().nullable().optional(),
   thumbnailMediaId: z.uuid().nullable().optional(),
@@ -482,7 +508,7 @@ export const deletedCourseSchema = z.object({
   id: z.uuid(),
   slug: z.string(),
   title: z.string(),
-  status: z.enum(["draft", "published", "archived"]),
+  status: courseStatusSchema,
   creatorId: z.uuid().nullable(),
   deletedAt: z.string(),
   purgeAt: z.string(),

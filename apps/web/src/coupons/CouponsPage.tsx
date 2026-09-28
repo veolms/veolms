@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import type { Coupon } from "@veolms/contracts";
-import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
 import { Button } from "../components/Button";
+import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { useCurrentUser } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
 import { getUserRoles, isStaffRole } from "../shell/workspaceRole";
@@ -97,9 +97,11 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
 
   if (!isAuthReady) {
     return (
-      <main data-coupon-surface="" className="mx-auto grid w-full max-w-[1320px] place-items-center py-24">
-        <CircleNotch size={28} className="mb-3 animate-spin text-(--accent)" />
-        <p className="text-sm text-(--muted)">Loading promotions workspace...</p>
+      <main data-coupon-surface="" className="mx-auto w-full max-w-[1320px]">
+        <CenteredLoadingSpinner
+          label="Loading promotions workspace"
+          className="min-h-52 py-24"
+        />
       </main>
     );
   }

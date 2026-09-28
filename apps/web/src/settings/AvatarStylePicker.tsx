@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowsClockwiseIcon as ArrowsClockwise } from "@phosphor-icons/react/ArrowsClockwise";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import {
   AVATAR_STYLES,
@@ -68,13 +69,26 @@ export function AvatarStylePicker({
       );
       if (exact) return exact;
 
-      const cleanCurrent = currentAvatarUrl.split("?")[0];
+      const cleanCurrent = currentAvatarUrl.split("?")[0] ?? currentAvatarUrl;
       const cleanMatch = avatars.find(
         (a) =>
-          a.avatarDataUrl.split("?")[0] === cleanCurrent ||
-          a.avatarSrcSet?.some((v) => v.url?.split("?")[0] === cleanCurrent),
+          (a.avatarDataUrl.split("?")[0] ?? a.avatarDataUrl) === cleanCurrent ||
+          a.avatarSrcSet?.some(
+            (v) => (v.url.split("?")[0] ?? v.url) === cleanCurrent,
+          ),
       );
       if (cleanMatch) return cleanMatch;
+
+      const currentPrefixMatch = cleanCurrent.match(
+        /\/public\/avatars\/[A-Za-z0-9_-]{1,200}/,
+      );
+      if (currentPrefixMatch) {
+        const prefix = currentPrefixMatch[0];
+        const prefixMatch = avatars.find((a) =>
+          a.avatarDataUrl.includes(prefix),
+        );
+        if (prefixMatch) return prefixMatch;
+      }
     }
 
     return null;
@@ -97,6 +111,7 @@ export function AvatarStylePicker({
   );
   const [shuffleCount, setShuffleCount] = useState(0);
   const [previewFailed, setPreviewFailed] = useState(false);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [failedThumbnails, setFailedThumbnails] = useState<
     Record<string, boolean>
   >({});
@@ -118,8 +133,14 @@ export function AvatarStylePicker({
     if (activeSavedAvatar) {
       return activeSavedAvatar.id;
     }
+    if (googleAvatar) {
+      return googleAvatar.id;
+    }
+    if (savedAvatars[0]) {
+      return savedAvatars[0].id;
+    }
     return null;
-  }, [userSelectedSavedId, avatars, activeSavedAvatar]);
+  }, [userSelectedSavedId, avatars, activeSavedAvatar, googleAvatar, savedAvatars]);
 
   const selectedSavedAvatar = useMemo(() => {
     if (effectiveSelectedSavedId) {
@@ -155,6 +176,7 @@ export function AvatarStylePicker({
     // Only initialize when dialog transitions from closed to open
     if (open && !prevOpenRef.current) {
       setPreviewFailed(false);
+      setIsPreviewLoading(false);
       setFailedThumbnails({});
       setShuffleCount(0);
       setUserSelectedSavedId(null);
@@ -177,6 +199,20 @@ export function AvatarStylePicker({
     setPreviewFailed(false);
   }, [selectedStyle, shuffleCount, activeTab, effectiveSelectedSavedId]);
 
+  useEffect(() => {
+    if (!isPreviewLoading) return;
+    const timeoutId = setTimeout(() => {
+      setIsPreviewLoading(false);
+    }, 8000);
+    return () => clearTimeout(timeoutId);
+  }, [isPreviewLoading]);
+
+  const handleShuffle = () => {
+    if (isSaving || isPreviewLoading) return;
+    setIsPreviewLoading(true);
+    setShuffleCount((count) => count + 1);
+  };
+
   if (!open) return null;
 
   const closeDialog = () => {
@@ -194,7 +230,10 @@ export function AvatarStylePicker({
       }
     } else {
       if (previewFailed) return;
-      await onSelectGenerated(generatedPreviewUrl);
+      // The preview is already visible. Let the parent persist it in the
+      // background so the user's selection is acknowledged immediately.
+      void onSelectGenerated(generatedPreviewUrl);
+      closeDialog();
     }
   };
 
@@ -238,15 +277,26 @@ export function AvatarStylePicker({
           <div className="settings-profile__avatar-preview-circle">
             {activeTab === "saved" ? (
               previewSrc ? (
-                <ResponsiveAvatar
-                  src={previewSrc}
-                  srcSet={previewSrcSet}
-                  alt="Avatar preview"
-                  width={152}
-                  height={152}
-                  sizes="(min-width: 680px) 152px, 88px"
-                  className="settings-profile__avatar-preview-img"
-                />
+                previewFailed ? (
+                  <span
+                    className="flex h-full w-full items-center justify-center rounded-full border-2 border-(--accent) bg-(--canvas) text-(--text-secondary)"
+                    role="img"
+                    aria-label="Saved photo unavailable"
+                  >
+                    <UserCircle size={72} weight="duotone" />
+                  </span>
+                ) : (
+                  <ResponsiveAvatar
+                    src={previewSrc}
+                    srcSet={previewSrcSet}
+                    alt="Avatar preview"
+                    width={152}
+                    height={152}
+                    sizes="(min-width: 680px) 152px, 88px"
+                    className="settings-profile__avatar-preview-img"
+                    onError={() => setPreviewFailed(true)}
+                  />
+                )
               ) : (
                 <span
                   className="settings-profile__avatar-fallback"
@@ -265,15 +315,39 @@ export function AvatarStylePicker({
                 Preview unavailable
               </span>
             ) : (
-              <img
-                src={generatedPreviewUrl}
-                alt="Generated avatar preview"
-                width={152}
-                height={152}
-                className="settings-profile__avatar-preview-img"
-                onError={() => setPreviewFailed(true)}
-                onLoad={() => setPreviewFailed(false)}
-              />
+              <>
+                <img
+                  key={generatedPreviewUrl}
+                  src={generatedPreviewUrl}
+                  alt="Generated avatar preview"
+                  width={152}
+                  height={152}
+                  className={`settings-profile__avatar-preview-img${
+                    isPreviewLoading
+                      ? " opacity-40 transition-opacity duration-200"
+                      : ""
+                  }`}
+                  onError={() => {
+                    setPreviewFailed(true);
+                    setIsPreviewLoading(false);
+                  }}
+                  onLoad={() => {
+                    setPreviewFailed(false);
+                    setIsPreviewLoading(false);
+                  }}
+                />
+                {isPreviewLoading && (
+                  <div
+                    className="absolute inset-0 flex items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--canvas)_60%,transparent)] backdrop-blur-[2px] z-10"
+                    aria-label="Generating avatar"
+                  >
+                    <CircleNotch
+                      size={32}
+                      className="animate-spin text-(--accent)"
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
           <span className="settings-profile__avatar-preview-caption">
@@ -283,12 +357,32 @@ export function AvatarStylePicker({
             <button
               type="button"
               className="settings-profile__avatar-style-shuffle"
-              disabled={isSaving}
-              onClick={() => setShuffleCount((count) => count + 1)}
-              title="Shuffle avatar look"
+              disabled={isSaving || isPreviewLoading}
+              onClick={handleShuffle}
+              title={
+                isPreviewLoading ? "Generating avatar..." : "Shuffle avatar look"
+              }
+              aria-busy={isPreviewLoading}
             >
-              <ArrowsClockwise size={13} weight="bold" aria-hidden="true" />
-              Shuffle look
+              {isPreviewLoading ? (
+                <>
+                  <CircleNotch
+                    size={13}
+                    className="animate-spin text-(--accent)"
+                    aria-hidden="true"
+                  />
+                  Shuffling...
+                </>
+              ) : (
+                <>
+                  <ArrowsClockwise
+                    size={13}
+                    weight="bold"
+                    aria-hidden="true"
+                  />
+                  Shuffle look
+                </>
+              )}
             </button>
           )}
         </div>
@@ -309,7 +403,10 @@ export function AvatarStylePicker({
               className={`settings-profile__avatar-dialog-tab${
                 activeTab === "saved" ? " is-active" : ""
               }`}
-              onClick={() => setActiveTab("saved")}
+              onClick={() => {
+                setActiveTab("saved");
+                setIsPreviewLoading(false);
+              }}
             >
               Sync &amp; saved
             </button>
@@ -368,15 +465,32 @@ export function AvatarStylePicker({
                         </span>
                       )}
                       <div className="settings-profile__avatar-saved-thumb-wrap">
-                        <ResponsiveAvatar
-                          src={googleAvatar.avatarDataUrl}
-                          srcSet={googleAvatar.avatarSrcSet}
-                          alt="Google Account"
-                          width={60}
-                          height={60}
-                          sizes="60px"
-                          className="settings-profile__avatar-saved-thumb"
-                        />
+                        {failedThumbnails[`saved-${googleAvatar.id}`] ? (
+                          <span
+                            className="flex h-15 w-15 items-center justify-center rounded-lg bg-(--canvas) text-(--text-secondary)"
+                            role="img"
+                            aria-label="Google photo unavailable"
+                          >
+                            <UserCircle size={36} weight="duotone" />
+                          </span>
+                        ) : (
+                          <ResponsiveAvatar
+                            src={googleAvatar.avatarDataUrl}
+                            srcSet={googleAvatar.avatarSrcSet}
+                            alt="Google Account"
+                            width={60}
+                            height={60}
+                            sizes="60px"
+                            loading="eager"
+                            className="settings-profile__avatar-saved-thumb"
+                            onError={() =>
+                              setFailedThumbnails((previous) => ({
+                                ...previous,
+                                [`saved-${googleAvatar.id}`]: true,
+                              }))
+                            }
+                          />
+                        )}
                         <span
                           className="settings-profile__avatar-google-badge"
                           aria-hidden="true"
@@ -413,15 +527,32 @@ export function AvatarStylePicker({
                           </span>
                         )}
                         <div className="settings-profile__avatar-saved-thumb-wrap">
-                          <ResponsiveAvatar
-                            src={saved.avatarDataUrl}
-                            srcSet={saved.avatarSrcSet}
-                            alt={`Saved photo ${index + 1}`}
-                            width={60}
-                            height={60}
-                            sizes="60px"
-                            className="settings-profile__avatar-saved-thumb"
-                          />
+                          {failedThumbnails[`saved-${saved.id}`] ? (
+                            <span
+                              className="flex h-15 w-15 items-center justify-center rounded-lg bg-(--canvas) text-(--text-secondary)"
+                              role="img"
+                              aria-label={`Saved photo ${index + 1} unavailable`}
+                            >
+                              <UserCircle size={36} weight="duotone" />
+                            </span>
+                          ) : (
+                            <ResponsiveAvatar
+                              src={saved.avatarDataUrl}
+                              srcSet={saved.avatarSrcSet}
+                              alt={`Saved photo ${index + 1}`}
+                              width={60}
+                              height={60}
+                              sizes="60px"
+                              loading="eager"
+                              className="settings-profile__avatar-saved-thumb"
+                              onError={() =>
+                                setFailedThumbnails((previous) => ({
+                                  ...previous,
+                                  [`saved-${saved.id}`]: true,
+                                }))
+                              }
+                            />
+                          )}
                         </div>
                       </button>
                     );
@@ -449,7 +580,12 @@ export function AvatarStylePicker({
                     className={`settings-profile__avatar-style-option${
                       selectedStyle === option ? " is-selected" : ""
                     }`}
-                    onClick={() => setSelectedStyle(option)}
+                    onClick={() => {
+                      if (selectedStyle !== option) {
+                        setSelectedStyle(option);
+                        setIsPreviewLoading(true);
+                      }
+                    }}
                   >
                     {failedThumbnails[option] ? (
                       <span
@@ -499,6 +635,8 @@ export function AvatarStylePicker({
           onClick={confirm}
           disabled={
             isSaving ||
+            isPreviewLoading ||
+            (activeTab === "saved" && previewFailed) ||
             (activeTab === "generate" && previewFailed) ||
             (activeTab === "saved" && !selectedSavedAvatar)
           }

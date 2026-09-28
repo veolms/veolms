@@ -33,6 +33,10 @@ import type {
 } from "@veolms/contracts";
 import type { CourseVideo } from "../../learning/courseContent";
 import {
+  mediaService,
+  useMediaImageVariantManifest,
+} from "../../services/media";
+import {
   resolveCourseHlsSrc,
   resolveCourseVideoThumbnailSrc,
 } from "../../learning/courseContent";
@@ -101,6 +105,35 @@ export function LessonMediaWorkspace({
   const [thumbnailPreviewFile, setThumbnailPreviewFile] = useState<File | null>(
     null,
   );
+  const imageVariantManifestQuery = useMediaImageVariantManifest(
+    mediaInfo?.id,
+    contentType === "image" && !previewFile,
+  );
+  const imageVariantManifest = imageVariantManifestQuery.data;
+  const mediaInfoId = mediaInfo?.id;
+  const imageVariantSrcSet =
+    !previewFile && mediaInfoId
+      ? imageVariantManifest?.variants
+          .map(
+            ({ width }) =>
+              `${mediaService.getImageVariantUrl(mediaInfoId, width)} ${width}w`,
+          )
+          .join(", ")
+      : undefined;
+  const imagePreviewSrc = previewFile
+    ? previewUrl ?? undefined
+    : mediaInfoId
+      ? imageVariantManifest
+        ? imageVariantManifest.variants.length
+          ? mediaService.getImageVariantUrl(
+              mediaInfoId,
+              imageVariantManifest.variants.at(-1)!.width,
+            )
+          : mediaService.getMediaAssetUrl(mediaInfoId)
+        : imageVariantManifestQuery.isError
+          ? mediaInfo?.url || mediaService.getMediaAssetUrl(mediaInfoId)
+          : undefined
+      : mediaInfo?.url || "/api/placeholder/1280/720";
 
   useEffect(() => {
     if (!previewFile) {
@@ -355,11 +388,18 @@ export function LessonMediaWorkspace({
           />
         ) : contentType === "image" ? (
           <div className="relative aspect-video w-full overflow-hidden rounded-[16px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-black shadow-(--card-shadow)">
-            <img
-              src={mediaInfo?.url || "/api/placeholder/1280/720"}
-              alt="Lesson Content Preview"
-              className="h-full w-full object-contain"
-            />
+            {imagePreviewSrc ? (
+              <img
+                src={imagePreviewSrc}
+                srcSet={imageVariantSrcSet}
+                sizes="(max-width: 820px) calc(100vw - 2rem), 640px"
+                alt="Lesson Content Preview"
+                width={imageVariantManifest?.width ?? 1280}
+                height={imageVariantManifest?.height ?? 720}
+                decoding="async"
+                className="h-full w-full object-contain"
+              />
+            ) : null}
           </div>
         ) : (
           <div className="relative flex aspect-video w-full flex-col items-center justify-center rounded-[16px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[radial-gradient(ellipse_at_top,_color-mix(in_srgb,var(--accent)_14%,var(--surface))_0%,_var(--canvas)_100%)] p-6 text-center shadow-(--card-shadow)">

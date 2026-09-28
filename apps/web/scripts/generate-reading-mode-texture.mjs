@@ -1,14 +1,11 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import { deflateSync } from "node:zlib";
 
 const BASE_SIZE = 256;
 const SEED = 0x5e0a17;
-const OUTPUT_DIRECTORY = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "../public/assets",
-);
+const OUTPUT_DIRECTORY = resolve(tmpdir(), "veolms-reading-mode-texture");
 const VARIANTS = [
   { scale: 1, suffix: "" },
   { scale: 2, suffix: "@2x" },

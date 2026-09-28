@@ -1,0 +1,5 @@
+/* Keep the player package, player chrome, and learning workspace cascade in
+   their established order; these styles load with the learning feature. */
+@import "@veolms/video-player/styles.css";
+@import "../styles/features/player.css";
+@import "../styles/features/learning.css";

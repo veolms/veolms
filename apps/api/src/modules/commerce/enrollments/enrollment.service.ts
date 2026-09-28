@@ -1,27 +1,74 @@
-import type { EnrolledCourse } from "@veolms/contracts";
+import type {
+  AcademyEnrollmentListItem,
+  EnrolledCourse,
+} from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 import { sql } from "kysely";
 import { toEnrolledCourseContract } from "./enrollment.mapper.ts";
 import * as enrollmentRepo from "./enrollment.repository.ts";
+import {
+  createStudentsService,
+  type StudentsService,
+} from "../../students/index.ts";
 
 export interface EnrollmentService {
   listEnrolledCourses(userId: string): Promise<EnrolledCourse[]>;
+  listAcademyEnrollments(limit: number): Promise<AcademyEnrollmentListItem[]>;
   getEnrollmentStats(
     filters: enrollmentRepo.EnrollmentAnalyticsFilters,
   ): Promise<{ totalEnrollments: number; activeEnrollments: number }>;
+  getEnrollmentActivityBuckets(
+    filters: enrollmentRepo.EnrollmentAnalyticsFilters,
+  ): Promise<Array<{ start: Date; value: number }>>;
   listTopCoursesByEnrollment(options: {
     limit: number;
     from?: Date;
     to?: Date;
     courseId?: string | string[];
   }): Promise<Array<{ courseId: string; enrollmentCount: number }>>;
+  listEnrollmentCountsByCourse(options?: {
+    courseId?: string | string[];
+  }): Promise<Array<{ courseId: string; enrollmentCount: number }>>;
 }
 
 export function createEnrollmentService({
   database,
+  studentsService = createStudentsService({ database }),
 }: {
   database: Executor;
+  studentsService?: Pick<StudentsService, "resolveStudentAvatars">;
 }): EnrollmentService {
+  async function listAcademyEnrollments(
+    limit: number,
+  ): Promise<AcademyEnrollmentListItem[]> {
+    const rows = await enrollmentRepo.listAcademyEnrollments(database, limit);
+    const avatarUrls = await studentsService.resolveStudentAvatars(
+      rows.map((row) => ({
+        id: row.student_id,
+        avatarDataUrl: row.student_avatar_data_url,
+      })),
+    );
+
+    return rows.map((row) => ({
+      enrollmentId: row.enrollment_id,
+      student: {
+        id: row.student_id,
+        username: row.student_username,
+        displayName: row.student_display_name,
+        avatarUrl: avatarUrls.get(row.student_id) ?? null,
+      },
+      course: {
+        id: row.course_id,
+        title: row.course_title,
+      },
+      averageProgressPercent:
+        row.average_progress_percent === null
+          ? null
+          : Number(row.average_progress_percent),
+      enrolledAt: row.enrolled_at,
+    }));
+  }
+
   async function listEnrolledCourses(
     userId: string,
   ): Promise<EnrolledCourse[]> {
@@ -37,6 +84,8 @@ export function createEnrollmentService({
         "c.slug as course_slug",
         "c.title as course_title",
         "c.short_description as course_description",
+        "c.thumbnail_url as course_thumbnail_url",
+        "c.thumbnail_media_id as course_thumbnail_media_id",
         "e.created_at as enrolled_at",
         "e.status as enrollment_status",
         "e.source as enrollment_source",
@@ -134,9 +183,6 @@ export function createEnrollmentService({
       .orderBy("e.created_at", "desc")
       .execute();
 
-    // Thumbnail URL: courses store a thumbnail_media_id FK — we read it
-    // separately and convert to a URL.  For the MVP, we pass null and let
-    // the frontend fall back to its local slug-based thumbnail map.
     return rows.map((row) =>
       toEnrolledCourseContract({
         enrollment_id: row.enrollment_id,
@@ -144,7 +190,8 @@ export function createEnrollmentService({
         course_slug: row.course_slug,
         course_title: row.course_title,
         course_description: row.course_description ?? null,
-        course_thumbnail_url: null,
+        course_thumbnail_url: row.course_thumbnail_url,
+        course_thumbnail_media_id: row.course_thumbnail_media_id,
         total_sections: Number(row.total_sections) || 0,
         total_lessons: Number(row.total_lessons) || 0,
         total_duration_seconds: Number(row.total_duration_seconds) || 0,
@@ -164,6 +211,12 @@ export function createEnrollmentService({
     return await enrollmentRepo.getEnrollmentStats(database, filters);
   }
 
+  async function getEnrollmentActivityBuckets(
+    filters: enrollmentRepo.EnrollmentAnalyticsFilters,
+  ) {
+    return await enrollmentRepo.getEnrollmentActivityBuckets(database, filters);
+  }
+
   async function listTopCoursesByEnrollment(options: {
     limit: number;
     from?: Date;
@@ -173,9 +226,18 @@ export function createEnrollmentService({
     return await enrollmentRepo.listTopCoursesByEnrollment(database, options);
   }
 
+  async function listEnrollmentCountsByCourse(options: {
+    courseId?: string | string[];
+  } = {}) {
+    return await enrollmentRepo.listEnrollmentCountsByCourse(database, options);
+  }
+
   return {
+    listAcademyEnrollments,
     listEnrolledCourses,
     getEnrollmentStats,
+    getEnrollmentActivityBuckets,
     listTopCoursesByEnrollment,
+    listEnrollmentCountsByCourse,
   };
 }

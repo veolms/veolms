@@ -1042,12 +1042,14 @@ export function createAuthService({
           );
         }
 
-        const avatarDataUrl = avatarCdnUrl(
-          avatarStorage,
-          userId,
-          160,
-          input.uploadId,
-        );
+        const avatarDataUrl =
+          avatarStorage.getPublicObjectUrl(storageKey) ??
+          avatarCdnUrl(
+            avatarStorage,
+            userId,
+            160,
+            input.uploadId,
+          );
         if (!avatarDataUrl) {
           throw new AppError(
             503,
@@ -1166,15 +1168,23 @@ export function createAuthService({
       ...uploadedAvatars,
     ];
 
-    return effectiveAvatars.map((avatar) => ({
-      id: avatar.id,
-      avatarDataUrl: avatar.avatar_data_url,
-      avatarSrcSet: avatarSrcSetFromUrl(avatar.avatar_data_url),
-      source: avatar.source,
-      createdAt: avatar.created_at.toISOString(),
-      isCurrent: avatar.avatar_data_url === user.avatar_data_url,
-      canDelete: avatar.source === "upload",
-    }));
+    return effectiveAvatars.map((avatar) => {
+      let avatarDataUrl = avatar.avatar_data_url;
+      if (avatarDataUrl.endsWith("--google/160.webp")) {
+        avatarDataUrl = avatarDataUrl.replace("/160.webp", "/original.jpg");
+      }
+      return {
+        id: avatar.id,
+        avatarDataUrl,
+        avatarSrcSet: avatarSrcSetFromUrl(avatarDataUrl),
+        source: avatar.source,
+        createdAt: avatar.created_at.toISOString(),
+        isCurrent:
+          avatar.avatar_data_url === user.avatar_data_url ||
+          avatarDataUrl === user.avatar_data_url,
+        canDelete: avatar.source === "upload",
+      };
+    });
   }
 
   async function selectAvatar(userId: string, avatarId: string) {

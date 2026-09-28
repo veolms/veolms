@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { flushSync } from "react-dom";
 import type {
   CSSProperties,
@@ -19,9 +20,14 @@ import type {
   ReactNode,
   Ref,
 } from "react";
+import type {
+  CourseListResponse,
+  CourseOverviewResponse,
+} from "@veolms/contracts";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { CenteredLoadingSpinner } from "./components/LoadingSpinner";
 import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
 import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
 import { DotsThreeCircleIcon as DotsThreeCircle } from "@phosphor-icons/react/DotsThreeCircle";
@@ -33,29 +39,13 @@ import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { ToastNotification, type ToastMessage } from "./ToastNotification";
 import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
 import logoDarkSvg from "./assets/procodrr-logo-dark.svg?raw";
-import { StudentHome } from "./StudentHome";
 import type { LearningCourse } from "./StudentPages";
-import { SettingsPage } from "./SettingsPage";
-import { CourseCatalogue } from "./courses/CourseCatalogue";
-import { PlaceholderPage } from "./courses/PlaceholderPage";
 import {
   getLearningPlayerSwipeSplitX,
   isFullLearningPlayerSwipeTarget,
   subscribeToPointerGestureClaims,
 } from "./gestures/pointerGestureOwnership";
 import { useSecondPressHold } from "./gestures/useSecondPressHold";
-import { WorkspacePage } from "./workspace/WorkspacePages";
-import { ReviewsPage } from "./reviews/ReviewsPage";
-import { CouponsPage } from "./coupons/CouponsPage";
-import { OrdersPage } from "./orders/OrdersPage";
-import { OrderHistoryPage } from "./order-history/OrderHistoryPage";
-import { NotificationsPage } from "./notifications/NotificationsPage";
-import { QuizAnalyticsPage } from "./quizzes/QuizAnalyticsPage";
-import { QuizBuilderPage } from "./quizzes/QuizBuilderPage";
-import { QuizDirectAttemptPage } from "./quizzes/QuizDirectAttemptPage";
-import { StudentsPage, StudentDetailsPage } from "./students";
-import { CouponBuilderPage } from "./coupons/CouponBuilderPage";
-import { CouponsAccessDenied } from "./coupons/CouponsAccessDenied";
 import { getVisibleCourses } from "./courses/catalogue";
 import type {
   Course,
@@ -70,14 +60,22 @@ import { FloatingScrollbar } from "./shell/FloatingScrollbar";
 import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
 import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
+import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
 import { useCurrentUser, useSignOut } from "./services/auth";
 import { useSidenav } from "./services/navigation";
-import { useAuthStore } from "./store/auth.store";
+import {
+  authStore,
+  useAuthIdentityHint,
+  useAuthStore,
+} from "./store/auth.store";
+
 import {
   useCourses,
+  useInfiniteCourses,
   useDeleteCourse,
   useDeletedCourses,
   useMyCourses,
+  prefetchCourseEditor,
   useRestoreCourse,
 } from "./services/courses";
 import { useEnrolledCourses } from "./services/enrollments";
@@ -111,6 +109,17 @@ import {
   getWorkspaceRoleStorageKey,
   getRoleDisplayName,
 } from "./shell/workspaceRole";
+
+const FALLBACK_DASHBOARD_NAVIGATION_ITEM: NavigationItemWithMetadata = [
+  "Dashboard",
+  SquaresFour,
+  {
+    id: "dashboard-capability",
+    routeLink: "/dashboard",
+    parentId: null,
+    source: "default",
+  },
+];
 import {
   SIDEBAR_MIN_WIDTH,
   applySidebarShellToDocument,
@@ -136,6 +145,10 @@ import {
   applyWithThemeViewTransition,
   themeRevealOriginFromClick,
 } from "./shell/themeViewTransition";
+import {
+  ensureAcademyPaletteCatalogStylesheet,
+  ensureAcademyPaletteStylesheets,
+} from "./shell/academyPaletteStyles";
 import type { ThemeRevealOrigin } from "./shell/themeViewTransition";
 import {
   academyThemes,
@@ -163,6 +176,7 @@ import {
   readPageTabColors,
 } from "./settings/settingsPreferences";
 import type { NavigateTo } from "./routing/navigation";
+import { useAcademyRouteGuardState } from "./routing/RouteGuards";
 import type { SettingsPageProps } from "./SettingsPage";
 import { isEditingShortcutTarget } from "./keyboardShortcuts";
 import { useGlobalSearchShortcut } from "./searchShortcut";
@@ -193,6 +207,14 @@ import {
   type DrawerDismissThen,
 } from "@/components/ui/drawer";
 import type { ProfilePreferences } from "./settings/profileTypes";
+const OrdersPageRoute = lazy(() =>
+  import("./orders/OrdersPage").then((module) => ({ default: module.OrdersPage })),
+);
+const OrderHistoryPageRoute = lazy(() =>
+  import("./order-history/OrderHistoryPage").then((module) => ({
+    default: module.OrderHistoryPage,
+  })),
+);
 const CreatorDashboard = lazy(() =>
   import("./CreatorDashboard").then((module) => ({
     default: module.CreatorDashboard,
@@ -214,11 +236,109 @@ const AnalyticsDashboardPage = lazy(() =>
   })),
 );
 
+const loadCourseCreatePage = () => import("./courses/CourseCreatePage");
+
 const CourseCreatePage = lazy(() =>
-  import("./courses/CourseCreatePage").then((module) => ({
+  loadCourseCreatePage().then((module) => ({
     default: module.CourseCreatePage,
   })),
 );
+
+function CourseEditorRouteFallback() {
+  return (
+    <CenteredLoadingSpinner
+      label="Loading course editor"
+      className="min-h-[calc(100dvh-10rem)] w-full"
+    />
+  );
+}
+
+const SettingsPage = lazy(() =>
+  import("./SettingsPage").then((module) => ({
+    default: module.SettingsPage,
+  })),
+);
+
+const StudentHome = lazy(() =>
+  import("./StudentHome").then((module) => ({ default: module.StudentHome })),
+);
+const CourseCatalogue = lazy(() =>
+  import("./courses/CourseCatalogue").then((module) => ({
+    default: module.CourseCatalogue,
+  })),
+);
+const PlaceholderPage = lazy(() =>
+  import("./courses/PlaceholderPage").then((module) => ({
+    default: module.PlaceholderPage,
+  })),
+);
+const WorkspacePage = lazy(() =>
+  import("./workspace/WorkspacePages").then((module) => ({
+    default: module.WorkspacePage,
+  })),
+);
+const ReviewsPage = lazy(() =>
+  import("./reviews/ReviewsPage").then((module) => ({
+    default: module.ReviewsPage,
+  })),
+);
+const CouponsPage = lazy(() =>
+  import("./coupons/CouponsPage").then((module) => ({
+    default: module.CouponsPage,
+  })),
+);
+const NotificationsPage = lazy(() =>
+  import("./notifications/NotificationsPage").then((module) => ({
+    default: module.NotificationsPage,
+  })),
+);
+const QuizAnalyticsPage = lazy(() =>
+  import("./quizzes/QuizAnalyticsPage").then((module) => ({
+    default: module.QuizAnalyticsPage,
+  })),
+);
+const QuizBuilderPage = lazy(() =>
+  import("./quizzes/QuizBuilderPage").then((module) => ({
+    default: module.QuizBuilderPage,
+  })),
+);
+const QuizDirectAttemptPage = lazy(() =>
+  import("./quizzes/QuizDirectAttemptPage").then((module) => ({
+    default: module.QuizDirectAttemptPage,
+  })),
+);
+const StudentsPage = lazy(() =>
+  import("./students/StudentsPage").then((module) => ({
+    default: module.StudentsPage,
+  })),
+);
+const StudentDetailsPage = lazy(() =>
+  import("./students/StudentDetailsPage").then((module) => ({
+    default: module.StudentDetailsPage,
+  })),
+);
+const CouponBuilderPage = lazy(() =>
+  import("./coupons/CouponBuilderPage").then((module) => ({
+    default: module.CouponBuilderPage,
+  })),
+);
+const CouponsAccessDenied = lazy(() =>
+  import("./coupons/CouponsAccessDenied").then((module) => ({
+    default: module.CouponsAccessDenied,
+  })),
+);
+
+function AcademyPageFallback() {
+  return (
+    <div
+      className="grid min-h-52 place-items-center"
+      role="status"
+      aria-label="Loading page"
+    >
+      <CircleNotch size={26} className="animate-spin text-(--accent)" />
+    </div>
+  );
+}
 
 type ThemePreference = "light" | "dark" | "device";
 type AppearanceOption = ThemePreference | "theme";
@@ -226,12 +346,16 @@ type AppearanceSwipeSource = AppearanceOption;
 type NavigationDropPosition = "before" | "after";
 
 interface CoursesPageProps {
+  initialPublishedCoursePage?: CourseListResponse;
+  initialPublishedCoursePageNeedsRefresh?: boolean;
+  initialCourseOverview?: CourseOverviewResponse;
   onOpenCourse: (
     course: Course | LearningCourse,
     options?: CourseOpenOptions,
   ) => void;
   onNavigatePage: NavigateTo;
   onExitSettings?: () => void;
+  isDashboardRoute?: boolean;
   page?: string;
   section?: string | null;
   settingsTab?: string;
@@ -514,23 +638,38 @@ function LoginProfileButton({
   className,
   arrowSize,
   onLogin,
+  displayName,
 }: {
   className: string;
   arrowSize: number;
   onLogin: () => void;
+  displayName?: string;
 }) {
   return (
     <button
       type="button"
       className={`${className} courses-profile__login-button`}
-      aria-label="Login. Access Your Learning Journey"
+      aria-label={
+        displayName
+          ? `Account for ${displayName}. Open account access`
+          : "Login. Access Your Learning Journey"
+      }
+      data-auth-identity-button=""
       onClick={onLogin}
     >
       <ShellProfileAvatar avatarUrl={null} />
       <span className="courses-profile__login-copy">
-        <strong className="courses-profile__login-title">Login</strong>
-        <small className="courses-profile__login-subtitle">
-          Access Your Learning Journey
+        <strong
+          className="courses-profile__login-title"
+          data-auth-identity-title=""
+        >
+          {displayName || "Login"}
+        </strong>
+        <small
+          className="courses-profile__login-subtitle"
+          data-auth-identity-subtitle=""
+        >
+          {displayName ? "Account" : "Access Your Learning Journey"}
         </small>
       </span>
       <i
@@ -544,9 +683,13 @@ function LoginProfileButton({
 }
 
 export function CoursesPage({
+  initialPublishedCoursePage,
+  initialPublishedCoursePageNeedsRefresh = false,
+  initialCourseOverview,
   onOpenCourse,
   onNavigatePage,
   onExitSettings,
+  isDashboardRoute = false,
   page = "courses",
   section: requestedSection = null,
   settingsTab = "profile",
@@ -561,15 +704,21 @@ export function CoursesPage({
   learningMotionStageRef,
   renderMain = null,
 }: CoursesPageProps) {
-  const [role, setRole] = useState<CourseRole>(() => {
-    if (typeof window === "undefined") return "student";
-    try {
-      const stored = localStorage.getItem("veolms-role");
-      return stored === "creator" ? "creator" : "student";
-    } catch {
-      return "student";
-    }
-  });
+  const queryClient = useQueryClient();
+  const warmCourseEditorChunk = useCallback((_course: Course) => {
+    void loadCourseCreatePage().catch(() => undefined);
+  }, []);
+  const prepareCourseEditorEdit = useCallback(
+    (course: Course) => {
+      warmCourseEditorChunk(course);
+      void prefetchCourseEditor(queryClient, course.id);
+    },
+    [queryClient, warmCourseEditorChunk],
+  );
+  // Keep the first client render identical to the prerender. Restore the
+  // account-specific workspace role only after `/auth/me` identifies the
+  // account below.
+  const [role, setRole] = useState<CourseRole>("student");
   const [hydratedWorkspaceRoleKey, setHydratedWorkspaceRoleKey] = useState<
     string | null
   >(null);
@@ -658,7 +807,7 @@ export function CoursesPage({
   });
   const readingModeEnabled = readingModePreferences.enabled;
   const [activeSection, setActiveSection] = useState(() => {
-    if (page === "home") return role === "creator" ? "Dashboard" : "Home";
+    if (page === "home") return isDashboardRoute ? "Dashboard" : "Home";
     if (page === "courses") return "Courses";
     if (requestedSection) return requestedSection;
     // Keep the initializer deterministic to avoid a server/client hydration
@@ -725,26 +874,57 @@ export function CoursesPage({
     isError: authUserError,
     isFetched: authUserFetched,
   } = useCurrentUser();
+  const authIdentityHint = useAuthIdentityHint();
+  const workspaceRoleHint = (() => {
+    if (typeof window === "undefined" || !authIdentityHint) return null;
+    try {
+      const storedRole = localStorage.getItem(
+        getWorkspaceRoleStorageKey(authIdentityHint.userId),
+      );
+      return storedRole === "creator" || storedRole === "student"
+        ? storedRole
+        : null;
+    } catch {
+      return null;
+    }
+  })();
   const storeUser = useAuthStore((s) => s.user);
   // Once `/auth/me` has completed, its null result must win over any
   // in-memory login snapshot. Before that, the snapshot is useful only for
   // same-page navigation after login; it is never persisted across reloads.
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
   const isAuthenticated = Boolean(activeUser);
+  const {
+    canAccessDashboard,
+    dashboardCapabilitiesResolved,
+    routeContentBlocked,
+  } = useAcademyRouteGuardState();
   const isEditingOrCreatingCourse = page === "course-create";
   const { data: sidenavData } = useSidenav();
   const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
     () => resolveShellNavigation(sidenavData?.menus),
     [sidenavData?.menus],
   );
+  const navigationItemsWithDashboard = useMemo(() => {
+    const authorizedItems = navigationItems.filter(
+      ([label]) => label !== "Dashboard" || canAccessDashboard,
+    );
+    if (
+      !canAccessDashboard ||
+      authorizedItems.some(([label]) => label === "Dashboard")
+    ) {
+      return authorizedItems;
+    }
+    return [...authorizedItems, FALLBACK_DASHBOARD_NAVIGATION_ITEM];
+  }, [canAccessDashboard, navigationItems]);
   const navigationSignature = useMemo(
     () =>
-      navigationItems
+      navigationItemsWithDashboard
         .map(([label, , metadata]) =>
           [metadata?.id ?? label, label, metadata?.routeLink ?? ""].join(":"),
         )
         .join("|"),
-    [navigationItems],
+    [navigationItemsWithDashboard],
   );
   const userRoles = getUserRoles(activeUser);
   const isAdmin = hasAdminRole(userRoles);
@@ -771,22 +951,79 @@ export function CoursesPage({
       if (typeof window !== "undefined") window.location.href = "/";
     }
   }, [signOut]);
+  const isCourseCataloguePage =
+    page === "courses" || learningBackground?.page === "courses";
+  useLayoutEffect(() => {
+    if (!window.__VEO_CREATOR_CATALOGUE_HINT__) return;
+    const grid = document.querySelector<HTMLElement>(
+      "[data-course-catalogue-grid]",
+    );
+    if (!grid) return;
+    grid.style.removeProperty("visibility");
+    window.__VEO_CREATOR_CATALOGUE_HINT__ = false;
+  }, []);
   const shouldLoadCourseSurface =
     (!renderMain || Boolean(learningBackground)) && !isEditingOrCreatingCourse;
-  const shouldQueryCourses = isAuthReady && shouldLoadCourseSurface;
+  const shouldQueryCourses =
+    isCourseCataloguePage &&
+    isAuthReady &&
+    shouldLoadCourseSurface &&
+    (!isAuthenticated || isWorkspaceRoleHydrated);
+  const shouldQueryCreatorCourses =
+    isCourseCataloguePage &&
+    isAuthReady &&
+    shouldLoadCourseSurface &&
+    isAuthenticated &&
+    (effectiveRole === "creator" || workspaceRoleHint === "creator");
 
-  const { data: publishedCoursesData, isPending: isPublishedPending } =
-    useCourses({
-      enabled: shouldQueryCourses && effectiveRole === "student",
-    });
+  const needsCompleteCourseList =
+    activeSection === "Wishlist" ||
+    enrollmentFilter !== "all" ||
+    statusFilter !== "all" ||
+    sort === "progress";
+  const pagedCourseQuery = useInfiniteCourses({
+    enabled:
+      shouldQueryCourses &&
+      effectiveRole === "student" &&
+      !needsCompleteCourseList,
+    search: debouncedSearch,
+    sort: sort === "title" ? "title" : "latest",
+    initialData: initialPublishedCoursePage,
+    initialDataNeedsRefresh: initialPublishedCoursePageNeedsRefresh,
+  });
+  const completeCourseQuery = useCourses({
+    enabled:
+      shouldQueryCourses &&
+      effectiveRole === "student" &&
+      needsCompleteCourseList,
+  });
+  const publishedCourses = useMemo(
+    () =>
+      needsCompleteCourseList
+        ? (completeCourseQuery.data?.courses ?? [])
+        : (pagedCourseQuery.data?.pages.flatMap((page) => page.courses) ?? []),
+    [
+      completeCourseQuery.data?.courses,
+      needsCompleteCourseList,
+      pagedCourseQuery.data?.pages,
+    ],
+  );
+  const isPublishedPending = needsCompleteCourseList
+    ? completeCourseQuery.isPending
+    : pagedCourseQuery.isPending;
   const { data: enrolledCoursesData } = useEnrolledCourses({
-    enabled: shouldLoadCourseSurface && effectiveRole === "student",
+    enabled:
+      isCourseCataloguePage &&
+      shouldLoadCourseSurface &&
+      effectiveRole === "student" &&
+      (isAuthenticated ||
+        (!authUserFetched && authStore.hasSessionHint())),
   });
   const { data: myCoursesData, isPending: isMyCoursesPending } = useMyCourses({
     enabled:
-      shouldQueryCourses &&
-      effectiveRole === "creator" &&
-      enrollmentFilter !== "bin",
+      enrollmentFilter !== "bin" &&
+      ((shouldQueryCourses && effectiveRole === "creator") ||
+        shouldQueryCreatorCourses),
   });
   const { data: deletedCoursesData, isPending: isDeletedPending } =
     useDeletedCourses(undefined, {
@@ -797,8 +1034,20 @@ export function CoursesPage({
         enrollmentFilter === "bin",
     });
 
+  const isRestoringCreatorWorkspace =
+    isCourseCataloguePage &&
+    Boolean(initialPublishedCoursePage) &&
+    workspaceRoleHint === "creator" &&
+    !authUserFetched;
+  const isResolvingCreatorWorkspace =
+    isCourseCataloguePage &&
+    isAuthenticated &&
+    !isWorkspaceRoleHydrated &&
+    (effectiveRole === "creator" || workspaceRoleHint === "creator");
   const isLoadingCourses =
-    !isAuthReady ||
+    (!isAuthReady && !initialPublishedCoursePage) ||
+    isRestoringCreatorWorkspace ||
+    isResolvingCreatorWorkspace ||
     (effectiveRole === "student"
       ? isPublishedPending
       : enrollmentFilter === "bin"
@@ -820,13 +1069,16 @@ export function CoursesPage({
   );
 
   const shellProfileDisplayName =
-    activeUser?.displayName?.trim() || "Your name";
+    activeUser?.displayName?.trim() ||
+    (!authUserFetched ? authIdentityHint?.displayName : undefined) ||
+    "Your name";
   const shellProfileAvatarUrl = activeUser?.avatarDataUrl ?? null;
   const shellProfileAvatarSrcSet = activeUser?.avatarSrcSet ?? [];
   const profileRef = useRef<HTMLDivElement>(null);
   const coursesAppRef = useRef<HTMLDivElement>(null);
   const appliedThemeRef = useRef<"light" | "dark" | null>(null);
   const appliedPaletteRef = useRef<string | null>(null);
+  const paletteStyleRequestRef = useRef(0);
   // Pointer-triggered display-mode commits stage their pointer position
   // here so the next reveal emanates from the interaction that caused it.
   // Keyboard and OS-triggered commits leave it null, and the theme effect
@@ -889,7 +1141,7 @@ export function CoursesPage({
     ? null
     : (requestedSection ??
       (page === "home"
-        ? role === "creator"
+        ? effectiveRole === "creator"
           ? "Dashboard"
           : "Home"
         : page === "courses"
@@ -997,7 +1249,8 @@ export function CoursesPage({
 
   const navigationHydrationKey = [
     activeUser ? `authenticated:${activeUser.id}` : "guest",
-    role,
+    effectiveRole,
+    dashboardCapabilitiesResolved ? "dashboard:resolved" : "dashboard:pending",
     navigationSignature,
   ].join(":");
 
@@ -1008,39 +1261,68 @@ export function CoursesPage({
     );
     setRole(storedRole === "creator" ? "creator" : "student");
     setHydratedWorkspaceRoleKey(activeUser?.id ?? "guest");
-  }, [activeUser?.id, authUserFetched, storedPreferencesReady]);
+  }, [
+    activeUser,
+    authUserFetched,
+    storedPreferencesReady,
+  ]);
 
   useEffect(() => {
     if (!storedPreferencesReady) return;
     if (!activeUser && !authUserFetched) return;
+    if (!dashboardCapabilitiesResolved) return;
     if (hydratedNavigationKey === navigationHydrationKey) return;
 
     setNavigationOrders((current) => ({
       ...current,
-      [role]: isPublicNavigation
-        ? getDefaultNavigationOrder(navigationItems)
-        : getInitialNavigationOrder(role, navigationItems, activeUser?.id),
+      [effectiveRole]: isPublicNavigation
+        ? getDefaultNavigationOrder(navigationItemsWithDashboard)
+        : getInitialNavigationOrder(
+            effectiveRole,
+            navigationItemsWithDashboard,
+            activeUser?.id,
+          ),
     }));
     setNavigationVisibility((current) => ({
       ...current,
-      [role]: isPublicNavigation
-        ? getDefaultNavigationVisibility(navigationItems)
-        : getInitialNavigationVisibility(role, navigationItems, activeUser?.id),
+      [effectiveRole]: isPublicNavigation
+        ? getDefaultNavigationVisibility(navigationItemsWithDashboard)
+        : getInitialNavigationVisibility(
+            effectiveRole,
+            navigationItemsWithDashboard,
+            activeUser?.id,
+          ),
     }));
     setHydratedNavigationKey(navigationHydrationKey);
   }, [
     activeUser,
     authUserFetched,
+    dashboardCapabilitiesResolved,
     hydratedNavigationKey,
     isPublicNavigation,
     navigationHydrationKey,
-    navigationItems,
-    role,
+    navigationItemsWithDashboard,
+    effectiveRole,
     storedPreferencesReady,
   ]);
 
   const navigationPreferencesReady =
+    dashboardCapabilitiesResolved &&
     hydratedNavigationKey === navigationHydrationKey;
+
+  const getSafeInitialNavigationOrder = (
+    items: readonly NavigationItemWithMetadata[],
+  ) =>
+    isPublicNavigation || dashboardCapabilitiesResolved
+      ? getInitialNavigationOrder(effectiveRole, items, activeUser?.id)
+      : getDefaultNavigationOrder(items);
+
+  const getSafeInitialNavigationVisibility = (
+    items: readonly NavigationItemWithMetadata[],
+  ) =>
+    isPublicNavigation || dashboardCapabilitiesResolved
+      ? getInitialNavigationVisibility(effectiveRole, items, activeUser?.id)
+      : getDefaultNavigationVisibility(items);
 
   useEffect(
     () => () => {
@@ -1247,6 +1529,7 @@ export function CoursesPage({
   useEffect(() => {
     if (!storedPreferencesReady) return;
     if (isPublicNavigation) return;
+    if (!dashboardCapabilitiesResolved) return;
     if (hydratedNavigationKey !== navigationHydrationKey) return;
     Object.entries(navigationOrders).forEach(([roleName, order]) => {
       localStorage.setItem(
@@ -1255,6 +1538,7 @@ export function CoursesPage({
       );
     });
   }, [
+    dashboardCapabilitiesResolved,
     hydratedNavigationKey,
     isPublicNavigation,
     navigationHydrationKey,
@@ -1266,6 +1550,7 @@ export function CoursesPage({
   useEffect(() => {
     if (!storedPreferencesReady) return;
     if (isPublicNavigation) return;
+    if (!dashboardCapabilitiesResolved) return;
     if (hydratedNavigationKey !== navigationHydrationKey) return;
     Object.entries(navigationVisibility).forEach(([roleName, visibleItems]) => {
       localStorage.setItem(
@@ -1278,6 +1563,7 @@ export function CoursesPage({
       );
     });
   }, [
+    dashboardCapabilitiesResolved,
     hydratedNavigationKey,
     isPublicNavigation,
     navigationHydrationKey,
@@ -1301,7 +1587,7 @@ export function CoursesPage({
     setEnrollmentFilter("all");
     setStatusFilter("all");
     if (page === "home")
-      setActiveSection(role === "creator" ? "Dashboard" : "Home");
+      setActiveSection(effectiveRole === "creator" ? "Dashboard" : "Home");
     else if (requestedSection) setActiveSection(requestedSection);
     else if (page === "courses") setActiveSection("Courses");
     else setActiveSection("Courses");
@@ -1311,6 +1597,7 @@ export function CoursesPage({
     page,
     requestedSection,
     role,
+    effectiveRole,
     isWorkspaceRoleHydrated,
     storedPreferencesReady,
   ]);
@@ -1541,6 +1828,9 @@ export function CoursesPage({
   }, [compactNavigation, mobileSidebarNavigationActive]);
 
   useEffect(() => {
+    if (paletteMenu || mobilePaletteMenu) {
+      void ensureAcademyPaletteCatalogStylesheet().catch(() => undefined);
+    }
     if (!paletteMenu && !mobilePaletteMenu) setPalettePreviewTheme(null);
   }, [mobilePaletteMenu, paletteMenu]);
 
@@ -1648,36 +1938,31 @@ export function CoursesPage({
   }, [edgeSidebarOpen, onNavigatePage, sidebarMode]);
 
   const roleFilteredNavigationItems = useMemo(() => {
-    return navigationItems.filter(([label]) => {
-      if (role === "student") {
-        return label !== "Students" && label !== "Dashboard";
+    return navigationItemsWithDashboard.filter(([label]) => {
+      if (label === "Dashboard") {
+        return canAccessDashboard;
       }
-      if (role === "creator") {
+      if (effectiveRole === "student") {
+        return label !== "Students";
+      }
+      if (effectiveRole === "creator") {
         return label !== "Home";
       }
       return true;
     });
-  }, [navigationItems, role]);
+  }, [canAccessDashboard, effectiveRole, navigationItemsWithDashboard]);
 
   const navigation = getVisibleOrderedNavigation(
     navigationPreferencesReady && !isPublicNavigation
-      ? navigationOrders[role]
+      ? navigationOrders[effectiveRole]
       : isPublicNavigation
         ? getDefaultNavigationOrder(roleFilteredNavigationItems)
-        : getInitialNavigationOrder(
-            role,
-            roleFilteredNavigationItems,
-            activeUser?.id,
-          ),
+        : getSafeInitialNavigationOrder(roleFilteredNavigationItems),
     navigationPreferencesReady && !isPublicNavigation
-      ? navigationVisibility[role]
+      ? navigationVisibility[effectiveRole]
       : isPublicNavigation
         ? getDefaultNavigationVisibility(roleFilteredNavigationItems)
-        : getInitialNavigationVisibility(
-            role,
-            roleFilteredNavigationItems,
-            activeUser?.id,
-          ),
+        : getSafeInitialNavigationVisibility(roleFilteredNavigationItems),
     roleFilteredNavigationItems,
   ).filter(([label]) => label !== "Settings" || !settingsInSidebarDock);
   const updateNavigationScrollFade = () => {
@@ -1707,7 +1992,7 @@ export function CoursesPage({
       window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", handleResize);
     };
-  }, [compactNavigation, navigation, role, sidebarMode]);
+  }, [compactNavigation, effectiveRole, navigation, sidebarMode]);
 
   const allCourses = useMemo(() => {
     if (effectiveRole !== "creator") {
@@ -1725,44 +2010,66 @@ export function CoursesPage({
         for (const ec of enrolledCoursesData?.courses || []) {
           try {
             const courseKey = encodeURIComponent(ec.courseSlug);
+            const serverProgress =
+              typeof ec.progress === "number" && Number.isFinite(ec.progress)
+                ? Math.max(0, Math.min(100, Math.round(ec.progress)))
+                : null;
+            const total = ec.totalLessons > 0 ? ec.totalLessons : 84;
+            let localEstimate: number | null = null;
+
             const detailedProgStr = localStorage.getItem(
               `veolms-learning-${courseKey}-progress`,
             );
-            const total = ec.totalLessons > 0 ? ec.totalLessons : 84;
             if (detailedProgStr) {
               const progMap = JSON.parse(detailedProgStr) as Record<
                 string,
                 number
               >;
-              const vals = Object.values(progMap);
-              if (vals.length > 0) {
+              const vals = Object.values(progMap).filter(
+                (value) => typeof value === "number" && Number.isFinite(value),
+              );
+              // Sparse session maps (often 1 lesson) must not replace server %.
+              // Only trust local when it covers a meaningful share of the course.
+              if (vals.length > 0 && vals.length >= Math.min(10, total * 0.05)) {
                 const sum = vals.reduce((a, b) => a + b, 0);
-                const calc = Math.min(100, Math.round(sum / total));
-                progressMap.set(ec.courseId, calc);
-                if (ec.courseSlug) progressMap.set(ec.courseSlug, calc);
-                continue;
+                localEstimate = Math.min(100, Math.round(sum / total));
               }
             }
-            const lastLessonStr = localStorage.getItem(
-              `veolms-last-lesson-${courseKey}`,
-            );
-            if (lastLessonStr) {
-              const lessonNum = parseInt(lastLessonStr, 10);
-              if (!isNaN(lessonNum) && lessonNum > 0) {
-                const calc = Math.min(
-                  100,
-                  Math.round((lessonNum / total) * 100),
-                );
-                progressMap.set(ec.courseId, calc);
-                if (ec.courseSlug) progressMap.set(ec.courseSlug, calc);
+
+            if (localEstimate == null) {
+              const lastLessonStr = localStorage.getItem(
+                `veolms-last-lesson-${courseKey}`,
+              );
+              if (lastLessonStr) {
+                const lessonNum = parseInt(lastLessonStr, 10);
+                // last-lesson is a resume pointer, not completion — never let it
+                // drop below the enrolled-courses API progress.
+                if (!isNaN(lessonNum) && lessonNum > 0) {
+                  localEstimate = Math.min(
+                    100,
+                    Math.round((lessonNum / total) * 100),
+                  );
+                }
               }
+            }
+
+            const nextProgress =
+              serverProgress == null
+                ? localEstimate
+                : localEstimate == null
+                  ? serverProgress
+                  : Math.max(serverProgress, localEstimate);
+
+            if (nextProgress != null) {
+              progressMap.set(ec.courseId, nextProgress);
+              if (ec.courseSlug) progressMap.set(ec.courseSlug, nextProgress);
             }
           } catch {
             // Ignore storage errors
           }
         }
       }
-      return (publishedCoursesData?.courses || []).map((summary) =>
+      return publishedCourses.map((summary) =>
         adaptCourseSummaryToCatalogueCourse(summary, enrolledSet, progressMap),
       );
     }
@@ -1778,12 +2085,12 @@ export function CoursesPage({
     enrollmentFilter,
     enrolledCoursesData,
     myCoursesData?.courses,
-    publishedCoursesData?.courses,
+    publishedCourses,
   ]);
 
   const totalCoursesCount = useMemo(() => {
     if (effectiveRole !== "creator") {
-      return publishedCoursesData?.courses?.length ?? 0;
+      return publishedCourses.length;
     }
     return (
       (myCoursesData?.courses?.length ?? 0) +
@@ -1793,7 +2100,7 @@ export function CoursesPage({
     deletedCoursesData?.courses?.length,
     effectiveRole,
     myCoursesData?.courses?.length,
-    publishedCoursesData?.courses?.length,
+    publishedCourses.length,
   ]);
 
   const handleDeleteCourse = async (course: Course) => {
@@ -1904,11 +2211,11 @@ export function CoursesPage({
     setNavigationOrders((current) => {
       const currentOrder =
         navigationPreferencesReady && !isPublicNavigation
-          ? current[role] ||
-            getInitialNavigationOrder(role, navigationItems, activeUser?.id)
+          ? current[effectiveRole] ||
+            getSafeInitialNavigationOrder(navigationItemsWithDashboard)
           : isPublicNavigation
-            ? getDefaultNavigationOrder(navigationItems)
-            : getInitialNavigationOrder(role, navigationItems, activeUser?.id);
+            ? getDefaultNavigationOrder(navigationItemsWithDashboard)
+            : getSafeInitialNavigationOrder(navigationItemsWithDashboard);
       const sourceIndex = currentOrder.indexOf(sourceLabel);
       if (sourceIndex < 0 || !currentOrder.includes(targetLabel))
         return current;
@@ -1920,18 +2227,18 @@ export function CoursesPage({
         0,
         sourceLabel,
       );
-      return { ...current, [role]: nextOrder };
+      return { ...current, [effectiveRole]: nextOrder };
     });
   };
 
   const moveNavigationWithKeyboard = (label: string, direction: -1 | 1) => {
     const currentOrder =
       navigationPreferencesReady && !isPublicNavigation
-        ? navigationOrders[role] ||
-          getInitialNavigationOrder(role, navigationItems, activeUser?.id)
+        ? navigationOrders[effectiveRole] ||
+          getSafeInitialNavigationOrder(navigationItemsWithDashboard)
         : isPublicNavigation
-          ? getDefaultNavigationOrder(navigationItems)
-          : getInitialNavigationOrder(role, navigationItems, activeUser?.id);
+          ? getDefaultNavigationOrder(navigationItemsWithDashboard)
+          : getSafeInitialNavigationOrder(navigationItemsWithDashboard);
     const currentIndex = currentOrder.indexOf(label);
     const targetLabel = currentOrder[currentIndex + direction];
     if (!targetLabel) return;
@@ -2316,6 +2623,7 @@ export function CoursesPage({
   };
 
   const changePalette = (nextTheme: string, origin?: ThemeRevealOrigin) => {
+    const requestId = ++paletteStyleRequestRef.current;
     // Selecting what is already displayed runs no transition; plain state
     // updates keep the committed selection and preview in sync.
     if (nextTheme === displayedAcademyTheme) {
@@ -2323,19 +2631,25 @@ export function CoursesPage({
       setPalettePreviewTheme(null);
       return;
     }
-    applyWithThemeViewTransition(
-      () =>
-        flushSync(() => {
-          setAcademyTheme(nextTheme);
-          setPalettePreviewTheme(null);
-          commitPalette(nextTheme);
-        }),
-      "palette",
-      origin,
-    );
+    void ensureAcademyPaletteStylesheets(nextTheme)
+      .then(() => {
+        if (paletteStyleRequestRef.current !== requestId) return;
+        applyWithThemeViewTransition(
+          () =>
+            flushSync(() => {
+              setAcademyTheme(nextTheme);
+              setPalettePreviewTheme(null);
+              commitPalette(nextTheme);
+            }),
+          "palette",
+          origin,
+        );
+      })
+      .catch(() => undefined);
   };
 
   const previewAcademyTheme = (themeId: string, origin?: ThemeRevealOrigin) => {
+    const requestId = ++paletteStyleRequestRef.current;
     // No transition when the previewed theme already matches the displayed
     // one; keyboard previews carry the focused swatch's center and pointer
     // previews carry the pointer position as the reveal origin.
@@ -2343,15 +2657,20 @@ export function CoursesPage({
       setPalettePreviewTheme(themeId);
       return;
     }
-    applyWithThemeViewTransition(
-      () =>
-        flushSync(() => {
-          setPalettePreviewTheme(themeId);
-          commitPalette(themeId);
-        }),
-      "palette",
-      origin,
-    );
+    void ensureAcademyPaletteStylesheets(themeId)
+      .then(() => {
+        if (paletteStyleRequestRef.current !== requestId) return;
+        applyWithThemeViewTransition(
+          () =>
+            flushSync(() => {
+              setPalettePreviewTheme(themeId);
+              commitPalette(themeId);
+            }),
+          "palette",
+          origin,
+        );
+      })
+      .catch(() => undefined);
   };
 
   // Reverts an unconfirmed keyboard preview back to the committed theme.
@@ -2361,6 +2680,7 @@ export function CoursesPage({
   // swatch's center; other dismissals pass nothing for the corner
   // fallback.
   const revertPalettePreview = (origin?: ThemeRevealOrigin) => {
+    paletteStyleRequestRef.current += 1;
     if (!palettePreviewTheme || palettePreviewTheme === academyTheme) {
       setPalettePreviewTheme(null);
       return;
@@ -2648,6 +2968,7 @@ export function CoursesPage({
       SIDEBAR_COLLAPSED_WIDTH + SIDEBAR_CONTENT_REVEAL_DISTANCE;
   const sidebarClassName = [
     "courses-app",
+    isDashboardRoute ? "courses-app--dashboard" : "",
     sidebarVisuallyCollapsed ? "courses-app--collapsed" : "",
     sidebarPresentedAsOverlay ? "courses-app--hidden" : "",
     sidebarPresentedAsOverlay && edgeSidebarOpen
@@ -3235,7 +3556,10 @@ export function CoursesPage({
     }
   };
 
-  const mobileNavigation = getMobilePrimaryNavigation(role, navigation);
+  const mobileNavigation = getMobilePrimaryNavigation(
+    effectiveRole,
+    navigation,
+  );
   const mobileMoreNavigation = getMobileOverflowNavigation(
     navigation,
     mobileNavigation,
@@ -3263,29 +3587,41 @@ export function CoursesPage({
     surfaceSettingsTab?: string;
     surfaceUsername?: string;
   } = {}): ReactNode => {
+    if (routeContentBlocked) {
+      return <AcademyPageFallback />;
+    }
+
     const surfaceActiveSection =
       surfaceSection ?? (surfacePage === "courses" ? "Courses" : activeSection);
-    if (role === "creator" && surfacePage === "home") {
+    if (
+      surfacePage === "home" &&
+      (effectiveRole === "creator" || (isDashboardRoute && canAccessDashboard))
+    ) {
       return (
-        <CreatorDashboard
-          onNavigatePage={onNavigatePage}
-          setNotice={setNotice}
-          academyTheme={appliedAcademyTheme}
-        />
+        <Suspense fallback={<AcademyPageFallback />}>
+          <CreatorDashboard
+            onNavigatePage={onNavigatePage}
+            academyTheme={appliedAcademyTheme}
+            resolvedTheme={resolvedTheme}
+          />
+        </Suspense>
       );
     }
-    if (role === "student" && surfacePage === "home") {
+    if (effectiveRole === "student" && surfacePage === "home") {
       return (
-        <StudentHome
-          onOpenCourse={onOpenCourse}
-          onNavigatePage={onNavigatePage}
-          studentName={shellProfileDisplayName}
-        />
+        <Suspense fallback={<AcademyPageFallback />}>
+          <StudentHome
+            onOpenCourse={onOpenCourse}
+            onNavigatePage={onNavigatePage}
+            studentName={shellProfileDisplayName}
+          />
+        </Suspense>
       );
     }
     if (surfacePage === "settings") {
       return (
-        <SettingsPage
+        <Suspense fallback={null}>
+          <SettingsPage
           tab={surfaceSettingsTab}
           role={role}
           userRoles={userRoles}
@@ -3308,45 +3644,44 @@ export function CoursesPage({
           navigationItems={roleFilteredNavigationItems}
           navigationVisibleItems={
             navigationPreferencesReady && !isPublicNavigation
-              ? navigationVisibility[role]
+              ? navigationVisibility[effectiveRole]
               : isPublicNavigation
                 ? getDefaultNavigationVisibility(roleFilteredNavigationItems)
-                : getInitialNavigationVisibility(
-                    role,
-                    roleFilteredNavigationItems,
-                    activeUser?.id,
-                  )
+                : getSafeInitialNavigationVisibility(roleFilteredNavigationItems)
           }
           onNavigationVisibilityChange={(visibleItems) =>
             setNavigationVisibility((current) => ({
               ...current,
-              [role]: ensureRequiredNavigationVisibility(
+              [effectiveRole]: ensureRequiredNavigationVisibility(
                 visibleItems,
                 roleFilteredNavigationItems,
               ),
             }))
           }
-        />
+          />
+        </Suspense>
       );
     }
     if (surfacePage === "workspace") {
       return (
-        <WorkspacePage
-          section={surfaceActiveSection}
-          role={role}
-          discussionTab={surfaceDiscussionTab}
-          onNavigatePage={onNavigatePage}
-          setNotice={setNotice}
-          onSignOut={() => {
-            localStorage.removeItem(getWorkspaceRoleStorageKey(activeUser?.id));
-            setRole("student");
-          }}
-        />
+        <Suspense fallback={<AcademyPageFallback />}>
+          <WorkspacePage
+            section={surfaceActiveSection}
+            role={role}
+            discussionTab={surfaceDiscussionTab}
+            onNavigatePage={onNavigatePage}
+            setNotice={setNotice}
+            onSignOut={() => {
+              localStorage.removeItem(getWorkspaceRoleStorageKey(activeUser?.id));
+              setRole("student");
+            }}
+          />
+        </Suspense>
       );
     }
     if (surfacePage === "course-create") {
       return (
-        <Suspense fallback={null}>
+        <Suspense fallback={<CourseEditorRouteFallback />}>
           <CourseCreatePage
             onNavigatePage={onNavigatePage}
             bottomNavHidden={mobileBottomNavHidden}
@@ -3359,6 +3694,7 @@ export function CoursesPage({
         <Suspense fallback={null}>
           <CourseOverviewPage
             courseSlug={surfaceCourseSlug}
+            initialOverview={initialCourseOverview}
             onNavigateCourses={() => onNavigatePage("/courses")}
             onNavigatePage={onNavigatePage}
             role={role}
@@ -3368,7 +3704,9 @@ export function CoursesPage({
     }
     if (surfacePage === "reviews" || surfaceActiveSection === "Reviews") {
       return (
-        <ReviewsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+        <Suspense fallback={<AcademyPageFallback />}>
+          <ReviewsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+        </Suspense>
       );
     }
     if (surfacePage === "coupon-builder") {
@@ -3376,35 +3714,50 @@ export function CoursesPage({
         return (
           <main
             data-coupon-surface=""
-            className="mx-auto grid w-full max-w-[1320px] place-items-center py-24"
+            className="mx-auto w-full max-w-[1320px]"
           >
-            <CircleNotch
-              size={28}
-              className="mb-3 animate-spin text-(--accent)"
+            <CenteredLoadingSpinner
+              label="Loading coupon builder"
+              className="min-h-52 py-24"
             />
-            <p className="text-sm text-(--muted)">Loading coupon builder...</p>
           </main>
         );
       }
       if (!activeUser || !isStaffRole(userRoles)) {
-        return <CouponsAccessDenied onNavigatePage={onNavigatePage} />;
+        return (
+          <Suspense fallback={<AcademyPageFallback />}>
+            <CouponsAccessDenied onNavigatePage={onNavigatePage} />
+          </Suspense>
+        );
       }
       return (
-        <CouponBuilderPage
-          couponId={couponId}
-          onNavigatePage={onNavigatePage}
-          setNotice={setNotice}
-        />
+        <Suspense fallback={<AcademyPageFallback />}>
+          <CouponBuilderPage
+            couponId={couponId}
+            onNavigatePage={onNavigatePage}
+            setNotice={setNotice}
+          />
+        </Suspense>
       );
     }
     if (surfacePage === "coupons" || surfaceActiveSection === "Coupons") {
       return (
-        <CouponsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+        <Suspense fallback={<AcademyPageFallback />}>
+          <CouponsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+        </Suspense>
       );
     }
     if (surfacePage === "orders" || surfaceActiveSection === "Orders") {
       return (
-        <OrdersPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+        <Suspense
+          fallback={
+            <div className="grid min-h-52 place-items-center" aria-label="Loading orders">
+              <CircleNotch size={26} className="animate-spin text-(--accent)" />
+            </div>
+          }
+        >
+          <OrdersPageRoute onNavigatePage={onNavigatePage} setNotice={setNotice} />
+        </Suspense>
       );
     }
     if (
@@ -3412,10 +3765,18 @@ export function CoursesPage({
       surfaceActiveSection === "Order History"
     ) {
       return (
-        <OrderHistoryPage
-          onNavigatePage={onNavigatePage}
-          setNotice={setNotice}
-        />
+        <Suspense
+          fallback={
+            <div className="grid min-h-52 place-items-center" aria-label="Loading order history">
+              <CircleNotch size={26} className="animate-spin text-(--accent)" />
+            </div>
+          }
+        >
+          <OrderHistoryPageRoute
+            onNavigatePage={onNavigatePage}
+            setNotice={setNotice}
+          />
+        </Suspense>
       );
     }
     if (
@@ -3424,10 +3785,12 @@ export function CoursesPage({
       surfaceActiveSection === "Notification"
     ) {
       return (
-        <NotificationsPage
-          onNavigatePage={onNavigatePage}
-          setNotice={setNotice}
-        />
+        <Suspense fallback={<AcademyPageFallback />}>
+          <NotificationsPage
+            onNavigatePage={onNavigatePage}
+            setNotice={setNotice}
+          />
+        </Suspense>
       );
     }
     if (surfacePage === "quiz-builder") {
@@ -3435,30 +3798,40 @@ export function CoursesPage({
         return null;
       }
       return (
-        <QuizBuilderPage quizId={quizId} onNavigatePage={onNavigatePage} />
+        <Suspense fallback={<AcademyPageFallback />}>
+          <QuizBuilderPage quizId={quizId} onNavigatePage={onNavigatePage} />
+        </Suspense>
       );
     }
     if (surfacePage === "quiz-attempt") {
       return (
-        <QuizDirectAttemptPage
-          assignmentId={assignmentId}
-          onNavigatePage={onNavigatePage}
-        />
+        <Suspense fallback={<AcademyPageFallback />}>
+          <QuizDirectAttemptPage
+            assignmentId={assignmentId}
+            onNavigatePage={onNavigatePage}
+          />
+        </Suspense>
       );
     }
     if (surfacePage === "quizzes") {
-      return <QuizAnalyticsPage role={role} onNavigatePage={onNavigatePage} />;
+      return (
+        <Suspense fallback={<AcademyPageFallback />}>
+          <QuizAnalyticsPage role={role} onNavigatePage={onNavigatePage} />
+        </Suspense>
+      );
     }
     if (surfacePage === "student-details") {
       if (effectiveRole !== "creator") {
         return null;
       }
       return (
-        <StudentDetailsPage
-          username={surfaceUsername}
-          onNavigatePage={onNavigatePage}
-          setNotice={setNotice}
-        />
+        <Suspense fallback={<AcademyPageFallback />}>
+          <StudentDetailsPage
+            username={surfaceUsername}
+            onNavigatePage={onNavigatePage}
+            setNotice={setNotice}
+          />
+        </Suspense>
       );
     }
     if (surfacePage === "students" || surfaceActiveSection === "Students") {
@@ -3466,7 +3839,9 @@ export function CoursesPage({
         return null;
       }
       return (
-        <StudentsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+        <Suspense fallback={<AcademyPageFallback />}>
+          <StudentsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
+        </Suspense>
       );
     }
     if (surfacePage === "analytics" || surfaceActiveSection === "Analytics") {
@@ -3483,42 +3858,53 @@ export function CoursesPage({
     }
     if (surfacePage === "placeholder") {
       return (
-        <PlaceholderPage
-          section={surfaceActiveSection}
-          role={role}
-          userRoles={userRoles}
-        />
+        <Suspense fallback={<AcademyPageFallback />}>
+          <PlaceholderPage
+            section={surfaceActiveSection}
+            role={role}
+            userRoles={userRoles}
+          />
+        </Suspense>
       );
     }
     return (
-      <CourseCatalogue
-        activeSection={surfaceActiveSection}
-        role={effectiveRole}
-        isAdmin={isAdmin}
-        currentUserId={activeUser?.id}
-        isLoading={isLoadingCourses}
-        wishlisted={wishlisted}
-        enrollmentFilter={enrollmentFilter}
-        onEnrollmentFilterChange={setEnrollmentFilter}
-        search={search}
-        onSearchChange={setSearch}
-        sort={sort}
-        onSortChange={setSort}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        visibleCourses={visibleCourses}
-        totalCoursesCount={totalCoursesCount}
-        onWishlist={toggleWishlist}
-        onOpenCourse={onOpenCourse}
-        courseMenu={courseMenu}
-        setCourseMenu={setCourseMenu}
-        setNotice={setNotice}
-        onNavigatePage={onNavigatePage}
-        onResetCatalogue={resetCatalogue}
-        onDeleteCourse={handleDeleteCourse}
-        onRestoreCourse={handleRestoreCourse}
-        deletingCourseIds={deletingCourseIds}
-      />
+      <Suspense fallback={<AcademyPageFallback />}>
+        <CourseCatalogue
+          activeSection={surfaceActiveSection}
+          role={effectiveRole}
+          isAdmin={isAdmin}
+          currentUserId={activeUser?.id}
+          isLoading={isLoadingCourses}
+          preloadFirstCourseImage={Boolean(initialPublishedCoursePage)}
+          wishlisted={wishlisted}
+          enrollmentFilter={enrollmentFilter}
+          onEnrollmentFilterChange={setEnrollmentFilter}
+          search={search}
+          onSearchChange={setSearch}
+          sort={sort}
+          onSortChange={setSort}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          visibleCourses={visibleCourses}
+          totalCoursesCount={totalCoursesCount}
+          hasNextPage={
+            !needsCompleteCourseList && pagedCourseQuery.hasNextPage
+          }
+          isFetchingNextPage={pagedCourseQuery.isFetchingNextPage}
+          onLoadMore={() => void pagedCourseQuery.fetchNextPage()}
+          onWishlist={toggleWishlist}
+          onOpenCourse={onOpenCourse}
+          onEditIntent={prepareCourseEditorEdit}
+          courseMenu={courseMenu}
+          setCourseMenu={setCourseMenu}
+          setNotice={setNotice}
+          onNavigatePage={onNavigatePage}
+          onResetCatalogue={resetCatalogue}
+          onDeleteCourse={handleDeleteCourse}
+          onRestoreCourse={handleRestoreCourse}
+          deletingCourseIds={deletingCourseIds}
+        />
+      </Suspense>
     );
   };
 
@@ -3557,7 +3943,7 @@ export function CoursesPage({
           <aside
             className="courses-sidebar touch-pan-y"
             data-header-layout={sidebarHeaderLayout}
-            aria-label={`${role === "creator" ? "Creator" : "Student"} navigation`}
+            aria-label={`${effectiveRole === "creator" ? "Creator" : "Student"} navigation`}
             aria-hidden={
               sidebarPresentedAsOverlay && !edgeSidebarOpen ? "true" : undefined
             }
@@ -3783,7 +4169,7 @@ export function CoursesPage({
             <div className="courses-profile" ref={profileRef}>
               {profileMenu && isAuthenticated && (
                 <ProfileMenu
-                  role={role}
+                  role={effectiveRole}
                   allowedRoles={allowedWorkspaceRoles}
                   userRoles={userRoles}
                   sidebarHidden={sidebarPresentedAsOverlay}
@@ -3802,7 +4188,7 @@ export function CoursesPage({
                   type="button"
                   className="courses-profile__button"
                   aria-label={`${shellProfileDisplayName}, ${getRoleDisplayName(
-                    role,
+                    effectiveRole,
                     userRoles,
                   )}. Open role and appearance menu`}
                   aria-expanded={profileMenu}
@@ -3815,7 +4201,7 @@ export function CoursesPage({
                   <span>
                     <strong>{shellProfileDisplayName}</strong>
                     <small>
-                      {getRoleDisplayName(role, userRoles)} <i />
+                      {getRoleDisplayName(effectiveRole, userRoles)} <i />
                     </small>
                   </span>
                   <CaretDown size={17} aria-hidden="true" />
@@ -3824,6 +4210,7 @@ export function CoursesPage({
                 <LoginProfileButton
                   className="courses-profile__button"
                   arrowSize={16}
+                  displayName={authIdentityHint?.displayName}
                   onLogin={() => onNavigatePage("/login")}
                 />
               )}
@@ -4124,7 +4511,7 @@ export function CoursesPage({
             data-learning-motion-stage={renderMain ? "" : undefined}
           >
             {renderMain ? (
-              learningBackground ? (
+              routeContentBlocked ? <AcademyPageFallback /> : learningBackground ? (
                 <div
                   className={`courses-main pointer-events-none sticky top-0 z-0 h-dvh max-h-dvh min-h-0! self-start overflow-clip! transition-opacity ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${learningBackground.page !== "courses" ? "student-surface-main" : ""}`}
                   style={{
@@ -4146,10 +4533,12 @@ export function CoursesPage({
                   })}
                 </div>
               ) : null
+            ) : routeContentBlocked ? (
+              <AcademyPageFallback />
             ) : (
               <div className="contents">{renderPageContent()}</div>
             )}
-            {renderMain ? (
+            {renderMain && !routeContentBlocked ? (
               <div className="relative min-h-full">
                 {renderMain({
                   mobileBottomNavigation:
@@ -4175,7 +4564,7 @@ export function CoursesPage({
         <nav
           ref={mobileBottomNavRef}
           className={`mobile-bottom-nav${mobileBottomNavHidden ? " is-scroll-hidden" : ""}`}
-          aria-label={`${role === "creator" ? "Creator" : "Student"} mobile navigation`}
+          aria-label={`${effectiveRole === "creator" ? "Creator" : "Student"} mobile navigation`}
           onFocusCapture={() => setMobileBottomNavHidden(false)}
         >
           {mobileNavigation.map((item) => {
@@ -4304,7 +4693,7 @@ export function CoursesPage({
                   aria-haspopup="menu"
                   aria-expanded={profileMenu}
                   aria-controls="mobile-profile-menu"
-                  aria-label={`${shellProfileDisplayName}, ${getRoleDisplayName(role, userRoles)}. Open role menu`}
+                  aria-label={`${shellProfileDisplayName}, ${getRoleDisplayName(effectiveRole, userRoles)}. Open role menu`}
                   onClick={() => setProfileMenu((current) => !current)}
                 >
                   <ShellProfileAvatar
@@ -4313,7 +4702,7 @@ export function CoursesPage({
                   />
                   <span>
                     <strong>{shellProfileDisplayName}</strong>
-                    <small>{getRoleDisplayName(role, userRoles)}</small>
+                    <small>{getRoleDisplayName(effectiveRole, userRoles)}</small>
                   </span>
                   <CaretDown size={17} aria-hidden="true" />
                 </button>
@@ -4321,6 +4710,7 @@ export function CoursesPage({
                 <LoginProfileButton
                   className="mobile-menu-sheet__profile"
                   arrowSize={17}
+                  displayName={authIdentityHint?.displayName}
                   onLogin={() => onNavigatePage("/login")}
                 />
               )}
@@ -4328,7 +4718,7 @@ export function CoursesPage({
                 <ProfileMenu
                   id="mobile-profile-menu"
                   className="mobile-menu-sheet__profile-menu"
-                  role={role}
+                  role={effectiveRole}
                   allowedRoles={allowedWorkspaceRoles}
                   userRoles={userRoles}
                   includeSidebarControl={false}

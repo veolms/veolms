@@ -49,6 +49,17 @@ export function compareEntriesNewest(left: Comment, right: Comment): number {
   return getClientEntityId(right).localeCompare(getClientEntityId(left));
 }
 
+export function compareEntriesForSort(
+  left: Comment,
+  right: Comment,
+  sort: DiscussionFeedSort,
+): number {
+  if (sort === "top") {
+    return right.likes - left.likes || compareEntriesNewest(left, right);
+  }
+  return compareEntriesNewest(left, right);
+}
+
 export function applyDiscussionFeed({
   entries,
   filter,
@@ -84,10 +95,7 @@ export function applyDiscussionFeed({
 
   if (preserveOrder) return visibleEntries;
 
-  return [...visibleEntries].sort((left, right) => {
-    if (sort === "top") {
-      return right.likes - left.likes || compareEntriesNewest(left, right);
-    }
-    return compareEntriesNewest(left, right);
-  });
+  return [...visibleEntries].sort((left, right) =>
+    compareEntriesForSort(left, right, sort),
+  );
 }

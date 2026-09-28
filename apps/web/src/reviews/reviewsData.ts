@@ -114,21 +114,21 @@ export const initialTopReviewers: readonly TopReviewer[] = [
   {
     id: "ashi-singh",
     name: "Ashi Singh",
-    avatarUrl: "/assets/sofia-avatar-160.webp",
+    avatarUrl: "/static/sofia-avatar-160.webp",
     reviewCount: 12,
     rating: 5.0,
   },
   {
     id: "rahul-sharma",
     name: "Rahul Sharma",
-    avatarUrl: "/assets/ethan-avatar-160.webp",
+    avatarUrl: "/static/ethan-avatar-160.webp",
     reviewCount: 7,
     rating: 5.0,
   },
   {
     id: "anurag-singh",
     name: "Anurag Singh",
-    avatarUrl: "/assets/ethan-avatar-160.webp",
+    avatarUrl: "/static/ethan-avatar-160.webp",
     reviewCount: 8,
     rating: 4.5,
   },
@@ -138,7 +138,7 @@ export const initialReviewsList: readonly ReviewItem[] = [
   {
     id: "rev-1",
     authorName: "Ashi Singh",
-    avatarUrl: "/assets/sofia-avatar-160.webp",
+    avatarUrl: "/static/sofia-avatar-160.webp",
     isVerifiedLearner: true,
     rating: 5,
     timestamp: "2 days ago",
@@ -153,7 +153,7 @@ export const initialReviewsList: readonly ReviewItem[] = [
   {
     id: "rev-2",
     authorName: "Anurag Singh",
-    avatarUrl: "/assets/ethan-avatar-160.webp",
+    avatarUrl: "/static/ethan-avatar-160.webp",
     isVerifiedLearner: true,
     rating: 4,
     timestamp: "5 days ago",
@@ -167,7 +167,7 @@ export const initialReviewsList: readonly ReviewItem[] = [
       id: "reply-1",
       authorName: "Instructor",
       authorRole: "Instructor",
-      avatarUrl: "/assets/ethan-avatar-160.webp",
+      avatarUrl: "/static/ethan-avatar-160.webp",
       timestamp: "4 days ago",
       content:
         "Thanks for the feedback! We'll keep this in mind while creating future content.",
@@ -176,7 +176,7 @@ export const initialReviewsList: readonly ReviewItem[] = [
   {
     id: "rev-3",
     authorName: "Rahul Sharma",
-    avatarUrl: "/assets/ethan-avatar-160.webp",
+    avatarUrl: "/static/ethan-avatar-160.webp",
     isVerifiedLearner: true,
     rating: 5,
     timestamp: "1 week ago",
@@ -190,7 +190,7 @@ export const initialReviewsList: readonly ReviewItem[] = [
   {
     id: "rev-4",
     authorName: "Priya Mehta",
-    avatarUrl: "/assets/sofia-avatar-160.webp",
+    avatarUrl: "/static/sofia-avatar-160.webp",
     isVerifiedLearner: true,
     rating: 4,
     timestamp: "2 weeks ago",
@@ -204,7 +204,7 @@ export const initialReviewsList: readonly ReviewItem[] = [
   {
     id: "rev-5",
     authorName: "Vikram Malhotra",
-    avatarUrl: "/assets/ethan-avatar-160.webp",
+    avatarUrl: "/static/ethan-avatar-160.webp",
     isVerifiedLearner: true,
     rating: 5,
     timestamp: "3 weeks ago",
@@ -218,7 +218,7 @@ export const initialReviewsList: readonly ReviewItem[] = [
   {
     id: "rev-6",
     authorName: "Sneha Patel",
-    avatarUrl: "/assets/sofia-avatar-160.webp",
+    avatarUrl: "/static/sofia-avatar-160.webp",
     isVerifiedLearner: false,
     rating: 3,
     timestamp: "1 month ago",

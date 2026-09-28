@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import "./mfa-setup.css";
 import { AuthBrandMark } from "./AuthBrandPanel.tsx";
 import { MFA_CONFIG } from "./mfa.config.ts";
 import { OtpCodeInput } from "./OtpCodeInput.tsx";
+import { MfaQrCode } from "./MfaQrCode.tsx";
 import { Icon } from "../icons/Icon.tsx";
 import { AUTH_CARD_HEADING_ID, validateOtpCode } from "./authFlow.ts";
 import { isPasskeySupported, startPasskeyRegistration } from "./webauthn.ts";
@@ -14,12 +16,14 @@ import {
   usePasskeyRegisterOptions,
   usePasskeyRegisterVerify,
 } from "../services/auth";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 
 export type AdminMfaMethod = "passkey" | "authenticator";
 
 export interface AdminMfaSetupProps {
   onDone: () => void;
   onError: (message: string) => void;
+  onClearError: () => void;
 }
 
 const STEP_LABELS = {
@@ -115,13 +119,18 @@ function BackupCodesScreen({ codes, onContinue }: BackupCodesScreenProps) {
 type Screen =
   "chooseMethod" | "totpQr" | "totpVerify" | "backupCodes" | "passkeyPending";
 
-export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
+export function AdminMfaSetup({
+  onDone,
+  onError,
+  onClearError,
+}: AdminMfaSetupProps) {
   const [screen, setScreen] = useState<Screen>("chooseMethod");
   const [totpSecret, setTotpSecret] = useState("");
   const [totpUri, setTotpUri] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [codeError, setCodeError] = useState<string | null>(null);
+  const passkeyAttempt = useRef(0);
 
   const queryClient = useQueryClient();
   const setupTotpMutation = useSetupTotp();
@@ -132,25 +141,46 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
   const passkeySupported = isPasskeySupported();
 
   const handleSetupPasskey = async () => {
+    onClearError();
+    const attempt = ++passkeyAttempt.current;
     setScreen("passkeyPending");
     try {
       const serverOptions = await passkeyOptionsMutation.mutateAsync();
+      if (passkeyAttempt.current !== attempt) return;
+
       const credential = await startPasskeyRegistration(serverOptions);
+      if (passkeyAttempt.current !== attempt) return;
+
       await passkeyVerifyMutation.mutateAsync(credential);
+      if (passkeyAttempt.current !== attempt) return;
+
       await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+      if (passkeyAttempt.current !== attempt) return;
+
       await queryClient.invalidateQueries({ queryKey: authKeys.sessions() });
+      if (passkeyAttempt.current !== attempt) return;
+
       onDone();
     } catch (err: unknown) {
+      if (passkeyAttempt.current !== attempt) return;
+
       const errorObj = err as { message?: string };
       const message =
         errorObj?.message ||
         "Passkey registration failed. Please try again or use an authenticator app.";
-      onError(message);
+
+      if (message === "Passkey registration was cancelled.") {
+        onClearError();
+      } else {
+        onError(message);
+      }
+
       setScreen("chooseMethod");
     }
   };
 
   const handleSetupTotp = async () => {
+    onClearError();
     try {
       const data = await setupTotpMutation.mutateAsync();
       setTotpSecret(data.secret);
@@ -234,7 +264,11 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
 
           <button
             className="auth-two-factor__alternate"
-            onClick={() => setScreen("chooseMethod")}
+            onClick={() => {
+              passkeyAttempt.current += 1;
+              onClearError();
+              setScreen("chooseMethod");
+            }}
             type="button"
           >
             ← Cancel
@@ -258,13 +292,7 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
 
         <div className="auth-card__form-slot">
           <div className="auth-mfa-setup__qr-wrapper" aria-hidden="true">
-            <img
-              alt="QR code for authenticator app"
-              className="auth-mfa-setup__qr"
-              src={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(totpUri)}&size=180x180&margin=2`}
-              width={180}
-              height={180}
-            />
+            <MfaQrCode value={totpUri} size={160} />
           </div>
 
           <div className="auth-mfa-setup__secret">
@@ -316,6 +344,7 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
                 disabled={enableTotpMutation.isPending}
                 invalid={codeError !== null}
                 label="Authentication code"
+                autoFocus
                 onChange={(code) => {
                   setTotpCode(code);
                   setCodeError(null);
@@ -443,6 +472,11 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
             )}
 
             <button
+              aria-label={
+                setupTotpMutation.isPending
+                  ? "Setting up authenticator app"
+                  : undefined
+              }
               aria-busy={setupTotpMutation.isPending}
               className="auth-secondary-btn"
               disabled={setupTotpMutation.isPending}
@@ -452,7 +486,7 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
               <Icon aria-hidden name="authenticator" size={18} />
               <span>
                 {setupTotpMutation.isPending
-                  ? "Loading…"
+                  ? <LoadingSpinnerIcon size={16} />
                   : "Use authenticator app"}
               </span>
             </button>

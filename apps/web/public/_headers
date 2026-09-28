@@ -1,5 +1,14 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-/*
+/static/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/robots.txt
+  Cache-Control: public, max-age=0, must-revalidate
+
+/.well-known/*
   Cache-Control: public, max-age=0, must-revalidate

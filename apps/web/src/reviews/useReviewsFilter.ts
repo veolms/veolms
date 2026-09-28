@@ -111,7 +111,7 @@ export function useReviewsFilter(
     const created: ReviewItem = {
       id: `rev-user-${Date.now()}`,
       authorName: "Ashi Singh",
-      avatarUrl: "/assets/sofia-avatar-160.webp",
+      avatarUrl: "/static/sofia-avatar-160.webp",
       isVerifiedLearner: true,
       rating: newReview.rating,
       timestamp: "Just now",

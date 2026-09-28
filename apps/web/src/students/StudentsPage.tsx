@@ -13,7 +13,7 @@ import {
   DEFAULT_DEBOUNCE_DELAY_MS,
   useDebounceValue,
 } from "../hooks/useDebounce";
-import { useCourses } from "../services/courses";
+import { useCourseOptions } from "../services/courses";
 import { useStudents } from "../services/students";
 import { StudentsTable } from "./StudentsTable";
 import { StudentFiltersBar } from "./StudentFiltersBar";
@@ -36,16 +36,16 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
   const [sortBy, setSortBy] = useState<
     "recent" | "name" | "courses" | "progress"
   >("recent");
+  const [isCourseFilterOpen, setIsCourseFilterOpen] = useState(false);
 
   // Load academy courses for the course filter dropdown
-  const { data: coursesData } = useCourses();
+  const { data: coursesData } = useCourseOptions({
+    enabled: isCourseFilterOpen,
+  });
   const courseRecords = coursesData?.courses;
   const availableCourses = useMemo(() => {
     if (!courseRecords) return [];
-    return courseRecords.map((c) => ({
-      id: c.id,
-      title: c.title,
-    }));
+    return courseRecords.map(({ id, title }) => ({ id, title }));
   }, [courseRecords]);
 
   const cleanSearch = debouncedSearch.replace(/^@+/, "").trim();
@@ -256,6 +256,8 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
           sortBy={sortBy}
           onSortByChange={setSortBy}
           availableCourses={availableCourses}
+          onCourseFilterOpen={() => setIsCourseFilterOpen(true)}
+          onCourseFilterClose={() => setIsCourseFilterOpen(false)}
           onResetFilters={resetFilters}
         />
       </div>

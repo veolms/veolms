@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./theme-ids": "./src/themes/playerThemeIds.ts",
     "./shaka": "./src/engines/shaka/index.ts",
     "./shaka-preload": "./src/engines/shaka/shaka-early-preload.ts",
     "./styles.css": "./src/styles/player.css",
@@ -17,7 +18,11 @@
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
-    "shaka-player": "5.2.7"
+    "mdast-util-to-string": "4.0.0",
+    "remark-gfm": "4.0.1",
+    "remark-parse": "11.0.0",
+    "shaka-player": "5.2.7",
+    "unified": "11.0.5"
   },
   "peerDependencies": {
     "react": ">=18.2 <20",

@@ -8,6 +8,7 @@ import { Exam } from "@phosphor-icons/react/Exam";
 import { Lock } from "@phosphor-icons/react/Lock";
 import { Tag } from "@phosphor-icons/react/Tag";
 import { Button } from "../components/Button";
+import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { useCurrentUser } from "../services/auth";
 import {
   useCreateCheckoutOrder,
@@ -90,10 +91,11 @@ export function QuizEnrollmentCard({
         className="mx-auto max-w-2xl rounded-[16px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-5 sm:p-8 text-(--text)"
         style={{ boxShadow: "var(--card-shadow)" }}
       >
-        <div className="flex items-center justify-center py-12">
-          <CircleNotch size={24} className="animate-spin text-(--accent)" />
-          <span className="ml-2 text-sm text-(--muted)">Loading quiz access details...</span>
-        </div>
+        <CenteredLoadingSpinner
+          label="Loading quiz access details"
+          className="min-h-40"
+          size={24}
+        />
       </section>
     );
   }

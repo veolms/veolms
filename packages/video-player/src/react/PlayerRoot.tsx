@@ -107,7 +107,7 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
   function PlayerRoot(
     {
       autoPlay = false,
-      chapters = [],
+      chapters,
       children,
       containerRef,
       engineFactory,
@@ -234,6 +234,7 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
     );
 
     useEffect(() => {
+      if (chapters === undefined) return;
       controller.setChapters(chapters);
     }, [chapters, controller]);
 

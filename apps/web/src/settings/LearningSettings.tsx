@@ -9,6 +9,7 @@ import { ThemedSelect } from "../ThemedSelect";
 import { CurriculumTestControls } from "./CurriculumTestControls";
 import { PlayerThemePicker } from "./PlayerThemePicker";
 import { LearningSelectRow, LearningToggleRow } from "./SettingsControls";
+import "../styles/features/settings/learning.css";
 import {
   LEARNING_PREFERENCES_KEY,
   LEARNING_PREFERENCES_EVENT,

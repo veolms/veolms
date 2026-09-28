@@ -1,7 +1,12 @@
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import {
+  parseChapterDeclarationsFromDescription,
+  resolveChapters,
+} from "@veolms/video-player";
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "./discussion-editor/types";
 import { SurfaceTopRightAccentGlow } from "./SurfaceTopRightAccentGlow";
+import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 
 export const DESCRIPTION_SURFACE_BASE =
   "bg-[color-mix(in_srgb,var(--surface)_94%,var(--canvas))] shadow-[0_14px_38px_color-mix(in_srgb,var(--canvas)_34%,transparent),0_1px_0_color-mix(in_srgb,var(--text)_6%,transparent)]";
@@ -41,12 +46,14 @@ export interface LessonDescriptionProps {
   description?: string | null;
   isLoading?: boolean;
   onSeekToTimestamp?: (seconds: number) => void;
+  onExpandedChange?: (expanded: boolean) => void;
 }
 
 export function LessonDescription({
   description,
   isLoading = false,
   onSeekToTimestamp,
+  onExpandedChange,
 }: LessonDescriptionProps = {}) {
   const contentId = useId();
   const sectionRef = useRef<HTMLElement>(null);
@@ -58,6 +65,22 @@ export function LessonDescription({
     () => createDiscussionDraft(rawMarkdown),
     [rawMarkdown],
   );
+  const chapterDeclarations = useMemo(() => {
+    const resolved = resolveChapters({ description: rawMarkdown });
+    if (resolved.source !== "description") return [];
+
+    const accepted = new Set(
+      resolved.chapters.map(
+        (chapter) => `${chapter.startTime}\u0000${chapter.title}`,
+      ),
+    );
+
+    return parseChapterDeclarationsFromDescription(rawMarkdown).filter(
+      (declaration) =>
+        declaration.isPlainText &&
+        accepted.has(`${declaration.startTime}\u0000${declaration.title}`),
+    );
+  }, [rawMarkdown]);
   const hasDescription = rawMarkdown.length > 0;
 
   if (!isLoading && !hasDescription) {
@@ -67,6 +90,7 @@ export function LessonDescription({
   const expand = () => {
     if (isLoading || !hasDescription) return;
     setExpanded(true);
+    onExpandedChange?.(true);
     requestAnimationFrame(() => {
       showLessRef.current?.focus({ preventScroll: true });
     });
@@ -74,6 +98,7 @@ export function LessonDescription({
 
   const collapse = (returnFocus = false) => {
     setExpanded(false);
+    onExpandedChange?.(false);
     if (returnFocus) {
       requestAnimationFrame(() => {
         sectionRef.current?.focus({ preventScroll: true });
@@ -114,21 +139,21 @@ export function LessonDescription({
             <h2 className="mt-0 mb-2 text-lg font-bold leading-tight text-(--text)">
               Description
             </h2>
-            <p
-              data-lesson-description-loading
-              className="m-0 text-(--muted) text-sm italic"
-            >
-              Loading lesson description...
-            </p>
+            <CenteredLoadingSpinner
+              label="Loading lesson description"
+              className="min-h-20 w-full"
+              size={20}
+            />
           </div>
         ) : expanded ? (
           hasDescription ? (
             <DiscussionMarkdown
               content={draftContent}
               label="Lesson description content"
-              enableInlineTimestamps={Boolean(onSeekToTimestamp)}
+              chapterDeclarations={chapterDeclarations}
               onSeekToTimestamp={onSeekToTimestamp}
-              className="[&>:first-child]:mt-0"
+              preserveSoftBreaks
+              className="wrap-anywhere [&>:first-child]:mt-0"
             />
           ) : (
             <p className="m-0 text-(--muted) text-sm italic">

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { useMyQuizAssignments } from "../services/quizzes";
+import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 
 interface Props {
   assignmentId?: string;
@@ -28,7 +29,10 @@ export function QuizDirectAttemptPage({ assignmentId, onNavigatePage }: Props) {
           className="rounded-[14px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-7 text-sm text-(--muted)"
           style={{ boxShadow: "var(--card-shadow)" }}
         >
-          Redirecting to lesson quiz…
+          <CenteredLoadingSpinner
+            label="Redirecting to lesson quiz"
+            className="min-h-32 w-full"
+          />
         </section>
       </main>
     );

@@ -9,6 +9,7 @@ import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircl
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { TrophyIcon as Trophy } from "@phosphor-icons/react/Trophy";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import "../styles/features/workspace.css";
 
 import {
   useNotificationPreferences,

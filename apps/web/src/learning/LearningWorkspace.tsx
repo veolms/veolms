@@ -8,6 +8,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import "./learning-feature.css";
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -18,6 +19,7 @@ import type {
   MyQuizAssignment,
   VideoPlaybackBootstrap,
 } from "@veolms/contracts";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import {
   DRAWER_SWIPE_THROUGH_VIEWPORT_CLASS,
   claimPointerGesture,
@@ -35,7 +37,7 @@ import { scrollApplicationTo } from "../shell/applicationScroll";
 import { isEditingShortcutTarget } from "../keyboardShortcuts";
 import { ALLOW_GUEST_LEARNING } from "../routing/routeAccess";
 import { useShortcutPlatform } from "../useShortcutPlatform";
-import { LessonVideoPlayer } from "./player";
+import { LessonVideoPlayer } from "./player/LessonVideoPlayer";
 import { LessonPlayerChromePlaceholder } from "./player/LessonPlayerChromePlaceholder";
 import type {
   LessonPlayerMinimizeGestureState,
@@ -66,7 +68,11 @@ import {
   FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT,
   FullscreenLandscapeCurriculumPanel,
 } from "./FullscreenLandscapeCurriculumPanel";
-import { getCourseThumbnail, getCourseTitle } from "./courseMetadata";
+import {
+  getCourseThumbnail,
+  getCourseThumbnailSrcSet,
+  getCourseTitle,
+} from "./courseMetadata";
 import {
   canPlayCourseLesson,
   getPublicPreviewLessonNumbers,
@@ -355,21 +361,21 @@ export function LearningWorkspace({
   });
   const isInteractionCapabilitiesLoading =
     isApiRoute && isCourseOverviewLoading && !courseOverview;
+  const allowComments = courseOverview?.settings?.allowComments ?? true;
+  const allowNotes = courseOverview?.settings?.allowNotes ?? true;
+  const allowQa = courseOverview?.settings?.allowQa ?? true;
 
   const interactionCapabilities: InteractionCapabilities = useMemo(() => {
-    if (courseOverview?.settings) {
-      return {
-        allowComments: courseOverview.settings.allowComments,
-        allowNotes: courseOverview.settings.allowNotes,
-        allowQa: courseOverview.settings.allowQa,
-      };
-    }
     return {
-      allowComments: true,
-      allowNotes: true,
-      allowQa: true,
+      allowComments,
+      allowNotes,
+      allowQa,
     };
-  }, [courseOverview?.settings]);
+  }, [
+    allowComments,
+    allowNotes,
+    allowQa,
+  ]);
   const publicPreviewLessonNumbers = useMemo(
     () => getPublicPreviewLessonNumbers(courseOverview),
     [courseOverview],
@@ -973,6 +979,12 @@ export function LearningWorkspace({
     }
     return isApiRoute ? undefined : getCourseThumbnail(courseSlug);
   }, [courseOverview, courseSlug, isApiRoute, isCourseOverviewError]);
+  const courseThumbnailSrcSet = courseOverview?.course.thumbnailSrcSet
+    ?.map(({ url, width }) => `${url} ${width}w`)
+    .join(", ") ||
+    (!isApiRoute && !isCourseOverviewError
+      ? getCourseThumbnailSrcSet(courseSlug)
+      : undefined);
   const nextLessonInfo = useMemo<NextLessonInfo | undefined>(() => {
     if (nextLessonId === undefined) return undefined;
     const lesson = curriculumLessonsById.get(nextLessonId);
@@ -1273,10 +1285,30 @@ export function LearningWorkspace({
         if (current[selectedLesson] === nextProgress) return current;
         const updated = { ...current, [selectedLesson]: nextProgress };
         try {
-          localStorage.setItem(
-            `veolms-learning-${coursePersistenceKey}-progress`,
-            JSON.stringify(updated),
-          );
+          // Merge with any previously stored map so a single watched lesson
+          // cannot wipe catalogue % derived from this legacy key.
+          const storageKey = `veolms-learning-${coursePersistenceKey}-progress`;
+          let merged: Record<string, number> = { ...updated };
+          try {
+            const raw = localStorage.getItem(storageKey);
+            if (raw) {
+              const existing = JSON.parse(raw) as Record<string, unknown>;
+              if (existing && typeof existing === "object") {
+                merged = {};
+                for (const [key, value] of Object.entries(existing)) {
+                  if (typeof value === "number" && Number.isFinite(value)) {
+                    merged[key] = value;
+                  }
+                }
+                for (const [key, value] of Object.entries(updated)) {
+                  merged[key] = Math.max(merged[key] ?? 0, value);
+                }
+              }
+            }
+          } catch {
+            merged = { ...updated };
+          }
+          localStorage.setItem(storageKey, JSON.stringify(merged));
         } catch {
           // Ignore storage write errors
         }
@@ -2250,6 +2282,7 @@ export function LearningWorkspace({
           courseNavigationActionLabel={courseNavigationActionLabel}
           courseTitle={courseTitle}
           courseThumbnail={courseThumbnail}
+          courseThumbnailSrcSet={courseThumbnailSrcSet}
           focusRequest={fullscreenCurriculumFocusRequest}
           persistenceKey={coursePersistenceKey}
         />
@@ -2260,6 +2293,7 @@ export function LearningWorkspace({
       closeFullscreenLessonPanel,
       courseNavigationActionLabel,
       courseThumbnail,
+      courseThumbnailSrcSet,
       courseTitle,
       curriculumLessonsById,
       curriculumSections,
@@ -2294,6 +2328,7 @@ export function LearningWorkspace({
   const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
     () => ({
       media: getCourseVideoForLesson(currentLesson[0]),
+      description: selectedLessonDescription,
       playbackBootstrap,
       refreshPlaybackToken,
       protectedPlayback,
@@ -2367,6 +2402,7 @@ export function LearningWorkspace({
       playerCourseLessonsSidePanel,
       previousLessonId,
       selectedLesson,
+      selectedLessonDescription,
       showingQuiz,
       theaterMode,
       toggleLessonDrawerFromPlayer,
@@ -2503,14 +2539,6 @@ export function LearningWorkspace({
       }
       onClickCapture={suppressCurriculumSwipeClick}
     >
-      {courseThumbnail ? (
-        <link
-          rel="preload"
-          as="image"
-          href={courseThumbnail}
-          fetchPriority="high"
-        />
-      ) : null}
       <main
         ref={mainRef}
         data-learning-motion-surface=""
@@ -2576,10 +2604,15 @@ export function LearningWorkspace({
                           ? "status"
                           : "alert"
                       }
-                      className="text-sm sm:text-base text-(--muted)"
+                      aria-label={
+                        quizAssignmentLoading || courseQuizAssignments.isLoading
+                          ? "Loading quiz assignment"
+                          : undefined
+                      }
+                      className={`text-sm sm:text-base text-(--muted) ${quizAssignmentLoading || courseQuizAssignments.isLoading ? "grid min-h-12 place-items-center" : ""}`}
                     >
                       {quizAssignmentLoading || courseQuizAssignments.isLoading
-                        ? "Loading Quiz assignment..."
+                        ? <LoadingSpinnerIcon size={20} />
                         : "This Quiz is not currently assigned to your course access."}
                     </p>
                   </section>
@@ -2698,8 +2731,7 @@ export function LearningWorkspace({
                     role="status"
                     aria-label="Loading discussion"
                   >
-                    <div className="mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-                    Loading discussion…
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
                   </div>
                 </div>
               )}
@@ -2763,6 +2795,7 @@ export function LearningWorkspace({
                 courseNavigationActionLabel={courseNavigationActionLabel}
                 courseTitle={courseTitle}
                 courseThumbnail={courseThumbnail}
+                courseThumbnailSrcSet={courseThumbnailSrcSet}
                 focusRequest={curriculumFocusRequest}
                 persistenceKey={coursePersistenceKey}
                 isLoading={isApiRoute && isCourseOverviewLoading}
@@ -2910,6 +2943,7 @@ export function LearningWorkspace({
               courseNavigationActionLabel={courseNavigationActionLabel}
               courseTitle={courseTitle}
               courseThumbnail={courseThumbnail}
+              courseThumbnailSrcSet={courseThumbnailSrcSet}
               focusRequest={
                 lessonDrawerScrollTarget === "current"
                   ? lessonDrawerFocusRequest
