@@ -4456,6 +4456,16 @@
   min-width: 0;
 }
 
+.discussion-hub__card-expanded-markdown {
+  max-height: 520px;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.discussion-hub__card-expanded-markdown a {
+  overflow-wrap: anywhere;
+}
+
 .discussion-hub__card-content-title {
   margin: 0 0 6px;
   color: var(--text);
@@ -4827,6 +4837,10 @@
     min-height: 0;
     overflow: visible;
     padding: 12px 14px;
+  }
+
+  .discussion-hub__card-expanded-markdown {
+    max-height: min(420px, 60dvh);
   }
 
   .discussion-hub .discussion-thread--workspace-card.is-collapsed {
