@@ -69,13 +69,26 @@ export function AvatarStylePicker({
       );
       if (exact) return exact;
 
-      const cleanCurrent = currentAvatarUrl.split("?")[0];
+      const cleanCurrent = currentAvatarUrl.split("?")[0] ?? currentAvatarUrl;
       const cleanMatch = avatars.find(
         (a) =>
-          a.avatarDataUrl.split("?")[0] === cleanCurrent ||
-          a.avatarSrcSet?.some((v) => v.url?.split("?")[0] === cleanCurrent),
+          (a.avatarDataUrl.split("?")[0] ?? a.avatarDataUrl) === cleanCurrent ||
+          a.avatarSrcSet?.some(
+            (v) => (v.url.split("?")[0] ?? v.url) === cleanCurrent,
+          ),
       );
       if (cleanMatch) return cleanMatch;
+
+      const currentPrefixMatch = cleanCurrent.match(
+        /\/public\/avatars\/[A-Za-z0-9_-]{1,200}/,
+      );
+      if (currentPrefixMatch) {
+        const prefix = currentPrefixMatch[0];
+        const prefixMatch = avatars.find((a) =>
+          a.avatarDataUrl.includes(prefix),
+        );
+        if (prefixMatch) return prefixMatch;
+      }
     }
 
     return null;
@@ -120,8 +133,14 @@ export function AvatarStylePicker({
     if (activeSavedAvatar) {
       return activeSavedAvatar.id;
     }
+    if (googleAvatar) {
+      return googleAvatar.id;
+    }
+    if (savedAvatars[0]) {
+      return savedAvatars[0].id;
+    }
     return null;
-  }, [userSelectedSavedId, avatars, activeSavedAvatar]);
+  }, [userSelectedSavedId, avatars, activeSavedAvatar, googleAvatar, savedAvatars]);
 
   const selectedSavedAvatar = useMemo(() => {
     if (effectiveSelectedSavedId) {
@@ -462,6 +481,7 @@ export function AvatarStylePicker({
                             width={60}
                             height={60}
                             sizes="60px"
+                            loading="eager"
                             className="settings-profile__avatar-saved-thumb"
                             onError={() =>
                               setFailedThumbnails((previous) => ({
@@ -523,6 +543,7 @@ export function AvatarStylePicker({
                               width={60}
                               height={60}
                               sizes="60px"
+                              loading="eager"
                               className="settings-profile__avatar-saved-thumb"
                               onError={() =>
                                 setFailedThumbnails((previous) => ({

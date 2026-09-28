@@ -9,7 +9,7 @@ const reactRouterCli = path.resolve(
   scriptDirectory,
   "../node_modules/@react-router/dev/bin.cjs",
 );
-const workspaceRoot = path.resolve(scriptDirectory, "../../..");
+const workspaceRoot = path.resolve(scriptDirectory, "../..");
 
 for (const environmentFile of [".env.production", ".env"]) {
   try {
@@ -19,6 +19,13 @@ for (const environmentFile of [".env.production", ".env"]) {
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
+}
+
+if (process.env.STATIC_BUILD_API_URL) {
+  process.env.STATIC_BUILD_API_URL = process.env.STATIC_BUILD_API_URL.replace("localhost", "127.0.0.1");
+}
+if (process.env.VITE_API_BASE_URL) {
+  process.env.VITE_API_BASE_URL = process.env.VITE_API_BASE_URL.replace("localhost", "127.0.0.1");
 }
 
 export const runPerformanceBuild = async (

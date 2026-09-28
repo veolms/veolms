@@ -376,6 +376,7 @@ function CurriculumSectionItem({
                   forceVirtualized={shouldVirtualizeLessons}
                   estimatedItemSize={46}
                   itemGap={0}
+                  overscan={14}
                   getItemKey={getOverviewLessonKey}
                   pinnedItemIds={NO_PINNED_LESSONS}
                   renderItem={
@@ -1463,7 +1464,13 @@ const LINE_HEIGHT_PX = 0.88 * 16 * 1.65; // font-size × line-height ≈ 23.2 px
 function CourseAboutCard({ description }: CourseAboutCardProps) {
   const hasDescription = Boolean(description && description.trim());
   const [expanded, setExpanded] = useState(false);
-  const [needsClamp, setNeedsClamp] = useState(false);
+  const [needsClamp, setNeedsClamp] = useState(() => {
+    if (!description) return false;
+    return (
+      description.split("\n").length > CLAMP_LINES ||
+      description.length > 250
+    );
+  });
   const contentRef = (node: HTMLDivElement | null) => {
     if (!node) return;
     const collapsedMax = Math.round(LINE_HEIGHT_PX * CLAMP_LINES);

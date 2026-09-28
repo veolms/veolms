@@ -19,6 +19,9 @@ const VIRTUALIZE_AFTER = 80;
 const LESSON_ROW_ESTIMATE = 168;
 const LESSON_ROW_OVERSCAN = 8;
 const LESSON_ROW_GAP = 10;
+// A zero-size first measurement mounts only the overscan rows until the
+// scroll element reports its actual viewport size.
+const INITIAL_VIRTUALIZER_RECT = { width: 1024, height: 768 };
 const LESSON_FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"], audio[controls], video[controls], summary';
 
@@ -29,6 +32,7 @@ interface VirtualizedLessonListProps<T> {
   forceVirtualized?: boolean;
   estimatedItemSize?: number;
   itemGap?: number;
+  overscan?: number;
   getScrollElement?: () => HTMLElement | null;
   getItemKey: (item: T) => string;
   pinnedItemIds: ReadonlySet<string>;
@@ -77,6 +81,7 @@ export function VirtualizedLessonList<T>({
   forceVirtualized = false,
   estimatedItemSize = LESSON_ROW_ESTIMATE,
   itemGap = LESSON_ROW_GAP,
+  overscan,
   getScrollElement: getScrollElementOverride,
   getItemKey,
   pinnedItemIds,
@@ -84,15 +89,7 @@ export function VirtualizedLessonList<T>({
   renderItem,
 }: VirtualizedLessonListProps<T>) {
   const listRef = useRef<HTMLDivElement>(null);
-  const [useWindowScroll, setUseWindowScroll] = useState(true);
-  const [scrollMargin, setScrollMargin] = useState(0);
-  const [pendingFocus, setPendingFocus] = useState<{
-    itemId: string;
-    edge: "first" | "last";
-  } | null>(null);
-  const virtualized =
-    items.length >= VIRTUALIZE_AFTER || (forceVirtualized && items.length > 0);
-  const getScrollElement = useCallback(
+  const resolveScrollElement = useCallback(
     () =>
       getScrollElementOverride
         ? getScrollElementOverride()
@@ -100,32 +97,91 @@ export function VirtualizedLessonList<T>({
           getApplicationScrollElement()),
     [getScrollElementOverride],
   );
+  const [useWindowScroll, setUseWindowScroll] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const initialElement =
+      getScrollElementOverride
+        ? getScrollElementOverride()
+        : (typeof document !== "undefined"
+            ? getApplicationScrollElement()
+            : null);
+    return initialElement === null;
+  });
+  const [scrollMargin, setScrollMargin] = useState(0);
+  const [pendingFocus, setPendingFocus] = useState<{
+    itemId: string;
+    edge: "first" | "last";
+  } | null>(null);
+  const virtualized =
+    items.length >= VIRTUALIZE_AFTER || (forceVirtualized && items.length > 0);
+  const effectiveOverscan =
+    overscan ?? (estimatedItemSize <= 60 ? 14 : LESSON_ROW_OVERSCAN);
 
   useLayoutEffect(() => {
     const syncScrollMode = () => {
-      setUseWindowScroll(getScrollElement() === null);
+      setUseWindowScroll(resolveScrollElement() === null);
     };
 
     syncScrollMode();
     window.addEventListener("resize", syncScrollMode);
     return () => window.removeEventListener("resize", syncScrollMode);
-  }, [getScrollElement]);
+  }, [resolveScrollElement]);
+
+  const syncScrollMargin = useCallback(() => {
+    const scrollElement = useWindowScroll ? null : resolveScrollElement();
+    const next = getListScrollMargin(listRef.current, scrollElement);
+    setScrollMargin((current) =>
+      Math.abs(current - next) > 1 ? next : current,
+    );
+  }, [resolveScrollElement, useWindowScroll]);
 
   useLayoutEffect(() => {
-    const syncScrollMargin = () => {
-      const next = getListScrollMargin(
-        listRef.current,
-        useWindowScroll ? null : getScrollElement(),
-      );
-      setScrollMargin((current) =>
-        Math.abs(current - next) > 1 ? next : current,
-      );
-    };
-
     syncScrollMargin();
+
+    const scrollElement = useWindowScroll ? null : resolveScrollElement();
+
     window.addEventListener("resize", syncScrollMargin);
-    return () => window.removeEventListener("resize", syncScrollMargin);
-  }, [getScrollElement, items.length, renderItem, useWindowScroll]);
+
+    const handleTransitionEnd = () => syncScrollMargin();
+    window.addEventListener("transitionend", handleTransitionEnd, {
+      passive: true,
+    });
+    window.addEventListener("animationend", handleTransitionEnd, {
+      passive: true,
+    });
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => {
+        syncScrollMargin();
+      });
+
+      if (listRef.current) {
+        resizeObserver.observe(listRef.current);
+      }
+      if (scrollElement) {
+        resizeObserver.observe(scrollElement);
+        if (scrollElement.firstElementChild) {
+          resizeObserver.observe(scrollElement.firstElementChild);
+        }
+      }
+    }
+
+    const timers = [
+      window.setTimeout(syncScrollMargin, 50),
+      window.setTimeout(syncScrollMargin, 150),
+      window.setTimeout(syncScrollMargin, 320),
+      window.setTimeout(syncScrollMargin, 500),
+    ];
+
+    return () => {
+      window.removeEventListener("resize", syncScrollMargin);
+      window.removeEventListener("transitionend", handleTransitionEnd);
+      window.removeEventListener("animationend", handleTransitionEnd);
+      resizeObserver?.disconnect();
+      timers.forEach((id) => window.clearTimeout(id));
+    };
+  }, [items.length, resolveScrollElement, syncScrollMargin, useWindowScroll]);
 
   const indexById = useMemo(() => {
     const indexes = new Map<string, number>();
@@ -193,7 +249,8 @@ export function VirtualizedLessonList<T>({
     count: virtualized && useWindowScroll ? items.length : 0,
     estimateSize: () => estimatedItemSize + itemGap,
     getItemKey: itemKey,
-    overscan: LESSON_ROW_OVERSCAN,
+    initialRect: INITIAL_VIRTUALIZER_RECT,
+    overscan: effectiveOverscan,
     rangeExtractor,
     scrollMargin: useWindowScroll ? scrollMargin : 0,
   });
@@ -203,8 +260,9 @@ export function VirtualizedLessonList<T>({
     count: virtualized && !useWindowScroll ? items.length : 0,
     estimateSize: () => estimatedItemSize + itemGap,
     getItemKey: itemKey,
-    getScrollElement,
-    overscan: LESSON_ROW_OVERSCAN,
+    getScrollElement: resolveScrollElement,
+    initialRect: INITIAL_VIRTUALIZER_RECT,
+    overscan: effectiveOverscan,
     rangeExtractor,
     scrollMargin: useWindowScroll ? 0 : scrollMargin,
   });
