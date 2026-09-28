@@ -115,8 +115,13 @@ export const authStore = {
 
   setUser(user: AuthUser | null) {
     writeGeneration += 1;
-    identityHint = user?.displayName?.trim()
-      ? { displayName: user.displayName.trim() }
+    const displayName = user?.displayName?.trim();
+    const userId = typeof user?.id === "string" ? user.id.trim() : "";
+    identityHint = displayName
+      ? {
+          displayName,
+          ...(userId ? { userId } : {}),
+        }
       : null;
     writeIdentityHint(user);
     state = {

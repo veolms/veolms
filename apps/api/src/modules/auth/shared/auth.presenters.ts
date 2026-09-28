@@ -2,9 +2,13 @@ import type { MfaState, SessionUser } from "./auth.types.ts";
 import { avatarSrcSetFromUrl } from "../../avatars/index.ts";
 
 export function presentAvatar(avatarDataUrl: string | null) {
+  let effectiveUrl = avatarDataUrl;
+  if (effectiveUrl && effectiveUrl.endsWith("--google/160.webp")) {
+    effectiveUrl = effectiveUrl.replace("/160.webp", "/original.jpg");
+  }
   return {
-    avatarDataUrl,
-    avatarSrcSet: avatarSrcSetFromUrl(avatarDataUrl),
+    avatarDataUrl: effectiveUrl,
+    avatarSrcSet: avatarSrcSetFromUrl(effectiveUrl),
   };
 }
 

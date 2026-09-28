@@ -97,38 +97,3 @@ export function getEarlyApiBootstrapScript(): string {
   } catch {}
 })();`;
 }
-
-/** Apply the display-only session hint as soon as server-rendered shell markup arrives. */
-export function getAuthIdentityHintBootstrapScript(): string {
-  return String.raw`(() => {
-  try {
-    const savedIdentity = sessionStorage.getItem('veolms-auth-identity');
-    if (!savedIdentity) return;
-    let displayName = '';
-    try {
-      const identity = JSON.parse(savedIdentity);
-      if (typeof identity === 'string') displayName = identity.trim();
-      else if (identity && typeof identity.displayName === 'string') displayName = identity.displayName.trim();
-    } catch {
-      displayName = savedIdentity.trim();
-    }
-    if (!displayName) return;
-    const applyDisplayName = () => {
-      const labels = document.querySelectorAll('[data-auth-identity-title]');
-      for (const label of labels) label.textContent = displayName;
-      for (const subtitle of document.querySelectorAll('[data-auth-identity-subtitle]')) {
-        subtitle.textContent = 'Account';
-      }
-      for (const button of document.querySelectorAll('[data-auth-identity-button]')) {
-        button.setAttribute('aria-label', 'Account for ' + displayName + '. Open account access');
-      }
-      return labels.length > 0;
-    };
-    const observer = new MutationObserver(() => {
-      if (applyDisplayName()) observer.disconnect();
-    });
-    observer.observe(document, { childList: true, subtree: true });
-    if (applyDisplayName()) observer.disconnect();
-  } catch {}
-})();`;
-}

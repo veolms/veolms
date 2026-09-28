@@ -22,7 +22,9 @@ import {
 import { getCourseRouteKey } from "./catalogue";
 import type { Course, CourseRole } from "./catalogue";
 import { CourseActionMenu, MenuAction, MenuDivider } from "./CourseActionMenu";
+import { CourseCardThumbnail } from "./CourseCardThumbnail";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
+export { courseThumbnailSizes, getCourseThumbnailSrcSet } from "./courseThumbnail";
 
 const courseOverviewPath = (course: Course) =>
   `/courses/${encodeURIComponent(getCourseRouteKey(course))}/overview`;
@@ -40,20 +42,6 @@ const studentStatusStyles = {
   "in-progress": "course-tag--in-progress",
   completed: "course-tag--completed",
 } as const;
-
-// Keep the image slot declaration aligned with CourseCatalogue's grid:
-// one column below 560px, two columns from 560px, three from 1280px, and
-// four from 1536px. Avoid `auto` here because eager images cannot use the
-// auto-size shortcut consistently across browsers.
-export const courseThumbnailSizes =
-  "(min-width: 1536px) 23vw, (min-width: 1280px) 31vw, (min-width: 560px) 47vw, 100vw";
-
-export const getCourseThumbnailSrcSet = (
-  course: Pick<Course, "thumbnailSrcSet">,
-) =>
-  course.thumbnailSrcSet
-    ?.map((variant) => `${variant.url} ${variant.width}w`)
-    .join(", ");
 
 const getStudentStatus = (course: Course) => {
   if (!course.enrolled) return "not-enrolled" as const;
@@ -213,18 +201,7 @@ export function CourseCard({
         data-course-card-media
       >
         {course.thumbnail ? (
-          <img
-            src={course.thumbnail}
-            srcSet={getCourseThumbnailSrcSet(course)}
-            sizes={courseThumbnailSizes}
-            alt={course.title}
-            className="h-full w-full object-cover"
-            width={960}
-            height={540}
-            loading={imagePriority ? "eager" : "lazy"}
-            fetchPriority={imagePriority ? "high" : "low"}
-            decoding={imagePriority ? "sync" : "async"}
-          />
+          <CourseCardThumbnail course={course} priority={imagePriority} />
         ) : (
           <CourseThumbnailPlaceholder />
         )}

@@ -84,7 +84,7 @@ export async function loadAcademyStaticPageData(
     new URL(request.url).pathname
       .replace(/(?:_)?\.data$/u, "")
       .replace(/\/$/u, "") || "/";
-  if (pathname === "/courses") {
+  if (pathname === "/" || pathname === "/courses") {
     const publishedCourses = await loadPublishedCourses();
     return {
       publishedCoursePage: publishedCourses.page,

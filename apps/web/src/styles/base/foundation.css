@@ -276,3 +276,93 @@ button {
   background: var(--accent);
   color: var(--on-accent);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Shared Page Tabs Contract
+   Used across Settings, Course Wizard, Discussions, and workspace tabs.
+   ───────────────────────────────────────────────────────────────────────────── */
+.page-tabs {
+  --page-tab-indicator-left: 0px;
+  --page-tab-indicator-width: 0px;
+  --page-tab-indicator-color: var(--accent);
+  position: relative;
+}
+
+.page-tabs [role="tab"] {
+  --page-tab-active-ink: var(--accent-ink, var(--accent));
+  --page-tab-active-indicator: var(--accent);
+}
+
+.page-tabs__indicator {
+  position: absolute;
+  z-index: 2;
+  bottom: 0;
+  left: 0;
+  width: var(--page-tab-indicator-width);
+  height: 2px;
+  border-radius: 999px 999px 0 0;
+  background: var(--page-tab-indicator-color, var(--accent));
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(var(--page-tab-indicator-left, 0px), 0, 0);
+  transition:
+    width 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 160ms ease-out;
+  will-change: width, transform;
+}
+
+.page-tabs [data-page-tab-tone="blue"] {
+  --page-tab-tone: #5da9ff;
+}
+.page-tabs [data-page-tab-tone="violet"] {
+  --page-tab-tone: #ad7cff;
+}
+.page-tabs [data-page-tab-tone="cyan"] {
+  --page-tab-tone: #63c8d5;
+}
+.page-tabs [data-page-tab-tone="green"] {
+  --page-tab-tone: #55d98b;
+}
+.page-tabs [data-page-tab-tone="gold"] {
+  --page-tab-tone: #f1be4b;
+}
+.page-tabs [data-page-tab-tone="orange"] {
+  --page-tab-tone: #f09c4e;
+}
+.page-tabs [data-page-tab-tone="rose"] {
+  --page-tab-tone: #ff6684;
+}
+
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="blue"] {
+  --page-tab-tone: #1769aa;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="violet"] {
+  --page-tab-tone: #6741b8;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="cyan"] {
+  --page-tab-tone: #0b6d79;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="green"] {
+  --page-tab-tone: #14763f;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="gold"] {
+  --page-tab-tone: #7b5b00;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="orange"] {
+  --page-tab-tone: #9a4d00;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="rose"] {
+  --page-tab-tone: #b82b52;
+}
+
+:root[data-page-tab-colors="multicolor"]
+  .page-tabs
+  [role="tab"][data-page-tab-tone],
+:root[data-page-tab-colors="follow-sidebar"][data-sidebar-icon-style="multicolor"]
+  .page-tabs
+  [role="tab"][data-page-tab-tone] {
+  --page-tab-active-ink: var(--page-tab-tone);
+  --page-tab-active-indicator: var(--page-tab-tone);
+}
+

@@ -61,6 +61,7 @@ export default function MfaSetupRoute() {
         <MfaEnrollmentSetup
           onDone={() => navigate(APP_HOME_PATH, { replace: true })}
           onError={setError}
+          onClearError={() => setError(null)}
         />
       )}
     </section>
