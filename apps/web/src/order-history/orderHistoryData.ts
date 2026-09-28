@@ -6,9 +6,9 @@ export type OrderHistoryStatus =
   | "canceled";
 
 export interface OrderHistoryPayment {
-  type: "visa" | "mastercard" | "upi" | "paypal";
-  label: string; // e.g. "•••• 4242", "ashisingh@upi", "ashisingh@example.com"
-  brand: string; // e.g. "Visa", "Mastercard", "UPI", "PayPal"
+  type: "visa" | "mastercard" | "upi" | "paypal" | "other";
+  label: string;
+  brand: string;
 }
 
 export interface OrderHistoryItem {

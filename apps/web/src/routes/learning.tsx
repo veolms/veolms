@@ -18,7 +18,6 @@ import {
   LEARNING_LESSON_NUMBER_META_NAME,
 } from "../learning/learningHlsBootstrap";
 import { resolveLessonIdentifier } from "../learning/courseContent";
-import { getApiCourseSlugForLegacyKey } from "../courses/catalogue";
 import {
   getCoursePlayerOrigin,
   getCoursePlayerNote,
@@ -32,7 +31,7 @@ import {
 } from "../learning/coursePlayerNavigation";
 import { getRouteMeta } from "../routing/routeDescriptors";
 import { useCurrentUser } from "../services/auth";
-import { useCourseOverview, useCourses } from "../services/courses";
+import { useCourseOverview } from "../services/courses";
 import { useAuthStore } from "../store/auth.store";
 import type { AcademyOutletContext } from "./academy-layout";
 import type { LearningMiniPlayerRequest } from "../learning/player/learningMiniPlayerTypes";
@@ -116,16 +115,6 @@ export default function LearningRoute() {
     useCourseOverview(courseSlug, {
       enabled: Boolean(courseSlug),
     });
-  const { data: publishedCoursesData } = useCourses({
-    enabled: Boolean(activeUser),
-  });
-  const apiCourseSlugForKey = getApiCourseSlugForLegacyKey(courseSlug);
-  const apiCourse = publishedCoursesData?.courses.find(
-    (course) =>
-      course.id === courseSlug ||
-      course.slug === courseSlug ||
-      course.slug === apiCourseSlugForKey,
-  );
   const { data: myQuizAssignments, isLoading: myQuizAssignmentsLoading } =
     useMyQuizAssignments({
       enabled: Boolean(activeUser),

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import {
   buildDicebearSvgUrl,
@@ -33,6 +33,7 @@ const NAME_FIELD_ID = "auth-account-name";
 const NAME_LABEL = "Your name";
 const NAME_REQUIRED_MESSAGE = "Please enter your name.";
 const NAME_TOO_LONG_MESSAGE = "Please use a shorter name.";
+const AVATAR_PREVIEW_DEBOUNCE_MS = 300;
 
 function validateName(value: string): string | null {
   const trimmed = value.trim();
@@ -58,8 +59,17 @@ export function AccountForm({
 }: AccountFormProps) {
   const creating = status === "creating";
   const [invalidReason, setInvalidReason] = useState<string | null>(null);
+  const [avatarPreviewName, setAvatarPreviewName] = useState(name.trim());
   const error = invalidReason ?? errorMessage ?? null;
   const hasName = Boolean(name.trim());
+
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setAvatarPreviewName(name.trim()),
+      AVATAR_PREVIEW_DEBOUNCE_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [name]);
 
   const changeName = (next: string) => {
     setInvalidReason(null);
@@ -117,11 +127,14 @@ export function AccountForm({
 
             <div className="auth-account-form__identity-row">
               <span className="auth-account-form__avatar-circle" aria-hidden="true">
-                {hasName ? (
+                {hasName && avatarPreviewName ? (
                   <img
                     alt=""
                     height={44}
-                    src={buildDicebearSvgUrl(DEFAULT_AVATAR_STYLE, name.trim())}
+                    src={buildDicebearSvgUrl(
+                      DEFAULT_AVATAR_STYLE,
+                      avatarPreviewName,
+                    )}
                     width={44}
                   />
                 ) : (

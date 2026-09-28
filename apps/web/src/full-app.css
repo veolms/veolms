@@ -1,21 +1,16 @@
+/* Development keeps a single stylesheet request to preserve the existing
+   first-paint behavior. Production links the shared sheet and each active
+   route/feature sheet independently. */
 @import "./styles.css";
+@import "@veolms/video-player/styles.css";
+@import "./styles/features/player.css";
+@import "./styles/features/learning.css";
+@import "./styles/features/student-learning.css";
+@import "./styles/features/course-wizard.css";
+@import "./styles/themes/academy-theme-palettes.css";
 @import "./shell-theme.css";
-@import "./reading-mode.css";
-/* Auth routes are client-hydrated and may initially serve HydrateFallback in
-   the static build, so their namespaced styles must be available globally. */
+@import "./styles/features/workspace.css";
+@import "./styles/features/discussions.css";
+@import "./styles/features/profile.css";
 @import "./auth/auth.css";
 @import "./auth/mfa-setup.css";
-/* Scrollbar pseudo-elements cannot be expressed with Tailwind. Keep their
-   application-wide preference styles owned by the settings feature. */
-@import "./settings/scrollbars/scrollbarPreferences.css";
-@import "./accessibility/tabFocusVisibility.css";
-
-@font-face {
-  font-family: "Manrope Variable";
-  font-style: normal;
-  font-display: swap;
-  font-weight: 200 800;
-  src: url("./assets/fonts/manrope-core.woff2") format("woff2-variations");
-  unicode-range:
-    U+0020-007E, U+00A0-00FF, U+20AC, U+20B9, U+2190-2193, U+2318, U+2325;
-}

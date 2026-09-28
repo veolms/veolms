@@ -19,7 +19,10 @@ import { useNavigate } from "react-router";
 import javascriptThumbnail from "./assets/course-thumbnails/javascript-960.webp";
 import nodeThumbnail from "./assets/course-thumbnails/nodejs-960.webp";
 import typescriptThumbnail from "./assets/course-thumbnails/typescript-960.webp";
+import typescriptInstructorHero512 from "./assets/learning-thumbnails/typescript-instructor-hero-512.webp";
+import typescriptInstructorHero640 from "./assets/learning-thumbnails/typescript-instructor-hero-640.webp";
 import typescriptInstructorHero800 from "./assets/learning-thumbnails/typescript-instructor-hero-800.webp";
+import typescriptInstructorHero from "./assets/learning-thumbnails/typescript-instructor-hero.webp";
 import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
 import { getCourseThumbnailCdnUrl } from "./courses/courseMedia";
 import {
@@ -38,6 +41,9 @@ import {
   DashboardDiscussionCardSkeletons,
   DashboardDiscussionRetryContent,
 } from "./workspace/DashboardDiscussionPreview";
+import "./styles/features/student-learning.css";
+import "./styles/features/home.css";
+import "./styles/features/creator-dashboard.css";
 
 interface StudentHomeProps {
   onOpenCourse: (course: LearningCourse) => void;
@@ -700,9 +706,12 @@ export function StudentHome({
             <div className="home-resume-visual">
               <img
                 src={typescriptInstructorHero800}
-                alt=""
+                srcSet={`${typescriptInstructorHero512} 512w, ${typescriptInstructorHero640} 640w, ${typescriptInstructorHero800} 800w, ${typescriptInstructorHero} 1600w`}
+                sizes="(max-width: 820px) calc(100vw - 50px), (max-width: 1180px) 40vw, 430px"
+                alt="Course explore"
                 width={1600}
                 height={900}
+                loading="eager"
                 decoding="sync"
                 fetchPriority="high"
               />

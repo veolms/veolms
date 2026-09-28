@@ -50,6 +50,7 @@ import { formatRelativeTime } from "./learning/learning-notes.adapter";
 import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
 import { useAuthStore } from "./store/auth.store";
 import { DiscussionWorkspaceCard } from "./workspace/DiscussionsWorkspace";
+import "./styles/features/creator-dashboard.css";
 
 type ActivityRow = readonly [
   label: string,

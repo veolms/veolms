@@ -16,6 +16,7 @@ import {
 } from "@phosphor-icons/react";
 import { useMyCourses } from "../services/courses";
 import { useBackDismiss } from "../navigation/useBackDismiss";
+import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 
 export interface SelectCourseForQuizModalProps {
   isOpen: boolean;
@@ -186,10 +187,11 @@ export function SelectCourseForQuizModal({
         {/* Course List */}
         <div className="flex-1 overflow-y-auto min-h-[180px] max-h-[340px] my-2 pr-1 space-y-2">
           {coursesQuery.isLoading ? (
-            <div className="flex flex-col items-center justify-center py-10 gap-2 text-(--muted) text-xs">
-              <CircleNotch size={22} className="animate-spin text-(--accent)" />
-              <span>Loading your courses...</span>
-            </div>
+            <CenteredLoadingSpinner
+              label="Loading your courses"
+              className="min-h-[180px]"
+              size={22}
+            />
           ) : rawCourses.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] text-(--accent) mb-3">

@@ -40,6 +40,7 @@ import {
 } from "./catalogue";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
 import type { CourseSection } from "../learning/courseContent";
+import { VirtualizedLessonList } from "./curriculum/VirtualizedLessonList";
 import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
 import type { NavigateTo } from "../routing/navigation";
 import { useAuthStore } from "../store/auth.store";
@@ -54,9 +55,19 @@ import {
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
 import { formatDuration, resolveCourseDurationSeconds } from "./courseAdapter";
+import {
+  getApplicationScrollElement,
+  scrollApplicationTo,
+} from "../shell/applicationScroll";
 // ─── Helpers for Currency, Sale Window, Language, and Price Sizing ────────────
 
 export type PriceSizeVariant = "normal" | "medium" | "large" | "xlarge";
+
+const NO_PINNED_LESSONS: ReadonlySet<string> = new Set();
+const SECTION_COLLAPSE_TRANSITION_MS = 250;
+const SECTION_SCROLL_SETTLE_DELAY_MS = SECTION_COLLAPSE_TRANSITION_MS + 50;
+const getOverviewLessonKey = (lesson: CourseSection["lessons"][number]) =>
+  String(lesson[0]);
 
 declare global {
   interface Window {
@@ -276,6 +287,7 @@ interface CurriculumSectionProps {
   isOpen: boolean;
   onToggle: () => void;
   onSelectLesson?: (lessonNumber: number) => void;
+  shouldVirtualizeLessons?: boolean;
   isReadOnlyPreview?: boolean;
   isPaidCourse?: boolean;
 }
@@ -292,6 +304,7 @@ function CurriculumSectionItem({
   isOpen,
   onToggle,
   onSelectLesson,
+  shouldVirtualizeLessons = false,
   isReadOnlyPreview = false,
   isPaidCourse = false,
 }: CurriculumSectionProps) {
@@ -357,8 +370,17 @@ function CurriculumSectionItem({
         <div className="overflow-hidden min-h-0">
           <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,var(--text))]">
             {section.lessons.length > 0 ? (
-              section.lessons.map(
-                ([number, title, duration, status, isPreview, contentType]) => {
+              isOpen ? (
+                <VirtualizedLessonList
+                  items={section.lessons}
+                  forceVirtualized={shouldVirtualizeLessons}
+                  estimatedItemSize={46}
+                  itemGap={0}
+                  overscan={14}
+                  getItemKey={getOverviewLessonKey}
+                  pinnedItemIds={NO_PINNED_LESSONS}
+                  renderItem={
+                    ([number, title, duration, status, isPreview, contentType]) => {
                   const isDoc = contentType === "document";
                   const isQuiz = contentType === "quiz";
                   return (
@@ -439,8 +461,10 @@ function CurriculumSectionItem({
                       ) : null}
                     </button>
                   );
-                },
-              )
+                    }
+                  }
+                />
+              ) : null
             ) : (
               <div className="px-3.5 py-3 text-(--muted) text-[0.82rem] italic">
                 No lessons added yet
@@ -1389,8 +1413,17 @@ function CourseHeroSection({
           {thumbnail ? (
             <img
               src={thumbnail}
+              srcSet={course.thumbnailSrcSet
+                ?.map(({ url, width }) => `${url} ${width}w`)
+                .join(", ")}
+              sizes="(max-width: 640px) 100vw, (max-width: 1200px) 50vw, 560px"
               alt={`Preview thumbnail for ${title}`}
               className="w-full h-full object-cover opacity-90 transition-[transform,opacity] duration-300 motion-reduce:transition-none group-hover:scale-[1.015] group-hover:opacity-[0.98]"
+              width={960}
+              height={540}
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
             />
           ) : (
             <CourseThumbnailPlaceholder />
@@ -1431,7 +1464,13 @@ const LINE_HEIGHT_PX = 0.88 * 16 * 1.65; // font-size × line-height ≈ 23.2 px
 function CourseAboutCard({ description }: CourseAboutCardProps) {
   const hasDescription = Boolean(description && description.trim());
   const [expanded, setExpanded] = useState(false);
-  const [needsClamp, setNeedsClamp] = useState(false);
+  const [needsClamp, setNeedsClamp] = useState(() => {
+    if (!description) return false;
+    return (
+      description.split("\n").length > CLAMP_LINES ||
+      description.length > 250
+    );
+  });
   const contentRef = (node: HTMLDivElement | null) => {
     if (!node) return;
     const collapsedMax = Math.round(LINE_HEIGHT_PX * CLAMP_LINES);
@@ -1613,10 +1652,11 @@ function CourseCurriculumCard({
               key={section.id}
               section={section}
               index={index}
-              isOpen={openSections.has(index)}
-              onToggle={() => onToggleSection(index)}
-              onSelectLesson={onSelectLesson}
-              isReadOnlyPreview={isReadOnlyPreview}
+                isOpen={openSections.has(index)}
+                onToggle={() => onToggleSection(index)}
+                onSelectLesson={onSelectLesson}
+                shouldVirtualizeLessons={course.lectures >= 80}
+                isReadOnlyPreview={isReadOnlyPreview}
               isPaidCourse={isPaidCourse}
             />
           ))}
@@ -1630,6 +1670,7 @@ function CourseCurriculumCard({
 
 export interface CourseOverviewPageProps {
   courseSlug?: string | undefined;
+  initialOverview?: CourseOverviewResponse;
   onNavigateCourses?: () => void;
   onNavigatePage?: NavigateTo;
   onSelectLesson?: (lessonNumber: number) => void;
@@ -1966,7 +2007,12 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
   const { data: apiOverview, isLoading: isOverviewLoading } = useCourseOverview(
     courseSlug,
     {
-      enabled: !props.previewData && !props.customCourse && Boolean(courseSlug),
+      enabled:
+        !props.initialOverview &&
+        !props.previewData &&
+        !props.customCourse &&
+        Boolean(courseSlug),
+      initialData: props.initialOverview,
     },
   );
 
@@ -1987,7 +2033,9 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
 
   const course = activeAdapted?.course ?? props.customCourse;
 
-  const { data: enrolledData } = useEnrolledCourses();
+  const { data: enrolledData } = useEnrolledCourses({
+    enabled: Boolean(authUser) && props.role !== "creator",
+  });
 
   const isEnrolled = useMemo(() => {
     if (!enrolledData?.courses) return false;
@@ -2199,6 +2247,15 @@ function CourseOverviewContent({
   const [openSections, setOpenSections] = useState<Set<number>>(
     () => new Set([0]),
   );
+  const sectionScrollTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (sectionScrollTimerRef.current !== null) {
+        window.clearTimeout(sectionScrollTimerRef.current);
+      }
+    },
+    [],
+  );
   const [wishlisted, setWishlisted] = useState(() => {
     try {
       const saved: unknown = JSON.parse(
@@ -2210,20 +2267,70 @@ function CourseOverviewContent({
     }
   });
 
+  const cancelPendingSectionScroll = () => {
+    if (sectionScrollTimerRef.current !== null) {
+      window.clearTimeout(sectionScrollTimerRef.current);
+      sectionScrollTimerRef.current = null;
+    }
+  };
+
+  const scrollToSection = (index: number, delay: number) => {
+    const section = courseSections[index];
+    if (!section) return;
+
+    sectionScrollTimerRef.current = window.setTimeout(() => {
+      sectionScrollTimerRef.current = null;
+      const sectionHeader = document.getElementById(
+        `cov-section-toggle-${section.id}`,
+      );
+      if (!sectionHeader) return;
+
+      const scrollElement = getApplicationScrollElement();
+      const headerTop = sectionHeader.getBoundingClientRect().top;
+      const scrollTop = scrollElement
+        ? scrollElement.scrollTop +
+          headerTop -
+          scrollElement.getBoundingClientRect().top
+        : window.scrollY + headerTop;
+      const prefersReducedMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+
+      scrollApplicationTo({
+        top: Math.max(0, scrollTop - 16),
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+      });
+    }, delay);
+  };
+
   const toggleSection = (index: number) => {
-    setOpenSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      return next;
-    });
+    const wasOpen = openSections.has(index);
+    cancelPendingSectionScroll();
+
+    if (wasOpen) {
+      setOpenSections(new Set());
+      return;
+    }
+
+    setOpenSections(new Set([index]));
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    scrollToSection(
+      index,
+      openSections.size > 0 && !prefersReducedMotion
+        ? SECTION_SCROLL_SETTLE_DELAY_MS
+        : 0,
+    );
   };
 
   const expandAllSections = () => {
+    cancelPendingSectionScroll();
     setOpenSections(new Set(courseSections.map((_, index) => index)));
   };
 
   const collapseAllSections = () => {
+    cancelPendingSectionScroll();
     setOpenSections(new Set());
   };
 

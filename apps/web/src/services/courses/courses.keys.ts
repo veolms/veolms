@@ -1,6 +1,8 @@
 export const courseKeys = {
   all: ["courses"] as const,
   lists: () => [...courseKeys.all, "list"] as const,
+  pagedLists: (filters: { limit: number; search: string; sort: string }) =>
+    [...courseKeys.lists(), "paged", filters] as const,
   mine: () => [...courseKeys.all, "mine"] as const,
   details: () => [...courseKeys.all, "detail"] as const,
   detail: (slug: string) => [...courseKeys.details(), slug] as const,
@@ -10,5 +12,6 @@ export const courseKeys = {
   preview: (id: string) => [...courseKeys.all, "preview", id] as const,
   validation: (id: string) => [...courseKeys.all, "validation", id] as const,
   categories: () => [...courseKeys.all, "categories"] as const,
+  options: () => [...courseKeys.lists(), "options"] as const,
   bin: () => [...courseKeys.all, "bin"] as const,
 };

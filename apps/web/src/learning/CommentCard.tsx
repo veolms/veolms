@@ -16,6 +16,7 @@ import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { CourseActionMenu, MenuAction, MenuDivider } from "../courses";
 import type {
@@ -792,13 +793,12 @@ export const CommentCard = React.memo(function CommentCard({
             >
               {isBackendEntity && isRepliesLoading && !repliesData ? (
                 <div
-                  className="py-4 text-center"
+                  className="grid min-h-20 place-items-center py-4"
                   data-testid="learning-replies-loading"
+                  role="status"
+                  aria-label="Loading replies"
                 >
-                  <div className="mx-auto mb-2 h-5 w-5 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-                  <p className="text-xs font-medium text-(--muted)">
-                    Loading replies…
-                  </p>
+                  <LoadingSpinnerIcon size={20} />
                 </div>
               ) : isBackendEntity && isRepliesError && !repliesData ? (
                 <div
@@ -877,9 +877,15 @@ export const CommentCard = React.memo(function CommentCard({
                       disabled={isFetchingNextPage}
                       onClick={() => void fetchNextPage()}
                       data-testid="learning-replies-load-more"
+                      aria-busy={isFetchingNextPage}
+                      aria-label={isFetchingNextPage ? "Loading more replies" : undefined}
                       className="inline-flex items-center rounded-lg bg-(--surface) px-2.5 py-1 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover) disabled:cursor-wait disabled:opacity-60"
                     >
-                      {isFetchingNextPage ? "Loading replies…" : "Load more replies"}
+                      {isFetchingNextPage ? (
+                        <LoadingSpinnerIcon size={16} />
+                      ) : (
+                        "Load more replies"
+                      )}
                     </button>
                   )}
                 </div>
@@ -987,6 +993,9 @@ function ReplyCard({
             <DiscussionAvatar
               src={reply.avatar}
               className="relative z-10 size-9 sm:size-10"
+              loading="lazy"
+              width={40}
+              height={40}
             />
 
             <div className="min-w-0 flex-1">

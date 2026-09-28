@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   courseSchema,
   courseListResponseSchema,
+  courseListQuerySchema,
+  courseOptionsResponseSchema,
   courseSlugParamsSchema,
   publicCourseSchema,
   createCourseRequestSchema,
@@ -38,11 +40,9 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         tags: ["Courses"],
         summary: "List published courses",
         description:
-          "Returns every course with `published` status, oldest first. " +
-          "Unpublished courses are never exposed. Supports optional filtering by creatorId.",
-        querystring: z.object({
-          creatorId: z.uuid().optional(),
-        }),
+          "Returns published courses in stable catalogue order. Unpublished courses are never exposed. " +
+          "Use limit and cursor for incremental catalogue loading; supports creatorId, search, and title sorting.",
+        querystring: courseListQuerySchema,
         response: {
           200: jsonResponse(
             "The published course catalogue.",
@@ -57,6 +57,31 @@ const courseRoutes: RoutePlugin = async (app, options) => {
       ],
     },
     controller.listCourses,
+  );
+
+  app.get(
+    "/courses/options",
+    {
+      schema: {
+        operationId: "listCourseOptions",
+        tags: ["Courses"],
+        summary: "List published course filter options",
+        description:
+          "Returns only IDs and titles for published courses, for course filter controls.",
+        response: {
+          200: jsonResponse(
+            "Published course IDs and titles.",
+            courseOptionsResponseSchema,
+          ),
+          403: errorResponse("MFA step-up required."),
+        },
+      },
+      preHandler: [
+        ctx.middleware.authenticate,
+        ctx.middleware.requireMfaVerifiedIfAuthenticated,
+      ],
+    },
+    controller.listCourseOptions,
   );
 
   app.get(

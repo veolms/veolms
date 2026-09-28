@@ -1,8 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import type {
   Category,
   CourseEditorDataResponse,
   CourseOverviewResponse,
+  CourseListResponse,
+  CourseOptionsResponse,
   CourseSummary,
   CourseValidationResponse,
   DeletedCoursesListResponse,
@@ -14,12 +17,16 @@ import type { ApiError } from "../../lib/api-error";
 import { courseKeys } from "./courses.keys";
 import { coursesService } from "./courses.service";
 
-export function useCourses(options?: { enabled?: boolean }) {
+export function useCourses(options?: {
+  enabled?: boolean;
+  initialData?: { courses: CourseSummary[] };
+}) {
   return useQuery<{ courses: CourseSummary[] }, ApiError>({
     queryKey: courseKeys.lists(),
     queryFn: () => coursesService.list(),
     enabled: options?.enabled ?? true,
-    staleTime: 5 * 60 * 1000,
+    initialData: options?.initialData,
+    staleTime: options?.initialData ? Infinity : 5 * 60 * 1000,
   });
 }
 
@@ -34,7 +41,10 @@ export function useCourse(slug: string) {
 
 export function useCourseOverview(
   idOrSlug: string | null | undefined,
-  options?: { enabled?: boolean },
+  options?: {
+    enabled?: boolean;
+    initialData?: CourseOverviewResponse;
+  },
 ) {
   return useQuery<CourseOverviewResponse, ApiError>({
     queryKey: idOrSlug
@@ -42,7 +52,8 @@ export function useCourseOverview(
       : ["courses", "overview", null],
     queryFn: () => coursesService.getOverview(idOrSlug!),
     enabled: Boolean(idOrSlug && (options?.enabled ?? true)),
-    staleTime: 60 * 1000,
+    initialData: options?.initialData,
+    staleTime: options?.initialData ? Infinity : 60 * 1000,
     retry: false,
   });
 }
@@ -75,6 +86,70 @@ export function useCourseEditor(courseId: string | null) {
       : ["courses", "editor", null],
     queryFn: () => coursesService.getCourseEditor(courseId!),
     enabled: Boolean(courseId),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useCourseOptions(options?: { enabled?: boolean }) {
+  return useQuery<CourseOptionsResponse, ApiError>({
+    queryKey: courseKeys.options(),
+    queryFn: () => coursesService.listOptions(),
+    enabled: options?.enabled ?? true,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useInfiniteCourses(options: {
+  enabled?: boolean;
+  limit?: number;
+  search?: string;
+  sort?: "latest" | "title";
+  initialData?: CourseListResponse;
+  initialDataNeedsRefresh?: boolean;
+}) {
+  const limit = options.limit ?? 24;
+  const search = options.search?.trim() ?? "";
+  const sort = options.sort ?? "latest";
+  const canUseInitialData =
+    Boolean(options.initialData) && search.length === 0 && sort === "latest";
+
+  return useInfiniteQuery<CourseListResponse, ApiError>({
+    queryKey: courseKeys.pagedLists({ limit, search, sort }),
+    queryFn: async ({ pageParam }) => {
+      const page = await coursesService.list({
+        limit,
+        cursor: pageParam as string | undefined,
+        ...(search ? { search } : {}),
+        sort,
+      });
+      return !page.nextCursor && page.courses.length > limit
+        ? { ...page, courses: page.courses.slice(0, limit) }
+        : page;
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: options.enabled ?? true,
+    initialData: canUseInitialData
+      ? {
+          pages: [options.initialData!],
+          pageParams: [undefined],
+        }
+      : undefined,
+    staleTime: canUseInitialData
+      ? options.initialDataNeedsRefresh
+        ? 0
+        : Infinity
+      : 5 * 60 * 1000,
+  });
+}
+
+export function prefetchCourseEditor(
+  queryClient: QueryClient,
+  courseId: string,
+): Promise<void> {
+  return queryClient.prefetchQuery<CourseEditorDataResponse, ApiError>({
+    queryKey: courseKeys.editor(courseId),
+    queryFn: () => coursesService.getCourseEditor(courseId),
     staleTime: 30 * 1000,
   });
 }

@@ -19,6 +19,8 @@ export interface StudentFiltersBarProps {
   sortBy: "recent" | "name" | "courses" | "progress";
   onSortByChange: (sort: "recent" | "name" | "courses" | "progress") => void;
   availableCourses: readonly { id: string; title: string }[];
+  onCourseFilterOpen: () => void;
+  onCourseFilterClose: () => void;
   onResetFilters: () => void;
 }
 
@@ -46,6 +48,8 @@ export function StudentFiltersBar({
   sortBy,
   onSortByChange,
   availableCourses,
+  onCourseFilterOpen,
+  onCourseFilterClose,
   onResetFilters,
 }: StudentFiltersBarProps) {
   const courseOptions: readonly [string, string][] = [
@@ -102,8 +106,10 @@ export function StudentFiltersBar({
             id="students-course-filter"
             value={courseFilter}
             onValueChange={onCourseFilterChange}
-            options={courseOptions}
-            searchable
+          options={courseOptions}
+          searchable
+          onOpen={onCourseFilterOpen}
+          onClose={onCourseFilterClose}
             searchPlaceholder="Search courses..."
             defaultLimit={8}
             ariaLabel="Filter by course"

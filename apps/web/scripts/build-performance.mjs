@@ -9,7 +9,7 @@ const reactRouterCli = path.resolve(
   scriptDirectory,
   "../node_modules/@react-router/dev/bin.cjs",
 );
-const workspaceRoot = path.resolve(scriptDirectory, "../../..");
+const workspaceRoot = path.resolve(scriptDirectory, "../..");
 
 for (const environmentFile of [".env.production", ".env"]) {
   try {
@@ -21,7 +21,17 @@ for (const environmentFile of [".env.production", ".env"]) {
   }
 }
 
-export const runPerformanceBuild = async (args = process.argv.slice(2)) => {
+if (process.env.STATIC_BUILD_API_URL) {
+  process.env.STATIC_BUILD_API_URL = process.env.STATIC_BUILD_API_URL.replace("localhost", "127.0.0.1");
+}
+if (process.env.VITE_API_BASE_URL) {
+  process.env.VITE_API_BASE_URL = process.env.VITE_API_BASE_URL.replace("localhost", "127.0.0.1");
+}
+
+export const runPerformanceBuild = async (
+  args = process.argv.slice(2),
+  environmentOverrides = {},
+) => {
   const firstSectionOnly = args.includes(FIRST_SECTION_FLAG);
   const reactRouterArgs = args.filter(
     (argument) => argument !== FIRST_SECTION_FLAG,
@@ -38,6 +48,8 @@ export const runPerformanceBuild = async (args = process.argv.slice(2)) => {
         env: {
           ...process.env,
           VEO_LEARNING_PRERENDER_SCOPE: scope,
+          VEO_REACT_ROUTER_BUILD: "true",
+          ...environmentOverrides,
         },
         stdio: "inherit",
       },

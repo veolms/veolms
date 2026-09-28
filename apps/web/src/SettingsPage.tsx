@@ -6,7 +6,9 @@ import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldChec
 import { SidebarSimpleIcon as SidebarSimple } from "@phosphor-icons/react/SidebarSimple";
 import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import {
+  lazy,
   memo,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -18,6 +20,7 @@ import {
   handleRovingTabKeyDown,
   scrollKeyboardFocusedTabIntoView,
 } from "./accessibility/rovingTabFocus";
+import { CenteredLoadingSpinner } from "./components/LoadingSpinner";
 import type { DisplayMode } from "./settings/AppearanceSettings";
 import type { ThemeRevealOrigin } from "./shell/themeViewTransition";
 import type { ProfilePreferences, ProfileRole } from "./settings/profileTypes";
@@ -39,16 +42,66 @@ import {
   isEditingShortcutTarget,
 } from "./keyboardShortcuts";
 import { SwipeableTabPanel } from "./navigation/SwipeableTabPanel";
-import { AccountSettings } from "./settings/AccountSettings";
-import { AppearanceSettings } from "./settings/AppearanceSettings";
-import { LearningSettings } from "./settings/LearningSettings";
-import { NotificationSettings } from "./settings/NotificationSettings";
-import { ProfileSettings } from "./settings/ProfileSettings";
-import { SecuritySettings } from "./settings/SecuritySettings";
 import { useAuthStore } from "./store/auth.store";
-import { SidebarSettings } from "./settings/SidebarSettings";
-import "./auth/mfa-setup.css";
+import "./styles/features/settings/foundation.css";
+import "./styles/features/settings/preferences-responsive.css";
 export type { SettingsTab } from "./routing/tabSessionState";
+
+const loadProfileSettings = () =>
+  import("./settings/ProfileSettings").then(({ ProfileSettings }) => ({
+    default: ProfileSettings,
+  }));
+const loadAppearanceSettings = () =>
+  import("./settings/AppearanceSettings").then(({ AppearanceSettings }) => ({
+    default: AppearanceSettings,
+  }));
+const loadSidebarSettings = () =>
+  import("./settings/SidebarSettings").then(({ SidebarSettings }) => ({
+    default: SidebarSettings,
+  }));
+const loadLearningSettings = () =>
+  import("./settings/LearningSettings").then(({ LearningSettings }) => ({
+    default: LearningSettings,
+  }));
+const loadNotificationSettings = () =>
+  import("./settings/NotificationSettings").then(
+    ({ NotificationSettings }) => ({ default: NotificationSettings }),
+  );
+const loadSecuritySettings = () =>
+  import("./settings/SecuritySettings").then(({ SecuritySettings }) => ({
+    default: SecuritySettings,
+  }));
+const loadAccountSettings = () =>
+  import("./settings/AccountSettings").then(({ AccountSettings }) => ({
+    default: AccountSettings,
+  }));
+
+const ProfileSettings = lazy(loadProfileSettings);
+const AppearanceSettings = lazy(loadAppearanceSettings);
+const SidebarSettings = lazy(loadSidebarSettings);
+const LearningSettings = lazy(loadLearningSettings);
+const NotificationSettings = lazy(loadNotificationSettings);
+const SecuritySettings = lazy(loadSecuritySettings);
+const AccountSettings = lazy(loadAccountSettings);
+
+function preloadSettingsTab(tab: SettingsTab) {
+  switch (tab) {
+    case "profile":
+      return loadProfileSettings();
+    case "appearance":
+      return loadAppearanceSettings();
+    case "sidebar":
+      return loadSidebarSettings();
+    case "learning":
+      return loadLearningSettings();
+    case "notifications":
+      return loadNotificationSettings();
+    case "security":
+      return loadSecuritySettings();
+    case "account":
+      return loadAccountSettings();
+  }
+}
 
 type SettingsTabIcon = ComponentType<{
   size?: number;
@@ -272,7 +325,7 @@ export function SettingsPage({
         window.setTimeout(
           () =>
             onNavigatePage?.(`/settings/${id}`, {
-              preserveScroll: true,
+              resetScroll: true,
             }),
           0,
         );
@@ -284,7 +337,16 @@ export function SettingsPage({
   const leaveSettings = useCallback(() => onExitSettings?.(), [onExitSettings]);
 
   const renderSettingsTab = (panelTab: SettingsTab) => (
-    <SettingsTabContent panelTab={panelTab} pageProps={pageProps} />
+    <Suspense
+      fallback={
+        <CenteredLoadingSpinner
+          label="Loading settings"
+          className="min-h-[max(12rem,calc(100dvh-24rem))] w-full"
+        />
+      }
+    >
+      <SettingsTabContent panelTab={panelTab} pageProps={pageProps} />
+    </Suspense>
   );
 
   const prepareTab = useCallback((id: SettingsTab) => {
@@ -300,7 +362,7 @@ export function SettingsPage({
     (id: SettingsTab) => {
       prepareTab(id);
       rememberSettingsTab(id);
-      onNavigatePage?.(`/settings/${id}`, { preserveScroll: true });
+      onNavigatePage?.(`/settings/${id}`, { resetScroll: true });
     },
     [onNavigatePage, prepareTab],
   );
@@ -322,8 +384,27 @@ export function SettingsPage({
   }, [activeTab, prepareTab]);
 
   useEffect(() => {
-    prepareSwipeNeighbors();
-  }, [prepareSwipeNeighbors]);
+    const nextTab = SETTINGS_TAB_IDS[(activeTabIndex + 1) % SETTINGS_TAB_IDS.length];
+    if (!nextTab) return undefined;
+
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (
+        callback: () => void,
+        options?: { timeout: number },
+      ) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    if (idleWindow.requestIdleCallback) {
+      const handle = idleWindow.requestIdleCallback(
+        () => void preloadSettingsTab(nextTab),
+        { timeout: 1500 },
+      );
+      return () => idleWindow.cancelIdleCallback?.(handle);
+    }
+
+    const handle = window.setTimeout(() => void preloadSettingsTab(nextTab), 800);
+    return () => window.clearTimeout(handle);
+  }, [activeTabIndex]);
 
   useEffect(() => {
     const exitSettings = (event: KeyboardEvent) => {
@@ -393,19 +474,13 @@ export function SettingsPage({
 
   return (
     <div className="settings-page" aria-labelledby="settings-page-title">
-      <header className="settings-page__header">
-        <div>
-          <h1 id="settings-page-title">Settings</h1>
-          <p>Manage your personal preferences and interface experience.</p>
-        </div>
-        <span className="settings-page__marker" aria-hidden="true">
-          <GearSix size={24} weight="duotone" />
-        </span>
-      </header>
+      <h1 id="settings-page-title" className="sr-only">
+        Settings
+      </h1>
 
       <nav
         ref={tabListRef}
-        className="settings-tabs page-tabs"
+        className="settings-tabs page-tabs top-0!"
         aria-label="Settings sections"
         role="tablist"
       >

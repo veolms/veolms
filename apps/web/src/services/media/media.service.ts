@@ -1,4 +1,5 @@
 import type {
+  MediaImageVariantManifest,
   MediaUploadCompleteResponse,
   PresignMediaRequest,
   PresignMediaResponse,
@@ -20,6 +21,22 @@ function requestPresignedMediaUpload(
 }
 
 export const mediaService = {
+  getImageVariantManifest(
+    mediaAssetId: string,
+  ): Promise<MediaImageVariantManifest> {
+    return api.get<MediaImageVariantManifest>(
+      `/media/${mediaAssetId}/image-variants`,
+    );
+  },
+
+  getImageVariantUrl(mediaAssetId: string, width: number): string {
+    return `${getApiBaseUrl().replace(/\/$/, "")}/media/${mediaAssetId}/variants/${width}`;
+  },
+
+  getMediaAssetUrl(mediaAssetId: string): string {
+    return `${getApiBaseUrl().replace(/\/$/, "")}/media/${mediaAssetId}`;
+  },
+
   presignMediaUpload(
     payload: PresignMediaRequest,
   ): Promise<PresignMediaResponse> {

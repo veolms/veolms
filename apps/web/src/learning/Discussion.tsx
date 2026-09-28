@@ -1,4 +1,6 @@
 import React, {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -19,6 +21,7 @@ import {
 } from "@tanstack/react-virtual";
 import { useInRouterContext, useSearchParams } from "react-router";
 import { createPortal } from "react-dom";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import {
   Drawer,
   DrawerContent,
@@ -53,7 +56,11 @@ import {
 } from "./unified-discussions.reconciliation";
 
 export type { InteractionCapabilities };
-import { DiscussionThreadPanel } from "./DiscussionThreadPanel";
+const DiscussionThreadPanel = lazy(() =>
+  import("./DiscussionThreadPanel").then((module) => ({
+    default: module.DiscussionThreadPanel,
+  })),
+);
 import {
   DESCRIPTION_SURFACE_BASE,
   LessonDescription,
@@ -195,7 +202,7 @@ const initialEntries: Comment[] = [
     id: 4,
     name: "Rohit Sharma",
     time: "2 hours ago",
-    avatar: "/assets/ethan-avatar-160.webp",
+    avatar: "/static/ethan-avatar-160.webp",
     text: "Great explanation! The way you broke down the design process makes it so much easier to understand. Especially the part about user empathy — super insightful!",
     entryKind: "comment",
     likes: 24,
@@ -206,7 +213,7 @@ const initialEntries: Comment[] = [
         id: 401,
         name: "Ashi Singh",
         time: "1 hour ago",
-        avatar: "/assets/sofia-avatar-160.webp",
+        avatar: "/static/sofia-avatar-160.webp",
         text: "Thank you so much, Rohit! Really glad it helped.",
         likes: 12,
       },
@@ -214,7 +221,7 @@ const initialEntries: Comment[] = [
         id: 402,
         name: "Karan Mehta",
         time: "45 minutes ago",
-        avatar: "/assets/ethan-avatar-160.webp",
+        avatar: "/static/ethan-avatar-160.webp",
         text: "Totally agree! The empathy part clicked for me too.",
         likes: 5,
       },
@@ -224,7 +231,7 @@ const initialEntries: Comment[] = [
     id: 3,
     name: "Neha Patel",
     time: "3 hours ago",
-    avatar: "/assets/sofia-avatar-160.webp",
+    avatar: "/static/sofia-avatar-160.webp",
     text: "Can you share some real-world examples of this process?",
     entryKind: "question",
     likes: 18,
@@ -235,7 +242,7 @@ const initialEntries: Comment[] = [
         id: 301,
         name: "Ashi Singh",
         time: "2 hours ago",
-        avatar: "/assets/sofia-avatar-160.webp",
+        avatar: "/static/sofia-avatar-160.webp",
         text: "Absolutely — I’ll add a few examples from product discovery and usability testing.",
         likes: 7,
       },
@@ -245,7 +252,7 @@ const initialEntries: Comment[] = [
     id: 1,
     name: "Vivek Nair",
     time: "1 day ago",
-    avatar: "/assets/ethan-avatar-160.webp",
+    avatar: "/static/ethan-avatar-160.webp",
     text: "How do you know when you have enough user interviews to start mapping patterns?",
     entryKind: "question",
     likes: 11,
@@ -256,7 +263,7 @@ const initialEntries: Comment[] = [
         id: 101,
         name: "Karan Mehta",
         time: "21 hours ago",
-        avatar: "/assets/ethan-avatar-160.webp",
+        avatar: "/static/ethan-avatar-160.webp",
         text: "When the same themes repeat and new interviews stop changing the shape of the problem.",
         likes: 7,
       },
@@ -2567,13 +2574,13 @@ function DiscussionInner({
         onDeleteFailure={setNotice}
         courseId={courseId}
       />
+      {openThread !== null &&
+      threadEntries.some(
+        (entry) => getClientEntityId(entry) === String(openThread.id),
+      ) ? (
+      <Suspense fallback={null}>
       <DiscussionThreadPanel
-        open={
-          openThread !== null &&
-          threadEntries.some(
-            (entry) => getClientEntityId(entry) === String(openThread.id),
-          )
-        }
+        open={true}
         activeEntryId={openThread?.id ?? null}
         entries={threadEntries}
         isBackendMode={isBackendMode}
@@ -2641,6 +2648,8 @@ function DiscussionInner({
           setNotice("Couldn't delete this reply. Please try again.")
         }
       />
+      </Suspense>
+      ) : null}
       <DiscussionReportDialog
         open={reportDialogOpen}
         target={reportingTarget}
@@ -3682,29 +3691,27 @@ function ThreadSurface({
       className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
       data-testid="learning-thread-deep-link-loading"
       role="status"
+      aria-label="Loading discussion"
     >
-      <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-      <p className="text-sm font-medium text-(--muted)">
-        Loading discussion…
-      </p>
+      <LoadingSpinnerIcon size={24} />
     </div>
   ) : isAllInitialLoading ? (
     <div
       className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
       data-testid="learning-all-loading"
+      role="status"
+      aria-label="Loading discussions"
     >
-      <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-      <p className="text-sm font-medium text-(--muted)">
-        Loading discussions…
-      </p>
+      <LoadingSpinnerIcon size={24} />
     </div>
   ) : entryFilter === "note" && isNotesLoading && entries.length === 0 ? (
     <div
       className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
       data-testid="learning-notes-loading"
+      role="status"
+      aria-label="Loading notes"
     >
-      <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-      <p className="text-sm font-medium text-(--muted)">Loading notes…</p>
+      <LoadingSpinnerIcon size={24} />
     </div>
   ) : entryFilter === "note" && isNotesError && entries.length === 0 ? (
     <div
@@ -3729,11 +3736,10 @@ function ThreadSurface({
     <div
       className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
       data-testid="learning-threads-loading"
+      role="status"
+      aria-label="Loading discussions"
     >
-      <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-      <p className="text-sm font-medium text-(--muted)">
-        Loading discussions…
-      </p>
+      <LoadingSpinnerIcon size={24} />
     </div>
   ) : entryFilter !== "note" && isThreadsError && entries.length === 0 ? (
     <div
@@ -3768,12 +3774,14 @@ function ThreadSurface({
         <div ref={feedSentinelRef} className="h-1" aria-hidden="true" />
       )}
       {isBackendMode && isFetchingNextPage && (
-        <p
-          className="py-4 text-center text-sm text-(--muted)"
+        <div
+          className="grid place-items-center py-4"
           data-testid="learning-feed-loading-more"
+          role="status"
+          aria-label="Loading more discussions"
         >
-          Loading more…
-        </p>
+          <LoadingSpinnerIcon size={18} />
+        </div>
       )}
       {isBackendMode && isNextPageError && entries.length > 0 && (
         <div

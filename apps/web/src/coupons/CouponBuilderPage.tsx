@@ -7,6 +7,7 @@ import { DiceFiveIcon as DiceFive } from "@phosphor-icons/react/DiceFive";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { Button } from "../components/Button";
+import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { ThemedSelect } from "../ThemedSelect";
 import { ThemedDateTimePicker } from "../ThemedDateTimePicker";
 import { useMyCourses } from "../services/courses";
@@ -336,9 +337,11 @@ export function CouponBuilderPage({
 
   if (isEditMode && isLoadingCoupon) {
     return (
-      <main data-coupon-surface="" className="mx-auto grid w-full max-w-[1320px] place-items-center py-24">
-        <CircleNotch size={28} className="mb-3 animate-spin text-(--accent)" />
-        <p className="text-sm text-(--muted)">Loading coupon...</p>
+      <main data-coupon-surface="" className="mx-auto w-full max-w-[1320px]">
+        <CenteredLoadingSpinner
+          label="Loading coupon"
+          className="min-h-52 py-24"
+        />
       </main>
     );
   }

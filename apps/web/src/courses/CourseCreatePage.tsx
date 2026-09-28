@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useState,
   useEffect,
   useRef,
@@ -7,12 +9,11 @@ import {
   memo,
   Fragment,
 } from "react";
+import "../styles/features/course-wizard.css";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { createPortal } from "react-dom";
-import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
+import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
-import { LessonVideoUpload } from "./lesson-video-upload/LessonVideoUpload";
-import { QuizAuthoringPanel } from "../quizzes/QuizAuthoringPanel";
 import { CourseQuizPricingCard } from "./CourseQuizPricingCard";
 import {
   LessonResourceManager,
@@ -31,6 +32,23 @@ import {
   type LessonEditorDraft,
   type StudioLessonContentType,
 } from "./curriculum";
+import { VirtualizedLessonList } from "./curriculum/VirtualizedLessonList";
+
+const DiscussionMarkdown = lazy(() =>
+  import("../learning/discussion-editor/DiscussionMarkdown").then((module) => ({
+    default: module.DiscussionMarkdown,
+  })),
+);
+const LessonVideoUpload = lazy(() =>
+  import("./lesson-video-upload/LessonVideoUpload").then((module) => ({
+    default: module.LessonVideoUpload,
+  })),
+);
+const QuizAuthoringPanel = lazy(() =>
+  import("../quizzes/QuizAuthoringPanel").then((module) => ({
+    default: module.QuizAuthoringPanel,
+  })),
+);
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { ToastNotification } from "../ToastNotification";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
@@ -316,6 +334,8 @@ interface CurriculumLessonItem {
   resources: LessonResourceItem[];
 }
 
+const getCurriculumLessonKey = (lesson: CurriculumLessonItem) => lesson.id;
+
 interface CurriculumSectionItem {
   id: string;
   title: string;
@@ -437,6 +457,7 @@ export type CourseWizardStepId =
 type WizardStepIcon = ComponentType<{
   size?: number;
   weight?: "bold" | "duotone" | "fill" | "regular";
+  className?: string;
 }>;
 
 export interface WizardStepDefinition {
@@ -2880,6 +2901,7 @@ export function CourseCreatePage({
       }
     };
     updateIndicator();
+    const rafId = requestAnimationFrame(updateIndicator);
     window.addEventListener("resize", updateIndicator);
 
     const observer = new MutationObserver(updateIndicator);
@@ -2894,6 +2916,7 @@ export function CourseCreatePage({
     });
 
     return () => {
+      cancelAnimationFrame(rafId);
       window.removeEventListener("resize", updateIndicator);
       observer.disconnect();
     };
@@ -3896,22 +3919,128 @@ export function CourseCreatePage({
   const [sections, setSections] = useState<CurriculumSectionItem[]>([]);
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
+  const sectionHeaderElementsRef = useRef(new Map<string, HTMLDivElement>());
+  const lastSectionScrollRequestRef = useRef<string | null>(null);
+  const sectionScrollDelayRef = useRef(300);
   const lessonTitleDraftsRef = useRef<Map<string, string>>(new Map());
 
+  const scrollSectionHeaderIntoView = useCallback((sectionId: string) => {
+    const header = sectionHeaderElementsRef.current.get(sectionId);
+    if (!header || typeof window === "undefined") return false;
+
+    let scrollport: HTMLElement | null = null;
+    for (
+      let parent = header.parentElement;
+      parent && parent !== document.body;
+      parent = parent.parentElement
+    ) {
+      const overflowY = window.getComputedStyle(parent).overflowY;
+      if (
+        (overflowY === "auto" ||
+          overflowY === "scroll" ||
+          overflowY === "overlay") &&
+        parent.scrollHeight > parent.clientHeight + 1
+      ) {
+        scrollport = parent;
+        break;
+      }
+    }
+
+    const headerTop = header.getBoundingClientRect().top;
+    if (scrollport) {
+      const scrollportTop = scrollport.getBoundingClientRect().top;
+      const top = scrollport.scrollTop + headerTop - scrollportTop;
+      const previousBehavior = scrollport.style.scrollBehavior;
+      scrollport.style.scrollBehavior = "auto";
+      scrollport.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+      scrollport.style.scrollBehavior = previousBehavior;
+      return true;
+    }
+
+    const root = document.documentElement;
+    const previousBehavior = root.style.scrollBehavior;
+    root.style.scrollBehavior = "auto";
+    window.scrollTo({
+      top: Math.max(0, window.scrollY + headerTop),
+      behavior: "auto",
+    });
+    root.style.scrollBehavior = previousBehavior;
+    return true;
+  }, []);
+
   useEffect(() => {
-    if (activeStep !== "curriculum" || !requestedSectionId) return;
+    if (activeStep !== "curriculum" || !requestedSectionId) {
+      lastSectionScrollRequestRef.current = null;
+      sectionScrollDelayRef.current = 300;
+      return;
+    }
+
+    const currentSections = sectionsRef.current;
+    const targetIndex = currentSections.findIndex(
+      (section) => section.id === requestedSectionId,
+    );
+    const targetAlreadyExpanded = currentSections.some(
+      (section) => section.id === requestedSectionId && section.isExpanded,
+    );
+    if (targetIndex >= 0 && !targetAlreadyExpanded) {
+      sectionScrollDelayRef.current = currentSections.some(
+        (section, index) =>
+          index < targetIndex &&
+          section.id !== requestedSectionId &&
+          section.isExpanded,
+      )
+        ? 300
+        : 0;
+    } else if (targetIndex < 0) {
+      sectionScrollDelayRef.current = 300;
+    }
+
     setSections((previous) => {
       let changed = false;
       const next = previous.map((section) => {
-        if (section.id !== requestedSectionId || section.isExpanded) {
+        const shouldExpand = section.id === requestedSectionId;
+        if (section.isExpanded === shouldExpand) {
           return section;
         }
         changed = true;
-        return { ...section, isExpanded: true };
+        return { ...section, isExpanded: shouldExpand };
       });
+      sectionsRef.current = changed ? next : previous;
       return changed ? next : previous;
     });
   }, [activeStep, requestedSectionId, sections.length]);
+
+  useEffect(() => {
+    if (activeStep !== "curriculum" || !requestedSectionId) return;
+    const requestKey = `${activeEditId ?? "create"}:${requestedSectionId}`;
+    if (lastSectionScrollRequestRef.current === requestKey) return;
+
+    const delay = sectionScrollDelayRef.current;
+    let frame = 0;
+    let retryTimer = 0;
+    let attempts = 0;
+    const tryScrollToRequestedSection = () => {
+      frame = window.requestAnimationFrame(() => {
+        if (scrollSectionHeaderIntoView(requestedSectionId)) {
+          lastSectionScrollRequestRef.current = requestKey;
+        } else if (attempts++ < 20) {
+          retryTimer = window.setTimeout(tryScrollToRequestedSection, 50);
+        }
+      });
+    };
+    const timeout = window.setTimeout(tryScrollToRequestedSection, delay);
+
+    return () => {
+      window.clearTimeout(timeout);
+      window.clearTimeout(retryTimer);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [
+    activeEditId,
+    activeStep,
+    requestedSectionId,
+    scrollSectionHeaderIntoView,
+  ]);
 
   const isCollapsingSectionRef = useRef(false);
   const inFlightLessonSavesRef = useRef<Map<string, Promise<boolean>>>(
@@ -6265,6 +6394,14 @@ export function CourseCreatePage({
 
   const [draggedLessonState, setDraggedLessonState] =
     useState<DraggedLessonState | null>(null);
+  const pinnedVirtualizedLessonIds = useMemo(
+    () =>
+      new Set([
+        ...mountedLessonEditorIds,
+        ...(draggedLessonState ? [draggedLessonState.lessonId] : []),
+      ]),
+    [draggedLessonState, mountedLessonEditorIds],
+  );
   const draggedLessonStateRef = useRef<DraggedLessonState | null>(null);
   const [lessonDropTarget, setLessonDropTarget] =
     useState<LessonDropTarget | null>(null);
@@ -7218,9 +7355,53 @@ export function CourseCreatePage({
 
     // 1. When the section is being EXPANDED:
     if (!sec.isExpanded) {
+      if (isCollapsingSectionRef.current || isSavingAllDirtyLessonsRef.current) {
+        return;
+      }
+
+      const sectionsToCollapse = currentSections.filter(
+        (section) => section.id !== sectionId && section.isExpanded,
+      );
+      const targetIndex = currentSections.findIndex(
+        (section) => section.id === sectionId,
+      );
+      sectionScrollDelayRef.current = currentSections
+        .slice(0, targetIndex)
+        .some((section) => section.isExpanded)
+        ? 300
+        : 0;
+      const dirtyLessons = sectionsToCollapse.flatMap((section) =>
+        section.lessons
+          .filter((lesson) => isLessonDirty(lesson) && !lesson.isPendingCreation)
+          .map((lesson) => ({ sectionId: section.id, lesson })),
+      );
+
+      if (dirtyLessons.length > 0) {
+        isCollapsingSectionRef.current = true;
+        let allSuccessful = true;
+        try {
+          for (const { sectionId: dirtySectionId, lesson } of dirtyLessons) {
+            const success = await persistLesson(dirtySectionId, lesson.id, {
+              collapseOnSuccess: true,
+            });
+            if (!success) {
+              allSuccessful = false;
+              break;
+            }
+          }
+        } finally {
+          isCollapsingSectionRef.current = false;
+        }
+        if (!allSuccessful) return;
+      }
+
       setSections((prev) => {
-        const next = prev.map((s) =>
-          s.id === sectionId ? { ...s, isExpanded: true } : s,
+        const next = prev.map((section) =>
+          section.id === sectionId
+            ? { ...section, isExpanded: true }
+            : section.isExpanded
+              ? { ...section, isExpanded: false }
+              : section,
         );
         sectionsRef.current = next;
         return next;
@@ -7563,7 +7744,7 @@ export function CourseCreatePage({
     enrolled: false,
     duration: computedDuration,
     students: 0,
-    thumbnail: thumbnail || "/assets/instructor-poster.jpg",
+    thumbnail: thumbnail || "/static/instructor-poster.jpg",
     lifecycleStatus: isPublished ? "published" : "draft",
   };
 
@@ -9516,14 +9697,14 @@ export function CourseCreatePage({
                 actionLoading !== null ||
                 (!isDownstreamUnlocked && step.id !== "basics")
               }
-              className={`!border-b-transparent shrink-0 whitespace-nowrap disabled:!opacity-50 disabled:!cursor-not-allowed ${isActive ? "is-active" : ""}`}
+              className={`inline-flex flex-row items-center gap-2 !border-b-transparent shrink-0 whitespace-nowrap disabled:!opacity-50 disabled:!cursor-not-allowed ${isActive ? "is-active" : ""}`}
               onClick={() => {
                 if (isInitialLoadingCourse) return;
                 void navigateToStep(step.id);
               }}
               onKeyDown={handleRovingTabKeyDown}
             >
-              <Icon size={17} weight={isActive ? "fill" : "regular"} />
+              <Icon size={17} weight={isActive ? "fill" : "regular"} className="shrink-0" />
               <span className="inline-flex items-center gap-1.5">
                 <span>{step.label}</span>
                 {isDirty && (
@@ -9541,25 +9722,36 @@ export function CourseCreatePage({
 
       {/* Wizard Step Panels using SwipeableTabPanel */}
       {isInitialLoadingCourse ? (
-        <CourseWizardSkeleton activeStep={activeStep} />
+        <CenteredLoadingSpinner
+          label="Loading course details"
+          className="min-h-80 w-full flex-1"
+        />
       ) : (
-      <SwipeableTabPanel
-        tabs={WIZARD_STEP_IDS}
-        activeTab={activeStep}
-        onTabChange={(newStep) => {
-          void navigateToStep(newStep);
-        }}
-        tabListRef={stepsNavRef}
-        id="course-wizard-tab-panel"
-        className="course-wizard-tab-content relative min-h-0 flex-1 flex flex-col pt-4 pb-6 max-[640px]:pt-3"
-        stateAttribute="data-wizard-step"
-        labelledBy={`course-wizard-tab-${activeStep}`}
-        disabled={
-          actionLoading !== null ||
-          (!isDownstreamUnlocked && activeStep === "basics")
-        }
-        spaceBetween={32}
-      >
+        <Suspense
+          fallback={
+            <CenteredLoadingSpinner
+              label="Loading course details"
+              className="min-h-80 w-full flex-1"
+            />
+          }
+        >
+          <SwipeableTabPanel
+            tabs={WIZARD_STEP_IDS}
+            activeTab={activeStep}
+            onTabChange={(newStep) => {
+              void navigateToStep(newStep);
+            }}
+            tabListRef={stepsNavRef}
+            id="course-wizard-tab-panel"
+            className="course-wizard-tab-content relative min-h-0 flex-1 flex flex-col pt-4 pb-6 max-[640px]:pt-3"
+            stateAttribute="data-wizard-step"
+            labelledBy={`course-wizard-tab-${activeStep}`}
+            disabled={
+              actionLoading !== null ||
+              (!isDownstreamUnlocked && activeStep === "basics")
+            }
+            spaceBetween={32}
+          >
         {(panelStep) =>
           !mountedTabs.has(panelStep) ? null : panelStep === "basics" ? (
             <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
@@ -10590,6 +10782,13 @@ export function CourseCreatePage({
                   >
                     {/* Section Header */}
                     <div
+                      ref={(element) => {
+                        if (element) {
+                          sectionHeaderElementsRef.current.set(sec.id, element);
+                        } else {
+                          sectionHeaderElementsRef.current.delete(sec.id);
+                        }
+                      }}
                       className="flex items-center justify-between px-[18px] py-3.5 bg-[color-mix(in_srgb,var(--text)_2%,transparent)] select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]"
                       onClick={() => handleToggleSectionExpand(sec.id)}
                       title="Click to toggle section"
@@ -10821,8 +11020,13 @@ export function CourseCreatePage({
                         }`}
                       >
                         {sec.isExpanded && (
-                          <div className="flex flex-col gap-2.5">
-                            {sec.lessons.map((les, lesIndex) => {
+                          <VirtualizedLessonList
+                            items={sec.lessons}
+                            getItemKey={getCurriculumLessonKey}
+                            pinnedItemIds={pinnedVirtualizedLessonIds}
+                            estimatedItemSize={168}
+                            itemGap={10}
+                            renderItem={(les, lesIndex) => {
                               const isDraggedLesson =
                                 draggedLessonState?.sectionId === sec.id &&
                                 draggedLessonState.lessonId === les.id;
@@ -11867,8 +12071,8 @@ export function CourseCreatePage({
                                 {isDropAfter && <LessonDropIndicator />}
                               </Fragment>
                               );
-                            })}
-                          </div>
+                            }}
+                          />
                         )}
 
                         {/* Add Lesson Action */}
@@ -13602,7 +13806,8 @@ export function CourseCreatePage({
             </div>
           )
         }
-      </SwipeableTabPanel>
+          </SwipeableTabPanel>
+        </Suspense>
       )}
 
       {/* Sticky Bottom Action Bar (Desktop / Tablet) */}

@@ -164,6 +164,13 @@ export function resolveShellNavigation(
   items: readonly NavigationItemWithMetadata[];
   isDefault: boolean;
 } {
+  // While the authenticated menu request is in flight, show only the two
+  // public destinations. This keeps the shell usable without briefly exposing
+  // a stale account's role-specific navigation.
+  if (menus == null) {
+    return { items: publicNavigation, isDefault: true };
+  }
+
   const serverItems = getNavigationItemsFromMenus(menus);
   const hasStaffMenus = serverItems.some(([label]) =>
     ["Dashboard", "Courses", "Students", "Analytics", "Orders", "Quizzes", "Reviews"].includes(label),

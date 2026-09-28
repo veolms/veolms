@@ -12,6 +12,12 @@ import {
 
 const buildExitCode = await runPerformanceBuild(
   process.argv.includes(FIRST_SECTION_FLAG) ? [FIRST_SECTION_FLAG] : [],
+  {
+    // A local preview must build its SSG catalogue from the local API too;
+    // never inherit a production STATIC_BUILD_API_URL from .env.production.
+    STATIC_BUILD_API_URL:
+      process.env.VEO_PREVIEW_API_TARGET || "http://127.0.0.1:4000/v1",
+  },
 );
 if (buildExitCode !== 0) process.exit(buildExitCode);
 
@@ -40,7 +46,7 @@ const apiTargetArgumentIndex = process.argv.indexOf("--api-target");
 const apiTargetValue =
   apiTargetArgumentIndex >= 0 && process.argv[apiTargetArgumentIndex + 1]
     ? process.argv[apiTargetArgumentIndex + 1]
-    : process.env.STATIC_BUILD_API_URL || "http://127.0.0.1:4000";
+    : process.env.VEO_PREVIEW_API_TARGET || "http://127.0.0.1:4000";
 const apiTarget = new URL(apiTargetValue);
 const apiOrigin = apiTarget.origin;
 const mimeTypes = new Map([
@@ -144,8 +150,8 @@ const proxyRequestToOrigin = (
 createServer(async (request, response) => {
   const requestUrl = new URL(request.url || "/", "http://localhost");
   if (
-    requestUrl.pathname === "/api" ||
-    requestUrl.pathname.startsWith("/api/")
+    requestUrl.pathname === "/v1" ||
+    requestUrl.pathname.startsWith("/v1/")
   ) {
     proxyRequestToOrigin(request, response, requestUrl, apiOrigin, {
       code: "API_UNAVAILABLE",
@@ -160,9 +166,12 @@ createServer(async (request, response) => {
   }
 
   const extension = path.extname(filePath).toLowerCase();
+  const isHashedBuildAsset =
+    filePath.includes(`${path.sep}assets${path.sep}`) &&
+    /[-_.][A-Za-z0-9_-]{8,}(?=\.[^.]+$)/.test(path.basename(filePath));
   const headers = {
     "Content-Type": mimeTypes.get(extension) || "application/octet-stream",
-    "Cache-Control": filePath.includes(`${path.sep}assets${path.sep}`)
+    "Cache-Control": isHashedBuildAsset
       ? "public, max-age=31536000, immutable"
       : "no-cache",
     Vary: "Accept-Encoding",

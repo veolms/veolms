@@ -30,6 +30,7 @@ import {
   getDefaultCountry,
 } from "../auth/CountryCodeSelect";
 import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
+import "../styles/features/profile.css";
 import { OtpCodeInput } from "../auth/OtpCodeInput";
 import {
   DEFAULT_COUNTRY_ID,
@@ -42,7 +43,6 @@ import {
 import type { CountryOption } from "../auth/identifier";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { AvatarStylePicker } from "./AvatarStylePicker";
-import { DicebearAvatar } from "./DicebearAvatar";
 import type {
   ProfileIdentity,
   ProfilePreferences,
@@ -59,10 +59,7 @@ import {
   useVerifyPhoneNumber,
 } from "../services/auth";
 import { authStore, useAuthStore, type AuthUser } from "../store/auth.store";
-import {
-  DICEBEAR_BASE_URL,
-  type ProfileUpdateRequest,
-} from "@veolms/contracts";
+import type { ProfileUpdateRequest } from "@veolms/contracts";
 import { CircularCheckbox } from "../components/CircularCheckbox";
 import { AutosaveStatus, useAutosync } from "../lib/autosync";
 import {
@@ -993,19 +990,9 @@ export function ProfileSettings({
       .finally(() => setPhotoUploading(false));
   };
 
-  const isDicebearAvatar = Boolean(
-    draftProfile.avatarDataUrl?.startsWith(DICEBEAR_BASE_URL),
-  );
-
   const avatar = (className: string) => (
     <span className={className} aria-hidden="true">
-      {showAvatar && isDicebearAvatar ? (
-        <DicebearAvatar
-          url={draftProfile.avatarDataUrl!}
-          size={160}
-          onError={() => setAvatarFailed(true)}
-        />
-      ) : showAvatar ? (
+      {showAvatar ? (
         <ResponsiveAvatar
           src={draftProfile.avatarDataUrl ?? undefined}
           srcSet={draftProfile.avatarSrcSet}
@@ -1150,8 +1137,18 @@ export function ProfileSettings({
                         }
                       }}
                     >
-                      <MagicWand size={14} weight="fill" aria-hidden="true" />
-                      Generate avatar
+                      {photoUploading ? (
+                        "Saving avatar…"
+                      ) : (
+                        <>
+                          <MagicWand
+                            size={14}
+                            weight="fill"
+                            aria-hidden="true"
+                          />
+                          Generate avatar
+                        </>
+                      )}
                     </button>
                   )}
                   <h3>
@@ -1911,28 +1908,68 @@ export function ProfileSettings({
               setPhotoUploading(false);
             }
           }}
-          onSelectGenerated={async (avatarUrl) => {
-            if (photoUploading) return;
+          onSelectGenerated={(avatarUrl) => {
+            if (photoUploading || !activeUser) return;
+
+            const previousAvatar = {
+              avatarDataUrl: draftProfile.avatarDataUrl,
+              avatarSrcSet: draftProfile.avatarSrcSet,
+            };
+            const optimisticUser = {
+              ...activeUser,
+              avatarDataUrl: avatarUrl,
+              avatarSrcSet: [],
+            };
+
             setPhotoError("");
+            setAvatarFailed(false);
             setPhotoUploading(true);
-            try {
-              const updated =
-                await authService.uploadGeneratedAvatar(avatarUrl);
-              handleProfileSynced(updated);
-              mergeFromServer({
-                avatarDataUrl: updated.avatarDataUrl,
-                avatarSrcSet: updated.avatarSrcSet,
-              });
-              setAvatarPickerOpen(false);
-            } catch (error: unknown) {
-              setPhotoError(
-                error && typeof error === "object" && "message" in error
-                  ? String((error as { message?: unknown }).message)
-                  : "We couldn't save this avatar. Please try again.",
-              );
-            } finally {
-              setPhotoUploading(false);
-            }
+            setAvatarPickerOpen(false);
+            authStore.setUser(optimisticUser);
+            queryClient.setQueryData(authKeys.me(), optimisticUser);
+            mergeFromServer({
+              avatarDataUrl: avatarUrl,
+              avatarSrcSet: [],
+            });
+
+            // Keep the existing R2/history upload, but don't make the user
+            // wait for its image download, presign, PUT, and completion calls.
+            void (async () => {
+              try {
+                const updated =
+                  await authService.uploadGeneratedAvatar(avatarUrl);
+                handleProfileSynced(updated);
+                mergeFromServer({
+                  avatarDataUrl: updated.avatarDataUrl,
+                  avatarSrcSet: updated.avatarSrcSet,
+                });
+              } catch {
+                try {
+                  // DiceBear URLs are valid profile avatars too. If storage
+                  // is unavailable, persist the already displayed selection
+                  // directly instead of reverting a successful user action.
+                  const updated = await authService.updateProfile({
+                    avatarDataUrl: avatarUrl,
+                  });
+                  handleProfileSynced(updated);
+                  mergeFromServer({
+                    avatarDataUrl: updated.avatarDataUrl,
+                    avatarSrcSet: updated.avatarSrcSet,
+                  });
+                } catch (error: unknown) {
+                  authStore.setUser(activeUser);
+                  queryClient.setQueryData(authKeys.me(), activeUser);
+                  mergeFromServer(previousAvatar);
+                  setPhotoError(
+                    error && typeof error === "object" && "message" in error
+                      ? String((error as { message?: unknown }).message)
+                      : "We couldn't save this avatar. Please try again.",
+                  );
+                }
+              } finally {
+                setPhotoUploading(false);
+              }
+            })();
           }}
         />
       </section>
