@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { CapabilitiesResponse, Permission, FeatureKey } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
+import { useAuthStore } from "../../store/auth.store";
 import { authorizationKeys } from "./authorization.keys";
 import { authorizationService } from "./authorization.service";
 
@@ -8,9 +9,11 @@ export function useCapabilities(options?: {
   courseId?: string;
   enabled?: boolean;
 }) {
+  const userId = useAuthStore((state) => state.user?.id);
   const query = useQuery<CapabilitiesResponse, ApiError>({
     queryKey: authorizationKeys.capabilities({
       courseId: options?.courseId,
+      userId,
     }),
     queryFn: () =>
       authorizationService.getCapabilities({

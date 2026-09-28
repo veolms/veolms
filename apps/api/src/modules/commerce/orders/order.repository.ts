@@ -21,6 +21,8 @@ export interface OrderStatsFilters {
   status?: OrderStatus;
   from?: Date;
   to?: Date;
+  /** Optional half-open upper bound used by dashboard period comparisons. */
+  toExclusive?: Date;
 }
 
 export interface OrderStatsRow {
@@ -41,6 +43,8 @@ export interface RevenueTrendFilters {
   courseId?: string | string[];
   from?: Date;
   to?: Date;
+  /** Optional half-open upper bound used by dashboard period comparisons. */
+  toExclusive?: Date;
   currency: string;
 }
 
@@ -59,7 +63,12 @@ function courseIdListFilter(courseId: string | string[] | undefined): string[] {
 export async function getOrderStatusFunnel(
   database: Executor,
   scope: OrderScope,
-  filters: { from?: Date; to?: Date; courseId?: string | string[] },
+  filters: {
+    from?: Date;
+    to?: Date;
+    toExclusive?: Date;
+    courseId?: string | string[];
+  },
 ): Promise<{ created: number; paid: number; refunded: number }> {
   let query = database
     .selectFrom("orders as o")
@@ -79,7 +88,9 @@ export async function getOrderStatusFunnel(
   if (filters.from) {
     query = query.where("o.created_at", ">=", filters.from);
   }
-  if (filters.to) {
+  if (filters.toExclusive) {
+    query = query.where("o.created_at", "<", filters.toExclusive);
+  } else if (filters.to) {
     query = query.where("o.created_at", "<=", filters.to);
   }
   const courseIds = courseIdListFilter(filters.courseId);
@@ -290,7 +301,9 @@ export async function getOrderStatsByCurrency(
   if (filters.from) {
     query = query.where("o.created_at", ">=", filters.from);
   }
-  if (filters.to) {
+  if (filters.toExclusive) {
+    query = query.where("o.created_at", "<", filters.toExclusive);
+  } else if (filters.to) {
     query = query.where("o.created_at", "<=", filters.to);
   }
   if (filters.courseId) {
@@ -359,7 +372,9 @@ export async function getRevenueTrend(
   if (filters.from) {
     query = query.where("o.created_at", ">=", filters.from);
   }
-  if (filters.to) {
+  if (filters.toExclusive) {
+    query = query.where("o.created_at", "<", filters.toExclusive);
+  } else if (filters.to) {
     query = query.where("o.created_at", "<=", filters.to);
   }
   if (filters.courseId) {

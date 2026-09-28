@@ -7,6 +7,7 @@ interface EnrolledCourseRow {
   course_title: string;
   course_description: string | null;
   course_thumbnail_url: string | null;
+  course_thumbnail_media_id: string | null;
   total_sections: number;
   total_lessons: number;
   total_duration_seconds: number;
@@ -35,6 +36,7 @@ export function toEnrolledCourseContract(
     courseTitle: row.course_title,
     courseDescription: row.course_description,
     courseThumbnailUrl: row.course_thumbnail_url,
+    courseThumbnailMediaId: row.course_thumbnail_media_id,
     totalSections: Number(row.total_sections) || 0,
     totalLessons,
     totalDurationSeconds: Number(row.total_duration_seconds) || 0,

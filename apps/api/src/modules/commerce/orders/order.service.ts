@@ -48,12 +48,18 @@ export interface OrderService {
       courseId?: string | string[];
       from?: Date;
       to?: Date;
+      toExclusive?: Date;
       currency?: string;
     },
   ): Promise<orderRepo.OrderStatsRow>;
   getOrderStatusFunnel(
     scope: OrderScope,
-    filters: { from?: Date; to?: Date; courseId?: string | string[] },
+    filters: {
+      from?: Date;
+      to?: Date;
+      toExclusive?: Date;
+      courseId?: string | string[];
+    },
   ): Promise<{ created: number; paid: number; refunded: number }>;
   /** The scope admin-view requests run under (single academy per deployment). */
   getAcademyScope(): Promise<OrderScope>;
@@ -351,6 +357,7 @@ export function createOrderService({
       courseId?: string | string[];
       from?: Date;
       to?: Date;
+      toExclusive?: Date;
       currency?: string;
     },
   ): Promise<orderRepo.OrderStatsRow> {
@@ -358,6 +365,7 @@ export function createOrderService({
       courseId: filters.courseId,
       from: filters.from,
       to: filters.to,
+      toExclusive: filters.toExclusive,
     });
     const requestedCurrency = filters.currency?.toUpperCase();
     const selected = requestedCurrency
@@ -381,7 +389,12 @@ export function createOrderService({
 
   async function getOrderStatusFunnel(
     scope: OrderScope,
-    filters: { from?: Date; to?: Date; courseId?: string | string[] },
+    filters: {
+      from?: Date;
+      to?: Date;
+      toExclusive?: Date;
+      courseId?: string | string[];
+    },
   ) {
     return await orderRepo.getOrderStatusFunnel(database, scope, filters);
   }

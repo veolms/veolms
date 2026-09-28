@@ -28,6 +28,24 @@ export const learningProgressResponseSchema = z.strictObject({
   lessons: z.array(learningProgressLessonSchema),
 });
 
+export const learningProgressResumeLessonSchema = z.strictObject({
+  lessonId: z.uuid(),
+  lessonNumber: z.number().int().positive(),
+  title: z.string().min(1),
+  sectionId: z.uuid(),
+  sectionTitle: z.string().min(1),
+  contentType: z.enum(["video", "document", "quiz"]),
+  progressPercent: z.number().int().min(0).max(100),
+});
+
+export const learningProgressResumeContextResponseSchema = z.strictObject({
+  courseId: z.uuid(),
+  courseSlug: z.string().min(1).max(160),
+  resumeLesson: learningProgressResumeLessonSchema.nullable(),
+  previousLesson: learningProgressResumeLessonSchema.nullable(),
+  nextLesson: learningProgressResumeLessonSchema.nullable(),
+});
+
 export const learningProgressSyncResponseSchema = z.strictObject({
   synced: z.literal(true),
 });
@@ -45,6 +63,12 @@ export type LearningProgressLesson = z.infer<
 export type LearningProgressResponse = z.infer<
   typeof learningProgressResponseSchema
 >;
+export type LearningProgressResumeLesson = z.infer<
+  typeof learningProgressResumeLessonSchema
+>;
+export type LearningProgressResumeContextResponse = z.infer<
+  typeof learningProgressResumeContextResponseSchema
+>;
 export type LearningProgressSyncResponse = z.infer<
   typeof learningProgressSyncResponseSchema
 >;
@@ -55,6 +79,11 @@ z.globalRegistry.add(learningProgressBatchRequestSchema, {
 z.globalRegistry.add(learningProgressResponseSchema, {
   id: "LearningProgressResponse",
   description: "The authenticated learner's progress for one course.",
+});
+z.globalRegistry.add(learningProgressResumeContextResponseSchema, {
+  id: "LearningProgressResumeContextResponse",
+  description:
+    "The best persisted-progress-based lesson resume context for one accessible course.",
 });
 z.globalRegistry.add(learningProgressSyncResponseSchema, {
   id: "LearningProgressSyncResponse",

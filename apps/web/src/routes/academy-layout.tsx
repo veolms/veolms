@@ -1282,6 +1282,9 @@ export default function AcademyLayout() {
   return (
     <AcademyRouteGuard>
       <CoursesPage
+        isDashboardRoute={
+          normalizeNavigationPath(location.pathname) === "/dashboard"
+        }
         initialPublishedCoursePage={
           staticCourseRouteData?.publishedCoursePage
         }

@@ -307,10 +307,11 @@ export function getInitialNavigationVisibility(
     );
     const previousMenuSignature = localStorage.getItem(menuSignatureKey);
     const menuSetChanged = previousMenuSignature !== menuSignature;
+    const previousMenuEntries = new Set(
+      previousMenuSignature?.split("|").filter(Boolean) ?? [],
+    );
     localStorage.setItem(menuSignatureKey, menuSignature);
-    if (!Array.isArray(parsedVisibility) || menuSetChanged) {
-      // Reset once when the effective server menu set changes. This prevents
-      // stale localStorage from hiding newly permissioned backend menus.
+    if (!Array.isArray(parsedVisibility)) {
       localStorage.setItem(visibilityKey, JSON.stringify(defaultVisibility));
       return defaultVisibility;
     }
@@ -324,7 +325,26 @@ export function getInitialNavigationVisibility(
         defaultVisibility.includes(label) &&
         normalizedVisibility.indexOf(label) === index,
     );
-    return ensureRequiredNavigationVisibility(savedVisibility, navigationItems);
+    if (!menuSetChanged) {
+      return ensureRequiredNavigationVisibility(savedVisibility, navigationItems);
+    }
+
+    const newlyAvailableLabels = navigationItems
+      .filter(([label, , metadata]) => {
+        const entry = [
+          metadata?.id ?? label,
+          label,
+          metadata?.routeLink ?? "",
+        ].join(":");
+        return !previousMenuEntries.has(entry);
+      })
+      .map(([label]) => label);
+    const nextVisibility = ensureRequiredNavigationVisibility(
+      [...savedVisibility, ...newlyAvailableLabels],
+      navigationItems,
+    );
+    localStorage.setItem(visibilityKey, JSON.stringify(nextVisibility));
+    return nextVisibility;
   } catch {
     return defaultVisibility;
   }

@@ -1,5 +1,6 @@
 import type {
   LearningProgressBatchRequest,
+  LearningProgressResumeContextResponse,
   LearningProgressResponse,
   LearningProgressSyncResponse,
 } from "@veolms/contracts";
@@ -11,6 +12,14 @@ const getProgressPath = (courseKey: string) =>
 export const learningProgressService = {
   get(courseKey: string): Promise<LearningProgressResponse> {
     return api.get<LearningProgressResponse>(getProgressPath(courseKey));
+  },
+
+  getResumeContext(
+    courseKey: string,
+  ): Promise<LearningProgressResumeContextResponse> {
+    return api.get<LearningProgressResumeContextResponse>(
+      `${getProgressPath(courseKey)}/resume-context`,
+    );
   },
 
   sync(

@@ -7,6 +7,7 @@ import {
   optimisticallyUpdateDiscussionsWorkspaceMembership,
   restoreDiscussionsWorkspaceCacheSnapshot,
 } from "../services/learning-interactions";
+import { copyTextToClipboard } from "../lib/clipboard";
 import type { DiscussionWorkspaceCard } from "./discussions-workspace.adapter";
 
 interface UseDiscussionWorkspaceCardActionsOptions {
@@ -29,12 +30,7 @@ export function useDiscussionWorkspaceCardActions({
   const canFollow = canUseSourceActions && !isNote;
   const bookmarkLabel = card.isBookmarked ? "Remove bookmark" : "Bookmark";
   const followLabel = card.isFollowing ? "Unfollow" : "Follow";
-  const copyTextValue = [
-    card.title?.trim(),
-    card.plainText.trim() || card.excerpt.trim() || card.content.replace(/\s+/g, " ").trim(),
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  const copyTextValue = card.content || card.plainText;
 
   const bookmark = () => {
     if (!sourceId) return;
@@ -153,17 +149,7 @@ export function useDiscussionWorkspaceCardActions({
   };
 
   const copyText = async () => {
-    if (!copyTextValue) return;
-
-    try {
-      if (!navigator.clipboard?.writeText) {
-        throw new Error("Clipboard unavailable");
-      }
-      await navigator.clipboard.writeText(copyTextValue);
-      setNotice?.("Text copied");
-    } catch {
-      setNotice?.("Couldn't copy text");
-    }
+    await copyTextToClipboard(copyTextValue, setNotice);
   };
 
   return {
@@ -171,7 +157,7 @@ export function useDiscussionWorkspaceCardActions({
     bookmarkLabel,
     canBookmark: canUseSourceActions,
     canCopyLink: Boolean(destination),
-    canCopyText: Boolean(copyTextValue),
+    canCopyText: Boolean(copyTextValue.trim()),
     canFollow,
     copyLink,
     copyText,
