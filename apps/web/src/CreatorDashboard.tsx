@@ -2856,15 +2856,6 @@ export const CreatorDashboard = memo(function CreatorDashboard({
     },
   ];
 
-  useEffect(() => {
-    if (import.meta.env.DEV && dashboardResponse) {
-      console.debug(
-        "[CreatorDashboard][SS1] dashboard response",
-        dashboardResponse,
-      );
-    }
-  }, [dashboardResponse]);
-
   return (
     <div className="creator-dashboard">
       <header className="creator-dashboard-heading">
