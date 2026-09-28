@@ -142,7 +142,7 @@ const getInitialLayoutDomState = (): InitialLayoutDomState => {
     bodyAttributes,
   };
 };
-
+// Shared HTML shell wrapping both the academy and authentication routes.
 export function Layout({ children }: LayoutProps) {
   // The preference scripts run before hydration so they can prevent visual
   // flashes. Snapshot the already-mutated document into React's first render;
