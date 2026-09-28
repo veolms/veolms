@@ -166,9 +166,12 @@ createServer(async (request, response) => {
   }
 
   const extension = path.extname(filePath).toLowerCase();
+  const isHashedBuildAsset =
+    filePath.includes(`${path.sep}assets${path.sep}`) &&
+    /[-_.][A-Za-z0-9_-]{8,}(?=\.[^.]+$)/.test(path.basename(filePath));
   const headers = {
     "Content-Type": mimeTypes.get(extension) || "application/octet-stream",
-    "Cache-Control": filePath.includes(`${path.sep}assets${path.sep}`)
+    "Cache-Control": isHashedBuildAsset
       ? "public, max-age=31536000, immutable"
       : "no-cache",
     Vary: "Accept-Encoding",

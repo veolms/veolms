@@ -3,6 +3,7 @@ import {
   presignMediaRequestSchema,
   presignMediaResponseSchema,
   mediaDeliveryResponseSchema,
+  mediaImageVariantManifestSchema,
   mediaUploadCompleteResponseSchema,
   videoJobProgressResponseSchema,
   videoPlaybackBootstrapSchema,
@@ -214,6 +215,27 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
       ],
     },
     controller.streamHlsResource,
+  );
+
+  app.get(
+    "/media/:mediaId/image-variants",
+    {
+      schema: {
+        operationId: "getMediaImageVariantManifest",
+        tags: ["Media"],
+        summary: "Get available responsive image dimensions",
+        params: z.object({ mediaId: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Available responsive image dimensions",
+            mediaImageVariantManifestSchema,
+          ),
+          404: errorResponse("Image asset not found"),
+        },
+      },
+      preHandler: requireAuthenticated,
+    },
+    controller.getImageVariantManifest,
   );
 
   app.get(

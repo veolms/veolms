@@ -1,8 +1,15 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
+import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
+import "../styles/features/workspace.css";
 import type { CourseRole } from "../courses/catalogue";
 import type { NavigateTo } from "../routing/navigation";
-import { DiscussionsWorkspace } from "./DiscussionsWorkspace";
+
+const DiscussionsWorkspace = lazy(() =>
+  import("./DiscussionsWorkspace").then((module) => ({
+    default: module.DiscussionsWorkspace,
+  })),
+);
 
 export interface WorkspacePageProps {
   section: string;
@@ -94,12 +101,21 @@ export function WorkspacePage({
 }: WorkspacePageProps) {
   if (section === "Discussions") {
     return (
-      <DiscussionsWorkspace
-        role={role}
-        tab={discussionTab}
-        onNavigatePage={onNavigatePage}
-        setNotice={setNotice}
-      />
+      <Suspense
+        fallback={
+          <CenteredLoadingSpinner
+            label="Loading discussions"
+            className="min-h-52"
+          />
+        }
+      >
+        <DiscussionsWorkspace
+          role={role}
+          tab={discussionTab}
+          onNavigatePage={onNavigatePage}
+          setNotice={setNotice}
+        />
+      </Suspense>
     );
   }
   if (section === "Logout") {

@@ -2,7 +2,11 @@ import { useLayoutEffect, type ReactNode } from "react";
 import { Links, Meta, Outlet, Scripts } from "react-router";
 import type { Route } from "./+types/root";
 import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
-import { fullAppStylesheet } from "./appStylesheet";
+import {
+  getAuthIdentityHintBootstrapScript,
+  getEarlyApiBootstrapScript,
+} from "./bootstrap/earlyApiBootstrap";
+import { appBaseStylesheet, fullAppStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
 import { getLearningPlayerBootstrapScript } from "./learning/learningPlayerPreferences";
@@ -32,6 +36,7 @@ import {
   getSidebarPresentationBootstrapScript,
   getSidebarShellBootstrapScript,
 } from "./shell/sidebarPreferences";
+import { getAcademyPaletteStylesheetBootstrapScript } from "./shell/academyPaletteStyles";
 import {
   ACADEMY_THEME_VERSION,
   DEFAULT_ACADEMY_THEME,
@@ -44,6 +49,11 @@ interface LayoutProps {
 
 const academyThemeIds = JSON.stringify(academyThemes.map(({ id }) => id));
 const videoPlaybackCdnOrigin = getVideoPlaybackCdnOrigin();
+// React Router's static renderer may evaluate the root through Vite's dev
+// server during a production build. The build flag keeps the SPA fallback on
+// the production route stylesheet path in that case.
+const useDevelopmentStylesheet =
+  import.meta.env.DEV && process.env.VEO_REACT_ROUTER_BUILD !== "true";
 
 const getAppearanceBootstrapScript = () =>
   `(()=>{const r=document.documentElement,p=${academyThemeIds};try{const t=localStorage.getItem("veolms-theme")||"dark";r.dataset.theme=t==="device"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t==="light"?"light":"dark"}catch{}try{const e=localStorage.getItem("veolms-randomize-academy-theme")==="true",s=sessionStorage.getItem("veolms-session-academy-theme"),l=localStorage.getItem("veolms-academy-theme"),c=localStorage.getItem("veolms-academy-theme-version")===${JSON.stringify(ACADEMY_THEME_VERSION)},v=e&&p.includes(s||"")?s:c&&p.includes(l||"")?l:${JSON.stringify(DEFAULT_ACADEMY_THEME)};r.dataset.palette=v}catch{}})();`;
@@ -183,6 +193,14 @@ export function Layout({ children }: LayoutProps) {
           content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
         />
         <meta name="theme-color" content="#151718" />
+        <script
+          dangerouslySetInnerHTML={{ __html: getEarlyApiBootstrapScript() }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: getAuthIdentityHintBootstrapScript(),
+          }}
+        />
         {videoPlaybackCdnOrigin ? (
           <link
             rel="preconnect"
@@ -228,13 +246,21 @@ export function Layout({ children }: LayoutProps) {
             __html: getControlRadiusBootstrapScript(),
           }}
         />
-        <link rel="stylesheet" href={fullAppStylesheet} />
-        {/* The complete app stylesheet is linked above. In development,
-            React Router otherwise synthesizes an additional route-critical
-            stylesheet on every document request, delaying first paint by
-            seconds in this large app. Production still receives route links
-            and preloads through Links. */}
-        {!import.meta.env.DEV && <Links />}
+        <link
+          rel="stylesheet"
+          href={useDevelopmentStylesheet ? fullAppStylesheet : appBaseStylesheet}
+        />
+        {!useDevelopmentStylesheet ? (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: getAcademyPaletteStylesheetBootstrapScript(),
+            }}
+          />
+        ) : null}
+        {/* Development keeps the complete stylesheet linked above to avoid
+            React Router's route-critical stylesheet fetch waterfall. In
+            production, route and feature modules provide their own CSS links. */}
+        {!useDevelopmentStylesheet && <Links />}
       </head>
       <body {...initialLayoutDomState.bodyAttributes}>
         <div id="root">{children}</div>

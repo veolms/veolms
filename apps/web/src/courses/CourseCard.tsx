@@ -369,6 +369,7 @@ export function CourseCard({
                   <MenuAction
                     Icon={ListBullets}
                     label="Manage Curriculum"
+                    onIntent={() => onEditIntent?.(course)}
                     onClick={() => closeThen(() => onManage?.(course))}
                   />
                   <MenuAction
@@ -408,6 +409,7 @@ export function CourseCard({
                         ? "Unpublish Course"
                         : "Publish Course"
                     }
+                    onIntent={() => onEditIntent?.(course)}
                     onClick={() =>
                       closeThen(() => {
                         if (onPublish) {

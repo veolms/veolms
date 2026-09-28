@@ -30,6 +30,7 @@ import {
   getDefaultCountry,
 } from "../auth/CountryCodeSelect";
 import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
+import "../styles/features/profile.css";
 import { OtpCodeInput } from "../auth/OtpCodeInput";
 import {
   DEFAULT_COUNTRY_ID,

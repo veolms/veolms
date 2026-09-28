@@ -1,10 +1,10 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 import type { OrderStatus } from "@veolms/contracts";
 import { CalendarBlankIcon as CalendarBlank } from "@phosphor-icons/react/CalendarBlank";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { XIcon as X } from "@phosphor-icons/react/X";
-import { useCourses } from "../services/courses";
+import { useCourseOptions } from "../services/courses";
 import { useCouponsList } from "../services/coupons";
 import { ThemedSelect, type ThemedSelectOption } from "../ThemedSelect";
 import {
@@ -66,8 +66,16 @@ export const OrderFiltersBar = memo(function OrderFiltersBar({
   isFiltered,
   onResetFilters,
 }: OrderFiltersBarProps) {
-  const { data: coursesData } = useCourses();
-  const { data: couponsData } = useCouponsList({ limit: 50 });
+  const [isCourseFilterOpen, setIsCourseFilterOpen] = useState(false);
+  const [isCouponFilterOpen, setIsCouponFilterOpen] = useState(false);
+  const { data: coursesData } = useCourseOptions({
+    enabled: isCourseFilterOpen,
+  });
+  const { data: couponsData } = useCouponsList({
+    limit: 50,
+    enabled: isCouponFilterOpen,
+    refetchInterval: false,
+  });
 
   // Course select options
   const courseOptions: readonly ThemedSelectOption<string>[] = useMemo(() => {
@@ -155,6 +163,8 @@ export const OrderFiltersBar = memo(function OrderFiltersBar({
               defaultLimit={8}
               ariaLabel="Filter by course"
               triggerClassName={selectTriggerClass}
+              onOpen={() => setIsCourseFilterOpen(true)}
+              onClose={() => setIsCourseFilterOpen(false)}
             />
           </div>
 
@@ -172,6 +182,8 @@ export const OrderFiltersBar = memo(function OrderFiltersBar({
               defaultLimit={8}
               ariaLabel="Filter by coupon"
               triggerClassName={selectTriggerClass}
+              onOpen={() => setIsCouponFilterOpen(true)}
+              onClose={() => setIsCouponFilterOpen(false)}
             />
           </div>
 

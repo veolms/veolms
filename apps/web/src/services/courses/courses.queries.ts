@@ -1,9 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import type {
   Category,
   CourseEditorDataResponse,
   CourseOverviewResponse,
+  CourseListResponse,
+  CourseOptionsResponse,
   CourseSummary,
   CourseValidationResponse,
   DeletedCoursesListResponse,
@@ -85,6 +87,59 @@ export function useCourseEditor(courseId: string | null) {
     queryFn: () => coursesService.getCourseEditor(courseId!),
     enabled: Boolean(courseId),
     staleTime: 30 * 1000,
+  });
+}
+
+export function useCourseOptions(options?: { enabled?: boolean }) {
+  return useQuery<CourseOptionsResponse, ApiError>({
+    queryKey: courseKeys.options(),
+    queryFn: () => coursesService.listOptions(),
+    enabled: options?.enabled ?? true,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useInfiniteCourses(options: {
+  enabled?: boolean;
+  limit?: number;
+  search?: string;
+  sort?: "latest" | "title";
+  initialData?: CourseListResponse;
+  initialDataNeedsRefresh?: boolean;
+}) {
+  const limit = options.limit ?? 24;
+  const search = options.search?.trim() ?? "";
+  const sort = options.sort ?? "latest";
+  const canUseInitialData =
+    Boolean(options.initialData) && search.length === 0 && sort === "latest";
+
+  return useInfiniteQuery<CourseListResponse, ApiError>({
+    queryKey: courseKeys.pagedLists({ limit, search, sort }),
+    queryFn: async ({ pageParam }) => {
+      const page = await coursesService.list({
+        limit,
+        cursor: pageParam as string | undefined,
+        ...(search ? { search } : {}),
+        sort,
+      });
+      return !page.nextCursor && page.courses.length > limit
+        ? { ...page, courses: page.courses.slice(0, limit) }
+        : page;
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: options.enabled ?? true,
+    initialData: canUseInitialData
+      ? {
+          pages: [options.initialData!],
+          pageParams: [undefined],
+        }
+      : undefined,
+    staleTime: canUseInitialData
+      ? options.initialDataNeedsRefresh
+        ? 0
+        : Infinity
+      : 5 * 60 * 1000,
   });
 }
 

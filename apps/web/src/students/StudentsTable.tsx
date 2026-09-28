@@ -598,10 +598,9 @@ export function StudentsTable({
         <div
           role="status"
           aria-label="Loading more students"
-          className="flex items-center justify-center gap-2 py-6 text-xs text-(--muted)"
+          className="flex items-center justify-center py-6"
         >
           <CircleNotch size={18} className="animate-spin text-(--accent)" />
-          <span>Loading more students...</span>
         </div>
       )}
     </div>

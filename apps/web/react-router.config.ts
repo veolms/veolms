@@ -74,11 +74,11 @@ async function getStaticCataloguePaths() {
 
 const prerenderConfig = {
   // React Router still renders configured prerender paths through its dev
-  // server. Keep development focused on the small Tailwind CSS course so
-  // other routes use the SPA fallback while the full production prerender
-  // set remains unchanged.
+  // server. Include the initial catalogue and profile-settings routes so
+  // their first document has the app shell before client modules load. Keep
+  // the remaining development routes on SPA fallback.
   paths: isDevelopment
-    ? staticLearningPages
+    ? [...staticLearningPages, "/", "/courses", "/settings/profile"]
     : async () => [
         ...staticApplicationPages,
         ...(await getStaticCataloguePaths()),

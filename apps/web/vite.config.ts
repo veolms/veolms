@@ -20,6 +20,7 @@ const shellPhosphorIcons = new Set([
   "CaretRight",
   "ChartBar",
   "ChatCircleDots",
+  "ChatTeardropDots",
   "Check",
   "CornersIn",
   "CornersOut",
@@ -41,6 +42,7 @@ const shellPhosphorIcons = new Set([
   "Student",
   "Sun",
   "Tote",
+  "Tag",
   "User",
   "Users",
 ]);
@@ -53,6 +55,76 @@ const homePhosphorIcons = new Set([
   "Target",
 ]);
 const settingsPhosphorIcons = new Set(["ShieldCheck", "UserCircle"]);
+const settingsRoutePhosphorIcons = new Set([
+  "Archive",
+  "ArrowFatUp",
+  "ArrowLineUp",
+  "ArrowCounterClockwise",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowsClockwise",
+  "ArrowsDownUp",
+  "ArrowsInLineHorizontal",
+  "At",
+  "BellRinging",
+  "Camera",
+  "Check",
+  "CheckCircle",
+  "CircleHalf",
+  "CircleNotch",
+  "ClosedCaptioning",
+  "CornersOut",
+  "CaretDoubleUp",
+  "CaretUp",
+  "CreditCard",
+  "DeviceMobile",
+  "DotsNine",
+  "DotsSixVertical",
+  "DownloadSimple",
+  "EnvelopeSimple",
+  "Fingerprint",
+  "Flask",
+  "GithubLogo",
+  "Globe",
+  "Grains",
+  "Heart",
+  "House",
+  "Image",
+  "Info",
+  "Keyboard",
+  "Laptop",
+  "LinkedinLogo",
+  "Lock",
+  "LockKey",
+  "LockOpen",
+  "MagicWand",
+  "MagnifyingGlass",
+  "Medal",
+  "Moon",
+  "Palette",
+  "Phone",
+  "PlayCircle",
+  "Plus",
+  "SealCheck",
+  "ShieldWarning",
+  "SignOut",
+  "Sparkle",
+  "Stack",
+  "Star",
+  "Sun",
+  "Tabs",
+  "Target",
+  "TextAa",
+  "TextT",
+  "ThermometerSimple",
+  "Timer",
+  "Trophy",
+  "Trash",
+  "WarningCircle",
+  "UsersThree",
+  "X",
+]);
 
 const getPhosphorIconName = (id: string) =>
   id
@@ -174,7 +246,28 @@ export default defineConfig(({ command, mode }) => {
       // graph; this app's editor, Shiki, and icon trees make that crawl long
       // enough for the SSR module runner's 60s transport request to time out.
       holdUntilCrawlEnd: false,
-      include: ["react", "react-dom/client"],
+      // Prebundle shell and settings icons which otherwise appear during idle
+      // tab preloads and force Vite to reload the open page.
+      include: [
+        "react",
+        "react-dom/client",
+        "react-router",
+        "@base-ui/react/drawer",
+        "@tanstack/react-query",
+        "@tanstack/query-async-storage-persister",
+        "@tanstack/react-query-persist-client",
+        "@veolms/contracts > zod",
+        "axios",
+        "clsx",
+        "tailwind-merge",
+        "swiper/react",
+        ...[
+          ...shellPhosphorIcons,
+          ...homePhosphorIcons,
+          ...settingsPhosphorIcons,
+          ...settingsRoutePhosphorIcons,
+        ].map((icon) => `@phosphor-icons/react/${icon}`),
+      ],
     },
     define: {
       "process.env.VEO_REACT_ROUTER_BUILD": JSON.stringify(
@@ -186,6 +279,12 @@ export default defineConfig(({ command, mode }) => {
       "import.meta.env.VITE_CDN_URL": JSON.stringify(config.VITE_CDN_URL),
     },
     plugins: [earlyHlsPreloadPlugin(), tailwindcss(), reactRouter()],
+    // React Router's prerender pass fetches route data from Vite's temporary
+    // preview server. Pin that internal server to IPv4 loopback so Windows
+    // localhost address selection cannot point the request at another family.
+    preview: {
+      host: "127.0.0.1",
+    },
     resolve: {
       alias: {
         "@": webSourceRoot,
@@ -232,13 +331,33 @@ export default defineConfig(({ command, mode }) => {
     server: {
       port: config.WEB_PORT,
       strictPort: true,
+      // A production build can run beside `dev` (the preview is served on
+      // 4173). Its generated HTML lives under this Vite root; watching those
+      // files makes Vite send a full-page reload for every prerendered route
+      // and can keep a cold browser session reloading for minutes.
+      watch: {
+        ignored: [path.resolve(workspaceRoot, "apps/web/build/**")],
+      },
       warmup: {
+        ssrFiles: [
+          "./src/root.tsx",
+          "./src/routes/academy-layout.tsx",
+          "./src/routes/academy-marker.tsx",
+        ],
         clientFiles: [
           "./src/entry.client.tsx",
           "./src/root.tsx",
+          // The development document uses this aggregate stylesheet directly;
+          // compile Tailwind's full feature layer before the first browser hit.
+          "./src/full-app.css",
           "./src/routes/academy-layout.tsx",
           "./src/CoursesPage.tsx",
           "./src/StudentPages.tsx",
+          // Settings is split from the academy shell, then its selected tab
+          // is split again. Warm the route shown most often in local dev so
+          // the first visit does not pay both transform costs interactively.
+          "./src/SettingsPage.tsx",
+          "./src/settings/ProfileSettings.tsx",
         ],
       },
       proxy: {

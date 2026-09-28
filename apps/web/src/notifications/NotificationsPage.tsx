@@ -10,6 +10,10 @@ import { NotificationSummaryWidget } from "./NotificationSummaryWidget";
 import { RecentMentionsWidget } from "./RecentMentionsWidget";
 import type { NotificationTabId } from "./notificationsData";
 import { useNotificationsFilter } from "./useNotificationsFilter";
+import {
+  CenteredLoadingSpinner,
+  LoadingSpinnerIcon,
+} from "../components/LoadingSpinner";
 
 export interface NotificationsPageProps {
   onNavigatePage?: NavigateTo;
@@ -185,12 +189,10 @@ export function NotificationsPage({
         {/* Left / Main Column: Grouped Notifications Feed */}
         <main className="flex flex-col gap-6 xl:col-span-8 min-w-0">
           {isLoading ? (
-            <div
-              className="rounded-[18px] bg-(--card-surface) p-8 text-center text-sm text-(--muted)"
-              style={{ boxShadow: "var(--card-shadow)" }}
-            >
-              Loading notifications…
-            </div>
+            <CenteredLoadingSpinner
+              label="Loading notifications"
+              className="min-h-52 rounded-[18px] bg-(--card-surface) p-8"
+            />
           ) : isError ? (
             <div
               role="alert"
@@ -295,10 +297,16 @@ export function NotificationsPage({
                 <button
                   type="button"
                   onClick={loadMore}
+                  aria-busy={isFetchingNextPage}
+                  aria-label={isFetchingNextPage ? "Loading more notifications" : undefined}
                   disabled={isFetchingNextPage}
                   className="self-center rounded-xl border border-(--border) bg-(--card-surface) px-4 py-2 text-sm font-semibold text-(--text) disabled:cursor-wait disabled:opacity-60"
                 >
-                  {isFetchingNextPage ? "Loading…" : "Load more"}
+                  {isFetchingNextPage ? (
+                    <LoadingSpinnerIcon size={18} />
+                  ) : (
+                    "Load more"
+                  )}
                 </button>
               )}
             </>

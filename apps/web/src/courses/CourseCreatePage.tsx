@@ -9,8 +9,10 @@ import {
   memo,
   Fragment,
 } from "react";
+import "../styles/features/course-wizard.css";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { createPortal } from "react-dom";
+import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
 import { CourseQuizPricingCard } from "./CourseQuizPricingCard";
 import {
@@ -7739,7 +7741,7 @@ export function CourseCreatePage({
     enrolled: false,
     duration: computedDuration,
     students: 0,
-    thumbnail: thumbnail || "/assets/instructor-poster.jpg",
+    thumbnail: thumbnail || "/static/instructor-poster.jpg",
     lifecycleStatus: isPublished ? "published" : "draft",
   };
 
@@ -9717,7 +9719,10 @@ export function CourseCreatePage({
 
       {/* Wizard Step Panels using SwipeableTabPanel */}
       {isInitialLoadingCourse ? (
-        <CourseWizardSkeleton activeStep={activeStep} />
+        <CenteredLoadingSpinner
+          label="Loading course details"
+          className="min-h-80 w-full flex-1"
+        />
       ) : (
       <SwipeableTabPanel
         tabs={WIZARD_STEP_IDS}

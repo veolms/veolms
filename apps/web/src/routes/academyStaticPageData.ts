@@ -1,16 +1,24 @@
 import {
   courseListResponseSchema,
   courseOverviewSchema,
+  type CourseListResponse,
   type CourseOverviewResponse,
-  type CourseSummary,
 } from "@veolms/contracts";
 
 export interface AcademyStaticPageData {
-  publishedCourses?: CourseSummary[];
+  publishedCoursePage?: CourseListResponse;
+  publishedCoursePageNeedsRefresh?: boolean;
   courseOverview?: CourseOverviewResponse;
 }
 
-let publishedCoursesPromise: Promise<CourseSummary[]> | undefined;
+const PUBLISHED_COURSE_PAGE_SIZE = 24;
+
+let publishedCoursePagePromise:
+  | Promise<{
+      page: CourseListResponse;
+      needsRefresh: boolean;
+    }>
+  | undefined;
 
 function getStaticApiBaseUrl() {
   const configured =
@@ -43,16 +51,28 @@ async function fetchStaticApiData<T>(
 }
 
 function loadPublishedCourses() {
-  publishedCoursesPromise ??= fetchStaticApiData("/courses", (value) => {
-    const result = courseListResponseSchema.safeParse(value);
-    if (!result.success) {
-      throw new Error(
-        "The build API returned an invalid published course catalogue.",
-      );
-    }
-    return result.data.courses;
-  });
-  return publishedCoursesPromise;
+  publishedCoursePagePromise ??= fetchStaticApiData(
+    "/courses?limit=24&sort=latest",
+    (value) => {
+      const result = courseListResponseSchema.safeParse(value);
+      if (!result.success) {
+        throw new Error(
+          "The build API returned an invalid published course catalogue.",
+        );
+      }
+      const needsRefresh =
+        !result.data.nextCursor &&
+        result.data.courses.length > PUBLISHED_COURSE_PAGE_SIZE;
+      return {
+        page: {
+          ...result.data,
+          courses: result.data.courses.slice(0, PUBLISHED_COURSE_PAGE_SIZE),
+        },
+        needsRefresh,
+      };
+    },
+  );
+  return publishedCoursePagePromise;
 }
 
 export async function loadAcademyStaticPageData(
@@ -64,9 +84,11 @@ export async function loadAcademyStaticPageData(
     new URL(request.url).pathname
       .replace(/(?:_)?\.data$/u, "")
       .replace(/\/$/u, "") || "/";
-  if (pathname === "/" || pathname === "/courses") {
+  if (pathname === "/courses") {
+    const publishedCourses = await loadPublishedCourses();
     return {
-      publishedCourses: await loadPublishedCourses(),
+      publishedCoursePage: publishedCourses.page,
+      publishedCoursePageNeedsRefresh: publishedCourses.needsRefresh,
     } satisfies AcademyStaticPageData;
   }
   if (pathname.startsWith("/courses/") && pathname.endsWith("/overview")) {

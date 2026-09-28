@@ -163,14 +163,15 @@ export function OrderHistoryPage({
                 <button
                   type="button"
                   onClick={() => void fetchNextPage()}
+                  aria-busy={isFetchingNextPage}
+                  aria-label={isFetchingNextPage ? "Loading more orders" : undefined}
                   disabled={isFetchingNextPage}
                   className="rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs md:text-sm font-semibold text-(--text) hover:bg-(--hover) transition-colors cursor-pointer disabled:cursor-wait disabled:opacity-60"
                   style={{ boxShadow: "var(--card-shadow)" }}
                 >
                   {isFetchingNextPage ? (
-                    <span className="inline-flex items-center gap-2">
-                      <CircleNotch size={15} className="animate-spin text-(--accent)" />
-                      Loading…
+                    <span className="inline-flex items-center">
+                      <CircleNotch size={15} className="animate-spin text-(--accent)" aria-hidden="true" />
                     </span>
                   ) : (
                     "Load more orders"

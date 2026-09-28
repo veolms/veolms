@@ -8,6 +8,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import "../styles/features/discussions.css";
 import type {
   CSSProperties,
   FormEvent,
@@ -37,6 +38,7 @@ import { SealCheckIcon as SealCheck } from "@phosphor-icons/react/SealCheck";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { XIcon as X } from "@phosphor-icons/react/X";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import type { CourseRole } from "../courses/catalogue";
 import { formatRelativeDate } from "../settings/sessionDisplay";
 import {
@@ -2731,19 +2733,16 @@ export function DiscussionsWorkspace({
                       aria-live="polite"
                     >
                       {isFetchingNextPage && (
-                        <p className="py-1.5 text-center text-xs font-medium text-(--muted)">
-                          {isCommentsTab
-                            ? "Loading more comments…"
-                            : isNotesTab
-                              ? "Loading more notes…"
-                              : isMentionsTab
-                                ? "Loading more mentions…"
-                                : isFollowingTab
-                                  ? "Loading more followed discussions…"
-                                  : isBookmarksTab
-                                    ? "Loading more bookmarks…"
-                                    : "Loading more discussions…"}
-                        </p>
+                        <div
+                          className="grid min-h-12 place-items-center"
+                          role="status"
+                          aria-label={activeLoadingLabel.replace(
+                            "Loading ",
+                            "Loading more ",
+                          )}
+                        >
+                          <LoadingSpinnerIcon size={18} />
+                        </div>
                       )}
                       {isFetchNextPageError && (
                         <div className="flex justify-center py-3">

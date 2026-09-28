@@ -7,6 +7,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import "../learning-feature.css";
 import { createPortal } from "react-dom";
 import {
   LessonVideoPlayer,

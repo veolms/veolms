@@ -487,9 +487,12 @@ export const OrdersTable = memo(function OrdersTable({
         className="w-full overflow-hidden rounded-[18px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-12 text-center"
         style={{ boxShadow: "var(--card-shadow)" }}
       >
-        <div className="flex flex-col items-center justify-center gap-3">
+        <div
+          role="status"
+          aria-label="Loading orders data"
+          className="grid min-h-36 place-items-center"
+        >
           <CircleNotch size={32} className="animate-spin text-(--accent)" />
-          <p className="text-sm text-(--muted)">Loading orders data...</p>
         </div>
       </div>
     );
@@ -627,10 +630,9 @@ export const OrdersTable = memo(function OrdersTable({
         <div
           role="status"
           aria-label="Loading more orders"
-          className="flex items-center justify-center gap-2 py-6 text-xs text-(--muted)"
+          className="flex items-center justify-center py-6"
         >
-          <CircleNotch size={18} className="animate-spin text-(--accent)" />
-          <span>Loading more orders...</span>
+          <CircleNotch size={18} className="animate-spin text-(--accent)" aria-hidden="true" />
         </div>
       )}
     </div>

@@ -431,6 +431,23 @@ export function DiscussionMarkdown({
           ),
           img: ({ src, alt }) => {
             if (!src) return null;
+            const linkedImageAttachment = linkedAttachments?.find(
+              (attachment) =>
+                attachment.fileUrl === src &&
+                (attachment.mediaType === "image" ||
+                  attachment.kind === "image" ||
+                  attachment.kind === "screenshot" ||
+                  attachment.mimeType.startsWith("image/")),
+            );
+            const imageWidth = linkedImageAttachment?.width;
+            const imageHeight = linkedImageAttachment?.height;
+            const hasTrustedDimensions =
+              typeof imageWidth === "number" &&
+              Number.isInteger(imageWidth) &&
+              imageWidth > 0 &&
+              typeof imageHeight === "number" &&
+              Number.isInteger(imageHeight) &&
+              imageHeight > 0;
             const attachmentLabel = alt?.toLowerCase().startsWith("video:")
               ? alt.slice(6).trim()
               : alt;
@@ -454,6 +471,13 @@ export function DiscussionMarkdown({
                 src={src}
                 alt={alt ?? ""}
                 loading="lazy"
+                width={hasTrustedDimensions ? imageWidth : undefined}
+                height={hasTrustedDimensions ? imageHeight : undefined}
+                style={
+                  hasTrustedDimensions
+                    ? { aspectRatio: `${imageWidth} / ${imageHeight}` }
+                    : undefined
+                }
                 className="my-3 max-h-96 max-w-full rounded-xl object-contain"
               />
             );

@@ -68,6 +68,26 @@ export function getApiBaseUrl(): string {
 
 const BACKEND_URL = getApiBaseUrl();
 
+interface EarlyApiResponse {
+  ok: boolean;
+  status: number;
+  body?: unknown;
+}
+
+interface EarlyApiRequest {
+  startedAt: number;
+  promise: Promise<EarlyApiResponse | null>;
+}
+
+const EARLY_API_RESPONSE_MAX_AGE_MS = 5 * 60 * 1000;
+
+declare global {
+  interface Window {
+    __VEO_EARLY_API_REQUESTS__?: Record<string, EarlyApiRequest>;
+    __VEO_CREATOR_CATALOGUE_HINT__?: boolean;
+  }
+}
+
 export function getApiRequestUrl(path: string): string {
   return `${BACKEND_URL.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
 }
@@ -172,6 +192,18 @@ function isHtmlDocumentResponse(response: AxiosResponse): boolean {
   );
 }
 
+function unwrapApiResponseData(data: unknown) {
+  if (
+    data &&
+    typeof data === "object" &&
+    "data" in data &&
+    "success" in data
+  ) {
+    return data.data;
+  }
+  return data;
+}
+
 function normalizeApiResponse(response: AxiosResponse) {
   if (isHtmlDocumentResponse(response)) {
     const error = Object.assign(
@@ -194,15 +226,44 @@ function normalizeApiResponse(response: AxiosResponse) {
     throw error;
   }
 
+  return unwrapApiResponseData(response.data) as AxiosResponse["data"];
+}
+
+function consumeEarlyApiResponse<T>(
+  url: string,
+  config?: AxiosRequestConfig,
+): Promise<T> | null {
+  if (typeof window === "undefined") return null;
+  const path = url.split(/[?#]/u, 1)[0] ?? url;
   if (
-    response.data &&
-    typeof response.data === "object" &&
-    "data" in response.data &&
-    "success" in response.data
+    path !== "/auth/me" &&
+    path !== "/navigation/sidenav" &&
+    path !== "/enrollments/courses"
   ) {
-    return response.data.data;
+    return null;
   }
-  return response.data;
+
+  const pending = window.__VEO_EARLY_API_REQUESTS__?.[path];
+  if (!pending) return null;
+  delete window.__VEO_EARLY_API_REQUESTS__?.[path];
+  if (Date.now() - pending.startedAt > EARLY_API_RESPONSE_MAX_AGE_MS)
+    return null;
+
+  const requestAgain = () =>
+    axiosInstance.get<T>(url, config).then((response) => response.data);
+
+  return pending.promise.then(
+    (result) => {
+      if (
+        !result?.ok ||
+        Date.now() - pending.startedAt > EARLY_API_RESPONSE_MAX_AGE_MS
+      ) {
+        return requestAgain();
+      }
+      return unwrapApiResponseData(result.body) as T;
+    },
+    requestAgain,
+  );
 }
 
 axiosInstance.interceptors.response.use(normalizeApiResponse);
@@ -221,6 +282,8 @@ axiosInstance.interceptors.response.use(undefined, (error: AxiosError) => {
 
 export const api = {
   get<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    const earlyResponse = consumeEarlyApiResponse<T>(url, config);
+    if (earlyResponse) return earlyResponse;
     return axiosInstance.get(url, config) as unknown as Promise<T>;
   },
 

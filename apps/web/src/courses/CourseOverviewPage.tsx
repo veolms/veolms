@@ -55,11 +55,17 @@ import {
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
 import { formatDuration, resolveCourseDurationSeconds } from "./courseAdapter";
+import {
+  getApplicationScrollElement,
+  scrollApplicationTo,
+} from "../shell/applicationScroll";
 // ─── Helpers for Currency, Sale Window, Language, and Price Sizing ────────────
 
 export type PriceSizeVariant = "normal" | "medium" | "large" | "xlarge";
 
 const NO_PINNED_LESSONS: ReadonlySet<string> = new Set();
+const SECTION_COLLAPSE_TRANSITION_MS = 250;
+const SECTION_SCROLL_SETTLE_DELAY_MS = SECTION_COLLAPSE_TRANSITION_MS + 50;
 const getOverviewLessonKey = (lesson: CourseSection["lessons"][number]) =>
   String(lesson[0]);
 
@@ -1406,8 +1412,17 @@ function CourseHeroSection({
           {thumbnail ? (
             <img
               src={thumbnail}
+              srcSet={course.thumbnailSrcSet
+                ?.map(({ url, width }) => `${url} ${width}w`)
+                .join(", ")}
+              sizes="(max-width: 640px) 100vw, (max-width: 1200px) 50vw, 560px"
               alt={`Preview thumbnail for ${title}`}
               className="w-full h-full object-cover opacity-90 transition-[transform,opacity] duration-300 motion-reduce:transition-none group-hover:scale-[1.015] group-hover:opacity-[0.98]"
+              width={960}
+              height={540}
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
             />
           ) : (
             <CourseThumbnailPlaceholder />
@@ -2225,6 +2240,15 @@ function CourseOverviewContent({
   const [openSections, setOpenSections] = useState<Set<number>>(
     () => new Set([0]),
   );
+  const sectionScrollTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (sectionScrollTimerRef.current !== null) {
+        window.clearTimeout(sectionScrollTimerRef.current);
+      }
+    },
+    [],
+  );
   const [wishlisted, setWishlisted] = useState(() => {
     try {
       const saved: unknown = JSON.parse(
@@ -2236,20 +2260,70 @@ function CourseOverviewContent({
     }
   });
 
+  const cancelPendingSectionScroll = () => {
+    if (sectionScrollTimerRef.current !== null) {
+      window.clearTimeout(sectionScrollTimerRef.current);
+      sectionScrollTimerRef.current = null;
+    }
+  };
+
+  const scrollToSection = (index: number, delay: number) => {
+    const section = courseSections[index];
+    if (!section) return;
+
+    sectionScrollTimerRef.current = window.setTimeout(() => {
+      sectionScrollTimerRef.current = null;
+      const sectionHeader = document.getElementById(
+        `cov-section-toggle-${section.id}`,
+      );
+      if (!sectionHeader) return;
+
+      const scrollElement = getApplicationScrollElement();
+      const headerTop = sectionHeader.getBoundingClientRect().top;
+      const scrollTop = scrollElement
+        ? scrollElement.scrollTop +
+          headerTop -
+          scrollElement.getBoundingClientRect().top
+        : window.scrollY + headerTop;
+      const prefersReducedMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+
+      scrollApplicationTo({
+        top: Math.max(0, scrollTop - 16),
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+      });
+    }, delay);
+  };
+
   const toggleSection = (index: number) => {
-    setOpenSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      return next;
-    });
+    const wasOpen = openSections.has(index);
+    cancelPendingSectionScroll();
+
+    if (wasOpen) {
+      setOpenSections(new Set());
+      return;
+    }
+
+    setOpenSections(new Set([index]));
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    scrollToSection(
+      index,
+      openSections.size > 0 && !prefersReducedMotion
+        ? SECTION_SCROLL_SETTLE_DELAY_MS
+        : 0,
+    );
   };
 
   const expandAllSections = () => {
+    cancelPendingSectionScroll();
     setOpenSections(new Set(courseSections.map((_, index) => index)));
   };
 
   const collapseAllSections = () => {
+    cancelPendingSectionScroll();
     setOpenSections(new Set());
   };
 

@@ -54,6 +54,24 @@ function getListScrollMargin(
   return listRect.top + window.scrollY;
 }
 
+function getNearestScrollableAncestor(element: HTMLElement | null) {
+  if (!element || typeof window === "undefined") return null;
+
+  let ancestor = element.parentElement;
+  while (ancestor) {
+    const overflowY = window.getComputedStyle(ancestor).overflowY;
+    if (
+      (overflowY === "auto" || overflowY === "scroll") &&
+      ancestor.scrollHeight > ancestor.clientHeight
+    ) {
+      return ancestor;
+    }
+    ancestor = ancestor.parentElement;
+  }
+
+  return null;
+}
+
 export function VirtualizedLessonList<T>({
   items,
   forceVirtualized = false,
@@ -74,8 +92,14 @@ export function VirtualizedLessonList<T>({
   } | null>(null);
   const virtualized =
     items.length >= VIRTUALIZE_AFTER || (forceVirtualized && items.length > 0);
-  const getScrollElement =
-    getScrollElementOverride ?? getApplicationScrollElement;
+  const getScrollElement = useCallback(
+    () =>
+      getScrollElementOverride
+        ? getScrollElementOverride()
+        : (getNearestScrollableAncestor(listRef.current) ??
+          getApplicationScrollElement()),
+    [getScrollElementOverride],
+  );
 
   useLayoutEffect(() => {
     const syncScrollMode = () => {

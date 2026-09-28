@@ -6,6 +6,7 @@ import {
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "./discussion-editor/types";
 import { SurfaceTopRightAccentGlow } from "./SurfaceTopRightAccentGlow";
+import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 
 export const DESCRIPTION_SURFACE_BASE =
   "bg-[color-mix(in_srgb,var(--surface)_94%,var(--canvas))] shadow-[0_14px_38px_color-mix(in_srgb,var(--canvas)_34%,transparent),0_1px_0_color-mix(in_srgb,var(--text)_6%,transparent)]";
@@ -134,12 +135,11 @@ export function LessonDescription({
             <h2 className="mt-0 mb-2 text-lg font-bold leading-tight text-(--text)">
               Description
             </h2>
-            <p
-              data-lesson-description-loading
-              className="m-0 text-(--muted) text-sm italic"
-            >
-              Loading lesson description...
-            </p>
+            <CenteredLoadingSpinner
+              label="Loading lesson description"
+              className="min-h-20 w-full"
+              size={20}
+            />
           </div>
         ) : expanded ? (
           hasDescription ? (

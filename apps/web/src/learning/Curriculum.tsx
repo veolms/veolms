@@ -36,6 +36,7 @@ interface CurriculumProps {
   courseNavigationActionLabel?: string;
   courseTitle: string;
   courseThumbnail?: string;
+  courseThumbnailSrcSet?: string;
   onClose?: () => void;
   onLessonSearchOpen?: () => void;
   focusRequest?: number;
@@ -63,6 +64,7 @@ export function Curriculum({
   courseNavigationActionLabel,
   courseTitle,
   courseThumbnail = "",
+  courseThumbnailSrcSet,
   onClose,
   onLessonSearchOpen,
   focusRequest = 0,
@@ -442,6 +444,8 @@ export function Curriculum({
             {courseThumbnail ? (
               <img
                 src={courseThumbnail}
+                srcSet={courseThumbnailSrcSet}
+                sizes="(max-width: 820px) 100vw, 400px"
                 alt=""
                 className="learning-curriculum__cover"
               />

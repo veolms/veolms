@@ -87,9 +87,12 @@ export function OrdersPage({
   // Waiting for authentication
   if (!isAuthReady) {
     return (
-      <main className="mx-auto grid w-full max-w-[1360px] place-items-center py-24">
-        <CircleNotch size={32} className="mb-3 animate-spin text-(--accent)" />
-        <p className="text-sm text-(--muted)">Loading orders dashboard...</p>
+      <main
+        className="mx-auto grid min-h-52 w-full max-w-[1360px] place-items-center py-24"
+        role="status"
+        aria-label="Loading orders dashboard"
+      >
+        <CircleNotch size={32} className="animate-spin text-(--accent)" aria-hidden="true" />
       </main>
     );
   }

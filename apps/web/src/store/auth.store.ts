@@ -10,8 +10,10 @@ export interface AuthState {
 }
 
 export interface AuthIdentityHint {
-  // Display-only hint; roles and authenticated state still come from /auth/me.
+  // Identity hints are only for display and locating UI preferences. Roles
+  // and authenticated state still come from `/auth/me`.
   displayName: string;
+  userId?: string;
 }
 
 const AUTH_IDENTITY_HINT_KEY = "veolms-auth-identity";
@@ -19,8 +21,28 @@ const AUTH_IDENTITY_HINT_KEY = "veolms-auth-identity";
 function readIdentityHint(): AuthIdentityHint | null {
   if (typeof window === "undefined") return null;
   try {
-    const displayName = window.sessionStorage.getItem(AUTH_IDENTITY_HINT_KEY);
-    return displayName?.trim() ? { displayName: displayName.trim() } : null;
+    const savedHint = window.sessionStorage.getItem(AUTH_IDENTITY_HINT_KEY);
+    if (!savedHint?.trim()) return null;
+
+    try {
+      const parsed: unknown = JSON.parse(savedHint);
+      if (parsed && typeof parsed === "object") {
+        const hint = parsed as Partial<AuthIdentityHint>;
+        const displayName = hint.displayName?.trim();
+        if (displayName) {
+          return {
+            displayName,
+            ...(typeof hint.userId === "string" && hint.userId.trim()
+              ? { userId: hint.userId.trim() }
+              : {}),
+          };
+        }
+      }
+    } catch {
+      // Support the display-name-only value written by older app versions.
+    }
+
+    return { displayName: savedHint.trim() };
   } catch {
     return null;
   }
@@ -31,7 +53,14 @@ function writeIdentityHint(user: AuthUser | null) {
   try {
     const displayName = user?.displayName?.trim();
     if (displayName) {
-      window.sessionStorage.setItem(AUTH_IDENTITY_HINT_KEY, displayName);
+      const userId = typeof user?.id === "string" ? user.id.trim() : "";
+      window.sessionStorage.setItem(
+        AUTH_IDENTITY_HINT_KEY,
+        JSON.stringify({
+          displayName,
+          ...(userId ? { userId } : {}),
+        } satisfies AuthIdentityHint),
+      );
     } else {
       window.sessionStorage.removeItem(AUTH_IDENTITY_HINT_KEY);
     }
