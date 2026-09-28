@@ -468,6 +468,10 @@ function CourseProgressCard({
             <img
               src={course.courseThumbnailUrl}
               alt={course.courseTitle}
+              width={96}
+              height={64}
+              loading="lazy"
+              decoding="async"
               className="h-16 w-24 shrink-0 rounded-xl object-cover border border-(--border) shadow-xs"
             />
           ) : (

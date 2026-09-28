@@ -5,6 +5,10 @@ import type {
 } from "@veolms/contracts";
 import { Button } from "../components/Button";
 import {
+  CenteredLoadingSpinner,
+  LoadingSpinnerIcon,
+} from "../components/LoadingSpinner";
+import {
   ArrowLeft,
   BookOpen,
   CaretDown,
@@ -1262,10 +1266,10 @@ export function QuizAuthoringPanel({
       if (selectedLessonId) {
         return [
           [selectedLessonId, "Attached lesson..."] as const,
-          ["", "Loading lessons..."] as const,
+          ["", "Select a lesson"] as const,
         ];
       }
-      return [["", "Loading lessons..."] as const];
+      return [["", "Select a lesson"] as const];
     }
     if (isLessonsError) {
       return [["", "Failed to load lessons (click to retry)"] as const];
@@ -1377,7 +1381,9 @@ export function QuizAuthoringPanel({
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
             {quizzes.isLoading ? (
-              <span className="text-xs text-(--muted)">Loading quizzes...</span>
+              <span role="status" aria-label="Loading quizzes">
+                <LoadingSpinnerIcon size={18} />
+              </span>
             ) : quizOptions.length > 0 ? (
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <span className="text-xs font-semibold text-(--muted) hidden md:inline">
@@ -1455,9 +1461,12 @@ export function QuizAuthoringPanel({
       </div>
 
       {quiz.isLoading && !quiz.data && !lastLoadedQuizIdRef.current ? (
-        <div className="my-8 flex items-center justify-center gap-2 text-sm text-(--muted)">
-          <CircleNotch size={18} className="animate-spin text-(--accent)" />
-          <span>Loading quiz details...</span>
+        <div
+          className="my-8 grid min-h-20 place-items-center"
+          role="status"
+          aria-label="Loading quiz details"
+        >
+          <LoadingSpinnerIcon size={18} />
         </div>
       ) : null}
 
@@ -2221,32 +2230,39 @@ export function QuizAuthoringPanel({
                     <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
                       Target lesson
                     </span>
-                    <ThemedSelect
-                      value={selectedLessonId}
-                      onValueChange={(val) => {
-                        if (isLessonsError) {
-                          courseEditor.refetch();
-                          courseOverview.refetch();
-                          return;
+                    {isLessonsLoading ? (
+                      <CenteredLoadingSpinner
+                        label="Loading lessons"
+                        className="min-h-10 w-full"
+                        size={18}
+                      />
+                    ) : (
+                      <ThemedSelect
+                        value={selectedLessonId}
+                        onValueChange={(val) => {
+                          if (isLessonsError) {
+                            courseEditor.refetch();
+                            courseOverview.refetch();
+                            return;
+                          }
+                          setSelectedLessonId(val);
+                        }}
+                        options={lessonOptions}
+                        searchable
+                        searchPlaceholder="Search lessons..."
+                        defaultLimit={10}
+                        disabled={
+                          !effectiveCourseId ||
+                          (!isLessonsError &&
+                            Boolean(courseSections) &&
+                            courseSections!.every(
+                              (s) => (s.lessons ?? []).length === 0,
+                            ))
                         }
-                        setSelectedLessonId(val);
-                      }}
-                      options={lessonOptions}
-                      searchable
-                      searchPlaceholder="Search lessons..."
-                      defaultLimit={10}
-                      disabled={
-                        !effectiveCourseId ||
-                        isLessonsLoading ||
-                        (!isLessonsError &&
-                          Boolean(courseSections) &&
-                          courseSections!.every(
-                            (s) => (s.lessons ?? []).length === 0,
-                          ))
-                      }
-                      ariaLabel="Target lesson"
-                      triggerClassName="!h-9.5 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-3 sm:!px-3.5 !text-xs sm:!text-sm !font-medium !text-(--text) focus:!border-(--accent)"
-                    />
+                        ariaLabel="Target lesson"
+                        triggerClassName="!h-9.5 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-3 sm:!px-3.5 !text-xs sm:!text-sm !font-medium !text-(--text) focus:!border-(--accent)"
+                      />
+                    )}
                     {isLessonsError ? (
                       <button
                         type="button"

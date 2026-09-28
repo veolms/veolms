@@ -97,8 +97,32 @@ export const publicCourseSchema: z.ZodType<PublicCourse> =
 export const courseListResponseSchema = z.strictObject({
   courses: z
     .array(courseSummarySchema)
-    .meta({ description: "Published courses, oldest first." }),
+    .meta({ description: "Published courses in stable catalogue order." }),
+  nextCursor: z.string().min(1).max(256).optional(),
 });
+
+export const courseOptionsResponseSchema = z.strictObject({
+  courses: z.array(
+    z.strictObject({
+      id: z.uuid(),
+      title: z.string().min(1).max(255),
+    }),
+  ),
+});
+
+export const courseListQuerySchema = z.object({
+  creatorId: z.uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(60).optional(),
+  cursor: z.string().min(1).max(256).optional(),
+  search: z.string().trim().max(120).optional(),
+  sort: z.enum(["latest", "title"]).optional(),
+});
+
+export type CourseListResponse = z.infer<typeof courseListResponseSchema>;
+export type CourseOptionsResponse = z.infer<
+  typeof courseOptionsResponseSchema
+>;
+export type CourseListQuery = z.infer<typeof courseListQuerySchema>;
 
 export const courseSlugSchema = z
   .string()

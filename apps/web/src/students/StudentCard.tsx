@@ -51,6 +51,10 @@ export function StudentCard({ student, onNavigatePage }: StudentCardProps) {
               <img
                 src={student.avatarUrl}
                 alt={student.displayName}
+                width={48}
+                height={48}
+                loading="lazy"
+                decoding="async"
                 referrerPolicy="no-referrer"
                 className="h-12 w-12 shrink-0 rounded-2xl object-cover border border-(--border) shadow-xs"
               />

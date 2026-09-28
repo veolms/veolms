@@ -8,6 +8,7 @@ import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import type { LearnerQuizAttempt, QuizResult } from "@veolms/contracts";
 import { Button } from "../components/Button";
+import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { getApiError } from "../lib/api-error";
 import { AutosaveStatus, useAutosync } from "../lib/autosync";
 import {
@@ -324,7 +325,11 @@ export function QuizAttemptPanel({
             ) : null}
           </div>
         ) : null}
-        <p role="status">Loading Quiz…</p>
+        <CenteredLoadingSpinner
+          label="Loading quiz"
+          className="min-h-32 w-full"
+          size={24}
+        />
       </section>
     );
   }

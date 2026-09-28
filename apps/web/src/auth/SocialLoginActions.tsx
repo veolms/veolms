@@ -6,6 +6,7 @@ import {
   clearOauthHandoff,
 } from "./oauthFlow";
 import { useOauthUrl } from "../services/auth";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 
 interface SocialLoginActionsProps {
   onError?: (message: string) => void;
@@ -62,6 +63,8 @@ export function SocialLoginActions({
 
       <div className="auth-social__actions">
         <button
+          aria-busy={loadingProvider === "google"}
+          aria-label={loadingProvider === "google" ? "Connecting to Google" : undefined}
           className="auth-social__button"
           disabled={loadingProvider !== null}
           onClick={() => handleOauth("google")}
@@ -69,11 +72,13 @@ export function SocialLoginActions({
         >
           <GoogleBrandIcon size={18} />
           {loadingProvider === "google"
-            ? "Connecting..."
+            ? <LoadingSpinnerIcon size={18} />
             : "Continue with Google"}
         </button>
 
         <button
+          aria-busy={loadingProvider === "github"}
+          aria-label={loadingProvider === "github" ? "Connecting to GitHub" : undefined}
           className="auth-social__button"
           disabled={loadingProvider !== null}
           onClick={() => handleOauth("github")}
@@ -81,7 +86,7 @@ export function SocialLoginActions({
         >
           <GitHubBrandIcon size={18} />
           {loadingProvider === "github"
-            ? "Connecting..."
+            ? <LoadingSpinnerIcon size={18} />
             : "Continue with GitHub"}
         </button>
       </div>

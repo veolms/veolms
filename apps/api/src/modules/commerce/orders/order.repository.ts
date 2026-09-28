@@ -544,6 +544,24 @@ export async function listPaymentsByOrderIds(
     .execute();
 }
 
+export async function listPaymentSummariesByOrderIds(
+  database: Executor,
+  orderIds: string[],
+) {
+  if (orderIds.length === 0) return [];
+  return await database
+    .selectFrom("payments")
+    .select(["order_id", "gateway_provider", "payment_method"])
+    .where("order_id", "in", orderIds)
+    .orderBy("order_id")
+    .orderBy(
+      sql`case status when 'captured' then 0 when 'refunded' then 1 when 'processing' then 2 when 'initiated' then 3 else 4 end`,
+    )
+    .orderBy("created_at", "desc")
+    .orderBy("id", "desc")
+    .execute();
+}
+
 export async function listCouponsByIds(
   database: Executor,
   couponIds: string[],

@@ -15,7 +15,7 @@ export { createLearningHlsPreloadSource } from "./learningHlsPreloadSource";
 
 export const LEARNING_LESSON_TEXT_TRACKS: readonly ExternalTextTrack[] = [
   {
-    src: "/assets/designing-users.vtt",
+    src: "/static/designing-users.vtt",
     language: "en",
     label: "English",
     kind: "captions",

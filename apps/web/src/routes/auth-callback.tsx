@@ -12,6 +12,7 @@ import {
 } from "../auth/oauthFlow";
 import { useOauthLogin } from "../services/auth";
 import { authStore } from "../store/auth.store";
+import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 
 export function meta() {
   return Object.entries(
@@ -92,44 +93,35 @@ export default function AuthCallbackRoute() {
   return (
     <section aria-labelledby={AUTH_CARD_HEADING_ID} className="auth-card">
       <AuthBrandMark />
-      <h1 className="auth-card__heading" id={AUTH_CARD_HEADING_ID}>
-        {errorMessage ? "Authentication Failed" : "Signing in..."}
+      <h1
+        className={errorMessage ? "auth-card__heading" : "sr-only"}
+        id={AUTH_CARD_HEADING_ID}
+      >
+        {errorMessage ? "Authentication Failed" : "Signing in"}
       </h1>
-      <p className="auth-card__subheading">
-        {errorMessage
-          ? errorMessage
-          : "Please wait while we verify your credentials."}
-      </p>
+      {errorMessage ? (
+        <p className="auth-card__subheading">{errorMessage}</p>
+      ) : null}
 
       {!errorMessage ? (
         <div
           className="auth-card__form-slot"
           style={{
             marginTop: "1.5rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
+            display: "grid",
+            placeItems: "center",
+            minHeight: "72px",
             padding: "16px",
             borderRadius: "10px",
             background: "color-mix(in srgb, var(--canvas) 60%, var(--surface))",
             border: "1px solid var(--auth-line)",
           }}
         >
-          <div
-            className="auth-mfa-setup__spinner"
-            style={{
-              width: "20px",
-              height: "20px",
-              border: "2px solid var(--auth-line)",
-              borderTopColor: "var(--accent)",
-              borderRadius: "50%",
-              animation: "spin 0.8s linear infinite",
-              flexShrink: 0,
-            }}
+          <CenteredLoadingSpinner
+            label="Verifying account and establishing secure session"
+            className="min-h-10 w-full"
+            size={22}
           />
-          <span style={{ fontSize: "0.85rem", color: "var(--muted)" }}>
-            Verifying account and establishing secure session…
-          </span>
         </div>
       ) : (
         <div className="auth-card__form-slot" style={{ marginTop: "1.5rem" }}>

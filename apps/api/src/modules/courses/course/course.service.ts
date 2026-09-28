@@ -10,6 +10,8 @@ import type {
 import type {
   CreateCourseRequest,
   UpdateCourseBasicsRequest,
+  CourseListQuery,
+  CourseListResponse,
   CourseSummary,
   CoursePricingSummary,
 } from "@veolms/contracts";
@@ -52,6 +54,40 @@ const ALLOWED_THUMBNAIL_MIME_TYPES = new Set([
   "image/gif",
   "image/avif",
 ]);
+
+function decodePublishedCourseCursor(
+  cursor: string,
+  sort: "latest" | "title",
+) {
+  const separator = cursor.lastIndexOf("~");
+  if (separator <= 0) {
+    throw new AppError(400, "INVALID_COURSE_CURSOR", "Invalid course cursor.");
+  }
+
+  let value: string;
+  try {
+    value = decodeURIComponent(cursor.slice(0, separator));
+  } catch {
+    throw new AppError(400, "INVALID_COURSE_CURSOR", "Invalid course cursor.");
+  }
+  const id = cursor.slice(separator + 1);
+  if (!/^[0-9a-f-]{36}$/iu.test(id)) {
+    throw new AppError(400, "INVALID_COURSE_CURSOR", "Invalid course cursor.");
+  }
+  if (sort === "latest" && !Number.isFinite(Date.parse(value))) {
+    throw new AppError(400, "INVALID_COURSE_CURSOR", "Invalid course cursor.");
+  }
+
+  return { value, id };
+}
+
+function encodePublishedCourseCursor(
+  row: { created_at_cursor: string; id: string; title: string },
+  sort: "latest" | "title",
+) {
+  const value = sort === "title" ? row.title : row.created_at_cursor;
+  return `${encodeURIComponent(value)}~${row.id}`;
+}
 
 type PublicThumbnailVariant = {
   url: string;
@@ -311,12 +347,26 @@ export function createCourseService({
   /**
    * Lists published courses with optional filtering.
    */
-  async function listPublishedCourses(filters?: {
-    creatorId?: string;
-  }): Promise<CourseSummary[]> {
-    const rows = await courseRepo.listPublishedCourses(database, filters);
-    return await Promise.all(
-      rows.map(async (row) => {
+  async function listPublishedCourses(
+    filters?: CourseListQuery,
+  ): Promise<CourseListResponse> {
+    const sort = filters?.sort ?? "latest";
+    const cursor = filters?.cursor
+      ? decodePublishedCourseCursor(filters.cursor, sort)
+      : undefined;
+    const rows = await courseRepo.listPublishedCourses(database, {
+      creatorId: filters?.creatorId,
+      limit: filters?.limit,
+      cursor,
+      search: filters?.search,
+      sort,
+    });
+    const pageLimit = filters?.limit;
+    const hasNextPage =
+      pageLimit !== undefined && rows.length > pageLimit;
+    const pageRows = hasNextPage ? rows.slice(0, pageLimit) : rows;
+    const courses = await Promise.all(
+      pageRows.map(async (row) => {
         const lessonDuration = Number(row.lesson_duration_seconds ?? 0);
         const totalDurationSeconds =
           lessonDuration > 0
@@ -372,6 +422,19 @@ export function createCourseService({
         };
       }),
     );
+    const lastRow = pageRows.at(-1);
+    return {
+      courses,
+      ...(hasNextPage && lastRow
+        ? { nextCursor: encodePublishedCourseCursor(lastRow, sort) }
+        : {}),
+    };
+  }
+
+  async function listPublishedCourseOptions() {
+    return {
+      courses: await courseRepo.listPublishedCourseOptions(database),
+    };
   }
 
   /**
@@ -1308,6 +1371,7 @@ export function createCourseService({
     createCourse,
     listMyCourses,
     listPublishedCourses,
+    listPublishedCourseOptions,
     getPublishedCourseBySlug,
     listAvailableCoursesByCreator,
     updateCourseBasics,

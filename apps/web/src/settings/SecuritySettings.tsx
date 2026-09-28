@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import "../styles/features/workspace.css";
 import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
 import { FingerprintIcon as Fingerprint } from "@phosphor-icons/react/Fingerprint";
 import { LaptopIcon as Laptop } from "@phosphor-icons/react/Laptop";
@@ -10,6 +11,11 @@ import { TimerIcon as Timer } from "@phosphor-icons/react/Timer";
 import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { SettingRow } from "./SettingsControls";
+import {
+  CenteredLoadingSpinner,
+  LoadingSpinnerIcon,
+} from "../components/LoadingSpinner";
+import { MfaQrCode } from "../auth/MfaQrCode";
 import {
   formatRelativeDate,
   formatSessionDevice,
@@ -229,7 +235,10 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
         </div>
 
         {step === "loading" && (
-          <p className="auth-mfa-setup__loading">Preparing setup…</p>
+          <CenteredLoadingSpinner
+            label="Preparing authenticator setup"
+            className="min-h-24 w-full"
+          />
         )}
 
         {step === "qr" && (
@@ -240,13 +249,7 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
             </p>
 
             <div className="auth-mfa-setup__qr-wrapper" aria-hidden="true">
-              <img
-                alt="Authenticator QR Code"
-                className="auth-mfa-setup__qr"
-                src={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(uri)}&size=160x160&margin=2`}
-                width={160}
-                height={160}
-              />
+              <MfaQrCode value={uri} size={160} />
             </div>
 
             <div className="auth-mfa-setup__secret">
@@ -626,7 +629,15 @@ export function SecuritySettings({
                   label="Passkey sign-in"
                   note={
                     userLoading
-                      ? "Loading…"
+                      ? (
+                          <span
+                            role="status"
+                            aria-label="Loading passkey status"
+                            className="inline-flex min-h-5 items-center"
+                          >
+                            <LoadingSpinnerIcon size={15} />
+                          </span>
+                        )
                       : passkeyEnabled
                         ? "A passkey is registered on this account."
                         : "No passkey registered yet."
@@ -711,7 +722,15 @@ export function SecuritySettings({
                   label="Two-factor authentication"
                   note={
                     userLoading
-                      ? "Loading…"
+                      ? (
+                          <span
+                            role="status"
+                            aria-label="Loading authenticator status"
+                            className="inline-flex min-h-5 items-center"
+                          >
+                            <LoadingSpinnerIcon size={15} />
+                          </span>
+                        )
                       : totpEnabled
                         ? "Authenticator app is active on this account."
                         : "Add an extra layer of security to your sign-in."
@@ -773,7 +792,11 @@ export function SecuritySettings({
         )}
 
         {isAuthenticated && sessionQuery.isLoading && (
-          <p className="auth-mfa-setup__loading">Loading sessions…</p>
+          <CenteredLoadingSpinner
+            label="Loading active sessions"
+            className="min-h-20 w-full"
+            size={22}
+          />
         )}
 
         {isAuthenticated && sessionQuery.isError && (

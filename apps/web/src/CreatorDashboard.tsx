@@ -20,9 +20,10 @@ import { VideoCameraIcon as VideoCamera } from "@phosphor-icons/react/VideoCamer
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import type { Icon } from "@phosphor-icons/react";
 import { handleRovingTabKeyDown } from "./accessibility/rovingTabFocus";
-import typescriptThumbnail from "./assets/course-thumbnails/typescript-960.webp";
-import nodeThumbnail from "./assets/course-thumbnails/nodejs-960.webp";
-import veolmsThumbnail from "./assets/learning-thumbnails/veolms-course.webp";
+import "./styles/features/creator-dashboard.css";
+import typescriptThumbnail from "./assets/course-thumbnails/typescript-160.webp?no-inline";
+import nodeThumbnail from "./assets/course-thumbnails/nodejs-160.webp?no-inline";
+import veolmsThumbnail from "./assets/learning-thumbnails/veolms-course-160.webp?no-inline";
 
 const creatorCourses = [
   {
@@ -107,35 +108,35 @@ const recentEnrollments: readonly EnrollmentRow[] = [
     "The Ultimate TypeScript Course",
     "₹999",
     "15m ago",
-    "/assets/ethan-avatar-160.webp",
+    "/static/ethan-avatar-160.webp",
   ],
   [
     "Pooja Sharma",
     "Complete Backend with Node.js",
     "₹1,299",
     "1h ago",
-    "/assets/sofia-avatar-160.webp",
+    "/static/sofia-avatar-160.webp",
   ],
   [
     "Vivek Reddy",
     "The Ultimate TypeScript Course",
     "₹999",
     "2h ago",
-    "/assets/ethan-avatar-160.webp",
+    "/static/ethan-avatar-160.webp",
   ],
   [
     "Neha Patel",
     "Building VeoLMS: Idea to Production",
     "₹1,499",
     "3h ago",
-    "/assets/sofia-avatar-160.webp",
+    "/static/sofia-avatar-160.webp",
   ],
   [
     "Arjun Mehta",
     "Complete Backend with Node.js",
     "₹1,299",
     "4h ago",
-    "/assets/ethan-avatar-160.webp",
+    "/static/ethan-avatar-160.webp",
   ],
 ];
 
@@ -147,7 +148,7 @@ const discussions = [
     body: "I'm confused about the constraint in generic functions...",
     time: "10m ago",
     action: "Reply",
-    avatar: "/assets/ethan-avatar-160.webp",
+    avatar: "/static/ethan-avatar-160.webp",
   },
   {
     name: "Sneha Verma commented",
@@ -156,7 +157,7 @@ const discussions = [
     body: "Great explanation! Could you also cover refresh tokens?",
     time: "1h ago",
     action: "View",
-    avatar: "/assets/sofia-avatar-160.webp",
+    avatar: "/static/sofia-avatar-160.webp",
   },
   {
     name: "Discussion has 3 new replies",
@@ -165,7 +166,7 @@ const discussions = [
     body: "There's an issue when uploading large files on S3...",
     time: "2h ago",
     action: "View thread",
-    avatar: "/assets/ethan-avatar-160.webp",
+    avatar: "/static/ethan-avatar-160.webp",
   },
 ];
 
@@ -613,6 +614,9 @@ function CoursesPanel({ onNavigatePage }: NavigateProps) {
               <img
                 src={course.thumbnail}
                 alt=""
+                width={160}
+                height={90}
+                sizes="32px"
                 loading="lazy"
                 decoding="async"
               />
@@ -650,7 +654,14 @@ function DiscussionsPanel({ onNavigatePage }: NavigateProps) {
       <div className="creator-discussion-list">
         {discussions.map((item) => (
           <article key={item.name}>
-            <img src={item.avatar} alt="" />
+            <img
+              src={item.avatar}
+              alt=""
+              width={40}
+              height={40}
+              loading="lazy"
+              decoding="async"
+            />
             <div>
               <strong>{item.name}</strong>
               <small>{item.course}</small>
@@ -690,7 +701,14 @@ function EnrollmentsPanel({ onNavigatePage }: NavigateProps) {
         {recentEnrollments.map(([student, course, amount, time, avatar]) => (
           <div className="creator-table-row" key={`${student}-${time}`}>
             <span className="creator-student-cell">
-              <img src={avatar} alt="" />
+              <img
+                src={avatar}
+                alt=""
+                width={40}
+                height={40}
+                loading="lazy"
+                decoding="async"
+              />
               <strong>{student}</strong>
             </span>
             <span>{course}</span>

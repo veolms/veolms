@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import {
   BookOpenIcon as BookOpen,
   CircleNotchIcon as CircleNotch,
@@ -7,9 +7,16 @@ import {
   PuzzlePieceIcon as PuzzlePiece,
   ArrowLeftIcon as ArrowLeft,
 } from "@phosphor-icons/react";
-import { QuizAuthoringPanel } from "./QuizAuthoringPanel";
+
 import { useMyCourses } from "../services/courses";
 import { Button } from "../components/Button";
+import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
+
+const QuizAuthoringPanel = lazy(() =>
+  import("./QuizAuthoringPanel").then((module) => ({
+    default: module.QuizAuthoringPanel,
+  })),
+);
 
 interface Props {
   quizId?: string;
@@ -41,10 +48,19 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
         data-quiz-surface=""
         className="mx-auto w-full max-w-[1320px] px-0 py-0.5 sm:px-4 sm:py-6 lg:px-8"
       >
-        <QuizAuthoringPanel
-          initialQuizId={quizId}
-          onBack={() => onNavigatePage?.("/quizzes")}
-        />
+        <Suspense
+          fallback={
+            <div className="grid min-h-52 place-items-center" role="status">
+              <CircleNotch size={26} className="animate-spin text-(--accent)" />
+              <span className="sr-only">Loading quiz authoring</span>
+            </div>
+          }
+        >
+          <QuizAuthoringPanel
+            initialQuizId={quizId}
+            onBack={() => onNavigatePage?.("/quizzes")}
+          />
+        </Suspense>
       </main>
     );
   }
@@ -120,10 +136,11 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
         {/* Courses list */}
         <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
           {coursesQuery.isLoading ? (
-            <div className="flex flex-col items-center justify-center py-12 gap-2 text-(--muted) text-xs">
-              <CircleNotch size={24} className="animate-spin text-(--accent)" />
-              <span>Loading your courses...</span>
-            </div>
+            <CenteredLoadingSpinner
+              label="Loading your courses"
+              className="min-h-48"
+              size={24}
+            />
           ) : rawCourses.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] text-(--accent) mb-3">

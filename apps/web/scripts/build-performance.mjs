@@ -21,7 +21,10 @@ for (const environmentFile of [".env.production", ".env"]) {
   }
 }
 
-export const runPerformanceBuild = async (args = process.argv.slice(2)) => {
+export const runPerformanceBuild = async (
+  args = process.argv.slice(2),
+  environmentOverrides = {},
+) => {
   const firstSectionOnly = args.includes(FIRST_SECTION_FLAG);
   const reactRouterArgs = args.filter(
     (argument) => argument !== FIRST_SECTION_FLAG,
@@ -38,6 +41,8 @@ export const runPerformanceBuild = async (args = process.argv.slice(2)) => {
         env: {
           ...process.env,
           VEO_LEARNING_PRERENDER_SCOPE: scope,
+          VEO_REACT_ROUTER_BUILD: "true",
+          ...environmentOverrides,
         },
         stdio: "inherit",
       },

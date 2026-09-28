@@ -2,4 +2,6 @@ export const mediaKeys = {
   all: ["media"] as const,
   videoProgress: (mediaAssetId: string) =>
     [...mediaKeys.all, "video-progress", mediaAssetId] as const,
+  imageVariantManifest: (mediaAssetId: string) =>
+    [...mediaKeys.all, "image-variant-manifest", mediaAssetId] as const,
 };

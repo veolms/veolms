@@ -21,6 +21,8 @@ import {
   type LearningCourse,
 } from "./StudentPages";
 import { useEnrolledCourses } from "./services/enrollments";
+import "./styles/features/student-learning.css";
+import "./styles/features/home.css";
 
 interface StudentHomeProps {
   onOpenCourse: (course: LearningCourse) => void;
@@ -212,6 +214,7 @@ export function StudentHome({
                 height={900}
                 decoding="sync"
                 fetchPriority="high"
+                loading="eager"
               />
             </div>
             <div className="home-resume-copy">
@@ -288,9 +291,12 @@ export function StudentHome({
             <div className="home-resume-visual">
               <img
                 src={typescriptInstructorHero800}
+                srcSet={`${typescriptInstructorHero512} 512w, ${typescriptInstructorHero640} 640w, ${typescriptInstructorHero800} 800w, ${typescriptInstructorHero} 1600w`}
+                sizes="(max-width: 820px) calc(100vw - 50px), (max-width: 1180px) 40vw, 430px"
                 alt="Course explore"
                 width={1600}
                 height={900}
+                loading="eager"
                 decoding="sync"
                 fetchPriority="high"
               />
@@ -325,7 +331,11 @@ export function StudentHome({
                 <article key={course.id} className="home-mini-course">
                   <img
                     src={course.thumbnail}
+                    srcSet={course.thumbnailSrcSet}
+                    sizes="(max-width: 560px) calc(100vw - 3rem), (max-width: 1180px) calc(50vw - 2rem), calc(25vw - 2rem)"
                     alt=""
+                    width={960}
+                    height={540}
                     loading="lazy"
                     decoding="async"
                   />
@@ -353,7 +363,11 @@ export function StudentHome({
               <article className="home-mini-course">
                 <img
                   src={heroCourse.thumbnail}
+                  srcSet={heroCourse.thumbnailSrcSet}
+                  sizes="(max-width: 560px) calc(100vw - 3rem), (max-width: 1180px) calc(50vw - 2rem), calc(25vw - 2rem)"
                   alt=""
+                  width={960}
+                  height={540}
                   loading="lazy"
                   decoding="async"
                 />
@@ -391,7 +405,14 @@ export function StudentHome({
           />
           <div className="home-discussion-list">
             <article>
-              <img src="/assets/ethan-avatar-160.webp" alt="" />
+              <img
+                src="/static/ethan-avatar-160.webp"
+                alt=""
+                width={40}
+                height={40}
+                loading="lazy"
+                decoding="async"
+              />
               <div>
                 <strong>
                   Anurag Singh replied to your comment <b>NEW</b>
@@ -477,7 +498,11 @@ export function StudentHome({
                 >
                   <img
                     src={course.thumbnail}
+                    srcSet={course.thumbnailSrcSet}
+                    sizes="(max-width: 820px) 48px, 52px"
                     alt=""
+                    width={160}
+                    height={90}
                     loading="lazy"
                     decoding="async"
                   />

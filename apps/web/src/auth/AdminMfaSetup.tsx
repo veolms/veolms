@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AuthBrandMark } from "./AuthBrandPanel.tsx";
 import { MFA_CONFIG } from "./mfa.config.ts";
 import { OtpCodeInput } from "./OtpCodeInput.tsx";
+import { MfaQrCode } from "./MfaQrCode.tsx";
 import { Icon } from "../icons/Icon.tsx";
 import { AUTH_CARD_HEADING_ID, validateOtpCode } from "./authFlow.ts";
 import { isPasskeySupported, startPasskeyRegistration } from "./webauthn.ts";
@@ -14,6 +15,7 @@ import {
   usePasskeyRegisterOptions,
   usePasskeyRegisterVerify,
 } from "../services/auth";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 
 export type AdminMfaMethod = "passkey" | "authenticator";
 
@@ -258,13 +260,7 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
 
         <div className="auth-card__form-slot">
           <div className="auth-mfa-setup__qr-wrapper" aria-hidden="true">
-            <img
-              alt="QR code for authenticator app"
-              className="auth-mfa-setup__qr"
-              src={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(totpUri)}&size=180x180&margin=2`}
-              width={180}
-              height={180}
-            />
+            <MfaQrCode value={totpUri} size={160} />
           </div>
 
           <div className="auth-mfa-setup__secret">
@@ -443,6 +439,11 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
             )}
 
             <button
+              aria-label={
+                setupTotpMutation.isPending
+                  ? "Setting up authenticator app"
+                  : undefined
+              }
               aria-busy={setupTotpMutation.isPending}
               className="auth-secondary-btn"
               disabled={setupTotpMutation.isPending}
@@ -452,7 +453,7 @@ export function AdminMfaSetup({ onDone, onError }: AdminMfaSetupProps) {
               <Icon aria-hidden name="authenticator" size={18} />
               <span>
                 {setupTotpMutation.isPending
-                  ? "Loading…"
+                  ? <LoadingSpinnerIcon size={16} />
                   : "Use authenticator app"}
               </span>
             </button>

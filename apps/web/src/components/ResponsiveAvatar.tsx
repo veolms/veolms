@@ -1,5 +1,5 @@
 import type { AvatarImageVariant } from "@veolms/contracts";
-import type { ImgHTMLAttributes } from "react";
+import { useState, type ImgHTMLAttributes } from "react";
 
 type ResponsiveAvatarProps = Omit<
   ImgHTMLAttributes<HTMLImageElement>,
@@ -29,17 +29,34 @@ export function ResponsiveAvatar({
   const responsiveSources = srcSet?.length
     ? srcSet.map((variant) => `${variant.url} ${variant.width}w`).join(", ")
     : undefined;
+  const [failedResponsiveSource, setFailedResponsiveSource] = useState<
+    string | null
+  >(null);
+  const useOriginalSource = Boolean(src && failedResponsiveSource === src);
+
+  const handleError: ImgHTMLAttributes<HTMLImageElement>["onError"] = (
+    event,
+  ) => {
+    // A CDN may not have every responsive variant ready yet. Retry the
+    // canonical image before reporting a real avatar failure to the caller.
+    if (responsiveSources && src && !useOriginalSource) {
+      setFailedResponsiveSource(src);
+      return;
+    }
+    props.onError?.(event);
+  };
 
   return (
     <img
       {...props}
       src={src ?? undefined}
-      srcSet={responsiveSources}
+      srcSet={useOriginalSource ? undefined : responsiveSources}
       sizes={sizes}
       width={width}
       height={height}
       loading={loading}
       decoding={decoding}
+      onError={handleError}
     />
   );
 }

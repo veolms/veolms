@@ -1,5 +1,5 @@
 import { sql } from "kysely";
-import type { SidenavMenuNode } from "@veolms/contracts";
+import type { SidenavMenuNode, SidenavResponse } from "@veolms/contracts";
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 
 async function getUserRoleIds(database: Executor, userId: string): Promise<string[]> {
@@ -27,15 +27,8 @@ async function getUserRoleIds(database: Executor, userId: string): Promise<strin
   );
 }
 
-export async function listUserRoleNames(
-  database: Executor,
-  userId: string,
-): Promise<string[]> {
-  const roleIds = await getUserRoleIds(database, userId);
-  if (roleIds.length === 0) {
-    return [];
-  }
-
+async function listRoleNamesByIds(database: Executor, roleIds: string[]) {
+  if (roleIds.length === 0) return [];
   const rows = await database
     .selectFrom("roles")
     .select("roles.name")
@@ -45,15 +38,8 @@ export async function listUserRoleNames(
   return rows.map((row) => row.name);
 }
 
-export async function listUserPermissions(
-  database: Executor,
-  userId: string,
-): Promise<string[]> {
-  const roleIds = await getUserRoleIds(database, userId);
-  if (roleIds.length === 0) {
-    return [];
-  }
-
+async function listPermissionsByRoleIds(database: Executor, roleIds: string[]) {
+  if (roleIds.length === 0) return [];
   const rows = await database
     .selectFrom("menu_permissions")
     .innerJoin("menus", "menus.id", "menu_permissions.menu_id")
@@ -79,15 +65,8 @@ export async function listUserPermissions(
   return Array.from(permissions);
 }
 
-export async function listUserMenus(
-  database: Executor,
-  userId: string,
-): Promise<SidenavMenuNode[]> {
-  const roleIds = await getUserRoleIds(database, userId);
-  if (roleIds.length === 0) {
-    return [];
-  }
-
+async function listMenusByRoleIds(database: Executor, roleIds: string[]) {
+  if (roleIds.length === 0) return [];
   const rows = await database
     .selectFrom("menu_permissions")
     .innerJoin("menus", "menus.id", "menu_permissions.menu_id")
@@ -111,6 +90,48 @@ export async function listUserMenus(
     .execute();
 
   return buildMenuTree(rows);
+}
+
+export async function listUserRoleNames(
+  database: Executor,
+  userId: string,
+): Promise<string[]> {
+  return listRoleNamesByIds(database, await getUserRoleIds(database, userId));
+}
+
+export async function listUserPermissions(
+  database: Executor,
+  userId: string,
+): Promise<string[]> {
+  return listPermissionsByRoleIds(
+    database,
+    await getUserRoleIds(database, userId),
+  );
+}
+
+export async function listUserMenus(
+  database: Executor,
+  userId: string,
+): Promise<SidenavMenuNode[]> {
+  return listMenusByRoleIds(database, await getUserRoleIds(database, userId));
+}
+
+export async function getUserSidenav(
+  database: Executor,
+  userId: string,
+): Promise<SidenavResponse> {
+  const roleIds = await getUserRoleIds(database, userId);
+  if (roleIds.length === 0) {
+    return { menus: [], permissions: [], roles: [] };
+  }
+
+  const [roles, permissions, menus] = await Promise.all([
+    listRoleNamesByIds(database, roleIds),
+    listPermissionsByRoleIds(database, roleIds),
+    listMenusByRoleIds(database, roleIds),
+  ]);
+
+  return { menus, permissions, roles };
 }
 
 export async function listPublicMenus(

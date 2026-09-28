@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./theme-ids": "./src/themes/playerThemeIds.ts",
     "./shaka": "./src/engines/shaka/index.ts",
     "./shaka-preload": "./src/engines/shaka/shaka-early-preload.ts",
     "./styles.css": "./src/styles/player.css",

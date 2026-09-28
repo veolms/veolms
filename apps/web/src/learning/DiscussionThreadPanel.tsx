@@ -11,6 +11,7 @@ import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { LockOpenIcon as LockOpen } from "@phosphor-icons/react/LockOpen";
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import {
   useCallback,
   useContext,
@@ -1078,13 +1079,12 @@ function ThreadSlide({
         <div className="mx-auto max-w-4xl">
           {!active ? null : isBackend && isRepliesLoading && !repliesData ? (
             <div
-              className="py-12 text-center"
+              className="grid min-h-36 place-items-center py-12"
               data-testid="learning-replies-loading"
+              role="status"
+              aria-label="Loading replies"
             >
-              <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-              <p className="text-sm font-medium text-(--muted)">
-                Loading replies…
-              </p>
+              <LoadingSpinnerIcon size={24} />
             </div>
           ) : isBackend && isRepliesError && !repliesData ? (
             <div
@@ -1158,9 +1158,13 @@ function ThreadSlide({
                   Retry loading replies
                 </button>
               ) : isFetchingNextPage ? (
-                <p className="text-xs font-medium text-(--muted)">
-                  Loading more replies…
-                </p>
+                <span
+                  className="grid place-items-center py-2"
+                  role="status"
+                  aria-label="Loading more replies"
+                >
+                  <LoadingSpinnerIcon size={16} />
+                </span>
               ) : null}
             </div>
           )}
@@ -1492,6 +1496,9 @@ function ThreadReplyEntry({
             <DiscussionAvatar
               src={reply.avatar}
               className="size-9 sm:size-10"
+              loading="lazy"
+              width={40}
+              height={40}
             />
             <div className="min-w-0 flex-1">
               <div className="relative flex items-start gap-2 pr-9">

@@ -1,14 +1,24 @@
+/* Shared app foundation and the Tailwind v4 utility layer. Feature styles
+   live with their route or component owner and are loaded when that feature
+   is rendered. */
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@veolms/video-player/styles.css";
 @import "./styles/base/theme-contract.css";
 @import "./styles/base/foundation.css";
-@import "./styles/features/player.css";
-@import "./styles/features/learning.css";
-@import "./styles/features/courses.css";
-@import "./styles/features/student-learning.css";
-@import "./styles/features/course-wizard.css";
-@import "./styles/components/confirm-delete-modal.css";
+@import "./styles/themes/contracts.css";
+@import "./styles/global/scrollbars.css";
+@import "./reading-mode.css";
+@import "./settings/scrollbars/scrollbarPreferences.css";
+@import "./accessibility/tabFocusVisibility.css";
 @source "../../../packages/video-player/src";
-@import "./styles/components/toast-notification.css";
+
+@font-face {
+  font-family: "Manrope Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  src: url("./assets/fonts/manrope-core.woff2") format("woff2-variations");
+  unicode-range:
+    U+0020-007E, U+00A0-00FF, U+20AC, U+20B9, U+2190-2193, U+2318, U+2325;
+}
