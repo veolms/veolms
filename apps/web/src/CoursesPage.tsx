@@ -61,7 +61,6 @@ import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
 import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
-import { useCapabilities } from "./services/authorization";
 import { useCurrentUser, useSignOut } from "./services/auth";
 import { useSidenav } from "./services/navigation";
 import {
@@ -110,7 +109,6 @@ import {
   getWorkspaceRoleStorageKey,
   getRoleDisplayName,
 } from "./shell/workspaceRole";
-import { hasDashboardAnalyticsPermission } from "./routing/routeAccess";
 
 const FALLBACK_DASHBOARD_NAVIGATION_ITEM: NavigationItemWithMetadata = [
   "Dashboard",
@@ -178,6 +176,7 @@ import {
   readPageTabColors,
 } from "./settings/settingsPreferences";
 import type { NavigateTo } from "./routing/navigation";
+import { useAcademyRouteGuardState } from "./routing/RouteGuards";
 import type { SettingsPageProps } from "./SettingsPage";
 import { isEditingShortcutTarget } from "./keyboardShortcuts";
 import { useGlobalSearchShortcut } from "./searchShortcut";
@@ -895,13 +894,11 @@ export function CoursesPage({
   // same-page navigation after login; it is never persisted across reloads.
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
   const isAuthenticated = Boolean(activeUser);
-  const dashboardCapabilities = useCapabilities({
-    enabled: isAuthenticated,
-  });
-  const dashboardPermissionResolved = dashboardCapabilities.isFetched;
-  const canAccessDashboard =
-    dashboardPermissionResolved &&
-    hasDashboardAnalyticsPermission(dashboardCapabilities.permissions);
+  const {
+    canAccessDashboard,
+    dashboardCapabilitiesResolved,
+    routeContentBlocked,
+  } = useAcademyRouteGuardState();
   const isEditingOrCreatingCourse = page === "course-create";
   const { data: sidenavData } = useSidenav();
   const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
@@ -909,13 +906,16 @@ export function CoursesPage({
     [sidenavData?.menus],
   );
   const navigationItemsWithDashboard = useMemo(() => {
+    const authorizedItems = navigationItems.filter(
+      ([label]) => label !== "Dashboard" || canAccessDashboard,
+    );
     if (
       !canAccessDashboard ||
-      navigationItems.some(([label]) => label === "Dashboard")
+      authorizedItems.some(([label]) => label === "Dashboard")
     ) {
-      return navigationItems;
+      return authorizedItems;
     }
-    return [...navigationItems, FALLBACK_DASHBOARD_NAVIGATION_ITEM];
+    return [...authorizedItems, FALLBACK_DASHBOARD_NAVIGATION_ITEM];
   }, [canAccessDashboard, navigationItems]);
   const navigationSignature = useMemo(
     () =>
@@ -1250,6 +1250,7 @@ export function CoursesPage({
   const navigationHydrationKey = [
     activeUser ? `authenticated:${activeUser.id}` : "guest",
     effectiveRole,
+    dashboardCapabilitiesResolved ? "dashboard:resolved" : "dashboard:pending",
     navigationSignature,
   ].join(":");
 
@@ -1269,6 +1270,7 @@ export function CoursesPage({
   useEffect(() => {
     if (!storedPreferencesReady) return;
     if (!activeUser && !authUserFetched) return;
+    if (!dashboardCapabilitiesResolved) return;
     if (hydratedNavigationKey === navigationHydrationKey) return;
 
     setNavigationOrders((current) => ({
@@ -1295,6 +1297,7 @@ export function CoursesPage({
   }, [
     activeUser,
     authUserFetched,
+    dashboardCapabilitiesResolved,
     hydratedNavigationKey,
     isPublicNavigation,
     navigationHydrationKey,
@@ -1304,7 +1307,22 @@ export function CoursesPage({
   ]);
 
   const navigationPreferencesReady =
+    dashboardCapabilitiesResolved &&
     hydratedNavigationKey === navigationHydrationKey;
+
+  const getSafeInitialNavigationOrder = (
+    items: readonly NavigationItemWithMetadata[],
+  ) =>
+    isPublicNavigation || dashboardCapabilitiesResolved
+      ? getInitialNavigationOrder(effectiveRole, items, activeUser?.id)
+      : getDefaultNavigationOrder(items);
+
+  const getSafeInitialNavigationVisibility = (
+    items: readonly NavigationItemWithMetadata[],
+  ) =>
+    isPublicNavigation || dashboardCapabilitiesResolved
+      ? getInitialNavigationVisibility(effectiveRole, items, activeUser?.id)
+      : getDefaultNavigationVisibility(items);
 
   useEffect(
     () => () => {
@@ -1511,6 +1529,7 @@ export function CoursesPage({
   useEffect(() => {
     if (!storedPreferencesReady) return;
     if (isPublicNavigation) return;
+    if (!dashboardCapabilitiesResolved) return;
     if (hydratedNavigationKey !== navigationHydrationKey) return;
     Object.entries(navigationOrders).forEach(([roleName, order]) => {
       localStorage.setItem(
@@ -1519,6 +1538,7 @@ export function CoursesPage({
       );
     });
   }, [
+    dashboardCapabilitiesResolved,
     hydratedNavigationKey,
     isPublicNavigation,
     navigationHydrationKey,
@@ -1530,6 +1550,7 @@ export function CoursesPage({
   useEffect(() => {
     if (!storedPreferencesReady) return;
     if (isPublicNavigation) return;
+    if (!dashboardCapabilitiesResolved) return;
     if (hydratedNavigationKey !== navigationHydrationKey) return;
     Object.entries(navigationVisibility).forEach(([roleName, visibleItems]) => {
       localStorage.setItem(
@@ -1542,6 +1563,7 @@ export function CoursesPage({
       );
     });
   }, [
+    dashboardCapabilitiesResolved,
     hydratedNavigationKey,
     isPublicNavigation,
     navigationHydrationKey,
@@ -1935,20 +1957,12 @@ export function CoursesPage({
       ? navigationOrders[effectiveRole]
       : isPublicNavigation
         ? getDefaultNavigationOrder(roleFilteredNavigationItems)
-        : getInitialNavigationOrder(
-            effectiveRole,
-            roleFilteredNavigationItems,
-            activeUser?.id,
-          ),
+        : getSafeInitialNavigationOrder(roleFilteredNavigationItems),
     navigationPreferencesReady && !isPublicNavigation
       ? navigationVisibility[effectiveRole]
       : isPublicNavigation
         ? getDefaultNavigationVisibility(roleFilteredNavigationItems)
-        : getInitialNavigationVisibility(
-            effectiveRole,
-            roleFilteredNavigationItems,
-            activeUser?.id,
-          ),
+        : getSafeInitialNavigationVisibility(roleFilteredNavigationItems),
     roleFilteredNavigationItems,
   ).filter(([label]) => label !== "Settings" || !settingsInSidebarDock);
   const updateNavigationScrollFade = () => {
@@ -2198,18 +2212,10 @@ export function CoursesPage({
       const currentOrder =
         navigationPreferencesReady && !isPublicNavigation
           ? current[effectiveRole] ||
-            getInitialNavigationOrder(
-              effectiveRole,
-              navigationItemsWithDashboard,
-              activeUser?.id,
-            )
+            getSafeInitialNavigationOrder(navigationItemsWithDashboard)
           : isPublicNavigation
             ? getDefaultNavigationOrder(navigationItemsWithDashboard)
-            : getInitialNavigationOrder(
-                effectiveRole,
-                navigationItemsWithDashboard,
-                activeUser?.id,
-              );
+            : getSafeInitialNavigationOrder(navigationItemsWithDashboard);
       const sourceIndex = currentOrder.indexOf(sourceLabel);
       if (sourceIndex < 0 || !currentOrder.includes(targetLabel))
         return current;
@@ -2229,18 +2235,10 @@ export function CoursesPage({
     const currentOrder =
       navigationPreferencesReady && !isPublicNavigation
         ? navigationOrders[effectiveRole] ||
-          getInitialNavigationOrder(
-            effectiveRole,
-            navigationItemsWithDashboard,
-            activeUser?.id,
-          )
+          getSafeInitialNavigationOrder(navigationItemsWithDashboard)
         : isPublicNavigation
           ? getDefaultNavigationOrder(navigationItemsWithDashboard)
-          : getInitialNavigationOrder(
-              effectiveRole,
-              navigationItemsWithDashboard,
-              activeUser?.id,
-            );
+          : getSafeInitialNavigationOrder(navigationItemsWithDashboard);
     const currentIndex = currentOrder.indexOf(label);
     const targetLabel = currentOrder[currentIndex + direction];
     if (!targetLabel) return;
@@ -3589,6 +3587,10 @@ export function CoursesPage({
     surfaceSettingsTab?: string;
     surfaceUsername?: string;
   } = {}): ReactNode => {
+    if (routeContentBlocked) {
+      return <AcademyPageFallback />;
+    }
+
     const surfaceActiveSection =
       surfaceSection ?? (surfacePage === "courses" ? "Courses" : activeSection);
     if (
@@ -3645,11 +3647,7 @@ export function CoursesPage({
               ? navigationVisibility[effectiveRole]
               : isPublicNavigation
                 ? getDefaultNavigationVisibility(roleFilteredNavigationItems)
-                : getInitialNavigationVisibility(
-                    effectiveRole,
-                    roleFilteredNavigationItems,
-                    activeUser?.id,
-                  )
+                : getSafeInitialNavigationVisibility(roleFilteredNavigationItems)
           }
           onNavigationVisibilityChange={(visibleItems) =>
             setNavigationVisibility((current) => ({
@@ -4513,7 +4511,7 @@ export function CoursesPage({
             data-learning-motion-stage={renderMain ? "" : undefined}
           >
             {renderMain ? (
-              learningBackground ? (
+              routeContentBlocked ? <AcademyPageFallback /> : learningBackground ? (
                 <div
                   className={`courses-main pointer-events-none sticky top-0 z-0 h-dvh max-h-dvh min-h-0! self-start overflow-clip! transition-opacity ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${learningBackground.page !== "courses" ? "student-surface-main" : ""}`}
                   style={{
@@ -4535,10 +4533,12 @@ export function CoursesPage({
                   })}
                 </div>
               ) : null
+            ) : routeContentBlocked ? (
+              <AcademyPageFallback />
             ) : (
               <div className="contents">{renderPageContent()}</div>
             )}
-            {renderMain ? (
+            {renderMain && !routeContentBlocked ? (
               <div className="relative min-h-full">
                 {renderMain({
                   mobileBottomNavigation:

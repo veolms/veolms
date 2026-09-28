@@ -1,5 +1,11 @@
 import type { ReactNode } from "react";
-import { useEffect, useLayoutEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+} from "react";
 import {
   Outlet,
   useLocation,
@@ -61,6 +67,26 @@ function useSessionAccess() {
   };
 }
 
+interface AcademyRouteGuardState {
+  canAccessDashboard: boolean;
+  dashboardCapabilitiesResolved: boolean;
+  routeContentBlocked: boolean;
+}
+
+const defaultAcademyRouteGuardState: AcademyRouteGuardState = {
+  canAccessDashboard: false,
+  dashboardCapabilitiesResolved: false,
+  routeContentBlocked: false,
+};
+
+const AcademyRouteGuardContext = createContext<AcademyRouteGuardState>(
+  defaultAcademyRouteGuardState,
+);
+
+export function useAcademyRouteGuardState(): AcademyRouteGuardState {
+  return useContext(AcademyRouteGuardContext);
+}
+
 export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -70,16 +96,22 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const landingDestination = resolveAcademyLandingDestination(access);
   const isDashboardPath = path === "/dashboard";
   const dashboardCapabilities = useCapabilities({
-    enabled: isDashboardPath && access.isSessionReady,
+    enabled: access.isSessionReady,
   });
   const dashboardCapabilityPending =
-    isDashboardPath &&
     access.isSessionReady &&
     !dashboardCapabilities.isFetched;
+  const dashboardCapabilitiesResolved = access.isSessionReady
+    ? dashboardCapabilities.isFetched
+    : !access.isAuthenticated && !pending;
+  const canAccessDashboard =
+    dashboardCapabilitiesResolved &&
+    hasDashboardAnalyticsPermission(dashboardCapabilities.permissions);
   const dashboardRouteDenied =
     isDashboardPath &&
+    access.isSessionReady &&
     dashboardCapabilities.isFetched &&
-    !hasDashboardAnalyticsPermission(dashboardCapabilities.permissions);
+    !canAccessDashboard;
   const courseAuthorRouteDenied =
     access.isSessionReady &&
     (dashboardRouteDenied ||
@@ -126,24 +158,31 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     pending,
   ]);
 
-  // Guest-landing aliases immediately redirect into the academy. Keep their
-  // shell visible while the session request settles so static HTML is not
-  // replaced by a loading takeover.
-  if (isGuestLandingPath(path)) {
-    return <>{children}</>;
-  }
+  const routeContentBlocked =
+    !isGuestLandingPath(path) &&
+    ((pending && authenticationRequired) ||
+      shouldBlockAcademyRender(path, access) ||
+      courseAuthorRouteDenied ||
+      (isDashboardPath && dashboardCapabilityPending));
 
-  const blockRender =
-    (pending && authenticationRequired) ||
-    shouldBlockAcademyRender(path, access) ||
-    courseAuthorRouteDenied ||
-    dashboardCapabilityPending;
+  const academyRouteGuardState = useMemo(
+    () => ({
+      canAccessDashboard,
+      dashboardCapabilitiesResolved,
+      routeContentBlocked,
+    }),
+    [
+      canAccessDashboard,
+      dashboardCapabilitiesResolved,
+      routeContentBlocked,
+    ],
+  );
 
-  if (blockRender) {
-    return <AppLoadingScreen />;
-  }
-
-  return <>{children}</>;
+  return (
+    <AcademyRouteGuardContext.Provider value={academyRouteGuardState}>
+      {children}
+    </AcademyRouteGuardContext.Provider>
+  );
 }
 
 export function AuthRouteGuard() {

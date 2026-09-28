@@ -378,12 +378,16 @@ function getDiscussionThreadDestination(
   thread: DiscussionWorkspaceCard,
   returnPath = "/discussions/q-and-a",
 ): string {
+  const threadId =
+    thread.itemType === "reply" && thread.parentThreadId
+      ? thread.parentThreadId
+      : thread.id;
   const basePath = getCoursePlayerPath(
     thread.courseId,
     "courses",
     1,
     returnPath,
-    { threadId: thread.id },
+    { threadId },
   );
   if (!thread.lessonId) return basePath;
 
@@ -735,7 +739,7 @@ function DiscussionWorkspaceNavigationLink({
 }: {
   destination: string;
   label: string;
-  onNavigatePage: NavigateTo;
+  onNavigatePage?: NavigateTo;
 }) {
   return (
     <a
@@ -755,6 +759,7 @@ function DiscussionWorkspaceNavigationLink({
         }
         const card = event.currentTarget.parentElement;
         if (card && hasTextSelectionWithin(card)) return;
+        if (!onNavigatePage) return;
         event.preventDefault();
         onNavigatePage(destination, { exact: true });
       }}
@@ -918,7 +923,7 @@ function DiscussionWorkspaceQuestionCard({
   expandable = true,
 }: {
   thread: DiscussionWorkspaceCard;
-  onNavigatePage: NavigateTo;
+  onNavigatePage?: NavigateTo;
   showActions: boolean;
   onRequestMobileActions?: (
     card: DiscussionWorkspaceCard,
@@ -958,7 +963,11 @@ function DiscussionWorkspaceQuestionCard({
           onNavigatePage={onNavigatePage}
         />
       }
-      onNavigate={() => onNavigatePage(destination, { exact: true })}
+      onNavigate={
+        onNavigatePage
+          ? () => onNavigatePage(destination, { exact: true })
+          : undefined
+      }
       onMobileActions={
         onRequestMobileActions
           ? () => onRequestMobileActions(thread, destination)
@@ -1034,7 +1043,7 @@ function DiscussionWorkspaceCommentCard({
   expandable = true,
 }: {
   thread: DiscussionWorkspaceCard;
-  onNavigatePage: NavigateTo;
+  onNavigatePage?: NavigateTo;
   showActions: boolean;
   onRequestMobileActions?: (
     card: DiscussionWorkspaceCard,
@@ -1070,7 +1079,11 @@ function DiscussionWorkspaceCommentCard({
           onNavigatePage={onNavigatePage}
         />
       }
-      onNavigate={() => onNavigatePage(destination, { exact: true })}
+      onNavigate={
+        onNavigatePage
+          ? () => onNavigatePage(destination, { exact: true })
+          : undefined
+      }
       onMobileActions={
         onRequestMobileActions
           ? () => onRequestMobileActions(thread, destination)
@@ -1259,12 +1272,7 @@ function DiscussionWorkspaceMentionCard({
     : null;
   const destination = isNote
     ? getDiscussionNoteDestination(mention, "/discussions/mentions")
-    : getDiscussionThreadDestination(
-        isReply && mention.parentThreadId
-          ? { ...mention, id: mention.parentThreadId }
-          : mention,
-        "/discussions/mentions",
-      );
+    : getDiscussionThreadDestination(mention, "/discussions/mentions");
   const destinationLabel = [mention.course, mention.lesson]
     .filter(Boolean)
     .join(", ");
@@ -1380,7 +1388,7 @@ function DiscussionWorkspaceNoteCard({
   expandable = true,
 }: {
   note: DiscussionWorkspaceCard;
-  onNavigatePage: NavigateTo;
+  onNavigatePage?: NavigateTo;
   showActions: boolean;
   onRequestMobileActions?: (
     card: DiscussionWorkspaceCard,
@@ -1419,7 +1427,7 @@ function DiscussionWorkspaceNoteCard({
         ) : undefined
       }
       onNavigate={
-        destination
+        destination && onNavigatePage
           ? () => onNavigatePage(destination, { exact: true })
           : undefined
       }
@@ -1480,13 +1488,11 @@ export function DiscussionWorkspaceCard({
   variant?: DiscussionWorkspaceCardVariant;
   expandable?: boolean;
 }) {
-  const navigate = onNavigatePage ?? (() => undefined);
-
   if (card.itemType === "note" || card.kind === "note") {
     return (
       <DiscussionWorkspaceNoteCard
         note={card}
-        onNavigatePage={navigate}
+        onNavigatePage={onNavigatePage}
         showActions={false}
         variant={variant}
         expandable={expandable}
@@ -1498,7 +1504,7 @@ export function DiscussionWorkspaceCard({
     return (
       <DiscussionWorkspaceQuestionCard
         thread={card}
-        onNavigatePage={navigate}
+        onNavigatePage={onNavigatePage}
         showActions={false}
         variant={variant}
         expandable={expandable}
@@ -1509,7 +1515,7 @@ export function DiscussionWorkspaceCard({
   return (
     <DiscussionWorkspaceCommentCard
       thread={card}
-      onNavigatePage={navigate}
+      onNavigatePage={onNavigatePage}
       showActions={false}
       variant={variant}
       expandable={expandable}

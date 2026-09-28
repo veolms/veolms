@@ -20,17 +20,12 @@ const AUTH_FLOW_PATHS = new Set([
 ]);
 
 const GUEST_LANDING_PATHS = new Set(["/"]);
-const DASHBOARD_PERMISSIONS = [
-  "analytics.revenue.read",
-  "analytics.course.read",
-] as const;
+const DASHBOARD_PERMISSION = "analytics.revenue.read";
 
 export function hasDashboardAnalyticsPermission(
   permissions: readonly string[] | null | undefined,
 ): boolean {
-  return DASHBOARD_PERMISSIONS.some((permission) =>
-    permissions?.includes(permission),
-  );
+  return permissions?.includes(DASHBOARD_PERMISSION) ?? false;
 }
 
 export function normalizeAppPath(pathname: string): string {

@@ -107,7 +107,7 @@ const analyticsRoutes: RoutePlugin = async (app, options) => {
         tags: ["Analytics"],
         summary: "Get the dashboard summary",
         description:
-          "Returns the top dashboard card metrics, Learning Activity, and the range-aware Revenue Overview. Requires analytics.revenue.read or analytics.course.read and scopes the data to the caller's authorized analytics surface.",
+          "Returns the top dashboard card metrics, Learning Activity, and the range-aware Revenue Overview. Requires the platform-wide analytics.revenue.read permission.",
         querystring: dashboardQuerySchema,
         response: {
           200: jsonResponse(
@@ -119,10 +119,7 @@ const analyticsRoutes: RoutePlugin = async (app, options) => {
       },
       preHandler: [
         ...auth.mfaVerified,
-        authGuard.authorizeAny(
-          ["analytics.revenue.read", "analytics.course.read"],
-          "platform",
-        ),
+        authGuard.authorize("analytics.revenue.read", "platform"),
       ],
     },
     controller.dashboard,

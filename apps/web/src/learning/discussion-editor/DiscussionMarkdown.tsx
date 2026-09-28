@@ -444,7 +444,7 @@ export function DiscussionMarkdown({
             const language = /language-([^\s]+)/.exec(codeClassName ?? "")?.[1];
             if (!language && !code.includes("\n")) {
               return (
-                <code className="rounded bg-[color-mix(in_srgb,var(--text)_9%,transparent)] px-1.5 py-0.5 font-mono text-[0.9em] text-(--text) [overflow-wrap:normal]">
+                <code className="rounded bg-[color-mix(in_srgb,var(--text)_9%,transparent)] px-1.5 py-0.5 font-mono text-[0.9em] text-(--text)">
                   {children}
                 </code>
               );
