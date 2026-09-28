@@ -129,6 +129,7 @@ export function useInfiniteCourses(options: {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: options.enabled ?? true,
+    placeholderData: (previousData) => previousData,
     initialData: canUseInitialData
       ? {
           pages: [options.initialData!],

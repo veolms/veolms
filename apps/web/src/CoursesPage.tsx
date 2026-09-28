@@ -47,6 +47,7 @@ import {
 } from "./gestures/pointerGestureOwnership";
 import { useSecondPressHold } from "./gestures/useSecondPressHold";
 import { getVisibleCourses } from "./courses/catalogue";
+import { CourseCatalogue } from "./courses/CourseCatalogue";
 import type {
   Course,
   CourseEnrollmentFilter,
@@ -248,11 +249,6 @@ const SettingsPage = lazy(() =>
 
 const StudentHome = lazy(() =>
   import("./StudentHome").then((module) => ({ default: module.StudentHome })),
-);
-const CourseCatalogue = lazy(() =>
-  import("./courses/CourseCatalogue").then((module) => ({
-    default: module.CourseCatalogue,
-  })),
 );
 const PlaceholderPage = lazy(() =>
   import("./courses/PlaceholderPage").then((module) => ({
@@ -965,17 +961,15 @@ export function CoursesPage({
       effectiveRole === "student" &&
       needsCompleteCourseList,
   });
-  const publishedCourses = useMemo(
-    () =>
-      needsCompleteCourseList
-        ? (completeCourseQuery.data?.courses ?? [])
-        : (pagedCourseQuery.data?.pages.flatMap((page) => page.courses) ?? []),
-    [
-      completeCourseQuery.data?.courses,
-      needsCompleteCourseList,
-      pagedCourseQuery.data?.pages,
-    ],
+  const pagedPublishedCourses = useMemo(
+    () => pagedCourseQuery.data?.pages.flatMap((page) => page.courses) ?? [],
+    [pagedCourseQuery.data?.pages],
   );
+  const publishedCourses = needsCompleteCourseList
+    ? (completeCourseQuery.data?.courses ?? pagedPublishedCourses)
+    : pagedPublishedCourses;
+  const hasPublishedCourseData =
+    completeCourseQuery.data !== undefined || pagedCourseQuery.data !== undefined;
   const isPublishedPending = needsCompleteCourseList
     ? completeCourseQuery.isPending
     : pagedCourseQuery.isPending;
@@ -1017,7 +1011,7 @@ export function CoursesPage({
     isRestoringCreatorWorkspace ||
     isResolvingCreatorWorkspace ||
     (effectiveRole === "student"
-      ? isPublishedPending
+      ? isPublishedPending && !hasPublishedCourseData
       : enrollmentFilter === "bin"
         ? isDeletedPending
         : isMyCoursesPending);
@@ -2084,7 +2078,10 @@ export function CoursesPage({
         role: effectiveRole,
         enrollmentFilter,
         statusFilter,
-        search: debouncedSearch,
+        search:
+          !needsCompleteCourseList && pagedCourseQuery.isPlaceholderData
+            ? ""
+            : debouncedSearch,
         sort,
       }),
     [
@@ -2093,6 +2090,8 @@ export function CoursesPage({
       effectiveRole,
       enrollmentFilter,
       debouncedSearch,
+      needsCompleteCourseList,
+      pagedCourseQuery.isPlaceholderData,
       sort,
       statusFilter,
       wishlisted,
@@ -3799,43 +3798,39 @@ export function CoursesPage({
       );
     }
     return (
-      <Suspense fallback={<AcademyPageFallback />}>
-        <CourseCatalogue
-          activeSection={surfaceActiveSection}
-          role={effectiveRole}
-          isAdmin={isAdmin}
-          currentUserId={activeUser?.id}
-          isLoading={isLoadingCourses}
-          preloadFirstCourseImage={Boolean(initialPublishedCoursePage)}
-          wishlisted={wishlisted}
-          enrollmentFilter={enrollmentFilter}
-          onEnrollmentFilterChange={setEnrollmentFilter}
-          search={search}
-          onSearchChange={setSearch}
-          sort={sort}
-          onSortChange={setSort}
-          statusFilter={statusFilter}
-          onStatusFilterChange={setStatusFilter}
-          visibleCourses={visibleCourses}
-          totalCoursesCount={totalCoursesCount}
-          hasNextPage={
-            !needsCompleteCourseList && pagedCourseQuery.hasNextPage
-          }
-          isFetchingNextPage={pagedCourseQuery.isFetchingNextPage}
-          onLoadMore={() => void pagedCourseQuery.fetchNextPage()}
-          onWishlist={toggleWishlist}
-          onOpenCourse={onOpenCourse}
-          onEditIntent={prepareCourseEditorEdit}
-          courseMenu={courseMenu}
-          setCourseMenu={setCourseMenu}
-          setNotice={setNotice}
-          onNavigatePage={onNavigatePage}
-          onResetCatalogue={resetCatalogue}
-          onDeleteCourse={handleDeleteCourse}
-          onRestoreCourse={handleRestoreCourse}
-          deletingCourseIds={deletingCourseIds}
-        />
-      </Suspense>
+      <CourseCatalogue
+        activeSection={surfaceActiveSection}
+        role={effectiveRole}
+        isAdmin={isAdmin}
+        currentUserId={activeUser?.id}
+        isLoading={isLoadingCourses}
+        preloadFirstCourseImage={Boolean(initialPublishedCoursePage)}
+        wishlisted={wishlisted}
+        enrollmentFilter={enrollmentFilter}
+        onEnrollmentFilterChange={setEnrollmentFilter}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        search={search}
+        onSearchChange={setSearch}
+        sort={sort}
+        onSortChange={setSort}
+        visibleCourses={visibleCourses}
+        totalCoursesCount={totalCoursesCount}
+        hasNextPage={!needsCompleteCourseList && pagedCourseQuery.hasNextPage}
+        isFetchingNextPage={pagedCourseQuery.isFetchingNextPage}
+        onLoadMore={() => void pagedCourseQuery.fetchNextPage()}
+        onWishlist={toggleWishlist}
+        onOpenCourse={onOpenCourse}
+        onEditIntent={prepareCourseEditorEdit}
+        courseMenu={courseMenu}
+        setCourseMenu={setCourseMenu}
+        setNotice={setNotice}
+        onNavigatePage={onNavigatePage}
+        onResetCatalogue={resetCatalogue}
+        onDeleteCourse={handleDeleteCourse}
+        onRestoreCourse={handleRestoreCourse}
+        deletingCourseIds={deletingCourseIds}
+      />
     );
   };
 
