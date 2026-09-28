@@ -21,6 +21,11 @@ export interface AuthorizationGuard {
     resourceType?: ResourceType,
     featureKey?: string,
   ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+  authorizeAny: (
+    permissions: readonly Permission[],
+    resourceType?: ResourceType,
+    featureKey?: string,
+  ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   requireFeature: (
     featureKey: string,
   ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
@@ -67,8 +72,8 @@ export function createAuthorizationGuard(
     return undefined;
   }
 
-  function authorize(
-    permission: Permission,
+  function authorizeAny(
+    permissions: readonly Permission[],
     resourceType: ResourceType = "platform",
     featureKey?: string,
   ) {
@@ -85,12 +90,28 @@ export function createAuthorizationGuard(
       const resourceId = extractResourceId(request, resourceType);
       const scope = await service.resolveScope(resourceType, resourceId);
 
-      const decision = await service.check({
-        userId: request.user.id,
-        permission,
-        courseId: scope.courseId,
-        featureKey,
-      });
+      const decisions = await Promise.all(
+        permissions.map((permission) =>
+          service.check({
+            userId: request.user!.id,
+            permission,
+            courseId: scope.courseId,
+            featureKey,
+          }),
+        ),
+      );
+      const allowedIndex = decisions.findIndex((decision) => decision.allowed);
+      const decision =
+        allowedIndex >= 0
+          ? {
+              ...decisions[allowedIndex]!,
+              permission: permissions[allowedIndex],
+            }
+          : (decisions[0] ?? {
+              allowed: false,
+              code: "PERMISSION_DENIED" as const,
+              reason: "No permission was provided",
+            });
 
       if (!decision.allowed) {
         if (decision.code === "FEATURE_DISABLED") {
@@ -120,6 +141,14 @@ export function createAuthorizationGuard(
     };
   }
 
+  function authorize(
+    permission: Permission,
+    resourceType: ResourceType = "platform",
+    featureKey?: string,
+  ) {
+    return authorizeAny([permission], resourceType, featureKey);
+  }
+
   function requireFeature(featureKey: string) {
     return async function requireFeatureHandler(
       request: FastifyRequest,
@@ -147,6 +176,7 @@ export function createAuthorizationGuard(
 
   return {
     authorize,
+    authorizeAny,
     requireFeature,
   };
 }

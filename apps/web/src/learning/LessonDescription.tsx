@@ -46,12 +46,14 @@ export interface LessonDescriptionProps {
   description?: string | null;
   isLoading?: boolean;
   onSeekToTimestamp?: (seconds: number) => void;
+  onExpandedChange?: (expanded: boolean) => void;
 }
 
 export function LessonDescription({
   description,
   isLoading = false,
   onSeekToTimestamp,
+  onExpandedChange,
 }: LessonDescriptionProps = {}) {
   const contentId = useId();
   const sectionRef = useRef<HTMLElement>(null);
@@ -88,6 +90,7 @@ export function LessonDescription({
   const expand = () => {
     if (isLoading || !hasDescription) return;
     setExpanded(true);
+    onExpandedChange?.(true);
     requestAnimationFrame(() => {
       showLessRef.current?.focus({ preventScroll: true });
     });
@@ -95,6 +98,7 @@ export function LessonDescription({
 
   const collapse = (returnFocus = false) => {
     setExpanded(false);
+    onExpandedChange?.(false);
     if (returnFocus) {
       requestAnimationFrame(() => {
         sectionRef.current?.focus({ preventScroll: true });
@@ -148,7 +152,8 @@ export function LessonDescription({
               label="Lesson description content"
               chapterDeclarations={chapterDeclarations}
               onSeekToTimestamp={onSeekToTimestamp}
-              className="[&>:first-child]:mt-0"
+              preserveSoftBreaks
+              className="wrap-anywhere [&>:first-child]:mt-0"
             />
           ) : (
             <p className="m-0 text-(--muted) text-sm italic">

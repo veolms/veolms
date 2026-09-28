@@ -1,5 +1,11 @@
 import type { ReactNode } from "react";
-import { useEffect, useLayoutEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+} from "react";
 import {
   Outlet,
   useLocation,
@@ -8,12 +14,14 @@ import {
 } from "react-router";
 import type { MfaGateUser } from "../auth/mfaGate";
 import { AppLoadingScreen } from "../bootstrap/AppLoadingScreen";
+import { useCapabilities } from "../services/authorization";
 import { useCurrentUser } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
 import {
   APP_HOME_PATH,
   buildMfaChallengePath,
   buildLoginPath,
+  resolveCourseAuthorRouteFallback,
   shouldRedirectFromCourseAuthorPath,
   isGuestLandingPath,
   normalizeAppPath,
@@ -21,6 +29,7 @@ import {
   resolveAcademyLandingDestination,
   resolveAuthenticatedDestination,
   resolveSessionAccess,
+  hasDashboardAnalyticsPermission,
   shouldBlockAcademyRender,
 } from "./routeAccess";
 
@@ -58,6 +67,26 @@ function useSessionAccess() {
   };
 }
 
+interface AcademyRouteGuardState {
+  canAccessDashboard: boolean;
+  dashboardCapabilitiesResolved: boolean;
+  routeContentBlocked: boolean;
+}
+
+const defaultAcademyRouteGuardState: AcademyRouteGuardState = {
+  canAccessDashboard: false,
+  dashboardCapabilitiesResolved: false,
+  routeContentBlocked: false,
+};
+
+const AcademyRouteGuardContext = createContext<AcademyRouteGuardState>(
+  defaultAcademyRouteGuardState,
+);
+
+export function useAcademyRouteGuardState(): AcademyRouteGuardState {
+  return useContext(AcademyRouteGuardContext);
+}
+
 export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -65,9 +94,28 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const path = normalizeAppPath(location.pathname);
   const authenticationRequired = requiresAcademyAuth(path);
   const landingDestination = resolveAcademyLandingDestination(access);
+  const isDashboardPath = path === "/dashboard";
+  const dashboardCapabilities = useCapabilities({
+    enabled: access.isSessionReady,
+  });
+  const dashboardCapabilityPending =
+    access.isSessionReady &&
+    !dashboardCapabilities.isFetched;
+  const dashboardCapabilitiesResolved = access.isSessionReady
+    ? dashboardCapabilities.isFetched
+    : !access.isAuthenticated && !pending;
+  const canAccessDashboard =
+    dashboardCapabilitiesResolved &&
+    hasDashboardAnalyticsPermission(dashboardCapabilities.permissions);
+  const dashboardRouteDenied =
+    isDashboardPath &&
+    access.isSessionReady &&
+    dashboardCapabilities.isFetched &&
+    !canAccessDashboard;
   const courseAuthorRouteDenied =
     access.isSessionReady &&
-    shouldRedirectFromCourseAuthorPath(path, user?.roles);
+    (dashboardRouteDenied ||
+      shouldRedirectFromCourseAuthorPath(path, user?.roles));
 
   useEffect(() => {
     if (pending) {
@@ -95,7 +143,7 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     }
 
     if (courseAuthorRouteDenied) {
-      navigate("/", { replace: true });
+      navigate(resolveCourseAuthorRouteFallback(path), { replace: true });
     }
   }, [
     access.isAuthenticated,
@@ -110,23 +158,30 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     pending,
   ]);
 
-  // Guest-landing aliases immediately redirect into the academy. Keep their
-  // shell visible while the session request settles so static HTML is not
-  // replaced by a loading takeover.
-  if (isGuestLandingPath(path)) {
-    return <>{children}</>;
-  }
+  const routeContentBlocked =
+    !isGuestLandingPath(path) &&
+    ((pending && authenticationRequired) ||
+      shouldBlockAcademyRender(path, access) ||
+      courseAuthorRouteDenied ||
+      (isDashboardPath && dashboardCapabilityPending));
 
-  const blockRender =
-    (pending && authenticationRequired) ||
-    shouldBlockAcademyRender(path, access) ||
-    courseAuthorRouteDenied;
+  const academyRouteGuardState = useMemo(
+    () => ({
+      canAccessDashboard,
+      dashboardCapabilitiesResolved,
+      routeContentBlocked,
+    }),
+    [
+      canAccessDashboard,
+      dashboardCapabilitiesResolved,
+      routeContentBlocked,
+    ],
+  );
 
   return (
-    <>
+    <AcademyRouteGuardContext.Provider value={academyRouteGuardState}>
       {children}
-      {blockRender ? <AppLoadingScreen /> : null}
-    </>
+    </AcademyRouteGuardContext.Provider>
   );
 }
 

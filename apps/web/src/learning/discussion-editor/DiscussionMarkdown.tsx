@@ -250,7 +250,42 @@ interface DiscussionMarkdownProps {
   onSeekToTimestamp?: (seconds: number) => void;
   /** Accepted plain-text lesson-description chapters to render as seek buttons. */
   chapterDeclarations?: readonly DescriptionChapterDeclaration[];
+  /** Render Markdown soft breaks as visible line breaks for lesson descriptions only. */
+  preserveSoftBreaks?: boolean;
   className?: string;
+}
+
+type MarkdownNode = {
+  type: string;
+  value?: string;
+  children?: MarkdownNode[];
+};
+
+function remarkLessonDescriptionSoftBreaks() {
+  return (tree: MarkdownNode) => {
+    const visit = (node: MarkdownNode) => {
+      if (!node.children) return;
+
+      const nextChildren: MarkdownNode[] = [];
+      for (const child of node.children) {
+        visit(child);
+        if (child.type !== "text" || !child.value?.includes("\n")) {
+          nextChildren.push(child);
+          continue;
+        }
+
+        const parts = child.value.split("\n");
+        parts.forEach((part, index) => {
+          if (part) nextChildren.push({ type: "text", value: part });
+          if (index < parts.length - 1) nextChildren.push({ type: "break" });
+        });
+      }
+
+      node.children = nextChildren;
+    };
+
+    visit(tree);
+  };
 }
 
 const CHAPTER_MARKER_PREFIX = "#__veolms-plain-chapter-";
@@ -319,6 +354,7 @@ export function DiscussionMarkdown({
   enableInlineTimestamps = false,
   onSeekToTimestamp,
   chapterDeclarations,
+  preserveSoftBreaks = false,
   className = "",
 }: DiscussionMarkdownProps) {
   const isGeneratedAttachmentMarkdown = (
@@ -356,10 +392,14 @@ export function DiscussionMarkdown({
     <div
       role="document"
       aria-label={label}
-      className={`max-w-[72ch] text-sm leading-6 text-(--text-secondary) sm:text-[15px] ${className}`}
+      className={`max-w-[72ch] wrap-anywhere text-sm leading-6 text-(--text-secondary) sm:text-[15px] ${className}`}
     >
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={
+          preserveSoftBreaks
+            ? [remarkGfm, remarkLessonDescriptionSoftBreaks]
+            : [remarkGfm]
+        }
         skipHtml
         urlTransform={safeMarkdownUrl}
         components={{
@@ -611,7 +651,7 @@ function HighlightedCodeBlock({ code, language }: HighlightedCodeBlockProps) {
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="max-w-full overflow-x-auto p-3 font-mono text-[13px] leading-6 [scrollbar-width:thin]">
+      <pre className="max-w-full overflow-x-auto p-3 font-mono text-[13px] leading-6 [overflow-wrap:normal] [scrollbar-width:thin]">
         <code>
           {(tokens ?? fallbackTokens(code)).map((line, lineIndex) => (
             <span key={lineIndex} className="block min-h-6">

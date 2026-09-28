@@ -12,6 +12,12 @@ export interface ListStudentsOptions {
   sortBy?: "recent" | "name" | "courses" | "progress";
 }
 
+export interface StudentCountOptions {
+  courseId?: string | string[];
+  search?: string;
+  status?: "all" | "active" | "completed" | "inactive";
+}
+
 export type StudentListSort = NonNullable<ListStudentsOptions["sortBy"]>;
 
 export type StudentListCursor =
@@ -266,7 +272,7 @@ export async function listStudentsPaginated(
  */
 export async function countTotalStudents(
   database: StudentsExecutor,
-  options: Omit<ListStudentsOptions, "cursor" | "limit">,
+  options: StudentCountOptions,
 ): Promise<number> {
   let query = database
     .selectFrom("users as u")
@@ -314,14 +320,25 @@ export async function countTotalStudents(
     }
   }
 
-  if (options.courseId) {
+  const courseIds = toIdList(options.courseId);
+  if (courseIds.length === 1) {
     query = query.where((eb) =>
       eb.exists(
         eb
           .selectFrom("enrollments as e")
           .select("e.id")
           .whereRef("e.user_id", "=", "u.id")
-          .where("e.course_id", "=", options.courseId!),
+          .where("e.course_id", "=", courseIds[0]!),
+      ),
+    );
+  } else if (courseIds.length > 1) {
+    query = query.where((eb) =>
+      eb.exists(
+        eb
+          .selectFrom("enrollments as e")
+          .select("e.id")
+          .whereRef("e.user_id", "=", "u.id")
+          .where("e.course_id", "in", courseIds),
       ),
     );
   }
@@ -356,6 +373,77 @@ export async function countTotalStudents(
             .whereRef("e.user_id", "=", "u.id")
             .where("e.status", "=", "active"),
         ),
+      ),
+    );
+  }
+
+  const result = await query.executeTakeFirst();
+  return Number(result?.total ?? 0);
+}
+
+/** Counts unique student accounts created in a date range. */
+export async function countStudentsCreatedBetween(
+  database: StudentsExecutor,
+  options: {
+    courseId?: string | string[];
+    from: Date;
+    to: Date;
+  },
+): Promise<number> {
+  let query = database
+    .selectFrom("users as u")
+    .select((eb) => eb.fn.count<number>("u.id").as("total"))
+    .where("u.is_deleted", "=", false)
+    .where("u.created_at", ">=", options.from)
+    .where("u.created_at", "<=", options.to)
+    // Keep this population definition aligned with countTotalStudents:
+    // student-role users or users with at least one enrollment.
+    .where((eb) =>
+      eb.or([
+        eb.exists(
+          eb
+            .selectFrom("user_roles as ur")
+            .innerJoin("roles as r", "r.id", "ur.role_id")
+            .select("r.id")
+            .whereRef("ur.user_id", "=", "u.id")
+            .where("r.name", "=", "student"),
+        ),
+        eb.exists(
+          eb
+            .selectFrom("role_assignments as ra")
+            .innerJoin("roles as r", "r.id", "ra.role_id")
+            .select("r.id")
+            .whereRef("ra.user_id", "=", "u.id")
+            .where("r.name", "=", "student"),
+        ),
+        eb.exists(
+          eb
+            .selectFrom("enrollments as e")
+            .select("e.id")
+            .whereRef("e.user_id", "=", "u.id"),
+        ),
+      ]),
+    );
+
+  const courseIds = toIdList(options.courseId);
+  if (courseIds.length === 1) {
+    query = query.where((eb) =>
+      eb.exists(
+        eb
+          .selectFrom("enrollments as e")
+          .select("e.id")
+          .whereRef("e.user_id", "=", "u.id")
+          .where("e.course_id", "=", courseIds[0]!),
+      ),
+    );
+  } else if (courseIds.length > 1) {
+    query = query.where((eb) =>
+      eb.exists(
+        eb
+          .selectFrom("enrollments as e")
+          .select("e.id")
+          .whereRef("e.user_id", "=", "u.id")
+          .where("e.course_id", "in", courseIds),
       ),
     );
   }

@@ -80,6 +80,38 @@ export function resolveStudentAvatar(
 }
 
 export function createStudentsService({ database }: StudentsServiceOptions) {
+  async function resolveStudentAvatars(
+    users: readonly {
+      id: string;
+      avatarDataUrl: string | null;
+    }[],
+  ): Promise<Map<string, string | null>> {
+    const uniqueUsers = Array.from(
+      new Map(users.map((user) => [user.id, user])).values(),
+    );
+    const allAvatars = await studentsRepo.listAvatarsForUserIds(
+      database,
+      uniqueUsers.map((user) => user.id),
+    );
+    const avatarsByUserId = new Map<string, typeof allAvatars>();
+
+    for (const avatar of allAvatars) {
+      const list = avatarsByUserId.get(avatar.user_id) ?? [];
+      list.push(avatar);
+      avatarsByUserId.set(avatar.user_id, list);
+    }
+
+    return new Map(
+      uniqueUsers.map((user) => [
+        user.id,
+        resolveStudentAvatar(
+          user.avatarDataUrl,
+          avatarsByUserId.get(user.id) ?? [],
+        ),
+      ]),
+    );
+  }
+
   async function listStudents(
     query: StudentListQuery,
   ): Promise<StudentListResponse> {
@@ -282,6 +314,25 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
     return await studentsRepo.getActiveLearnerCount(database, filters);
   }
 
+  async function getStudentPopulationCounts(filters: {
+    courseId?: string | string[];
+    createdFrom: Date;
+    createdTo: Date;
+  }) {
+    const [total, newThisMonth] = await Promise.all([
+      studentsRepo.countTotalStudents(database, {
+        courseId: filters.courseId,
+      }),
+      studentsRepo.countStudentsCreatedBetween(database, {
+        courseId: filters.courseId,
+        from: filters.createdFrom,
+        to: filters.createdTo,
+      }),
+    ]);
+
+    return { total, newThisMonth };
+  }
+
   async function getStudentByUsername(
     username: string,
   ): Promise<StudentDetailResponse> {
@@ -422,7 +473,9 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
   return {
     listStudents,
     getStudentByUsername,
+    resolveStudentAvatars,
     getActiveLearnerCount,
+    getStudentPopulationCounts,
   };
 }
 
