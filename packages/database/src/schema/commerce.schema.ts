@@ -108,6 +108,8 @@ export interface OrderTable {
   discount_amount: Generated<number>;
   tax_amount: Generated<number>;
   total_amount: number;
+  /** Creator earnings after commission, in smallest currency units (paise). */
+  after_commission_amount: number | null;
   coupon_id: string | null;
   idempotency_key: string | null;
   expires_at: Date;

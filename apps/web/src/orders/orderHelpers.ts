@@ -111,16 +111,11 @@ export function getOrderStatusStyle(status: OrderStatus | string): StatusStyle {
           "border-rose-500/30 bg-rose-500/10 text-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.15)]",
       };
     case "payment_failed":
+    case "cancelled":
       return {
         label: "Failed",
         dotColor: "bg-rose-400",
         pillClass: "border-rose-500/30 bg-rose-500/10 text-rose-400",
-      };
-    case "cancelled":
-      return {
-        label: "Cancelled",
-        dotColor: "bg-zinc-400",
-        pillClass: "border-zinc-500/30 bg-zinc-500/10 text-zinc-400",
       };
     case "expired":
       return {

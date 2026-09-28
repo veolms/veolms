@@ -320,7 +320,11 @@ export function createOrderService({
         )[0];
 
     return {
-      netRevenue: selected ? selected.grossPaid - selected.refundedAmount : 0,
+      // Successful orders only: gross paid − partial refunds on those orders.
+      netRevenue: selected
+        ? selected.grossPaid - selected.refundedAgainstPaid
+        : 0,
+      totalEarnings: selected?.totalEarnings ?? 0,
       totalOrders: selected?.totalOrders ?? 0,
       uniqueBuyers: selected?.uniqueBuyers ?? 0,
       refundedAmount: selected?.refundedAmount ?? 0,
@@ -368,7 +372,9 @@ export function createOrderService({
         totalOrders: 0,
         uniqueBuyers: 0,
         grossPaid: 0,
+        totalEarnings: 0,
         refundedAmount: 0,
+        refundedAgainstPaid: 0,
       }
     );
   }

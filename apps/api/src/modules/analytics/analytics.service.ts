@@ -167,7 +167,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
           courseId,
           title: titleById.get(courseId) ?? "Untitled course",
           enrollments: enrollmentByCourse.get(courseId) ?? 0,
-          netRevenue: orderStats.grossPaid - orderStats.refundedAmount,
+          netRevenue: orderStats.grossPaid - orderStats.refundedAgainstPaid,
           completionRate: progress.completionRate,
           averageProgressPercent: progress.averageProgressPercent,
         };
@@ -256,8 +256,10 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     ]);
 
     const currency = rawStatsCurrent.currency;
-    const netRevenueCurrent = rawStatsCurrent.grossPaid - rawStatsCurrent.refundedAmount;
-    const netRevenuePrev = rawStatsPrev.grossPaid - rawStatsPrev.refundedAmount;
+    const netRevenueCurrent =
+      rawStatsCurrent.grossPaid - rawStatsCurrent.refundedAgainstPaid;
+    const netRevenuePrev =
+      rawStatsPrev.grossPaid - rawStatsPrev.refundedAgainstPaid;
 
     const [revenueTrend, coursePerformance] = await Promise.all([
       orderService.getRevenueTrend(scope, {

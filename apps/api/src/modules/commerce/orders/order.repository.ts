@@ -25,10 +25,16 @@ export interface OrderStatsFilters {
 
 export interface OrderStatsRow {
   currency: string;
+  /** Successful orders only (`paid` + `partially_refunded`). */
   totalOrders: number;
   uniqueBuyers: number;
+  /** Gross of successful orders only (excludes fully refunded / cancelled / failed). */
   grossPaid: number;
+  totalEarnings: number;
+  /** All processed refunds (Refunded Amount card). */
   refundedAmount: number;
+  /** Processed refunds against successful orders only (for Net Revenue). */
+  refundedAgainstPaid: number;
 }
 
 export interface RevenueTrendFilters {
@@ -247,16 +253,30 @@ export async function getOrderStatsByCurrency(
     .selectFrom("orders as o")
     .select([
       "o.currency",
-      sql<number>`count(o.id)::int`.as("total_orders"),
-      sql<number>`count(distinct o.user_id)::int`.as("unique_buyers"),
-      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded', 'refunded') then o.total_amount else 0 end), 0)::bigint`.as(
+      // Successful / completed only (exclude cancelled, failed, fully refunded).
+      sql<number>`count(*) filter (where o.status in ('paid', 'partially_refunded'))::int`.as(
+        "total_orders",
+      ),
+      sql<number>`count(distinct o.user_id) filter (where o.status in ('paid', 'partially_refunded'))::int`.as(
+        "unique_buyers",
+      ),
+      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then o.total_amount else 0 end), 0)::bigint`.as(
         "gross_paid",
+      ),
+      // Creator earnings: successful only (matches TagMango Total Earnings).
+      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then coalesce(o.after_commission_amount, 0) else 0 end), 0)::bigint`.as(
+        "total_earnings",
       ),
       sql<number>`coalesce(sum((
         select coalesce(sum(r.amount), 0)
         from refunds r
         where r.order_id = o.id and r.status = 'processed'
       )), 0)::bigint`.as("refunded_amount"),
+      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then (
+        select coalesce(sum(r.amount), 0)
+        from refunds r
+        where r.order_id = o.id and r.status = 'processed'
+      ) else 0 end), 0)::bigint`.as("refunded_against_paid"),
     ])
     .groupBy("o.currency")
     .orderBy("o.currency");
@@ -297,7 +317,9 @@ export async function getOrderStatsByCurrency(
     totalOrders: Number(row.total_orders),
     uniqueBuyers: Number(row.unique_buyers),
     grossPaid: Number(row.gross_paid),
+    totalEarnings: Number(row.total_earnings),
     refundedAmount: Number(row.refunded_amount),
+    refundedAgainstPaid: Number(row.refunded_against_paid),
   }));
 }
 
@@ -318,14 +340,14 @@ export async function getRevenueTrend(
       sql<string>`to_char(date_trunc('day', o.created_at at time zone 'UTC'), 'YYYY-MM-DD')`.as(
         "date",
       ),
-      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded', 'refunded') then o.total_amount else 0 end), 0)::bigint`.as(
+      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then o.total_amount else 0 end), 0)::bigint`.as(
         "gross_paid",
       ),
-      sql<number>`coalesce(sum((
+      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then (
         select coalesce(sum(r.amount), 0)
         from refunds r
         where r.order_id = o.id and r.status = 'processed'
-      )), 0)::bigint`.as("refunded_amount"),
+      ) else 0 end), 0)::bigint`.as("refunded_amount"),
     ])
     .where("o.currency", "=", filters.currency)
     .groupBy(sql`date_trunc('day', o.created_at at time zone 'UTC')`)
@@ -439,6 +461,7 @@ export async function insertOrder(
     discount_amount?: number;
     tax_amount?: number;
     total_amount: number;
+    after_commission_amount?: number | null;
     coupon_id?: string | null;
     idempotency_key?: string | null;
     expires_at: Date;

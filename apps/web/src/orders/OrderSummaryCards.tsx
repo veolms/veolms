@@ -1,6 +1,7 @@
 import { memo } from "react";
 import type { OrderStatsResponse } from "@veolms/contracts";
 import { CurrencyInrIcon as CurrencyInr } from "@phosphor-icons/react/CurrencyInr";
+import { WalletIcon as Wallet } from "@phosphor-icons/react/Wallet";
 import { ShoppingCartIcon as ShoppingCart } from "@phosphor-icons/react/ShoppingCart";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
@@ -24,8 +25,17 @@ export const OrderSummaryCards = memo(function OrderSummaryCards({
       iconBg: "bg-emerald-500/15 text-emerald-400",
     },
     {
+      id: "total-earnings",
+      title: "Total Earnings",
+      value: stats
+        ? formatCurrency(stats.totalEarnings ?? 0, stats.currency)
+        : "₹0",
+      icon: <Wallet size={16} weight="bold" />,
+      iconBg: "bg-amber-500/15 text-amber-400",
+    },
+    {
       id: "total-orders",
-      title: "Total Orders",
+      title: "Successful Orders",
       value: stats ? formatNumber(stats.totalOrders) : "0",
       icon: <ShoppingCart size={16} weight="bold" />,
       iconBg: "bg-sky-500/15 text-sky-400",
@@ -49,7 +59,7 @@ export const OrderSummaryCards = memo(function OrderSummaryCards({
   return (
     <section
       aria-label="Order Performance Summary"
-      className="grid grid-cols-2 gap-2 sm:gap-3.5 md:grid-cols-4"
+      className="grid grid-cols-2 gap-2 sm:gap-3.5 md:grid-cols-3 xl:grid-cols-5"
     >
       {cards.map((card) => (
         <article

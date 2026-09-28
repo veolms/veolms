@@ -35,6 +35,7 @@ const statusOptions: readonly ThemedSelectOption<string>[] = [
   ["payment_processing", "In Progress"],
   ["pending", "Processing"],
   ["refunded", "Refunded"],
+  ["cancelled", "Failed"],
 ];
 
 const datePresetOptions: readonly ThemedSelectOption<DateRangePreset>[] = [
