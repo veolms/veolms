@@ -10616,7 +10616,7 @@ export function CourseCreatePage({
                               )
                             }
                             placeholder="Add a detailed description of what students will learn in this lesson..."
-                            maxLength={1500}
+                            maxLength={10000}
                           />
                         </div>
                       }
@@ -11568,7 +11568,7 @@ export function CourseCreatePage({
                                             })
                                           }
                                           placeholder="Add a detailed description of what students will learn in this lesson..."
-                                          maxLength={1500}
+                                          maxLength={10000}
                                         />
                                       }
                                       resourcesSection={
@@ -11703,7 +11703,7 @@ export function CourseCreatePage({
                                                     )
                                                   }
                                                   placeholder="Add a detailed description of what students will learn in this lesson..."
-                                                  maxLength={1500}
+                                                  maxLength={10000}
                                                 />
                                               </div>
                                             </div>

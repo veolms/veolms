@@ -61,6 +61,7 @@ import { FloatingScrollbar } from "./shell/FloatingScrollbar";
 import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
 import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
+import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
 import { useCurrentUser, useSignOut } from "./services/auth";
 import { useSidenav } from "./services/navigation";
 import {
@@ -109,6 +110,17 @@ import {
   getWorkspaceRoleStorageKey,
   getRoleDisplayName,
 } from "./shell/workspaceRole";
+
+const FALLBACK_DASHBOARD_NAVIGATION_ITEM: NavigationItemWithMetadata = [
+  "Dashboard",
+  SquaresFour,
+  {
+    id: "dashboard-capability",
+    routeLink: "/dashboard",
+    parentId: null,
+    source: "default",
+  },
+];
 import {
   SIDEBAR_MIN_WIDTH,
   applySidebarShellToDocument,
@@ -165,6 +177,7 @@ import {
   readPageTabColors,
 } from "./settings/settingsPreferences";
 import type { NavigateTo } from "./routing/navigation";
+import { useAcademyRouteGuardState } from "./routing/RouteGuards";
 import type { SettingsPageProps } from "./SettingsPage";
 import { isEditingShortcutTarget } from "./keyboardShortcuts";
 import { useGlobalSearchShortcut } from "./searchShortcut";
@@ -338,6 +351,7 @@ interface CoursesPageProps {
   ) => void;
   onNavigatePage: NavigateTo;
   onExitSettings?: () => void;
+  isDashboardRoute?: boolean;
   page?: string;
   section?: string | null;
   settingsTab?: string;
@@ -671,6 +685,7 @@ export function CoursesPage({
   onOpenCourse,
   onNavigatePage,
   onExitSettings,
+  isDashboardRoute = false,
   page = "courses",
   section: requestedSection = null,
   settingsTab = "profile",
@@ -788,7 +803,7 @@ export function CoursesPage({
   });
   const readingModeEnabled = readingModePreferences.enabled;
   const [activeSection, setActiveSection] = useState(() => {
-    if (page === "home") return role === "creator" ? "Dashboard" : "Home";
+    if (page === "home") return isDashboardRoute ? "Dashboard" : "Home";
     if (page === "courses") return "Courses";
     if (requestedSection) return requestedSection;
     // Keep the initializer deterministic to avoid a server/client hydration
@@ -875,20 +890,37 @@ export function CoursesPage({
   // same-page navigation after login; it is never persisted across reloads.
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
   const isAuthenticated = Boolean(activeUser);
+  const {
+    canAccessDashboard,
+    dashboardCapabilitiesResolved,
+    routeContentBlocked,
+  } = useAcademyRouteGuardState();
   const isEditingOrCreatingCourse = page === "course-create";
   const { data: sidenavData } = useSidenav();
   const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
     () => resolveShellNavigation(sidenavData?.menus),
     [sidenavData?.menus],
   );
+  const navigationItemsWithDashboard = useMemo(() => {
+    const authorizedItems = navigationItems.filter(
+      ([label]) => label !== "Dashboard" || canAccessDashboard,
+    );
+    if (
+      !canAccessDashboard ||
+      authorizedItems.some(([label]) => label === "Dashboard")
+    ) {
+      return authorizedItems;
+    }
+    return [...authorizedItems, FALLBACK_DASHBOARD_NAVIGATION_ITEM];
+  }, [canAccessDashboard, navigationItems]);
   const navigationSignature = useMemo(
     () =>
-      navigationItems
+      navigationItemsWithDashboard
         .map(([label, , metadata]) =>
           [metadata?.id ?? label, label, metadata?.routeLink ?? ""].join(":"),
         )
         .join("|"),
-    [navigationItems],
+    [navigationItemsWithDashboard],
   );
   const userRoles = getUserRoles(activeUser);
   const isAdmin = hasAdminRole(userRoles);
@@ -1103,7 +1135,7 @@ export function CoursesPage({
     ? null
     : (requestedSection ??
       (page === "home"
-        ? role === "creator"
+        ? effectiveRole === "creator"
           ? "Dashboard"
           : "Home"
         : page === "courses"
@@ -1211,7 +1243,8 @@ export function CoursesPage({
 
   const navigationHydrationKey = [
     activeUser ? `authenticated:${activeUser.id}` : "guest",
-    role,
+    effectiveRole,
+    dashboardCapabilitiesResolved ? "dashboard:resolved" : "dashboard:pending",
     navigationSignature,
   ].join(":");
 
@@ -1222,39 +1255,68 @@ export function CoursesPage({
     );
     setRole(storedRole === "creator" ? "creator" : "student");
     setHydratedWorkspaceRoleKey(activeUser?.id ?? "guest");
-  }, [activeUser?.id, authUserFetched, storedPreferencesReady]);
+  }, [
+    activeUser,
+    authUserFetched,
+    storedPreferencesReady,
+  ]);
 
   useEffect(() => {
     if (!storedPreferencesReady) return;
     if (!activeUser && !authUserFetched) return;
+    if (!dashboardCapabilitiesResolved) return;
     if (hydratedNavigationKey === navigationHydrationKey) return;
 
     setNavigationOrders((current) => ({
       ...current,
-      [role]: isPublicNavigation
-        ? getDefaultNavigationOrder(navigationItems)
-        : getInitialNavigationOrder(role, navigationItems, activeUser?.id),
+      [effectiveRole]: isPublicNavigation
+        ? getDefaultNavigationOrder(navigationItemsWithDashboard)
+        : getInitialNavigationOrder(
+            effectiveRole,
+            navigationItemsWithDashboard,
+            activeUser?.id,
+          ),
     }));
     setNavigationVisibility((current) => ({
       ...current,
-      [role]: isPublicNavigation
-        ? getDefaultNavigationVisibility(navigationItems)
-        : getInitialNavigationVisibility(role, navigationItems, activeUser?.id),
+      [effectiveRole]: isPublicNavigation
+        ? getDefaultNavigationVisibility(navigationItemsWithDashboard)
+        : getInitialNavigationVisibility(
+            effectiveRole,
+            navigationItemsWithDashboard,
+            activeUser?.id,
+          ),
     }));
     setHydratedNavigationKey(navigationHydrationKey);
   }, [
     activeUser,
     authUserFetched,
+    dashboardCapabilitiesResolved,
     hydratedNavigationKey,
     isPublicNavigation,
     navigationHydrationKey,
-    navigationItems,
-    role,
+    navigationItemsWithDashboard,
+    effectiveRole,
     storedPreferencesReady,
   ]);
 
   const navigationPreferencesReady =
+    dashboardCapabilitiesResolved &&
     hydratedNavigationKey === navigationHydrationKey;
+
+  const getSafeInitialNavigationOrder = (
+    items: readonly NavigationItemWithMetadata[],
+  ) =>
+    isPublicNavigation || dashboardCapabilitiesResolved
+      ? getInitialNavigationOrder(effectiveRole, items, activeUser?.id)
+      : getDefaultNavigationOrder(items);
+
+  const getSafeInitialNavigationVisibility = (
+    items: readonly NavigationItemWithMetadata[],
+  ) =>
+    isPublicNavigation || dashboardCapabilitiesResolved
+      ? getInitialNavigationVisibility(effectiveRole, items, activeUser?.id)
+      : getDefaultNavigationVisibility(items);
 
   useEffect(
     () => () => {
@@ -1461,6 +1523,7 @@ export function CoursesPage({
   useEffect(() => {
     if (!storedPreferencesReady) return;
     if (isPublicNavigation) return;
+    if (!dashboardCapabilitiesResolved) return;
     if (hydratedNavigationKey !== navigationHydrationKey) return;
     Object.entries(navigationOrders).forEach(([roleName, order]) => {
       localStorage.setItem(
@@ -1469,6 +1532,7 @@ export function CoursesPage({
       );
     });
   }, [
+    dashboardCapabilitiesResolved,
     hydratedNavigationKey,
     isPublicNavigation,
     navigationHydrationKey,
@@ -1480,6 +1544,7 @@ export function CoursesPage({
   useEffect(() => {
     if (!storedPreferencesReady) return;
     if (isPublicNavigation) return;
+    if (!dashboardCapabilitiesResolved) return;
     if (hydratedNavigationKey !== navigationHydrationKey) return;
     Object.entries(navigationVisibility).forEach(([roleName, visibleItems]) => {
       localStorage.setItem(
@@ -1492,6 +1557,7 @@ export function CoursesPage({
       );
     });
   }, [
+    dashboardCapabilitiesResolved,
     hydratedNavigationKey,
     isPublicNavigation,
     navigationHydrationKey,
@@ -1515,7 +1581,7 @@ export function CoursesPage({
     setEnrollmentFilter("all");
     setStatusFilter("all");
     if (page === "home")
-      setActiveSection(role === "creator" ? "Dashboard" : "Home");
+      setActiveSection(effectiveRole === "creator" ? "Dashboard" : "Home");
     else if (requestedSection) setActiveSection(requestedSection);
     else if (page === "courses") setActiveSection("Courses");
     else setActiveSection("Courses");
@@ -1525,6 +1591,7 @@ export function CoursesPage({
     page,
     requestedSection,
     role,
+    effectiveRole,
     isWorkspaceRoleHydrated,
     storedPreferencesReady,
   ]);
@@ -1865,36 +1932,31 @@ export function CoursesPage({
   }, [edgeSidebarOpen, onNavigatePage, sidebarMode]);
 
   const roleFilteredNavigationItems = useMemo(() => {
-    return navigationItems.filter(([label]) => {
-      if (role === "student") {
-        return label !== "Students" && label !== "Dashboard";
+    return navigationItemsWithDashboard.filter(([label]) => {
+      if (label === "Dashboard") {
+        return canAccessDashboard;
       }
-      if (role === "creator") {
+      if (effectiveRole === "student") {
+        return label !== "Students";
+      }
+      if (effectiveRole === "creator") {
         return label !== "Home";
       }
       return true;
     });
-  }, [navigationItems, role]);
+  }, [canAccessDashboard, effectiveRole, navigationItemsWithDashboard]);
 
   const navigation = getVisibleOrderedNavigation(
     navigationPreferencesReady && !isPublicNavigation
-      ? navigationOrders[role]
+      ? navigationOrders[effectiveRole]
       : isPublicNavigation
         ? getDefaultNavigationOrder(roleFilteredNavigationItems)
-        : getInitialNavigationOrder(
-            role,
-            roleFilteredNavigationItems,
-            activeUser?.id,
-          ),
+        : getSafeInitialNavigationOrder(roleFilteredNavigationItems),
     navigationPreferencesReady && !isPublicNavigation
-      ? navigationVisibility[role]
+      ? navigationVisibility[effectiveRole]
       : isPublicNavigation
         ? getDefaultNavigationVisibility(roleFilteredNavigationItems)
-        : getInitialNavigationVisibility(
-            role,
-            roleFilteredNavigationItems,
-            activeUser?.id,
-          ),
+        : getSafeInitialNavigationVisibility(roleFilteredNavigationItems),
     roleFilteredNavigationItems,
   ).filter(([label]) => label !== "Settings" || !settingsInSidebarDock);
   const updateNavigationScrollFade = () => {
@@ -1924,7 +1986,7 @@ export function CoursesPage({
       window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", handleResize);
     };
-  }, [compactNavigation, navigation, role, sidebarMode]);
+  }, [compactNavigation, effectiveRole, navigation, sidebarMode]);
 
   const allCourses = useMemo(() => {
     if (effectiveRole !== "creator") {
@@ -2148,11 +2210,11 @@ export function CoursesPage({
     setNavigationOrders((current) => {
       const currentOrder =
         navigationPreferencesReady && !isPublicNavigation
-          ? current[role] ||
-            getInitialNavigationOrder(role, navigationItems, activeUser?.id)
+          ? current[effectiveRole] ||
+            getSafeInitialNavigationOrder(navigationItemsWithDashboard)
           : isPublicNavigation
-            ? getDefaultNavigationOrder(navigationItems)
-            : getInitialNavigationOrder(role, navigationItems, activeUser?.id);
+            ? getDefaultNavigationOrder(navigationItemsWithDashboard)
+            : getSafeInitialNavigationOrder(navigationItemsWithDashboard);
       const sourceIndex = currentOrder.indexOf(sourceLabel);
       if (sourceIndex < 0 || !currentOrder.includes(targetLabel))
         return current;
@@ -2164,18 +2226,18 @@ export function CoursesPage({
         0,
         sourceLabel,
       );
-      return { ...current, [role]: nextOrder };
+      return { ...current, [effectiveRole]: nextOrder };
     });
   };
 
   const moveNavigationWithKeyboard = (label: string, direction: -1 | 1) => {
     const currentOrder =
       navigationPreferencesReady && !isPublicNavigation
-        ? navigationOrders[role] ||
-          getInitialNavigationOrder(role, navigationItems, activeUser?.id)
+        ? navigationOrders[effectiveRole] ||
+          getSafeInitialNavigationOrder(navigationItemsWithDashboard)
         : isPublicNavigation
-          ? getDefaultNavigationOrder(navigationItems)
-          : getInitialNavigationOrder(role, navigationItems, activeUser?.id);
+          ? getDefaultNavigationOrder(navigationItemsWithDashboard)
+          : getSafeInitialNavigationOrder(navigationItemsWithDashboard);
     const currentIndex = currentOrder.indexOf(label);
     const targetLabel = currentOrder[currentIndex + direction];
     if (!targetLabel) return;
@@ -2905,6 +2967,7 @@ export function CoursesPage({
       SIDEBAR_COLLAPSED_WIDTH + SIDEBAR_CONTENT_REVEAL_DISTANCE;
   const sidebarClassName = [
     "courses-app",
+    isDashboardRoute ? "courses-app--dashboard" : "",
     sidebarVisuallyCollapsed ? "courses-app--collapsed" : "",
     sidebarPresentedAsOverlay ? "courses-app--hidden" : "",
     sidebarPresentedAsOverlay && edgeSidebarOpen
@@ -3492,7 +3555,10 @@ export function CoursesPage({
     }
   };
 
-  const mobileNavigation = getMobilePrimaryNavigation(role, navigation);
+  const mobileNavigation = getMobilePrimaryNavigation(
+    effectiveRole,
+    navigation,
+  );
   const mobileMoreNavigation = getMobileOverflowNavigation(
     navigation,
     mobileNavigation,
@@ -3520,20 +3586,27 @@ export function CoursesPage({
     surfaceSettingsTab?: string;
     surfaceUsername?: string;
   } = {}): ReactNode => {
+    if (routeContentBlocked) {
+      return <AcademyPageFallback />;
+    }
+
     const surfaceActiveSection =
       surfaceSection ?? (surfacePage === "courses" ? "Courses" : activeSection);
-    if (role === "creator" && surfacePage === "home") {
+    if (
+      surfacePage === "home" &&
+      (effectiveRole === "creator" || (isDashboardRoute && canAccessDashboard))
+    ) {
       return (
         <Suspense fallback={<AcademyPageFallback />}>
           <CreatorDashboard
             onNavigatePage={onNavigatePage}
-            setNotice={setNotice}
             academyTheme={appliedAcademyTheme}
+            resolvedTheme={resolvedTheme}
           />
         </Suspense>
       );
     }
-    if (role === "student" && surfacePage === "home") {
+    if (effectiveRole === "student" && surfacePage === "home") {
       return (
         <Suspense fallback={<AcademyPageFallback />}>
           <StudentHome
@@ -3570,19 +3643,15 @@ export function CoursesPage({
           navigationItems={roleFilteredNavigationItems}
           navigationVisibleItems={
             navigationPreferencesReady && !isPublicNavigation
-              ? navigationVisibility[role]
+              ? navigationVisibility[effectiveRole]
               : isPublicNavigation
                 ? getDefaultNavigationVisibility(roleFilteredNavigationItems)
-                : getInitialNavigationVisibility(
-                    role,
-                    roleFilteredNavigationItems,
-                    activeUser?.id,
-                  )
+                : getSafeInitialNavigationVisibility(roleFilteredNavigationItems)
           }
           onNavigationVisibilityChange={(visibleItems) =>
             setNavigationVisibility((current) => ({
               ...current,
-              [role]: ensureRequiredNavigationVisibility(
+              [effectiveRole]: ensureRequiredNavigationVisibility(
                 visibleItems,
                 roleFilteredNavigationItems,
               ),
@@ -3869,7 +3938,7 @@ export function CoursesPage({
           <aside
             className="courses-sidebar touch-pan-y"
             data-header-layout={sidebarHeaderLayout}
-            aria-label={`${role === "creator" ? "Creator" : "Student"} navigation`}
+            aria-label={`${effectiveRole === "creator" ? "Creator" : "Student"} navigation`}
             aria-hidden={
               sidebarPresentedAsOverlay && !edgeSidebarOpen ? "true" : undefined
             }
@@ -4095,7 +4164,7 @@ export function CoursesPage({
             <div className="courses-profile" ref={profileRef}>
               {profileMenu && isAuthenticated && (
                 <ProfileMenu
-                  role={role}
+                  role={effectiveRole}
                   allowedRoles={allowedWorkspaceRoles}
                   userRoles={userRoles}
                   sidebarHidden={sidebarPresentedAsOverlay}
@@ -4114,7 +4183,7 @@ export function CoursesPage({
                   type="button"
                   className="courses-profile__button"
                   aria-label={`${shellProfileDisplayName}, ${getRoleDisplayName(
-                    role,
+                    effectiveRole,
                     userRoles,
                   )}. Open role and appearance menu`}
                   aria-expanded={profileMenu}
@@ -4127,7 +4196,7 @@ export function CoursesPage({
                   <span>
                     <strong>{shellProfileDisplayName}</strong>
                     <small>
-                      {getRoleDisplayName(role, userRoles)} <i />
+                      {getRoleDisplayName(effectiveRole, userRoles)} <i />
                     </small>
                   </span>
                   <CaretDown size={17} aria-hidden="true" />
@@ -4437,7 +4506,7 @@ export function CoursesPage({
             data-learning-motion-stage={renderMain ? "" : undefined}
           >
             {renderMain ? (
-              learningBackground ? (
+              routeContentBlocked ? <AcademyPageFallback /> : learningBackground ? (
                 <div
                   className={`courses-main pointer-events-none sticky top-0 z-0 h-dvh max-h-dvh min-h-0! self-start overflow-clip! transition-opacity ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${learningBackground.page !== "courses" ? "student-surface-main" : ""}`}
                   style={{
@@ -4459,10 +4528,12 @@ export function CoursesPage({
                   })}
                 </div>
               ) : null
+            ) : routeContentBlocked ? (
+              <AcademyPageFallback />
             ) : (
               <div className="contents">{renderPageContent()}</div>
             )}
-            {renderMain ? (
+            {renderMain && !routeContentBlocked ? (
               <div className="relative min-h-full">
                 {renderMain({
                   mobileBottomNavigation:
@@ -4488,7 +4559,7 @@ export function CoursesPage({
         <nav
           ref={mobileBottomNavRef}
           className={`mobile-bottom-nav${mobileBottomNavHidden ? " is-scroll-hidden" : ""}`}
-          aria-label={`${role === "creator" ? "Creator" : "Student"} mobile navigation`}
+          aria-label={`${effectiveRole === "creator" ? "Creator" : "Student"} mobile navigation`}
           onFocusCapture={() => setMobileBottomNavHidden(false)}
         >
           {mobileNavigation.map((item) => {
@@ -4617,7 +4688,7 @@ export function CoursesPage({
                   aria-haspopup="menu"
                   aria-expanded={profileMenu}
                   aria-controls="mobile-profile-menu"
-                  aria-label={`${shellProfileDisplayName}, ${getRoleDisplayName(role, userRoles)}. Open role menu`}
+                  aria-label={`${shellProfileDisplayName}, ${getRoleDisplayName(effectiveRole, userRoles)}. Open role menu`}
                   onClick={() => setProfileMenu((current) => !current)}
                 >
                   <ShellProfileAvatar
@@ -4626,7 +4697,7 @@ export function CoursesPage({
                   />
                   <span>
                     <strong>{shellProfileDisplayName}</strong>
-                    <small>{getRoleDisplayName(role, userRoles)}</small>
+                    <small>{getRoleDisplayName(effectiveRole, userRoles)}</small>
                   </span>
                   <CaretDown size={17} aria-hidden="true" />
                 </button>
@@ -4642,7 +4713,7 @@ export function CoursesPage({
                 <ProfileMenu
                   id="mobile-profile-menu"
                   className="mobile-menu-sheet__profile-menu"
-                  role={role}
+                  role={effectiveRole}
                   allowedRoles={allowedWorkspaceRoles}
                   userRoles={userRoles}
                   includeSidebarControl={false}

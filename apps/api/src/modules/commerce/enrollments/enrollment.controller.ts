@@ -1,4 +1,5 @@
 import type { FastifyRequest } from "fastify";
+import type { AcademyEnrollmentListQuery } from "@veolms/contracts";
 import type { EnrollmentService } from "./enrollment.service.ts";
 
 export function createEnrollmentController({
@@ -12,5 +13,12 @@ export function createEnrollmentController({
     return { courses };
   }
 
-  return { listEnrolledCourses };
+  async function listAcademyEnrollments(
+    request: FastifyRequest<{ Querystring: AcademyEnrollmentListQuery }>,
+  ) {
+    const items = await service.listAcademyEnrollments(request.query.limit);
+    return { items };
+  }
+
+  return { listEnrolledCourses, listAcademyEnrollments };
 }

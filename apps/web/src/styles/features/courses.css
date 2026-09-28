@@ -18,6 +18,13 @@
   transition: grid-template-columns 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* The analytics dashboard contains multiple responsive charts. Interpolating
+   the shell grid forces the whole dashboard to reflow on every animation
+   frame, so commit sidebar changes immediately on that route. */
+.courses-app--dashboard {
+  transition: none;
+}
+
 .courses-app--collapsed {
   grid-template-columns: 84px minmax(0, 1fr);
 }
@@ -1309,4 +1316,3 @@
   border-color: #94a3b8;
   color: #f8fafc;
 }
-

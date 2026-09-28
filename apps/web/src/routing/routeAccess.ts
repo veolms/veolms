@@ -19,7 +19,14 @@ const AUTH_FLOW_PATHS = new Set([
   "/auth/callback",
 ]);
 
-const GUEST_LANDING_PATHS = new Set(["/", "/home", "/dashboard"]);
+const GUEST_LANDING_PATHS = new Set(["/"]);
+const DASHBOARD_PERMISSION = "analytics.revenue.read";
+
+export function hasDashboardAnalyticsPermission(
+  permissions: readonly string[] | null | undefined,
+): boolean {
+  return permissions?.includes(DASHBOARD_PERMISSION) ?? false;
+}
 
 export function normalizeAppPath(pathname: string): string {
   return normalizeNavigationPath(pathname);
@@ -38,6 +45,7 @@ export function isCourseAuthorPath(pathname: string): boolean {
   const path = pathname.split(/[?#]/, 1)[0] || "/";
   const normalized = normalizeAppPath(path);
   return (
+    normalized === "/dashboard" ||
     isCourseEditorPath(normalized) ||
     normalized === "/students" ||
     normalized.startsWith("/students/") ||
@@ -57,7 +65,14 @@ export function shouldRedirectFromCourseAuthorPath(
   pathname: string,
   roles: readonly string[] | null | undefined,
 ): boolean {
+  if (normalizeAppPath(pathname) === "/dashboard") {
+    return false;
+  }
   return isCourseAuthorPath(pathname) && !hasCourseAuthorRole(roles);
+}
+
+export function resolveCourseAuthorRouteFallback(pathname: string): string {
+  return normalizeAppPath(pathname) === "/dashboard" ? APP_HOME_PATH : "/";
 }
 
 export function isCoursesPublicPath(pathname: string): boolean {

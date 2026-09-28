@@ -1,5 +1,9 @@
 import type { LessonDiscussionItem } from "@veolms/contracts";
 import type { Comment } from "./CommentCard";
+import {
+  compareEntriesForSort,
+  type DiscussionFeedSort,
+} from "./discussionFeed";
 import { adaptLearningNoteToComment } from "./learning-notes.adapter";
 import { adaptLearningThreadToComment } from "./learning-threads.adapter";
 import {
@@ -76,6 +80,7 @@ export function getUnifiedEntryIdentity(entry: Comment): string | undefined {
 export function orderUnifiedDiscussionEntries(
   items: readonly LessonDiscussionItem[],
   entries: readonly Comment[],
+  sort: DiscussionFeedSort,
 ): Comment[] {
   const byIdentity = new Map(
     entries
@@ -88,10 +93,12 @@ export function orderUnifiedDiscussionEntries(
   const ordered = items
     .map((item) => byIdentity.get(getUnifiedDiscussionIdentity(item)))
     .filter((entry): entry is Comment => Boolean(entry));
-  const localOnly = entries.filter((entry) => {
-    const identity = getUnifiedEntryIdentity(entry);
-    return !identity || !hydratedIdentities.has(identity);
-  });
+  const localOnly = entries
+    .filter((entry) => {
+      const identity = getUnifiedEntryIdentity(entry);
+      return !identity || !hydratedIdentities.has(identity);
+    })
+    .sort((left, right) => compareEntriesForSort(left, right, sort));
 
   return [...localOnly, ...ordered];
 }

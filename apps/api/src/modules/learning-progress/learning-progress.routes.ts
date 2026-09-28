@@ -1,6 +1,7 @@
 import {
   learningProgressBatchRequestSchema,
   learningProgressCourseParamsSchema,
+  learningProgressResumeContextResponseSchema,
   learningProgressResponseSchema,
   learningProgressSyncResponseSchema,
 } from "@veolms/contracts";
@@ -48,6 +49,30 @@ const learningProgressRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.get,
+  );
+
+  app.get(
+    "/learning-progress/:courseKey/resume-context",
+    {
+      preHandler: requireAuthenticated,
+      schema: {
+        operationId: "getLearningProgressResumeContext",
+        tags: ["Learning Progress"],
+        summary:
+          "Resolve the authenticated learner's resume context for one course",
+        params: learningProgressCourseParamsSchema,
+        response: {
+          200: jsonResponse(
+            "The learner's resume context for one course.",
+            learningProgressResumeContextResponseSchema,
+          ),
+          401: errorResponse("Authentication required"),
+          403: errorResponse("Course access required"),
+          404: errorResponse("Course not found"),
+        },
+      },
+    },
+    controller.getResumeContext,
   );
 
   app.post(

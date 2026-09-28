@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
 import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
+import { useEffect, useState } from "react";
 import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
 
 interface DiscussionAvatarProps {
@@ -17,20 +17,21 @@ export function DiscussionAvatar({
   width = 44,
   height = 44,
 }: DiscussionAvatarProps) {
-  const [failed, setFailed] = useState(false);
+  const normalizedSrc = src?.trim() ?? "";
+  const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
-    setFailed(false);
-  }, [src]);
+    setImageFailed(false);
+  }, [normalizedSrc]);
 
   return (
     <span
       className={`grid shrink-0 place-items-center overflow-hidden rounded-full border border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_78%,var(--canvas))] text-(--muted) ${className}`}
       aria-hidden="true"
     >
-      {src && !failed ? (
+      {normalizedSrc && !imageFailed ? (
         <ResponsiveAvatar
-          src={src}
+          src={normalizedSrc}
           alt=""
           width={width}
           height={height}
@@ -38,7 +39,7 @@ export function DiscussionAvatar({
           loading={loading}
           decoding="async"
           className="size-full object-cover"
-          onError={() => setFailed(true)}
+          onError={() => setImageFailed(true)}
         />
       ) : (
         <UserCircle className="size-[68%]" weight="duotone" />

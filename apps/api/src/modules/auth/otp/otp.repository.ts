@@ -99,6 +99,14 @@ export async function retireOutstandingOtps(
     .execute();
 }
 
+/** Removes an OTP that was never delivered so it does not count toward send limits. */
+export async function deleteOtp(
+  database: Executor,
+  otpId: string,
+): Promise<void> {
+  await database.deleteFrom("otp_codes").where("id", "=", otpId).execute();
+}
+
 export async function hasOtpSince(
   database: Executor,
   input: {

@@ -1,20 +1,4 @@
 /* Home dashboard refinement and responsive student navigation */
-.courses-app {
-  grid-template-columns: 302px minmax(0, 1fr);
-}
-
-.courses-app--collapsed {
-  grid-template-columns: 76px minmax(0, 1fr);
-}
-
-.courses-app--hidden .courses-sidebar {
-  width: 302px;
-}
-
-.courses-nav {
-  margin-top: 10px;
-}
-
 .home-resume-card {
   padding: 14px 15px;
 }
@@ -81,6 +65,83 @@
   margin-top: 8px;
 }
 
+.home-metric-skeleton .home-metric__lead > span,
+.home-metric-skeleton__value,
+.home-metric-skeleton__label {
+  display: block;
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  animation: student-home-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.home-metric-skeleton .home-metric__lead > span {
+  color: transparent;
+}
+
+.home-metric-skeleton__value {
+  width: 54px;
+  height: 14px;
+  border-radius: 999px;
+}
+
+.home-metric-skeleton__label {
+  width: 78%;
+  height: 9px;
+  margin-top: 8px;
+  border-radius: 999px;
+}
+
+.home-progress-state {
+  display: flex;
+  min-height: 96px;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.home-progress-state strong,
+.home-progress-state small {
+  display: block;
+}
+
+.home-progress-state strong {
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.home-progress-state small {
+  max-width: 270px;
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+
+.home-progress-state button {
+  margin-top: 5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-strong) 54%, transparent);
+  font-size: 0.66rem;
+  font-weight: 650;
+}
+
+.home-progress-state button:hover:not(:disabled),
+.home-progress-state button:focus-visible {
+  border-color: var(--accent-ink, var(--accent));
+  color: var(--accent-ink, var(--accent));
+}
+
+.home-progress-state button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .home-discussions-panel {
   display: flex;
   min-height: 0;
@@ -96,32 +157,15 @@
   overscroll-behavior: auto;
 }
 
+.home-discussion-workspace-list {
+  margin-top: 8px;
+}
+
 .home-discussion-list article:nth-child(n + 4) {
   display: none;
 }
 
 @media (max-width: 640px) {
-  .courses-app,
-  .courses-app--collapsed,
-  .courses-app--hidden {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
-    padding: 0;
-    background: var(--main-surface);
-  }
-
-  .courses-sidebar,
-  .sidebar-edge-trigger {
-    display: none !important;
-  }
-
-  .courses-main,
-  .student-surface-main {
-    min-height: calc(100vh - 16px);
-    min-height: calc(100dvh - 16px);
-    padding-bottom: calc(82px + var(--app-viewport-safe-area-max-bottom));
-  }
-
   .home-resume-card {
     padding: 12px;
   }

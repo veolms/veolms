@@ -325,7 +325,18 @@ export async function listAllCourses(database: Kysely<Database>) {
         .as("lesson_duration_seconds"),
     ])
     .where("courses.deleted_at", "is", null)
+    .orderBy("courses.updated_at", "desc")
     .orderBy("courses.created_at", "desc")
+    .execute();
+}
+
+export async function listAllCourseScope(database: Kysely<Database>) {
+  return await database
+    .selectFrom("courses")
+    .select(["id", "status"])
+    .where("deleted_at", "is", null)
+    .orderBy("updated_at", "desc")
+    .orderBy("created_at", "desc")
     .execute();
 }
 
@@ -397,6 +408,7 @@ export async function listCoursesByCreator(
     ])
     .where("courses.creator_id", "=", creatorId)
     .where("courses.deleted_at", "is", null)
+    .orderBy("courses.updated_at", "desc")
     .orderBy("courses.created_at", "desc")
     .execute();
 }
@@ -408,6 +420,20 @@ export async function listAvailableCoursesByCreator(
   return await database
     .selectFrom("courses")
     .selectAll()
+    .where("creator_id", "=", creatorId)
+    .where("status", "=", "published")
+    .where("deleted_at", "is", null)
+    .orderBy("created_at", "desc")
+    .execute();
+}
+
+export async function listAvailableCourseScopeByCreator(
+  database: Kysely<Database>,
+  creatorId: string,
+) {
+  return await database
+    .selectFrom("courses")
+    .select(["id", "status"])
     .where("creator_id", "=", creatorId)
     .where("status", "=", "published")
     .where("deleted_at", "is", null)
