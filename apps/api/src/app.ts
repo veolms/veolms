@@ -191,11 +191,42 @@ export async function createApp({
       ),
   });
 
+  // CORS_ORIGINS entries may use a leading `*.` host wildcard (for example
+  // `https://*.dev-preview.veolms.org`) to allow every subdomain of that host
+  // with the same scheme and port. The bare parent host is not matched.
+  const corsWildcardOrigins = config.CORS_ORIGINS.flatMap((entry) => {
+    const match = /^(https?):\/\/\*\.([^/:]+)(?::(\d+))?$/iu.exec(entry);
+    if (!match?.[1] || !match[2]) return [];
+    return [
+      {
+        protocol: `${match[1].toLowerCase()}:`,
+        hostSuffix: `.${match[2].toLowerCase()}`,
+        port: match[3] ?? "",
+      },
+    ];
+  });
+
+  const matchesCorsWildcard = (origin: string): boolean => {
+    if (corsWildcardOrigins.length === 0) return false;
+    try {
+      const url = new URL(origin);
+      return corsWildcardOrigins.some(
+        (pattern) =>
+          url.protocol === pattern.protocol &&
+          url.port === pattern.port &&
+          url.hostname.endsWith(pattern.hostSuffix),
+      );
+    } catch {
+      return false;
+    }
+  };
+
   const isAllowedLanOrigin = (origin: string | undefined): boolean => {
     if (
       !origin ||
       config.CORS_ORIGINS.includes(origin) ||
-      config.WEBAUTHN_ORIGINS.includes(origin)
+      config.WEBAUTHN_ORIGINS.includes(origin) ||
+      matchesCorsWildcard(origin)
     ) {
       return true;
     }

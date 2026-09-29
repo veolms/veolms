@@ -27,6 +27,7 @@ export interface AppServices {
   storage: S3StorageService;
   videoDispatch: VideoDispatchService;
   paymentGateway: PaymentGateway;
+  config: ServerConfig;
   courseStaticPages?: CourseStaticPageRefreshService;
 }
 
@@ -139,7 +140,7 @@ export function createServices({
       triggerUrl: config.FLEET_MANAGER_TRIGGER_URL,
       lambdaName: config.PROBE_LAMBDA_NAME || config.FLEET_MANAGER_LAMBDA_NAME,
     }),
-
+    config,
     paymentGateway: createPaymentGateway(config),
     courseStaticPages: createCourseStaticPageRefreshService({
       githubToken: config.COURSE_STATIC_REFRESH_GITHUB_TOKEN,
