@@ -16,7 +16,7 @@ export interface LessonAudioPlayerProps {
 
 export function LessonAudioPlayer({
   title = "Introduction Audio",
-  subtitle = "Web Development Course for Absolute Beginners",
+  subtitle,
   audioUrl,
   durationSeconds = 754, // 12:34 fallback default matching screenshot
   thumbnailUrl,

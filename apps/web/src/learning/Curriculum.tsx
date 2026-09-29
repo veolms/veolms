@@ -9,11 +9,8 @@ import { ElasticScroller } from "../components/elastic-scroller";
 import type { ElasticScrollerHandle } from "../components/elastic-scroller";
 import { CurriculumSectionActionsMenuContent } from "./CurriculumSectionActionsMenu";
 import { getInitialCurriculumExpandedSections } from "./curriculumExpandedSections";
-import {
-  lessonsById as defaultLessonsById,
-  sections as defaultSections,
-} from "./courseContent";
 import type { CourseSection, Lesson } from "./courseContent";
+
 import {
   isStoredBoolean,
   isStoredString,
@@ -23,6 +20,9 @@ import type { LessonDrawerHeroControlProps } from "./useLessonDrawerHeroControl"
 import { CurriculumLessonRows } from "./CurriculumLessonRows";
 import { useCurriculumLayoutRevision } from "./useCurriculumLayoutRevision";
 import { useCurriculumSectionScrollAnchor } from "./useCurriculumSectionScrollAnchor";
+
+const EMPTY_CURRICULUM_SECTIONS: CourseSection[] = [];
+const EMPTY_LESSONS_BY_ID: ReadonlyMap<number, Lesson> = new Map();
 
 const LESSON_PROGRESS_COMPLETE_THRESHOLD = 99.5;
 
@@ -56,8 +56,8 @@ interface CurriculumProps {
 
 export function Curriculum({
   selectedLesson,
-  sections = defaultSections,
-  lessonsById = defaultLessonsById,
+  sections = EMPTY_CURRICULUM_SECTIONS,
+  lessonsById = EMPTY_LESSONS_BY_ID,
   lessonProgress = {},
   onSelectLesson,
   onOpenCourseOverview,

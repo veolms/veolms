@@ -132,6 +132,9 @@ export interface LessonVideoPlayerProps {
   resumePersistenceKey?: string;
   /** Runtime playback data returned by the authorized bootstrap endpoint. */
   playbackBootstrap?: VideoPlaybackBootstrap | null;
+  /** Shown when the lesson has no playable source because loading it failed. */
+  playbackUnavailableMessage?: string | null;
+  onRetryPlayback?: () => void;
   /** Refreshes only the short-lived CDN segment token when playback runs long. */
   refreshPlaybackToken?: () => Promise<VideoPlaybackToken>;
   /** Legacy caller hint retained while all protected access moves to tokens. */
@@ -185,6 +188,8 @@ export function LessonVideoPlayer({
   theaterMode,
   presentation = "full",
   playbackBootstrap,
+  playbackUnavailableMessage = null,
+  onRetryPlayback,
   refreshPlaybackToken,
   protectedPlayback = false,
 }: LessonVideoPlayerProps) {
@@ -783,6 +788,57 @@ export function LessonVideoPlayer({
           "calc(var(--learning-fullscreen-panel-offset-x) / 2)",
       } as FullscreenCoursePanelStyle)
     : undefined;
+
+  if (!playbackMedia.src) {
+    // API lessons have no playable source until their playback bootstrap
+    // resolves. Show the lesson poster instead of handing the engine an
+    // empty URL or a placeholder video, and the failure when loading failed.
+    return (
+      <div
+        role={playbackUnavailableMessage ? "alert" : "img"}
+        aria-label={
+          playbackUnavailableMessage
+            ? undefined
+            : `Preparing video for ${lessonTitle}`
+        }
+        className={cn(
+          "relative aspect-video w-full overflow-hidden bg-black",
+          presentation === "mini" ? "rounded-none" : "rounded-xl",
+        )}
+      >
+        {media.thumbnailSrc ? (
+          <img
+            src={media.thumbnailSrc}
+            alt=""
+            decoding="async"
+            className={cn(
+              "h-full w-full object-cover",
+              playbackUnavailableMessage && "opacity-30",
+            )}
+            onError={(event) => {
+              event.currentTarget.hidden = true;
+            }}
+          />
+        ) : null}
+        {playbackUnavailableMessage ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4 text-center">
+            <p className="m-0 max-w-sm text-[0.86rem] font-semibold text-white">
+              {playbackUnavailableMessage}
+            </p>
+            {onRetryPlayback ? (
+              <button
+                type="button"
+                onClick={onRetryPlayback}
+                className="inline-flex h-10 items-center justify-center rounded-[10px] border-none bg-(--accent) px-5 text-[0.82rem] font-bold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] cursor-pointer focus-visible:outline-2 focus-visible:outline-(--accent)"
+              >
+                Retry
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <VeoVideoPlayer

@@ -1,4 +1,5 @@
-import { getLessonSlug, sections } from "./courseContent";
+import { getLessonSlug } from "./courseContent";
+import { CURRICULUM_LECTURE_COUNT_DEFAULT } from "./curriculumSize";
 
 export const PRERENDERED_LEARNING_COURSE_SLUGS = [
   "backend-nodejs",
@@ -16,9 +17,19 @@ interface CreateLearningPrerenderPathsOptions {
   scope: LearningPrerenderScope;
 }
 
+// Lesson routes are numbered (`lecture-N`) and their content is loaded from
+// the API at runtime, so prerendering only needs the route shells.
+const FIRST_SECTION_LECTURE_COUNT = 5;
+
 const getLectureIds = (scope: LearningPrerenderScope) =>
-  (scope === "all-lectures" ? sections : sections.slice(0, 1)).flatMap(
-    ({ lessons }) => lessons.map(([lessonId]) => lessonId),
+  Array.from(
+    {
+      length:
+        scope === "all-lectures"
+          ? CURRICULUM_LECTURE_COUNT_DEFAULT
+          : FIRST_SECTION_LECTURE_COUNT,
+    },
+    (_, index) => index + 1,
   );
 
 export const createLearningPrerenderPaths = ({
