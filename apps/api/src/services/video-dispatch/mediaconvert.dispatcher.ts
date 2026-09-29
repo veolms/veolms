@@ -132,6 +132,15 @@ export function createMediaConvertDispatcher(options: {
 
     if (config.MEDIACONVERT_WEBHOOK_URL) {
       userMetadata.webhookUrl = config.MEDIACONVERT_WEBHOOK_URL;
+      // The fleet signs its callbacks with the per-job secret it receives
+      // here; the webhook handler rejects unsigned callbacks with 401.
+      if (config.MEDIACONVERT_WEBHOOK_SECRET) {
+        userMetadata.webhookSecret = config.MEDIACONVERT_WEBHOOK_SECRET;
+      } else {
+        logger.warn(
+          "[video-dispatch:mediaconvert] MEDIACONVERT_WEBHOOK_URL is set without MEDIACONVERT_WEBHOOK_SECRET; webhook callbacks will be rejected",
+        );
+      }
     }
 
     const destination = outputPrefix.startsWith("s3://")

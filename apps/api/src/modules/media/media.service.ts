@@ -1405,9 +1405,23 @@ export function createMediaService({
         return { success: true, status: "cancelled", jobId: job.id };
       }
 
-      const outputGroupDetails = eventDetail?.outputGroupDetails;
-      const firstOutput = outputGroupDetails?.[0];
-      const playlistPaths = firstOutput?.playlistFilePaths;
+      // The fleet retries completion callbacks and may deliver them more
+      // than once; video_outputs has no unique key, so re-processing would
+      // insert a duplicate output row.
+      if (job.status === "completed") {
+        return { success: true, status: "completed", jobId: job.id };
+      }
+
+      const outputGroupDetails =
+        eventDetail?.outputGroupDetails || body?.outputGroupDetails;
+      // The thumbnail FILE_GROUP also reports its .webp in playlistFilePaths,
+      // so select the group that carries the HLS .m3u8 playlist.
+      const isHlsPlaylist = (path: string) => /\.m3u8$/i.test(path);
+      const firstOutput =
+        outputGroupDetails?.find((group) =>
+          group.playlistFilePaths?.some(isHlsPlaylist),
+        ) ?? outputGroupDetails?.[0];
+      const playlistPaths = firstOutput?.playlistFilePaths?.filter(isHlsPlaylist);
       const rawMasterPath =
         playlistPaths?.[0] ||
         body?.masterPlaylistPath ||
