@@ -55,7 +55,7 @@ jobs:
       - name: Validate deployment configuration
         shell: bash
         env:
-          VEO_PUBLIC_API_BASE_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL || vars.VITE_API_BASE_URL || 'https://api.procodrr.dev/v1' }}
+          VEO_PUBLIC_API_BASE_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL || vars.VITE_API_BASE_URL || 'https://api-origin.dev.veolms.org/v1' }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
@@ -67,15 +67,15 @@ jobs:
       - name: Build web application
         run: pnpm build:web
         env:
-          STATIC_BUILD_API_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL || vars.VITE_API_BASE_URL || 'https://api.procodrr.dev/v1' }}
-          VEO_PUBLIC_API_BASE_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL || vars.VITE_API_BASE_URL || 'https://api.procodrr.dev/v1' }}
-          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'https://api.procodrr.dev/v1' }}
+          STATIC_BUILD_API_URL: ${{ vars.STATIC_BUILD_API_URL || vars.VEO_PUBLIC_API_BASE_URL || vars.VITE_API_BASE_URL || 'https://api-origin.dev.veolms.org/v1' }}
+          VEO_PUBLIC_API_BASE_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL || vars.VITE_API_BASE_URL || 'https://api-origin.dev.veolms.org/v1' }}
+          VITE_API_BASE_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL || vars.VITE_API_BASE_URL || 'https://api-origin.dev.veolms.org/v1' }}
 
       - name: Generate HTML and React Router data files
         run: pnpm --filter @veolms/web refresh:course-pages -- --all
         env:
-          VEO_PUBLIC_API_BASE_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL || vars.VITE_API_BASE_URL || 'https://api.procodrr.dev/v1' }}
-          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'https://api.procodrr.dev/v1' }}
+          VEO_PUBLIC_API_BASE_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL || vars.VITE_API_BASE_URL || 'https://api-origin.dev.veolms.org/v1' }}
+          VITE_API_BASE_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL || vars.VITE_API_BASE_URL || 'https://api-origin.dev.veolms.org/v1' }}
 
       - name: Record source revision used by the artifact
         run: echo "$GITHUB_SHA" > apps/web/build/deployment-source.sha

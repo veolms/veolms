@@ -3,9 +3,9 @@
    two-stage lift for every card family that uses --card-shadow. */
 :root {
   --sidebar-menu-active-background: linear-gradient(
-    108deg,
-    color-mix(in srgb, var(--canvas) 88%, var(--accent) 12%) 0%,
-    color-mix(in srgb, var(--surface) 82%, var(--accent) 18%) 100%
+    180deg,
+    color-mix(in srgb, var(--accent) 12%, var(--surface-strong)) 0%,
+    color-mix(in srgb, var(--surface) 60%, var(--app-shell)) 100%
   );
   --surface-depth-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--text) 13%, transparent),
@@ -46,8 +46,10 @@
     color-mix(in srgb, var(--text) 28%, transparent);
   --sidebar-menu-depth-shadow: none;
   --sidebar-menu-depth-hover-shadow: none;
-  --sidebar-menu-active-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--accent) 18%, transparent);
+  --sidebar-menu-active-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--accent) 45%, rgba(255, 255, 255, 0.2)),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent),
+    0 4px 16px -2px color-mix(in srgb, var(--accent-shadow) 36%, rgba(0, 0, 0, 0.4));
   --sidebar-dock-depth-shadow: none;
   --sidebar-dock-depth-hover-shadow: none;
 }
@@ -90,9 +92,9 @@
    edge, close contact shadow, and two soft foreground-derived lift layers. */
 :root[data-theme="light"] {
   --sidebar-menu-active-background: linear-gradient(
-    108deg,
-    color-mix(in srgb, var(--surface-strong) 92%, var(--accent) 8%) 0%,
-    color-mix(in srgb, var(--surface) 88%, var(--accent) 12%) 100%
+    135deg,
+    color-mix(in srgb, var(--surface) 95%, var(--accent) 10%) 0%,
+    color-mix(in srgb, var(--surface-strong) 85%, var(--accent) 15%) 100%
   );
   --surface-depth-shadow:
     inset 0 1px 0 rgb(255 255 255 / 96%), inset 1px 0 0 rgb(255 255 255 / 68%),
@@ -122,8 +124,9 @@
     0 8px 22px color-mix(in srgb, var(--text) 20%, transparent),
     0 30px 76px color-mix(in srgb, var(--text) 24%, transparent);
   --sidebar-menu-active-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 88%), 0 2px 4px rgb(25 32 45 / 9%),
-    0 8px 18px rgb(25 32 45 / 12%);
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
+    0 4px 14px -2px color-mix(in srgb, var(--accent-shadow) 22%, rgba(0, 0, 0, 0.08));
 }
 
 :root:not([data-elevated-surfaces="false"]) {
@@ -171,10 +174,11 @@
   --sidebar-menu-depth-hover-shadow:
     inset 0 1px 0 rgb(255 255 255 / 12%), 0 4px 9px rgb(0 0 0 / 34%),
     0 15px 32px rgb(0 0 0 / 42%);
-  /* The selected destination is a raised surface, not an accent glow. Reuse
-     the same dark contact and ambient depth as dashboard cards so it remains
-     visibly lifted against every dark sidebar palette. */
-  --sidebar-menu-active-shadow: var(--surface-depth-shadow);
+  --sidebar-menu-active-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+    0 4px 16px -2px color-mix(in srgb, var(--accent-shadow) 42%, rgba(0, 0, 0, 0.5));
 }
 
 :root[data-theme="light"][data-sidebar-menu-elevation="true"] {

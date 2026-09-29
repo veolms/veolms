@@ -106,6 +106,7 @@ function preloadSettingsTab(tab: SettingsTab) {
 type SettingsTabIcon = ComponentType<{
   size?: number;
   weight?: "duotone" | "fill" | "regular";
+  className?: string;
 }>;
 
 interface SettingsTabDefinition {
@@ -480,10 +481,11 @@ export function SettingsPage({
 
       <nav
         ref={tabListRef}
-        className="settings-tabs page-tabs top-0!"
+        className="settings-tabs page-tabs border-b border-[color-mix(in_srgb,var(--text)_12%,transparent)] [&::after]:hidden!"
         aria-label="Settings sections"
         role="tablist"
       >
+        <span className="page-tabs__indicator" aria-hidden="true" />
         {SETTINGS_TABS.map(({ id, label, Icon, tone }, index) => (
           <button
             type="button"
@@ -496,7 +498,7 @@ export function SettingsPage({
             data-page-tab-tone={tone}
             data-swipe-tab-id={id}
             tabIndex={activeTab === id ? 0 : -1}
-            className={activeTab === id ? "group is-active" : "group"}
+            className={`group inline-flex flex-row items-center gap-2 !border-b-transparent shrink-0 whitespace-nowrap ${activeTab === id ? "is-active" : ""}`}
             onPointerEnter={() => prepareTab(id)}
             onPointerDown={() => prepareTab(id)}
             onClick={() => navigateTab(id)}
@@ -507,12 +509,11 @@ export function SettingsPage({
             }}
           >
             <span className="settings-tab__press-content inline-flex origin-bottom items-center gap-2 transition-transform duration-150 ease-out group-active:scale-[0.985] motion-reduce:duration-[0.01ms]">
-              <Icon size={17} weight={activeTab === id ? "fill" : "regular"} />
+              <Icon size={17} weight={activeTab === id ? "fill" : "regular"} className="shrink-0" />
               <span>{label}</span>
             </span>
           </button>
         ))}
-        <span className="page-tabs__indicator" aria-hidden="true" />
       </nav>
 
       <SwipeableTabPanel
@@ -521,12 +522,13 @@ export function SettingsPage({
         onTabChange={(nextTab) => void navigateTab(nextTab)}
         tabListRef={tabListRef}
         id="settings-tab-panel"
-        className="settings-tab-content pb-8"
+        className="settings-tab-content relative min-h-0 flex-1 flex flex-col"
         stateAttribute="data-settings-tab"
         labelledBy={`settings-tab-${activeTab}`}
         onSwipeStart={prepareSwipeNeighbors}
         nativeOnFinePointer
         focusable={false}
+        spaceBetween={32}
       >
         {(panelTab) =>
           panelTab === activeTab || preparedTabs.has(panelTab)

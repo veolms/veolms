@@ -225,6 +225,11 @@
     padding-left: 12.5px;
   }
 
+  .courses-app--collapsed .courses-nav button {
+    padding-left: 0;
+    justify-content: center;
+  }
+
   .courses-nav button > svg {
     width: 23px;
     height: 23px;
@@ -240,8 +245,8 @@
   }
 
   .courses-app--collapsed .courses-profile__button {
-    justify-content: flex-start;
-    padding: 7px;
+    justify-content: center;
+    padding: 0;
   }
 
   .courses-nav button > .courses-nav__text,
@@ -262,30 +267,33 @@
   }
 
   .courses-app--collapsed .courses-sidebar__brand {
-    min-height: 48px;
+    min-height: 40px;
     flex-direction: row;
-    justify-content: flex-start;
-    gap: 0;
-    padding-left: 0;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 0 2px;
   }
 
   .courses-app--collapsed .sidebar-collapse {
-    left: 10px;
+    position: static;
+    left: auto;
+    top: auto;
   }
 
   .courses-app--collapsed .sidebar-collapse__asset {
-    /* Match the compact P's optical center without shifting the shared logo axis. */
-    transform: translateX(1.5px);
+    transform: none;
   }
 
   .courses-app--collapsed .courses-logo-clip {
     display: block;
-    width: 156px;
-    max-width: 0;
-    height: 38px;
-    opacity: 0;
-    clip-path: inset(0 100% 0 0);
-    pointer-events: none;
+    position: static;
+    width: 22px;
+    max-width: 22px;
+    height: 28px;
+    opacity: 1;
+    clip-path: none;
+    pointer-events: auto;
+    overflow: hidden;
   }
 
   .courses-app--collapsed .courses-logo-clip svg {
@@ -340,17 +348,19 @@
   :root[data-collapsed-sidebar-logo="true"]
     .courses-app--collapsed
     .sidebar-collapse {
-    top: 12px;
+    position: static;
+    top: auto;
     right: auto;
-    left: 10px;
+    left: auto;
     transform: none;
   }
 
   :root[data-collapsed-sidebar-logo="true"]
     .courses-app--collapsed
     .courses-logo-clip {
-    top: 15px;
-    left: 19.375px;
+    position: static;
+    top: auto;
+    left: auto;
     transform: none;
   }
 
@@ -436,73 +446,10 @@
     transform: none;
   }
 
-  /* At rest, the compact logo and expand control share one slot. The control
-     replaces the logo on rail hover/focus; it never sits beside it. When the
-     compact logo preference is disabled, the control remains available. */
-  :root[data-sidebar-header-layout="inline"]
-    .courses-app--collapsed
-    .courses-sidebar__brand {
-    justify-content: flex-start;
-    gap: 0;
-    padding-left: 0;
-    overflow: visible;
-  }
+  /* In compact rail mode, navigation.css governs the single-slot header behavior
+     for both inline and fixed header layouts, honoring data-collapsed-sidebar-logo. */
 
-  :root[data-sidebar-header-layout="inline"][data-collapsed-sidebar-logo="true"]
-    .courses-app--collapsed
-    .courses-logo-clip {
-    /* Keep the compact P on the same page coordinate as the expanded
-       wordmark. Only the sidebar edge reveals more of the artwork. */
-    left: 19.375px;
-    width: 21px;
-    max-width: 21px;
-  }
 
-  :root[data-sidebar-header-layout="inline"][data-collapsed-sidebar-logo="true"]
-    .courses-app--collapsed
-    .courses-logo-clip
-    svg {
-    width: 156px;
-    height: 38px;
-  }
-
-  :root[data-sidebar-header-layout="inline"][data-collapsed-sidebar-logo="false"]
-    .courses-app--collapsed
-    .sidebar-collapse {
-    position: absolute;
-    top: 12px;
-    right: auto;
-    left: 10px;
-    opacity: 1;
-    pointer-events: auto;
-    transform: none;
-  }
-
-  :root[data-sidebar-header-layout="inline"]
-    .courses-app--resize-content-visible.courses-app--collapsed
-    .courses-sidebar__brand {
-    justify-content: space-between;
-    gap: 12px;
-    /* The compact rail has 4px less outer padding than the expanded sidebar.
-       Add that difference here so pointer-down, drag, and release never move
-       the logo's left edge. */
-    padding-left: 19.375px;
-    overflow: hidden;
-  }
-
-  :root[data-sidebar-header-layout="inline"]
-    .courses-app--resize-content-visible.courses-app--collapsed
-    .courses-logo-clip {
-    order: 1;
-  }
-
-  :root[data-sidebar-header-layout="inline"]
-    .courses-app--resize-content-visible.courses-app--collapsed
-    .sidebar-collapse {
-    position: static;
-    order: 2;
-    inset: auto;
-  }
 
   .sidebar-appearance {
     box-sizing: border-box;

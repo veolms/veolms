@@ -407,6 +407,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   Settings: "/settings",
   "Create Course": "/courses/create",
   "Order History": "/order-history",
+  Notification: "/notifications",
   Notifications: "/notifications",
   Logout: "/logout",
 };

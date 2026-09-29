@@ -67,24 +67,33 @@
 }
 
 .courses-nav button {
-  min-height: 47px;
-  border-radius: 10px;
+  min-height: 48px;
+  border-radius: 12px;
   padding-inline: 14px;
   box-shadow: none;
+  border: 1px solid transparent;
+  color: color-mix(in srgb, var(--text) 84%, var(--muted));
+  font-size: 0.92rem;
+  font-weight: 500;
   transition:
     background-color 150ms ease,
     color 150ms ease,
+    border-color 150ms ease,
     box-shadow 150ms ease;
 }
 
 .courses-nav button:hover {
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-strong) 42%, transparent);
   box-shadow: none;
 }
 
 .courses-nav button.is-active {
+  color: var(--text);
+  font-weight: 600;
   background: var(--sidebar-menu-active-background);
   box-shadow: var(--sidebar-menu-active-shadow);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 /* The More drawer is the compact presentation of this same navigation, so
@@ -109,7 +118,12 @@
 
 .courses-nav button > svg {
   color: var(--nav-icon-color);
-  filter: none;
+  transition: filter 180ms ease, transform 180ms ease;
+}
+
+.courses-nav button.is-active > svg {
+  color: #ffffff !important;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 85%, transparent)) !important;
 }
 
 .shortcut-keys,
@@ -207,73 +221,27 @@
   transition-delay: 0s;
 }
 
-.courses-nav button[data-sortable="true"],
-.mobile-menu-sheet__list > button[data-sortable="true"] {
-  touch-action: none;
-  -webkit-touch-callout: none;
-}
-
-.courses-nav button.is-dragging,
-.mobile-menu-sheet__list > button.is-dragging {
-  transform: none;
-  opacity: 0.46;
-}
-
-.courses-nav button.is-drop-target::before,
-.courses-nav button.is-drop-target::after,
-.mobile-menu-sheet__list > button.is-drop-target::before,
-.mobile-menu-sheet__list > button.is-drop-target::after {
-  content: "";
-  position: absolute;
-  right: 13px;
-  left: 13px;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--accent);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--accent-shadow) 40%, transparent);
-}
-
-.courses-nav button.is-drop-target::before,
-.mobile-menu-sheet__list > button.is-drop-target::before {
-  top: -2px;
-}
-.courses-nav button.is-drop-target::after,
-.mobile-menu-sheet__list > button.is-drop-target::after {
-  bottom: -2px;
-}
-.courses-nav button.is-drop-target.is-drop-after::before,
-.mobile-menu-sheet__list > button.is-drop-target.is-drop-after::before {
-  display: none;
-}
-.courses-nav button.is-drop-target:not(.is-drop-after)::after,
-.mobile-menu-sheet__list > button.is-drop-target:not(.is-drop-after)::after {
-  display: none;
-}
-
-.courses-app--navigation-dragging .courses-nav button:not(.is-dragging),
-.courses-app--navigation-dragging
-  .mobile-menu-sheet__list
-  > button:not(.is-dragging) {
-  transition-duration: 90ms;
-}
-
 .courses-profile {
   position: relative;
-  margin-top: 12px;
-  margin-inline: -4.5px;
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .shell-profile-avatar {
   display: inline-flex;
-  flex: 0 0 auto;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
-  color: var(--text-secondary);
-  background: color-mix(in srgb, var(--surface-strong) 88%, var(--canvas));
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent);
+  border: 1px solid color-mix(in srgb, #38bdf8 35%, transparent);
+  color: #38bdf8;
+  background: color-mix(in srgb, #38bdf8 14%, var(--surface-strong));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   font-size: 0.75rem;
   font-style: normal;
   font-weight: 700;
@@ -281,9 +249,9 @@
 }
 
 .shell-profile-avatar--fallback {
-  border-color: color-mix(in srgb, var(--accent) 26%, var(--border));
-  color: var(--accent-ink, var(--accent));
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong));
+  border-color: color-mix(in srgb, #38bdf8 35%, transparent);
+  color: #38bdf8;
+  background: color-mix(in srgb, #38bdf8 14%, var(--surface-strong));
 }
 
 .shell-profile-avatar img {
@@ -296,34 +264,92 @@
   position: relative;
   /* Keep the profile trigger beneath both overlay menus when they overlap. */
   z-index: 80;
-  height: 57px;
-  min-height: 57px;
-  border: 0;
-  border-radius: 12px;
-  padding: 7px;
-  background: color-mix(in srgb, var(--surface) 74%, transparent);
-  box-shadow: var(--sidebar-dock-depth-shadow);
+  height: auto;
+  min-height: 64px;
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-strong) 75%, var(--app-shell)) 0%,
+    color-mix(in srgb, var(--surface) 45%, var(--app-shell)) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+    0 6px 18px -2px rgba(0, 0, 0, 0.42),
+    0 2px 5px rgba(0, 0, 0, 0.28);
+  transition: all 180ms ease;
 }
 
 .courses-profile__button:hover {
-  border-color: transparent;
-  background: var(--surface);
-  box-shadow: var(--sidebar-dock-depth-hover-shadow);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-strong) 85%, var(--app-shell)) 0%,
+    color-mix(in srgb, var(--surface) 55%, var(--app-shell)) 100%
+  );
+  border-color: color-mix(in srgb, var(--text) 18%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+    0 10px 24px -2px rgba(0, 0, 0, 0.5),
+    0 3px 8px rgba(0, 0, 0, 0.35);
+  transform: translateY(-1px);
+}
+
+.courses-profile__button:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.5),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+    0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+:root[data-theme="light"] .courses-profile__button {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface) 98%, var(--app-shell)) 0%,
+    color-mix(in srgb, var(--surface-strong) 88%, var(--app-shell)) 100%
+  );
+  border-color: color-mix(in srgb, var(--text) 10%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08),
+    0 4px 12px -2px rgba(0, 0, 0, 0.08);
+}
+
+:root[data-theme="light"] .courses-profile__button:hover {
+  background: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    color-mix(in srgb, var(--surface) 92%, var(--app-shell)) 100%
+  );
+  border-color: color-mix(in srgb, var(--text) 18%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    0 6px 16px -2px rgba(0, 0, 0, 0.12);
 }
 
 .courses-profile__button > .shell-profile-avatar,
 .courses-profile__button img {
-  width: 43px;
-  height: 43px;
+  width: 38px;
+  height: 38px;
 }
 
 .courses-profile__button > .shell-profile-avatar {
   display: inline-flex;
-  flex: 0 0 auto;
+  flex: 0 0 38px;
 }
 
 .courses-profile__button strong {
-  font-size: 0.83rem;
+  font-size: 0.90rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.courses-profile__button small {
+  font-size: 0.72rem;
+  color: var(--muted);
 }
 
 .profile-menu,
@@ -342,11 +368,12 @@
   position: relative;
   display: flex;
   gap: 8px;
-  margin-top: 8px;
-  border-radius: 12px;
-  padding: 6px 8px;
-  background: color-mix(in srgb, var(--surface) 62%, transparent);
-  box-shadow: var(--sidebar-dock-depth-shadow);
+  width: 100%;
+  margin-top: 2px;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .sidebar-appearance > button,
@@ -354,14 +381,28 @@
   position: relative;
   display: inline-flex;
   min-width: 0;
-  height: 38px;
+  height: 44px;
+  flex: 1;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: 9px;
+  border-radius: 13px;
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-strong) 80%, var(--app-shell)) 0%,
+    color-mix(in srgb, var(--surface) 50%, var(--app-shell)) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 4px 12px -1px rgba(0, 0, 0, 0.45),
+    0 2px 5px rgba(0, 0, 0, 0.3);
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 600;
+  cursor: pointer;
+  transition: all 180ms ease;
 }
 
 .sidebar-appearance > button,
@@ -378,14 +419,116 @@
 .sidebar-appearance > button:hover,
 .sidebar-palette-trigger:hover {
   color: var(--text);
-  background: var(--hover);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-strong) 90%, var(--app-shell)) 0%,
+    color-mix(in srgb, var(--surface) 60%, var(--app-shell)) 100%
+  );
+  border-color: color-mix(in srgb, var(--text) 18%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 7px 16px -2px rgba(0, 0, 0, 0.55),
+    0 3px 8px rgba(0, 0, 0, 0.35);
+  transform: translateY(-1.5px);
+}
+
+.sidebar-appearance > button:active,
+.sidebar-palette-trigger:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 .sidebar-appearance > button.is-active,
 .sidebar-palette-trigger[aria-pressed="true"] {
   color: var(--text);
-  background: var(--sidebar-menu-active-background);
-  box-shadow: var(--sidebar-menu-active-shadow);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 32%, var(--surface-strong)) 0%,
+    color-mix(in srgb, var(--accent) 18%, var(--surface)) 100%
+  );
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+    0 0 14px color-mix(in srgb, var(--accent-shadow) 40%, transparent),
+    0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme="light"] .sidebar-appearance > button,
+:root[data-theme="light"] .sidebar-palette-trigger {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface) 98%, var(--app-shell)) 0%,
+    color-mix(in srgb, var(--surface) 86%, var(--app-shell)) 100%
+  );
+  border-color: color-mix(in srgb, var(--text) 10%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08),
+    0 3px 8px -1px rgba(0, 0, 0, 0.1),
+    0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+:root[data-theme="light"] .sidebar-appearance > button:hover,
+:root[data-theme="light"] .sidebar-palette-trigger:hover {
+  background: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    color-mix(in srgb, var(--surface) 92%, var(--app-shell)) 100%
+  );
+  border-color: color-mix(in srgb, var(--text) 18%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08),
+    0 5px 12px -2px rgba(0, 0, 0, 0.14),
+    0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* Dock icon tones in multicolor mode */
+:root[data-sidebar-icon-style="multicolor"] .sidebar-appearance > button[data-dock-item="appearance"] > svg,
+:root[data-sidebar-icon-style="multicolor"] .mobile-menu-sheet__appearance > button[data-dock-item="appearance"] > svg {
+  color: #818cf8;
+  filter: drop-shadow(0 0 6px rgba(129, 140, 248, 0.45));
+}
+
+:root[data-sidebar-icon-style="multicolor"] .sidebar-appearance > button[data-dock-item="reading-mode"] > svg,
+:root[data-sidebar-icon-style="multicolor"] .mobile-menu-sheet__appearance > button[data-dock-item="reading-mode"] > svg {
+  color: #38bdf8;
+  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.45));
+}
+
+:root[data-sidebar-icon-style="multicolor"] .sidebar-appearance > button[data-dock-item="settings"] > svg,
+:root[data-sidebar-icon-style="multicolor"] .mobile-menu-sheet__appearance > button[data-dock-item="settings"] > svg {
+  color: #c084fc;
+  filter: drop-shadow(0 0 6px rgba(192, 132, 252, 0.45));
+}
+
+:root[data-sidebar-icon-style="multicolor"] .sidebar-appearance > .sidebar-palette-wrap .sidebar-palette-trigger > svg,
+:root[data-sidebar-icon-style="multicolor"] .mobile-menu-sheet__appearance > .sidebar-palette-wrap .sidebar-palette-trigger > svg {
+  color: #f472b6;
+  filter: drop-shadow(0 0 6px rgba(244, 114, 182, 0.45));
+}
+
+:root[data-sidebar-icon-style="multicolor"] .sidebar-appearance > button[data-dock-item="fullscreen"] > svg,
+:root[data-sidebar-icon-style="multicolor"] .mobile-menu-sheet__appearance > button[data-dock-item="fullscreen"] > svg {
+  color: #fb923c;
+  filter: drop-shadow(0 0 6px rgba(251, 146, 60, 0.45));
+}
+
+/* Single color / monochrome icon mode: ALL dock icons strictly follow the chosen single color */
+:root[data-sidebar-icon-style="monochrome"] .sidebar-appearance > button > svg,
+:root[data-sidebar-icon-style="monochrome"] .sidebar-appearance > .sidebar-palette-wrap .sidebar-palette-trigger > svg,
+:root[data-sidebar-icon-style="monochrome"] .mobile-menu-sheet__appearance > button > svg,
+:root[data-sidebar-icon-style="monochrome"] .mobile-menu-sheet__appearance > .sidebar-palette-wrap .sidebar-palette-trigger > svg {
+  color: var(--nav-icon-color, var(--accent)) !important;
+  filter: drop-shadow(
+    0 2px 6px
+      color-mix(in srgb, var(--nav-icon-color, var(--accent)) 38%, transparent)
+  ) !important;
 }
 
 /* The reading-mode bootstrap updates the root before React hydrates. Keep the
@@ -420,10 +563,10 @@
 .sidebar-appearance > button > svg,
 .sidebar-palette-trigger > svg,
 .mobile-menu-sheet__appearance > button > svg {
-  color: var(--accent-ink, var(--accent));
+  color: var(--nav-icon-color, var(--accent));
   filter: drop-shadow(
     0 2px 6px
-      color-mix(in srgb, var(--accent-ink, var(--accent)) 38%, transparent)
+      color-mix(in srgb, var(--nav-icon-color, var(--accent)) 38%, transparent)
   );
   transition:
     color 160ms ease,
@@ -432,7 +575,7 @@
 
 .sidebar-appearance > button.sidebar-appearance__settings > svg,
 .mobile-menu-sheet__appearance > button[data-dock-item="settings"] > svg {
-  color: var(--nav-icon-color, var(--accent-ink, var(--accent)));
+  color: var(--nav-icon-color, var(--accent));
 }
 
 .sidebar-palette-wrap {
@@ -769,19 +912,22 @@
 }
 
 :root[data-theme="light"] .sidebar-appearance {
-  background: var(--sidebar-control-surface);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 72%, transparent),
-    inset 1px 0 0 color-mix(in srgb, white 42%, transparent),
-    0 9px 22px color-mix(in srgb, var(--text) 10%, transparent),
-    0 2px 9px color-mix(in srgb, var(--accent-shadow) 18%, transparent);
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="light"] .sidebar-appearance > button,
+:root[data-theme="light"] .sidebar-appearance .sidebar-palette-wrap {
+  background: color-mix(in srgb, var(--surface) 80%, white);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 :root[data-theme="light"] .sidebar-appearance > button.is-active,
 :root[data-theme="light"] .sidebar-palette-trigger[aria-pressed="true"] {
   color: var(--text);
-  background: var(--sidebar-menu-active-background);
-  box-shadow: var(--sidebar-menu-active-shadow);
+  background: color-mix(in srgb, var(--surface) 90%, white);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .courses-app--collapsed .courses-sidebar {
@@ -790,100 +936,91 @@
 }
 
 .courses-app--collapsed .courses-sidebar__brand {
-  min-height: 36px;
-  justify-content: center;
-  align-items: flex-end;
-  gap: 0;
-  padding: 0;
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 42px !important;
+  padding: 0 !important;
+  margin: 0 auto 6px !important;
+  width: 100% !important;
+  overflow: visible !important;
 }
 
-.courses-app--collapsed .courses-logo-clip {
-  display: none;
+/* When collapsed logo is enabled in settings: single slot with smooth hover swap */
+:root[data-collapsed-sidebar-logo="true"] .courses-app--collapsed .courses-logo-clip {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  width: 30px !important;
+  max-width: 30px !important;
+  height: 34px !important;
+  overflow: hidden !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  margin: 0 auto !important;
+  transition: opacity 150ms ease;
+  clip-path: none !important;
 }
 
-/* In compact mode the optional brand mark occupies the rail by itself. The
-   expand affordance stays quiet until the rail is hovered or focused, keeping
-   the P readable without competing with the navigation icons. */
-:root[data-collapsed-sidebar-logo="true"]
-  .courses-app--collapsed
-  .courses-sidebar__brand {
-  position: relative;
+:root[data-collapsed-sidebar-logo="true"] .courses-app--collapsed .courses-logo-clip svg {
+  display: block !important;
+  width: 176px !important;
+  max-width: none !important;
+  height: auto !important;
+  transform: translate(0, -6px) !important;
 }
 
-:root[data-collapsed-sidebar-logo="false"]
-  .courses-app--collapsed
-  .courses-logo-clip {
+:root[data-collapsed-sidebar-logo="true"] .courses-app--collapsed .sidebar-collapse {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  display: inline-flex !important;
+  width: 32px !important;
+  height: 32px !important;
+  flex: 0 0 32px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 150ms ease, transform 150ms ease !important;
+  z-index: 2 !important;
+}
+
+/* On hover/focus: swap P logo for centered expand button */
+:root[data-collapsed-sidebar-logo="true"] .courses-app--collapsed .courses-sidebar:hover .courses-logo-clip,
+:root[data-collapsed-sidebar-logo="true"] .courses-app--collapsed .courses-sidebar:focus-within .courses-logo-clip {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+:root[data-collapsed-sidebar-logo="true"] .courses-app--collapsed .courses-sidebar:hover .sidebar-collapse,
+:root[data-collapsed-sidebar-logo="true"] .courses-app--collapsed .courses-sidebar:focus-within .sidebar-collapse {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transform: translate(-50%, -50%) !important;
+}
+
+/* When collapsed logo is disabled in settings: show ONLY the centered expand button */
+:root:not([data-collapsed-sidebar-logo="true"]) .courses-app--collapsed .courses-logo-clip,
+:root[data-collapsed-sidebar-logo="false"] .courses-app--collapsed .courses-logo-clip {
   display: none !important;
 }
 
-:root[data-collapsed-sidebar-logo="true"]
-  .courses-app--collapsed
-  .courses-logo-clip {
-  display: block;
-  position: absolute;
-  /* The visible P sits high and fractionally left inside the full wordmark's
-     viewBox. Offset the clipping window so the rendered glyph-not merely its
-     box-shares the expand button's optical center. */
-  top: 3px;
-  left: calc(50% + 3.4px);
-  width: 21px;
-  max-width: 21px;
-  height: 36px;
-  overflow: hidden;
-  opacity: 1;
-  clip-path: inset(0 0 0 0);
-  pointer-events: none;
-  transform: translateX(-50%);
-  transition: none;
-}
-
-:root[data-collapsed-sidebar-logo="true"]
-  .courses-app--collapsed
-  .courses-logo-clip
-  svg {
-  width: 156px;
-  max-width: none;
-  height: 38px;
-}
-
-:root[data-collapsed-sidebar-logo="true"]
-  .courses-app--collapsed
-  .sidebar-collapse {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  right: auto;
-  z-index: 1;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(-50%);
-  transition: opacity 150ms ease;
-}
-
-:root[data-collapsed-sidebar-logo="true"]
-  .courses-app--collapsed
-  .courses-sidebar:hover
-  .sidebar-collapse,
-:root[data-collapsed-sidebar-logo="true"]
-  .courses-app--collapsed
-  .courses-sidebar:focus-within
-  .sidebar-collapse {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-/* Treat the compact mark and expand control as one visual slot. Hovering or
-   keyboard focus swaps the P for the action instead of stacking both marks. */
-:root[data-collapsed-sidebar-logo="true"]
-  .courses-app--collapsed
-  .courses-sidebar:hover
-  .courses-logo-clip,
-:root[data-collapsed-sidebar-logo="true"]
-  .courses-app--collapsed
-  .courses-sidebar:focus-within
-  .courses-logo-clip {
-  opacity: 0;
-  clip-path: inset(0 50% 0 50%);
+:root:not([data-collapsed-sidebar-logo="true"]) .courses-app--collapsed .sidebar-collapse,
+:root[data-collapsed-sidebar-logo="false"] .courses-app--collapsed .sidebar-collapse {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  transform: none !important;
+  display: inline-flex !important;
+  width: 32px !important;
+  height: 32px !important;
+  flex: 0 0 32px !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  margin: 0 auto !important;
+  z-index: 1 !important;
 }
 
 .courses-app--collapsed .courses-nav {
@@ -914,58 +1051,170 @@
 }
 
 .courses-app--collapsed .courses-nav button {
-  width: 100%;
-  justify-content: flex-start;
-  gap: 15px;
-  padding: 0 0 0 12.5px;
+  width: 46px !important;
+  min-width: 46px !important;
+  max-width: 46px !important;
+  height: 46px !important;
+  min-height: 46px !important;
+  padding: 0 !important;
+  margin: 0 auto !important;
+  border-radius: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
   overflow: visible;
 }
 
-.courses-app--collapsed .courses-nav button > .courses-nav__text,
-.courses-app--collapsed .courses-nav button > b,
-.courses-app--collapsed .courses-nav button > .courses-nav__shortcut {
-  display: none;
+.courses-app--collapsed .courses-nav button > svg {
+  width: 22px !important;
+  height: 22px !important;
+  flex: 0 0 22px !important;
+  margin: 0 !important;
+}
+
+.courses-app--collapsed .courses-nav button.is-active,
+.courses-app--collapsed .courses-nav button.courses-nav__button--active {
+  background: var(--sidebar-menu-active-background) !important;
+  box-shadow: var(--sidebar-menu-active-shadow) !important;
+  border-color: color-mix(in srgb, var(--text) 12%, transparent) !important;
+}
+
+.courses-app--collapsed .courses-nav button.is-active > svg,
+.courses-app--collapsed .courses-nav button.courses-nav__button--active > svg {
+  color: #ffffff !important;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 85%, transparent)) !important;
+}
+
+:root[data-theme="light"] .courses-app--collapsed .courses-nav button.is-active > svg,
+:root[data-theme="light"] .courses-app--collapsed .courses-nav button.courses-nav__button--active > svg {
+  color: var(--accent) !important;
+  filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.12)) !important;
+}
+
+.courses-app--collapsed .courses-nav button:hover:not(.is-active) {
+  background: color-mix(in srgb, var(--surface-strong) 42%, transparent) !important;
+  border-color: color-mix(in srgb, var(--text) 8%, transparent) !important;
+}
+
+.courses-app--collapsed .courses-nav button > *:not(svg) {
+  display: none !important;
 }
 
 .courses-app--collapsed .courses-profile__button {
-  height: 57px;
-  min-height: 57px;
+  width: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  padding: 0 !important;
+  margin: 0 auto !important;
+  border-radius: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   gap: 0;
-  justify-content: flex-start;
-  padding: 7px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-strong) 78%, var(--app-shell)) 0%,
+    color-mix(in srgb, var(--surface) 48%, var(--app-shell)) 100%
+  ) !important;
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 4px 12px -1px rgba(0, 0, 0, 0.45),
+    0 2px 5px rgba(0, 0, 0, 0.3) !important;
+  transition: all 180ms ease !important;
+}
+
+.courses-app--collapsed .courses-profile__button:hover {
+  transform: translateY(-1px) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 6px 16px -2px rgba(0, 0, 0, 0.55),
+    0 3px 8px rgba(0, 0, 0, 0.35) !important;
+}
+
+.courses-app--collapsed .courses-profile__button:active {
+  transform: translateY(1px) !important;
 }
 
 .courses-app--collapsed .courses-profile__button > .shell-profile-avatar,
 .courses-app--collapsed .courses-profile__button img {
-  width: 43px;
-  height: 43px;
+  width: 28px !important;
+  height: 28px !important;
+  flex: 0 0 28px !important;
+  margin: 0 !important;
 }
 
-.courses-app--collapsed .courses-profile__button > .shell-profile-avatar {
-  display: inline-flex;
-  flex: 0 0 auto;
+.courses-app--collapsed .courses-profile__button > *:not(.shell-profile-avatar) {
+  display: none !important;
 }
 
 .courses-app--collapsed .courses-profile {
-  margin-top: 6px;
+  margin-top: auto;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: center;
+  width: 100%;
 }
 
 .courses-app--collapsed .sidebar-appearance {
-  margin-top: 6px;
+  margin-top: 0;
   align-items: center;
   flex-direction: column;
-  padding: 8px;
+  gap: 8px;
+  padding: 0;
+  width: 100%;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
-.courses-app--collapsed .sidebar-appearance > button {
-  display: inline-flex;
-  width: 42px;
-  flex: 0 0 38px;
-}
-
+.courses-app--collapsed .sidebar-appearance > button,
 .courses-app--collapsed .sidebar-palette-wrap {
-  width: 42px;
-  flex: 0 0 38px;
+  width: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  flex: 0 0 44px !important;
+  padding: 0 !important;
+  margin: 0 auto !important;
+  border-radius: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-strong) 78%, var(--app-shell)) 0%,
+    color-mix(in srgb, var(--surface) 48%, var(--app-shell)) 100%
+  ) !important;
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 4px 12px -1px rgba(0, 0, 0, 0.45),
+    0 2px 5px rgba(0, 0, 0, 0.3) !important;
+  transition: all 180ms ease !important;
+}
+
+.courses-app--collapsed .sidebar-appearance > button:hover,
+.courses-app--collapsed .sidebar-palette-wrap:hover {
+  transform: translateY(-1px) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 6px 16px -2px rgba(0, 0, 0, 0.55),
+    0 3px 8px rgba(0, 0, 0, 0.35) !important;
+}
+
+.courses-app--collapsed .sidebar-appearance > button:active,
+.courses-app--collapsed .sidebar-palette-wrap:active {
+  transform: translateY(1px) !important;
 }
 
 .courses-app--collapsed .sidebar-palette-menu {
@@ -1468,10 +1717,9 @@
 }
 
 :root .courses-app:not(.courses-app--hidden) .courses-sidebar {
-  border: 0;
-  background: transparent;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+  border-radius: 22px;
+  -webkit-backdrop-filter: blur(28px) saturate(1.2);
+  backdrop-filter: blur(28px) saturate(1.2);
 }
 
 .courses-app--hidden .courses-sidebar {

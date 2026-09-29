@@ -4,14 +4,25 @@ import type {
 } from "@veolms/contracts";
 
 type RuntimeProcess = typeof globalThis & {
-  process?: { env?: Record<string, string | undefined> };
+  process?: {
+    env?: {
+      VEO_PUBLIC_API_BASE_URL?: string;
+      VEO_REACT_ROUTER_BUILD?: string;
+    };
+  };
 };
 
 function resolveApiUrl(requestUrl: string, path: string): URL {
-  const runtimeBase = (globalThis as RuntimeProcess).process?.env
-    ?.VEO_PUBLIC_API_BASE_URL;
+  const runtimeEnvironment = (globalThis as RuntimeProcess).process?.env;
+  const isStaticBuild = runtimeEnvironment?.VEO_REACT_ROUTER_BUILD === "true";
+  const staticBuildBase = isStaticBuild
+    ? import.meta.env.STATIC_BUILD_API_URL
+    : undefined;
   const configuredBase =
-    runtimeBase || import.meta.env.VITE_API_BASE_URL || "/v1";
+    staticBuildBase ||
+    runtimeEnvironment?.VEO_PUBLIC_API_BASE_URL ||
+    import.meta.env.VITE_API_BASE_URL ||
+    "/v1";
   const normalizedBase = configuredBase.endsWith("/")
     ? configuredBase
     : `${configuredBase}/`;
@@ -46,19 +57,10 @@ async function requestPublicData<T>(
 
 export const publicCourseApi = {
   async list(request: Request): Promise<CourseListResponse> {
-    const courses: CourseListResponse["courses"] = [];
-    let cursor: string | undefined;
-    do {
-      const query = new URLSearchParams({ limit: "50" });
-      if (cursor) query.set("cursor", cursor);
-      const page = await requestPublicData<CourseListResponse>(
-        request,
-        `courses?${query.toString()}`,
-      );
-      courses.push(...page.courses);
-      cursor = page.nextCursor;
-    } while (cursor);
-    return { courses };
+    // The public catalogue endpoint returns every published course when no
+    // pagination limit is supplied. Keep the static page to one request; the
+    // build already uses this endpoint to discover the catalogue's route set.
+    return requestPublicData(request, "courses");
   },
   overview(
     request: Request,

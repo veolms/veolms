@@ -1,29 +1,23 @@
-import type { AuthMenuNode } from "@veolms/contracts";
 import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
-import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
+import { BrainIcon as Brain } from "@phosphor-icons/react/Brain";
+import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
 import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
 import { HouseIcon as House } from "@phosphor-icons/react/House";
-import { StarIcon as Star } from "@phosphor-icons/react/Star";
-import { ToteIcon as Tote } from "@phosphor-icons/react/Tote";
-import { UsersIcon as Users } from "@phosphor-icons/react/Users";
-import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
-import { EnvelopeSimpleIcon as EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
 import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
+import { ToteIcon as Tote } from "@phosphor-icons/react/Tote";
+import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import type { Icon } from "@phosphor-icons/react";
 import type { SidebarPreferences } from "../settings/settingsPreferences";
-
-import { ChatTeardropDotsIcon as ChatTeardropDots } from "@phosphor-icons/react/ChatTeardropDots";
-import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 
 export interface NavigationItemMetadata {
   id: string;
   routeLink: string;
   parentId: string | null;
-  source: "server" | "default";
+  source: "static" | "default";
 }
 
 export type NavigationItem = readonly [
@@ -32,18 +26,40 @@ export type NavigationItem = readonly [
   metadata?: NavigationItemMetadata,
 ];
 
-export type DynamicNavigationItem = readonly [
-  label: string,
-  icon: Icon,
-  metadata: NavigationItemMetadata,
-];
-
 export type NavigationItemWithMetadata = NavigationItem;
 
-const requiredNavigationLabels = new Set([
-  "Courses",
-  "Settings",
-]);
+type SystemRole =
+  | "admin"
+  | "instructor"
+  | "student"
+  | "course_manager"
+  | "content_editor"
+  | "thumbnail_editor"
+  | "teaching_assistant"
+  | "reviewer"
+  | "analytics_viewer";
+
+interface StaticMenuDefinition {
+  id: string;
+  label: string;
+  routeLink: string;
+  icon: Icon;
+  roles: readonly SystemRole[];
+}
+
+const allRoles: readonly SystemRole[] = [
+  "admin",
+  "instructor",
+  "student",
+  "course_manager",
+  "content_editor",
+  "thumbnail_editor",
+  "teaching_assistant",
+  "reviewer",
+  "analytics_viewer",
+];
+
+const requiredNavigationLabels = new Set(["Courses", "Settings"]);
 
 const publicNavigation: readonly NavigationItem[] = [
   [
@@ -68,85 +84,227 @@ const publicNavigation: readonly NavigationItem[] = [
   ],
 ];
 
-const menuIcons: Record<string, Icon> = {
-  Bell,
-  BookOpen,
-  ChartBar,
-  ChatCircleDots,
-  ChatTeardropDots,
-  CheckCircle,
-  EnvelopeSimple,
-  GearSix,
-  GraduationCap,
-  Heart,
-  House,
-  SquaresFour,
-  Star,
-  Tag,
-  Tote,
-  Users,
-};
-
-const getMenuIcon = (iconName: string | null): Icon =>
-  (iconName && menuIcons[iconName]) || SquaresFour;
-
 /**
- * Converts the server's effective RBAC menu tree to the shell's flat
- * navigation shape.
+ * Static presentation data for the system roles currently seeded by the API.
+ * Order matches the latest modern academy sidebar design.
  */
-export function getNavigationItemsFromMenus(
-  menus: readonly AuthMenuNode[] | null | undefined,
-): DynamicNavigationItem[] {
-  if (!menus?.length) return [];
+const staticMenus: readonly StaticMenuDefinition[] = [
+  {
+    id: "00000000-0000-4000-9000-000000000001",
+    label: "Dashboard",
+    routeLink: "/dashboard",
+    icon: SquaresFour,
+    roles: ["admin", "instructor", "course_manager"],
+  },
+  {
+    id: "00000000-0000-4000-9000-000000000008",
+    label: "Home",
+    routeLink: "/home",
+    icon: House,
+    roles: ["admin", "student"],
+  },
+  {
+    id: "00000000-0000-4000-9000-000000000002",
+    label: "Courses",
+    routeLink: "/courses",
+    icon: GraduationCap,
+    roles: [
+      "admin",
+      "instructor",
+      "course_manager",
+      "content_editor",
+      "thumbnail_editor",
+      "teaching_assistant",
+      "reviewer",
+      "analytics_viewer",
+      "student",
+    ],
+  },
+  {
+    id: "00000000-0000-4000-9000-000000000013",
+    label: "Wishlist",
+    routeLink: "/wishlist",
+    icon: Heart,
+    roles: ["admin", "student"],
+  },
+  {
+    id: "00000000-0000-4000-9000-000000000004",
+    label: "Discussions",
+    routeLink: "/discussions",
+    icon: ChatCircleDots,
+    roles: [
+      "admin",
+      "instructor",
+      "student",
+      "course_manager",
+      "content_editor",
+      "teaching_assistant",
+    ],
+  },
+  {
+    id: "00000000-0000-4000-9000-000000000014",
+    label: "Order History",
+    routeLink: "/order-history",
+    icon: Tote,
+    roles: ["admin", "student"],
+  },
+  {
+    id: "00000000-0000-4000-9000-000000000010",
+    label: "Notification",
+    routeLink: "/notifications",
+    icon: Bell,
+    roles: ["admin", "student"],
+  },
+  {
+    id: "00000000-0000-4000-9000-000000000003",
+    label: "Students",
+    routeLink: "/students",
+    icon: Users,
+    roles: ["admin", "instructor", "course_manager", "teaching_assistant"],
+  },
+  {
+    id: "00000000-0000-4000-9000-000000000005",
+    label: "Analytics",
+    routeLink: "/analytics",
+    icon: ChartBar,
+    roles: ["admin", "instructor", "course_manager", "analytics_viewer"],
+  },
+  {
+    id: "00000000-0000-4000-9000-000000000006",
+    label: "Orders",
+    routeLink: "/orders",
+    icon: Tote,
+    roles: ["admin", "instructor"],
+  },
+  {
+    id: "00000000-0000-4000-9000-000000000018",
+    label: "Coupons",
+    routeLink: "/coupons",
+    icon: Tag,
+    roles: ["admin"],
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000701",
+    label: "Quizzes",
+    routeLink: "/quizzes",
+    icon: Brain,
+    roles: [
+      "admin",
+      "instructor",
+      "student",
+      "course_manager",
+      "content_editor",
+      "teaching_assistant",
+      "reviewer",
+    ],
+  },
+  {
+    id: "00000000-0000-4000-9000-000000000007",
+    label: "Settings",
+    routeLink: "/settings",
+    icon: GearSix,
+    roles: ["admin", "instructor", "student", "course_manager"],
+  },
+];
 
-  const items: DynamicNavigationItem[] = [];
-  const seenLabels = new Set<string>();
+const adminRoleAliases = new Set([
+  "admin",
+  "administrator",
+  "platform_admin",
+  "platform_administrator",
+  "platform administrator",
+]);
 
-  const visit = (nodes: readonly AuthMenuNode[]) => {
-    for (const menu of nodes) {
-      if (
-        menu.label === "Learning Space" ||
-        menu.routeLink === "/learning-space" ||
-        menu.id === "00000000-0000-4000-9000-000000000009"
-      ) {
-        if (menu.children?.length) visit(menu.children);
-        continue;
-      }
+function normalizeSystemRoles(
+  roles: readonly string[] | null | undefined,
+): Set<SystemRole> {
+  const normalized = new Set<SystemRole>();
 
-      // The current shell is label-oriented for drag/drop and preference
-      // persistence. Keep the first effective entry when an admin receives
-      // both student and instructor variants of the same menu label.
-      if (!seenLabels.has(menu.label)) {
-        seenLabels.add(menu.label);
-        items.push([
-          menu.label,
-          getMenuIcon(menu.icon),
-          {
-            id: menu.id,
-            routeLink: menu.routeLink,
-            parentId: menu.parentId,
-            source: "server",
-          },
-        ]);
-      }
+  for (const rawRole of roles ?? []) {
+    const role = rawRole.trim().toLowerCase();
+    const normalizedRole = role.replace(/\s+/g, "_");
 
-      if (menu.children?.length) visit(menu.children);
+    if (adminRoleAliases.has(role) || adminRoleAliases.has(normalizedRole)) {
+      normalized.add("admin");
+      continue;
     }
-  };
 
-  visit(menus);
-  return items;
+    if (normalizedRole === "creator") {
+      normalized.add("instructor");
+      continue;
+    }
+
+    if (allRoles.includes(normalizedRole as SystemRole)) {
+      normalized.add(normalizedRole as SystemRole);
+    }
+  }
+
+  return normalized;
 }
 
-export function hasNavigationMenu(
-  menus: readonly AuthMenuNode[] | null | undefined,
-  label: string,
-): boolean {
-  if (!menus?.length) return false;
+function getStaticNavigationItems(
+  roles: readonly string[] | null | undefined,
+): NavigationItemWithMetadata[] {
+  const normalizedRoles = normalizeSystemRoles(roles);
+  if (normalizedRoles.size === 0) return [...publicNavigation];
 
-  return menus.some(
-    (menu) => menu.label === label || hasNavigationMenu(menu.children, label),
+  const items = staticMenus
+    .filter((menu) => menu.roles.some((role) => normalizedRoles.has(role)))
+    .map<NavigationItemWithMetadata>((menu) => [
+      menu.label,
+      menu.icon,
+      {
+        id: menu.id,
+        routeLink: menu.routeLink,
+        parentId: null,
+        source: "static",
+      },
+    ]);
+
+  const seenLabels = new Set<string>();
+  const uniqueItems = items.filter(([label]) => {
+    if (seenLabels.has(label)) return false;
+    seenLabels.add(label);
+    return true;
+  });
+
+  // Preserve the old shell's Coupons fallback for authenticated roles that
+  // received Courses through the seeded menu tree, while making that behavior
+  // explicit in this static catalog path. Guests still receive public links.
+  const hasCoupons = uniqueItems.some(([label]) => label === "Coupons");
+  const hasStaffMenus = uniqueItems.some(([label]) =>
+    [
+      "Dashboard",
+      "Courses",
+      "Students",
+      "Analytics",
+      "Orders",
+      "Quizzes",
+      "Reviews",
+    ].includes(label),
   );
+  if (hasStaffMenus && !hasCoupons) {
+    const couponItem: NavigationItemWithMetadata = [
+      "Coupons",
+      Tag,
+      {
+        id: "default-coupons",
+        routeLink: "/coupons",
+        parentId: null,
+        source: "static",
+      },
+    ];
+    const insertIndex = uniqueItems.findIndex(([label]) =>
+      ["Orders", "Courses", "Analytics"].includes(label),
+    );
+    uniqueItems.splice(
+      insertIndex === -1 ? uniqueItems.length : insertIndex + 1,
+      0,
+      couponItem,
+    );
+  }
+
+  return uniqueItems.length > 0 ? uniqueItems : [...publicNavigation];
 }
 
 export function getPublicNavigationItems(): readonly NavigationItem[] {
@@ -154,69 +312,51 @@ export function getPublicNavigationItems(): readonly NavigationItem[] {
 }
 
 /**
- * Sidebar items for the current session. The navigation endpoint is the sole
- * source of truth for effective menus and RBAC visibility; `/auth/me` only
- * supplies identity/session data.
+ * Resolves the shell navigation from the authenticated user's static role map.
+ * Unauthenticated users always receive the two public destinations while
+ * authenticated users with unknown roles fail closed to those same links.
  */
 export function resolveShellNavigation(
-  menus: readonly AuthMenuNode[] | null | undefined,
+  roles: readonly string[] | null | undefined,
+  isAuthenticated: boolean,
 ): {
   items: readonly NavigationItemWithMetadata[];
   isDefault: boolean;
 } {
-  // While the authenticated menu request is in flight, show only the two
-  // public destinations. This keeps the shell usable without briefly exposing
-  // a stale account's role-specific navigation.
-  if (menus == null) {
+  if (!isAuthenticated) {
     return { items: publicNavigation, isDefault: true };
   }
 
-  const serverItems = getNavigationItemsFromMenus(menus);
-  const hasStaffMenus = serverItems.some(([label]) =>
-    ["Dashboard", "Courses", "Students", "Analytics", "Orders", "Quizzes", "Reviews"].includes(label),
-  );
-  const hasCoupons = serverItems.some(([label]) => label === "Coupons");
-  if (hasStaffMenus && !hasCoupons) {
-    const couponsItem: DynamicNavigationItem = [
-      "Coupons",
-      Tag,
-      {
-        id: "default-coupons",
-        routeLink: "/coupons",
-        parentId: null,
-        source: "server",
-      },
-    ];
-    const insertIdx = serverItems.findIndex(
-      ([label]) => label === "Orders" || label === "Courses" || label === "Analytics",
-    );
-    if (insertIdx !== -1) {
-      serverItems.splice(insertIdx + 1, 0, couponsItem);
-    } else {
-      serverItems.push(couponsItem);
-    }
-  }
-  return { items: serverItems, isDefault: false };
+  return {
+    items: getStaticNavigationItems(roles),
+    isDefault: false,
+  };
 }
 
 const navigationTones: Record<string, string> = {
-  Home: "#5da9ff",
-  Dashboard: "#5da9ff",
-  Courses: "#8f70ff",
+  Home: "#38bdf8",
+  Dashboard: "#38bdf8",
+  Courses: "#a855f7",
+  "My Courses": "#a855f7",
   Coupons: "#fbbf24",
-  Students: "#55d98b",
-  Wishlist: "#ff6684",
-  Reviews: "#f1be4b",
-  "My Quiz": "#47d4d0",
-  Discussions: "#58a8ff",
-  Analytics: "#f09c4e",
-  Orders: "#d68eea",
-  "Order History": "#d68eea",
-  Messages: "#63c8d5",
-  Notifications: "#f1be4b",
-  Settings: "#a16cff",
-  Fullscreen: "#ff8a55",
-  Logout: "#8c9294",
+  Students: "#4ade80",
+  Wishlist: "#f43f5e",
+  Reviews: "#facc15",
+  "My Quiz": "#2dd4bf",
+  Quizzes: "#2dd4bf",
+  Discussions: "#38bdf8",
+  Analytics: "#fb923c",
+  Orders: "#e879f9",
+  "Order History": "#e879f9",
+  Messages: "#38bdf8",
+  Notification: "#facc15",
+  Notifications: "#facc15",
+  Settings: "#c084fc",
+  Fullscreen: "#fb923c",
+  Appearance: "#818cf8",
+  "Reading Mode": "#38bdf8",
+  Theme: "#f472b6",
+  Logout: "#94a3b8",
 };
 
 export function getDefaultNavigationOrder(
@@ -326,7 +466,10 @@ export function getInitialNavigationVisibility(
         normalizedVisibility.indexOf(label) === index,
     );
     if (!menuSetChanged) {
-      return ensureRequiredNavigationVisibility(savedVisibility, navigationItems);
+      return ensureRequiredNavigationVisibility(
+        savedVisibility,
+        navigationItems,
+      );
     }
 
     const newlyAvailableLabels = navigationItems
@@ -391,11 +534,13 @@ export function getVisibleOrderedNavigation(
 }
 
 export function getMobilePrimaryNavigation(
-  role: string,
+  _role: string,
   navigation: readonly NavigationItemWithMetadata[],
 ): NavigationItemWithMetadata[] {
-  const capacity = role === "student" ? 3 : 4;
-  return navigation.slice(0, capacity);
+  const capacity = 3;
+  return navigation
+    .filter(([label]) => label !== "Settings")
+    .slice(0, capacity);
 }
 
 export function getMobileOverflowNavigation(

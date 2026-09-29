@@ -86,8 +86,8 @@ jobs:
         id: generate
         run: pnpm --filter @veolms/web refresh:course-pages
         env:
-          VEO_PUBLIC_API_BASE_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL || vars.VITE_API_BASE_URL || 'https://api.procodrr.dev/v1' }}
-          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'https://api.procodrr.dev/v1' }}
+          VEO_PUBLIC_API_BASE_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL || vars.VITE_API_BASE_URL || 'https://api-origin.dev.veolms.org/v1' }}
+          VITE_API_BASE_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL || vars.VITE_API_BASE_URL || 'https://api-origin.dev.veolms.org/v1' }}
           COURSE_STATIC_COURSE_ID: ${{ inputs.course_id }}
           COURSE_STATIC_COURSE_SLUG: ${{ inputs.course_slug }}
 
