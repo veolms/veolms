@@ -31,8 +31,8 @@ const SIDEBAR_MAX_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH_LIMIT = 520;
 export const SIDEBAR_DEFAULT_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH_DEFAULT_VERSION = "300px-v1";
-const SIDEBAR_ICON_DEFAULT_VERSION = "monochrome-theme-v1";
-const SIDEBAR_DOCK_DEFAULT_VERSION = "three-controls-v2";
+const SIDEBAR_ICON_DEFAULT_VERSION = "multicolor-v3";
+const SIDEBAR_DOCK_DEFAULT_VERSION = "three-controls-v5-settings";
 const LEGACY_SIDEBAR_DOCK_DEFAULT_ITEMS = [
   "appearance",
   "theme",
@@ -201,10 +201,10 @@ export const getSidebarShellBootstrapScript = () =>
   `(()=>{const r=document.documentElement,d=${SIDEBAR_DEFAULT_WIDTH},n=${SIDEBAR_MIN_WIDTH},x=${SIDEBAR_MAX_WIDTH_LIMIT},q=matchMedia(${JSON.stringify(COMPACT_NAVIGATION_QUERY)}).matches;let m="expanded",w=d,a=${SIDEBAR_MAX_WIDTH};try{const s=localStorage.getItem("veolms-sidebar-mode"),l=localStorage.getItem("veolms-sidebar-collapsed");m=s==="expanded"||s==="collapsed"||s==="hidden"?s:l!==null?(l==="true"?"collapsed":"expanded"):(matchMedia(${JSON.stringify(SIDEBAR_RESPONSIVE_COLLAPSE_QUERY)}).matches?"collapsed":"expanded");if(localStorage.getItem("veolms-sidebar-max-width-default-version")===${JSON.stringify(SIDEBAR_MAX_WIDTH_DEFAULT_VERSION)}){const p=JSON.parse(localStorage.getItem("veolms-sidebar-preferences")||"{}"),v=Number(p&&p.sidebarMaxWidth);if(Number.isFinite(v))a=Math.min(x,Math.max(n,v))}const v=Number(localStorage.getItem("veolms-sidebar-width"));if(Number.isFinite(v)&&String(localStorage.getItem("veolms-sidebar-width")||"").trim())w=Math.min(a,Math.max(n,v))}catch{}const s={mode:m,width:w};window.__VEO_BOOTSTRAP__={sidebar:s,navigation:{compact:q}};r.dataset.sidebarState=m;r.dataset.navigationLayout=q?"compact":"wide";r.style.setProperty("--sidebar-width",w+"px");r.style.setProperty("--sidebar-expanded-width",w+"px")})();`;
 
 export const getSidebarPresentationBootstrapScript = () =>
-  `(()=>{const r=document.documentElement;try{const p=JSON.parse(localStorage.getItem("veolms-sidebar-preferences")||"{}");r.dataset.collapsedTooltips=String(p.showCollapsedLabels!==false);r.dataset.collapsedSidebarLogo=String(p.showCollapsedLogo!==false);r.dataset.activeFill=String(p.highlightActive!==false);r.dataset.sidebarMonochromeMode=p.monochromeMode==="neutral"||p.monochromeMode==="custom"?p.monochromeMode:"theme";r.style.setProperty("--sidebar-monochrome-color",typeof p.monochromeColor==="string"&&p.monochromeColor?p.monochromeColor:"#6c78ff")}catch{r.dataset.collapsedTooltips="true";r.dataset.collapsedSidebarLogo="true";r.dataset.activeFill="true";r.dataset.sidebarMonochromeMode="theme";r.style.setProperty("--sidebar-monochrome-color","#6c78ff")}})();`;
+  `(()=>{const r=document.documentElement;try{const p=JSON.parse(localStorage.getItem("veolms-sidebar-preferences")||"{}");r.dataset.sidebarIconStyle=p.iconStyle||"multicolor";r.dataset.collapsedTooltips=String(p.showCollapsedLabels!==false);r.dataset.collapsedSidebarLogo=String(p.showCollapsedLogo!==false);r.dataset.activeFill=String(p.highlightActive!==false);r.dataset.sidebarMonochromeMode=p.monochromeMode==="neutral"||p.monochromeMode==="custom"?p.monochromeMode:"theme";r.style.setProperty("--sidebar-monochrome-color",typeof p.monochromeColor==="string"&&p.monochromeColor?p.monochromeColor:"#6c78ff")}catch{r.dataset.sidebarIconStyle="multicolor";r.dataset.collapsedTooltips="true";r.dataset.collapsedSidebarLogo="true";r.dataset.activeFill="true";r.dataset.sidebarMonochromeMode="theme";r.style.setProperty("--sidebar-monochrome-color","#6c78ff")}})();`;
 
 export const getDefaultSidebarPreferences = (): SidebarPreferences => ({
-  iconStyle: "monochrome",
+  iconStyle: "multicolor",
   monochromeMode: "theme",
   monochromeColor: "#6c78ff",
   contentLayout: "framed",
@@ -282,16 +282,14 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
     const hasCurrentDockDefault =
       localStorage.getItem("veolms-sidebar-dock-default-version") ===
       SIDEBAR_DOCK_DEFAULT_VERSION;
-    const usesKnownLegacyDockDefault =
-      localStorage.getItem("veolms-sidebar-dock-default-version") ===
-        "four-controls-v1" &&
-      JSON.stringify(storedPreferences.dockItems) ===
-        JSON.stringify(LEGACY_SIDEBAR_DOCK_DEFAULT_ITEMS) &&
-      JSON.stringify(storedPreferences.dockOrder) ===
-        JSON.stringify(LEGACY_SIDEBAR_DOCK_DEFAULT_ORDER);
+    const hasLegacyFullscreenDock =
+      Array.isArray(storedPreferences.dockItems) &&
+      storedPreferences.dockItems.includes("fullscreen") &&
+      !storedPreferences.dockItems.includes("settings");
     const needsDockDefaultMigration =
-      !hasCurrentDockDefault &&
-      (storedPreferences.dockItems === undefined || usesKnownLegacyDockDefault);
+      !hasCurrentDockDefault ||
+      storedPreferences.dockItems === undefined ||
+      hasLegacyFullscreenDock;
     preferences.dockItems =
       needsDockDefaultMigration && storedPreferences.showThemeIcon !== false
         ? [...SIDEBAR_DOCK_DEFAULT_ITEMS]
@@ -331,14 +329,14 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
       SIDEBAR_ICON_DEFAULT_VERSION;
     const needsIconMigration = !hasCurrentIconDefault;
     if (needsIconMigration) {
-      preferences.iconStyle = "monochrome";
-      preferences.monochromeMode = "theme";
+      preferences.iconStyle = "multicolor";
     }
 
     if (
       needsMaxWidthMigration ||
       needsIconMigration ||
       needsStructureMigration ||
+      needsDockDefaultMigration ||
       !hasCurrentDockDefault ||
       !hasCurrentHeaderDefault
     ) {
@@ -361,7 +359,7 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
         );
       }
 
-      if (!hasCurrentDockDefault) {
+      if (!hasCurrentDockDefault || needsDockDefaultMigration) {
         localStorage.setItem(
           "veolms-sidebar-dock-default-version",
           SIDEBAR_DOCK_DEFAULT_VERSION,

@@ -82,7 +82,7 @@ import { QuizAttemptPanel } from "../quizzes/QuizAttemptPanel";
 import { useCourseOverview } from "../services/courses";
 import { useCourseQuizAssignments } from "../services/quizzes/quizzes.queries";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
-import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
+import { BrainIcon as Brain } from "@phosphor-icons/react/Brain";
 import { adaptCourseOverviewToCurriculum } from "./courseCurriculumAdapter";
 import {
   getCachedVideoPlaybackBootstrap,
@@ -2512,7 +2512,7 @@ export function LearningWorkspace({
               : "Open lesson quiz"
           }
         >
-          <Exam size={12} weight="bold" className="text-(--accent)" />
+          <Brain size={12} weight="bold" className="text-(--accent)" />
           <span>
             {activeLessonView === "quiz" ? "Back to video" : "Quiz"}
           </span>
@@ -2590,7 +2590,7 @@ export function LearningWorkspace({
                         <span>Back to video</span>
                       </button>
                       <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
-                        <Exam
+                        <Brain
                           size={14}
                           className="text-(--accent)"
                           weight="bold"
@@ -2621,7 +2621,7 @@ export function LearningWorkspace({
             ) : isDedicatedQuizLesson && !hasLessonQuiz(selectedLesson) ? (
               <div className="w-full max-w-4xl mx-auto p-8 sm:p-12 text-center">
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
-                  <Exam size={28} weight="duotone" />
+                  <Brain size={28} weight="duotone" />
                 </div>
                 <h2 className="text-base font-semibold text-(--text)">
                   Quiz Assessment Not Available

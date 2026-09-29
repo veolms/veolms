@@ -1,10 +1,62 @@
-/* Settings workspace */
+/* Settings workspace framing — matches Course Wizard architecture:
+   Header & Tabs pinned at the top, tab content scrolls smoothly in its own pane */
+.courses-main:has(.settings-page),
+.courses-main:has(.settings-tabs),
+.student-surface-main:has(.settings-page),
+.student-surface-main:has(.settings-tabs),
+.courses-main.courses-main--settings {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+}
+
+@media (max-width: 640px) {
+  :root:has(.settings-page),
+  :root:has(.settings-page) body {
+    height: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
+  }
+
+  .courses-app:has(.settings-page) {
+    height: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    align-items: stretch !important;
+    grid-template-rows: 1fr !important;
+    padding: 8px 8px 0 8px !important;
+    box-sizing: border-box !important;
+  }
+
+  .courses-main-frame:has(.settings-page) {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+}
+
 .settings-page {
   --settings-page-inline-gutter: 0px;
-  min-width: 0;
-  min-height: 100%;
-  padding: 0;
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 0% !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
   color: var(--text);
+  box-sizing: border-box !important;
 }
 
 /* Page/content tabs share one semantic color contract. Monochrome remains the
@@ -109,68 +161,151 @@
 }
 
 .settings-tabs {
-  --settings-tab-nav-bleed: clamp(16px, 2.25vw, 25px);
-  position: sticky;
-  top: var(--page-tabs-sticky-top, 0px);
-  z-index: 25;
-  display: flex;
-  min-width: 0;
-  margin: 26px calc(-1 * var(--settings-tab-nav-bleed)) 0;
-  padding: 6px var(--settings-tab-nav-bleed) 0;
-  gap: 8px;
-  overflow-x: auto;
-  background: color-mix(in srgb, var(--main-surface) 94%, transparent);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  position: relative !important;
+  top: 0 !important;
+  z-index: 30 !important;
+  display: flex !important;
+  align-items: center !important;
+  flex-shrink: 0 !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 var(--application-page-inline-gutter, 25px) !important;
+  gap: 8px !important;
+  overflow-x: auto !important;
+  background: color-mix(in srgb, var(--main-surface) 96%, transparent) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
   border-bottom: 1px solid
-    color-mix(in srgb, var(--surface-strong) 72%, transparent);
+    color-mix(in srgb, var(--text) 12%, transparent) !important;
+  scrollbar-width: none;
 }
 
-.settings-tabs button {
-  position: relative;
-  display: inline-flex;
-  min-height: 46px;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 8px 8px 0 0;
-  padding: 0 14px;
-  color: var(--muted);
-  background: transparent;
-  font-size: 0.82rem;
-  font-weight: 600;
-  transition: none;
+.settings-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+:root[data-theme="light"] .settings-tabs {
+  border-bottom-color: color-mix(in srgb, var(--text) 14%, transparent) !important;
+  background: color-mix(in srgb, var(--main-surface) 96%, transparent) !important;
+}
+
+.settings-tabs button,
+.settings-tabs [role="tab"] {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-direction: row !important;
+  gap: 8px !important;
+  min-height: 48px !important;
+  padding: 0 14px !important;
+  font-size: 0.82rem !important;
+  font-weight: 600 !important;
+  color: var(--muted) !important;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 8px 8px 0 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease !important;
+}
+
+.settings-tabs button svg,
+.settings-tabs [role="tab"] svg {
+  display: inline-block !important;
+  flex-shrink: 0 !important;
 }
 
 .settings-tabs .page-tabs__indicator {
-  transition: none;
-  will-change: auto;
+  position: absolute !important;
+  z-index: 2 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: var(--page-tab-indicator-width) !important;
+  height: 2px !important;
+  border-radius: 999px 999px 0 0 !important;
+  background: var(--page-tab-indicator-color, var(--accent)) !important;
+  opacity: 1 !important;
+  pointer-events: none !important;
+  transform: translate3d(var(--page-tab-indicator-left, 0px), 0, 0) !important;
+  transition:
+    width 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 200ms ease-out !important;
+  will-change: width, transform !important;
 }
 
-.settings-tabs button:hover {
-  color: var(--text);
-  background: color-mix(in srgb, var(--surface) 48%, transparent);
+.settings-tabs [role="tab"].is-active,
+.settings-tabs button.is-active {
+  color: var(--page-tab-active-ink, var(--accent)) !important;
+  border-bottom-color: transparent !important;
 }
-.settings-page > .settings-tabs button:hover {
-  background: transparent;
+
+.settings-tabs [role="tab"]:hover:not(.is-active):not(:disabled),
+.settings-tabs button:hover:not(.is-active):not(:disabled) {
+  color: var(--text) !important;
+  background: transparent !important;
 }
+
+.settings-tabs [role="tab"]:focus-visible,
 .settings-tabs button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
-}
-.settings-tabs button.is-active {
-  border-bottom-color: var(--page-tab-active-indicator);
-  color: var(--page-tab-active-ink);
+  border-radius: 6px;
 }
 
 .settings-tab-content {
-  --settings-tab-swipe-bleed: calc(clamp(16px, 2.25vw, 25px) + 5px);
-  --swipeable-tab-panel-inline-start: var(--settings-tab-swipe-bleed);
-  --swipeable-tab-panel-inline-end: var(--settings-tab-swipe-bleed);
+  --swipeable-tab-panel-inline-start: 0px !important;
+  --swipeable-tab-panel-inline-end: 0px !important;
+  margin-inline: 0 !important;
+  margin-top: 0 !important;
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+  padding: 20px var(--application-page-inline-gutter, 25px) 48px !important;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent) transparent;
+}
+
+.settings-tab-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.settings-tab-content::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text) 20%, transparent);
+  border-radius: 999px;
+}
+
+.settings-tab-content .swipeable-tab-panel__native,
+.settings-tab-content .swipeable-tab-panel__native-slide {
+  width: 100%;
   min-width: 0;
-  margin-top: 14px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+  .settings-tabs {
+    padding: 0 var(--application-page-inline-gutter, 15px) !important;
+  }
+  .settings-tabs button,
+  .settings-tabs [role="tab"] {
+    min-height: 44px !important;
+    padding-inline: 10px !important;
+    font-size: 0.76rem !important;
+  }
+  .settings-tab-content {
+    padding: 16px var(--application-page-inline-gutter, 15px) calc(80px + var(--app-viewport-safe-area-bottom, 0px)) !important;
+  }
 }
 
 .settings-content {

@@ -2376,7 +2376,7 @@ html:has(.settings-profile__verification-dialog-overlay) {
   }
 
   .settings-tabs {
-    position: sticky;
+    position: relative;
     scroll-padding-inline: 18px;
   }
 }
