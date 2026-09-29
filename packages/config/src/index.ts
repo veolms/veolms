@@ -98,6 +98,7 @@ const serverConfigSchema = z.object({
   RP_ID: z.string().optional(),
   RP_NAME: z.string().default("VeoLMS"),
   WEBAUTHN_ORIGINS: z.string().optional(),
+  CORS_ORIGINS: z.string().optional(),
 
   // TOTP Configuration
   TOTP_STEP_SECONDS: z.coerce.number().int().min(1).default(30),
@@ -366,14 +367,34 @@ function resolveWebAuthnRpIds(
   return Array.from(rpIds);
 }
 
+function resolveCorsOrigins(parsed: ParsedServerConfig): string[] {
+  const origins = new Set(resolveWebAuthnOrigins(parsed));
+
+  if (parsed.CORS_ORIGINS) {
+    for (const origin of parsed.CORS_ORIGINS.split(",")) {
+      const trimmed = origin.trim();
+      if (trimmed) {
+        try {
+          origins.add(new URL(trimmed).origin);
+        } catch {
+          origins.add(trimmed);
+        }
+      }
+    }
+  }
+
+  return Array.from(origins);
+}
+
 export type ServerConfig = Omit<
   ParsedServerConfig,
-  "RP_ID" | "WEBAUTHN_ORIGINS"
+  "RP_ID" | "WEBAUTHN_ORIGINS" | "CORS_ORIGINS"
 > & {
   EMAIL_TRANSPORT: "smtp" | "console";
   RP_ID: string;
   WEBAUTHN_ORIGINS: string[];
   WEBAUTHN_RP_IDS: string[];
+    CORS_ORIGINS: string[];
 };
 
 export function loadServerConfig(
@@ -407,6 +428,7 @@ export function loadServerConfig(
   const resolvedRpId = resolveWebAuthnRpId(parsed);
   const origins = resolveWebAuthnOrigins(parsed);
   const rpIds = resolveWebAuthnRpIds(resolvedRpId, origins);
+    const corsOrigins = resolveCorsOrigins(parsed);
 
   return {
     ...parsed,
@@ -414,6 +436,7 @@ export function loadServerConfig(
     RP_ID: resolvedRpId,
     WEBAUTHN_ORIGINS: origins,
     WEBAUTHN_RP_IDS: rpIds,
+    CORS_ORIGINS: corsOrigins,
   };
 }
 
