@@ -1,9 +1,5 @@
-import {
-  getCourseVideoForLesson,
-  resolveLessonIdentifier,
-} from "./courseContent";
+import { resolveLessonIdentifier } from "./courseContent";
 import { serializeForInlineJson } from "../lib/serializeForInlineJson";
-import { PRERENDERED_LEARNING_COURSE_SLUGS } from "./prerenderLearningPaths";
 
 export const LEARNING_HLS_MANIFEST_META_NAME = "veo-hls-manifest";
 export const LEARNING_HLS_MEDIA_KEY_META_NAME = "veo-hls-media-key";
@@ -22,30 +18,6 @@ export interface LearningHlsBootstrap {
 export interface LearningPlaybackRequestMetadata {
   courseSlug: string;
   lessonNumber: number;
-}
-
-// Only routes explicitly included in the static learning build may embed a
-// public manifest. Runtime/API-created courses use the authenticated path.
-const PUBLIC_SSG_COURSE_SLUGS = new Set<string>(
-  PRERENDERED_LEARNING_COURSE_SLUGS,
-);
-
-export function getLearningHlsBootstrap(params: {
-  courseSlug?: string;
-  lectureSlug?: string;
-}): LearningHlsBootstrap | null {
-  if (!params.courseSlug || !PUBLIC_SSG_COURSE_SLUGS.has(params.courseSlug)) {
-    return null;
-  }
-
-  const lessonId = resolveLessonIdentifier(params.lectureSlug) ?? 1;
-  const video = getCourseVideoForLesson(lessonId);
-  if (!/\.m3u8(?:$|[?#])/i.test(video.src)) return null;
-
-  return {
-    manifestUrl: video.src,
-    mediaKey: `${encodeURIComponent(params.courseSlug)}-lesson-${lessonId}`,
-  };
 }
 
 export function getLearningPlaybackRequestMetadata(params: {

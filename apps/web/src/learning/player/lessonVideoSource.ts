@@ -55,6 +55,7 @@ export function createLearningLessonVideoSource(options: {
     metadata: {
       duration: options.media.duration,
       title: options.lessonTitle,
+      poster: options.media.thumbnailSrc,
     },
     streaming: hls ? { ...LEARNING_HLS_STREAMING } : undefined,
     networking: hls

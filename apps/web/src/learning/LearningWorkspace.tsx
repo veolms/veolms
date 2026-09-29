@@ -58,11 +58,10 @@ import {
 import { writeAutoplayPreference } from "./player/lessonPlayerPersistence";
 import {
   type Lesson,
-  createCurriculumSections,
+  createLessonVideo,
   createLessonsById,
-  getCourseVideoForLesson,
 } from "./courseContent";
-import { getLearningHlsBootstrap } from "./learningHlsBootstrap";
+import { mediaService } from "../services/media";
 import { Curriculum } from "./Curriculum";
 import {
   FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT,
@@ -104,7 +103,6 @@ import {
   applyLearningShellToDocument,
   getInitialLearningShellState,
 } from "./learningShellPreferences";
-import { useCurriculumTestPreferences } from "./useCurriculumTestPreferences";
 import { useLearningProgress } from "./useLearningProgress";
 import {
   getPhoneLessonDrawerCollapsedSnapPoint,
@@ -549,8 +547,6 @@ export function LearningWorkspace({
     }
   }, [courseContentDrawerViewport, curriculumCollapsed]);
 
-  const { preferences: curriculumTestPreferences } =
-    useCurriculumTestPreferences();
   const [theaterMode, setTheaterMode] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
   const playerWrapRef = useRef<HTMLDivElement>(null);
@@ -653,24 +649,10 @@ export function LearningWorkspace({
     return adaptCourseOverviewToCurriculum(courseOverview);
   }, [courseOverview]);
 
-  const curriculumSections = useMemo(() => {
-    if (adaptedCurriculum) {
-      return adaptedCurriculum.sections;
-    }
-    if (isApiRoute || isCourseOverviewError) {
-      return [];
-    }
-    return createCurriculumSections(
-      curriculumTestPreferences.sectionCount,
-      curriculumTestPreferences.lectureCount,
-    );
-  }, [
-    adaptedCurriculum,
-    isApiRoute,
-    isCourseOverviewError,
-    curriculumTestPreferences.lectureCount,
-    curriculumTestPreferences.sectionCount,
-  ]);
+  const curriculumSections = useMemo(
+    () => adaptedCurriculum?.sections ?? [],
+    [adaptedCurriculum],
+  );
   const curriculumLessonsById = useMemo(
     () => createLessonsById(curriculumSections),
     [curriculumSections],
@@ -866,20 +848,10 @@ export function LearningWorkspace({
       window.removeEventListener("playing", handlePlayCapture, true);
     };
   }, [showingQuiz]);
-  const publicPlaybackBootstrap = useMemo(
-    () =>
-      courseSlug
-        ? getLearningHlsBootstrap({
-            courseSlug,
-            lectureSlug: String(selectedLesson),
-          })
-        : null,
-    [courseSlug, selectedLesson],
-  );
-  const protectedPlayback = Boolean(courseSlug && !publicPlaybackBootstrap);
+  const protectedPlayback = Boolean(courseSlug);
   const [playbackBootstrap, setPlaybackBootstrap] =
     useState<VideoPlaybackBootstrap | null>(() => {
-      if (!courseSlug || publicPlaybackBootstrap) return null;
+      if (!courseSlug) return null;
       return getCachedVideoPlaybackBootstrap({
         courseSlug,
         lessonNumber: selectedLesson,
@@ -896,7 +868,7 @@ export function LearningWorkspace({
   }, [courseSlug, selectedLesson]);
 
   useEffect(() => {
-    if (!courseSlug || publicPlaybackBootstrap) {
+    if (!courseSlug) {
       setPlaybackBootstrap(null);
       return;
     }
@@ -926,7 +898,7 @@ export function LearningWorkspace({
     return () => {
       active = false;
     };
-  }, [courseSlug, publicPlaybackBootstrap, selectedLesson]);
+  }, [courseSlug, selectedLesson]);
   const lessonSequence = useMemo(
     () =>
       curriculumSections.flatMap(({ lessons }) => lessons.map(([id]) => id)),
@@ -992,18 +964,22 @@ export function LearningWorkspace({
     const section = curriculumSections.find(({ lessons }) =>
       lessons.some(([id]) => id === nextLessonId),
     );
-    const video = getCourseVideoForLesson(nextLessonId);
+    const nextLessonMediaId =
+      adaptedCurriculum?.lessonsByNumber.get(nextLessonId)?.contentMediaId;
     const nextIndex = lessonSequence.indexOf(nextLessonId);
     return {
       id: nextLessonId,
       title: lesson[1],
       duration: lesson[2],
       sectionTitle: section?.title,
-      thumbnailSrc: video?.thumbnailSrc || courseThumbnail,
+      thumbnailSrc: nextLessonMediaId
+        ? mediaService.getVideoThumbnailUrl(nextLessonMediaId)
+        : courseThumbnail,
       lectureNumber: nextIndex >= 0 ? nextIndex + 1 : undefined,
       totalLessons: lessonSequence.length,
     };
   }, [
+    adaptedCurriculum,
     courseThumbnail,
     curriculumLessonsById,
     curriculumSections,
@@ -2325,9 +2301,28 @@ export function LearningWorkspace({
     lessonPlayerSeekRef.current?.(seconds);
   }, []);
 
+  const currentLessonTitle = currentLesson[1];
+  const selectedLessonDurationSeconds = selectedLessonRecord?.durationSeconds;
+  const selectedLessonMediaId = selectedLessonRecord?.contentMediaId;
+  const currentLessonMedia = useMemo(
+    () =>
+      createLessonVideo(currentLessonTitle, {
+        durationSeconds: selectedLessonDurationSeconds,
+        thumbnailSrc: selectedLessonMediaId
+          ? mediaService.getVideoThumbnailUrl(selectedLessonMediaId)
+          : courseThumbnail,
+      }),
+    [
+      courseThumbnail,
+      currentLessonTitle,
+      selectedLessonDurationSeconds,
+      selectedLessonMediaId,
+    ],
+  );
+
   const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
     () => ({
-      media: getCourseVideoForLesson(currentLesson[0]),
+      media: currentLessonMedia,
       description: selectedLessonDescription,
       playbackBootstrap,
       refreshPlaybackToken,
@@ -2379,6 +2374,7 @@ export function LearningWorkspace({
       courseSlug,
       courseTitle,
       currentLesson,
+      currentLessonMedia,
       currentLessonIndex,
       curriculumShortcutLabel,
       fullscreenCoursePanel,

@@ -784,6 +784,34 @@ export function LessonVideoPlayer({
       } as FullscreenCoursePanelStyle)
     : undefined;
 
+  if (!playbackMedia.src) {
+    // API lessons have no playable source until their playback bootstrap
+    // resolves. Show the lesson poster instead of handing the engine an
+    // empty URL or a placeholder video.
+    return (
+      <div
+        role="img"
+        aria-label={`Preparing video for ${lessonTitle}`}
+        className={cn(
+          "relative aspect-video w-full overflow-hidden bg-black",
+          presentation === "mini" ? "rounded-none" : "rounded-xl",
+        )}
+      >
+        {media.thumbnailSrc ? (
+          <img
+            src={media.thumbnailSrc}
+            alt=""
+            decoding="async"
+            className="h-full w-full object-cover"
+            onError={(event) => {
+              event.currentTarget.hidden = true;
+            }}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <VeoVideoPlayer
       ref={playerRef}

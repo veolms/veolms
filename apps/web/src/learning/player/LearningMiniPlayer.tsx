@@ -3,7 +3,7 @@ import {
   type VideoPlayerEvent,
   type VideoPlayerHandle,
 } from "@veolms/video-player";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "../learning-feature.css";
 import type {
   LearningMiniPlayerSession,
@@ -34,11 +34,14 @@ import { LEARNING_MINI_PLAYER_CURRICULUM_SCROLL_CONTROL_BOTTOM_CLEARANCE } from 
 import { useMiniPlayerCurriculumSections } from "./useMiniPlayerCurriculumSections";
 import { Curriculum } from "../Curriculum";
 import {
-  getCourseVideoForLesson,
-  lessonSequence as defaultLessonSequence,
-  lessonsById as defaultLessonsById,
-  sections as defaultSections,
+  createLessonSequence,
+  createLessonsById,
+  type CourseSection,
 } from "../courseContent";
+import { adaptCourseOverviewToCurriculum } from "../courseCurriculumAdapter";
+import { useCourseOverview } from "../../services/courses";
+
+const EMPTY_CURRICULUM_SECTIONS: CourseSection[] = [];
 
 const MAX_HANDOFF_DRIFT_SECONDS = 0.35;
 
@@ -131,86 +134,91 @@ export function LearningMiniPlayer({
   );
 
   const selectedLesson = session.selectedLesson ?? 1;
+  const { data: courseOverview } = useCourseOverview(session.courseSlug, {
+    enabled: Boolean(session.courseSlug),
+  });
+  const curriculumSections = useMemo<CourseSection[]>(
+    () =>
+      courseOverview
+        ? adaptCourseOverviewToCurriculum(courseOverview).sections
+        : EMPTY_CURRICULUM_SECTIONS,
+    [courseOverview],
+  );
+  const curriculumLessonsById = useMemo(
+    () => createLessonsById(curriculumSections),
+    [curriculumSections],
+  );
+  const lessonSequence = useMemo(
+    () => createLessonSequence(curriculumSections),
+    [curriculumSections],
+  );
   const {
     sectionIds,
     expandedSectionIds,
     setExpandedSectionIds,
     expandAllSections,
     collapseAllSections,
-  } = useMiniPlayerCurriculumSections(defaultSections, selectedLesson);
-  const selectedLessonIndex = defaultLessonSequence.indexOf(selectedLesson);
+  } = useMiniPlayerCurriculumSections(curriculumSections, selectedLesson);
+  const selectedLessonIndex = lessonSequence.indexOf(selectedLesson);
   const previousLessonId =
-    selectedLessonIndex > 0
-      ? defaultLessonSequence[selectedLessonIndex - 1]
-      : undefined;
+    selectedLessonIndex > 0 ? lessonSequence[selectedLessonIndex - 1] : undefined;
   const nextLessonId =
-    selectedLessonIndex >= 0 &&
-    selectedLessonIndex < defaultLessonSequence.length - 1
-      ? defaultLessonSequence[selectedLessonIndex + 1]
+    selectedLessonIndex >= 0 && selectedLessonIndex < lessonSequence.length - 1
+      ? lessonSequence[selectedLessonIndex + 1]
       : undefined;
 
   const handleSelectLesson = useCallback(
     (lessonNumber: number) => {
-      const newLesson = defaultLessonsById.get(lessonNumber);
-      if (!newLesson) return;
-      const newMedia = getCourseVideoForLesson(lessonNumber);
-      const lessonIndex = defaultLessonSequence.indexOf(lessonNumber);
+      const newLesson = curriculumLessonsById.get(lessonNumber);
+      const courseSlug = session.courseSlug;
+      if (!newLesson || !courseSlug) return;
+      const lessonIndex = lessonSequence.indexOf(lessonNumber);
       const lessonPath =
         resolveLearningMiniPlayerLessonPath({
-          courseRouteKey: session.courseSlug,
+          courseRouteKey: courseSlug,
           lessonNumber,
           lessonPath: session.lessonPath,
         }) ?? session.lessonPath;
-      const cachedBootstrap = session.courseSlug
-        ? getCachedVideoPlaybackBootstrap({
-            courseSlug: session.courseSlug,
-            lessonNumber,
-          })
-        : null;
-      const newSession: LearningMiniPlayerSession = {
-        ...session,
-        lessonTitle: newLesson[1],
-        lessonIndex: lessonIndex >= 0 ? lessonIndex + 1 : undefined,
-        totalLessons: defaultLessonSequence.length,
-        selectedLesson: lessonNumber,
-        source: {
-          src: cachedBootstrap?.manifestUrl ?? newMedia.src,
-          type: "application/x-mpegurl",
-          startTime: 0,
-        },
-        mediaKey: cachedBootstrap?.mediaKey ?? newMedia.fileName,
-        currentTime: 0,
-        playing: true,
-        lessonPath,
+      const openLesson = (manifestUrl: string, mediaKey: string) => {
+        openLearningMiniPlayerSession({
+          ...session,
+          lessonTitle: newLesson[1],
+          lessonIndex: lessonIndex >= 0 ? lessonIndex + 1 : undefined,
+          totalLessons: lessonSequence.length,
+          selectedLesson: lessonNumber,
+          source: {
+            src: manifestUrl,
+            type: "application/x-mpegurl",
+            startTime: 0,
+          },
+          mediaKey,
+          currentTime: 0,
+          playing: true,
+          lessonPath,
+        });
       };
-      openLearningMiniPlayerSession(newSession);
 
-      if (session.courseSlug && !cachedBootstrap) {
-        void getVideoPlaybackBootstrap({
-          courseSlug: session.courseSlug,
-          lessonNumber,
-        })
-          .then((bootstrap) => {
-            const current = getLearningMiniPlayerSnapshot();
-            if (
-              current &&
-              current.courseSlug === session.courseSlug &&
-              current.selectedLesson === lessonNumber
-            ) {
-              openLearningMiniPlayerSession({
-                ...current,
-                source: {
-                  ...current.source,
-                  src: bootstrap.manifestUrl,
-                },
-                mediaKey: bootstrap.mediaKey,
-              });
-            }
-          })
-          .catch(() => undefined);
+      const cachedBootstrap = getCachedVideoPlaybackBootstrap({
+        courseSlug,
+        lessonNumber,
+      });
+      if (cachedBootstrap) {
+        openLesson(cachedBootstrap.manifestUrl, cachedBootstrap.mediaKey);
+        return;
       }
+
+      // Lessons only play from their API manifest, so switch once it is known
+      // instead of starting the new lesson with a placeholder source.
+      void getVideoPlaybackBootstrap({ courseSlug, lessonNumber })
+        .then((bootstrap) => {
+          const current = getLearningMiniPlayerSnapshot();
+          if (current && current.courseSlug === courseSlug) {
+            openLesson(bootstrap.manifestUrl, bootstrap.mediaKey);
+          }
+        })
+        .catch(() => undefined);
     },
-    [session],
+    [curriculumLessonsById, lessonSequence, session],
   );
 
   const handleGoPrevious = useCallback(() => {
@@ -410,8 +418,8 @@ export function LearningMiniPlayer({
         >
           <Curriculum
             hideHero
-            sections={defaultSections}
-            lessonsById={defaultLessonsById}
+            sections={curriculumSections}
+            lessonsById={curriculumLessonsById}
             selectedLesson={selectedLesson}
             onSelectLesson={handleSelectLesson}
             courseTitle={session.courseTitle ?? ""}

@@ -34,10 +34,6 @@ import {
   mediaService,
   useMediaImageVariantManifest,
 } from "../../services/media";
-import {
-  resolveCourseHlsSrc,
-  resolveCourseVideoThumbnailSrc,
-} from "../../learning/courseContent";
 
 export interface AttachedMediaInfo {
   id?: string;
@@ -71,6 +67,7 @@ export interface LessonMediaWorkspaceProps {
   courseSlug?: string;
   courseTitle?: string;
   mediaInfo?: AttachedMediaInfo | null;
+  playbackRevision?: number;
   previewFile?: File | null;
   disabled?: boolean;
   onUploadFile?: (file: File) => void | Promise<void>;
@@ -85,8 +82,9 @@ export function LessonMediaWorkspace({
   lessonTitle,
   lessonNumber,
   courseSlug,
-  courseTitle = "Web Development Course for Absolute Beginners",
+  courseTitle,
   mediaInfo,
+  playbackRevision = 0,
   previewFile = null,
   disabled = false,
   onUploadFile,
@@ -101,6 +99,11 @@ export function LessonMediaWorkspace({
     useState<VideoPlaybackBootstrap | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [thumbnailPreviewFile, setThumbnailPreviewFile] = useState<File | null>(
+    null,
+  );
+  // The generated thumbnail can lag behind processing progress; remember a
+  // URL that failed to load so the card falls back to its placeholder.
+  const [failedThumbnailUrl, setFailedThumbnailUrl] = useState<string | null>(
     null,
   );
   const imageVariantManifestQuery = useMediaImageVariantManifest(
@@ -134,6 +137,11 @@ export function LessonMediaWorkspace({
       : mediaInfo?.url || "/api/placeholder/1280/720";
 
   useEffect(() => {
+    // A thumbnail requested early in processing may not have existed yet.
+    setFailedThumbnailUrl(null);
+  }, [playbackRevision]);
+
+  useEffect(() => {
     if (!previewFile) {
       setPreviewUrl(null);
       return;
@@ -152,7 +160,11 @@ export function LessonMediaWorkspace({
 
     let active = true;
     setPlaybackBootstrap(null);
-    void getVideoPlaybackBootstrap({ courseSlug, lessonNumber })
+    void getVideoPlaybackBootstrap({
+      courseSlug,
+      lessonNumber,
+      mediaId: mediaInfo?.id,
+    })
       .then((bootstrap) => {
         if (active) setPlaybackBootstrap(bootstrap);
       })
@@ -164,7 +176,14 @@ export function LessonMediaWorkspace({
     return () => {
       active = false;
     };
-  }, [contentType, courseSlug, lessonNumber, mediaInfo?.id, previewFile]);
+  }, [
+    contentType,
+    courseSlug,
+    lessonNumber,
+    mediaInfo?.id,
+    playbackRevision,
+    previewFile,
+  ]);
 
   const refreshPlaybackToken = useCallback((): Promise<VideoPlaybackToken> => {
     if (!courseSlug || !lessonNumber) {
@@ -173,35 +192,27 @@ export function LessonMediaWorkspace({
     return refreshVideoPlaybackToken({ courseSlug, lessonNumber });
   }, [courseSlug, lessonNumber]);
 
-  const videoMedia = useMemo<CourseVideo>(() => {
-    const fileName =
-      previewFile?.name ||
-      mediaInfo?.name ||
-      "The Complete JavaScript Course Trailer.mp4";
-    const thumbnailSrc = previewUrl
-      ? undefined
-      : mediaInfo?.thumbnailUrl ||
-        resolveCourseVideoThumbnailSrc(
-          "The Complete JavaScript Course Trailer.mp4",
-        );
-
-    return {
-      fileName,
-      duration: mediaInfo?.durationSeconds || 754,
-      src:
-        previewUrl ||
-        mediaInfo?.url ||
-        resolveCourseHlsSrc("The Complete JavaScript Course Trailer.mp4"),
-      thumbnailSrc,
-    };
-  }, [
-    mediaInfo?.durationSeconds,
-    mediaInfo?.name,
-    mediaInfo?.thumbnailUrl,
-    mediaInfo?.url,
-    previewFile?.name,
-    previewUrl,
-  ]);
+  // Attached lessons play from their playback bootstrap manifest. Until it
+  // loads, the player shows the lesson thumbnail rather than any other video.
+  const videoMedia = useMemo<CourseVideo>(
+    () => ({
+      fileName: previewFile?.name || mediaInfo?.name || lessonTitle,
+      duration: mediaInfo?.durationSeconds || 0,
+      src: previewUrl || mediaInfo?.url || "",
+      thumbnailSrc: previewUrl
+        ? undefined
+        : mediaInfo?.thumbnailUrl || undefined,
+    }),
+    [
+      lessonTitle,
+      mediaInfo?.durationSeconds,
+      mediaInfo?.name,
+      mediaInfo?.thumbnailUrl,
+      mediaInfo?.url,
+      previewFile?.name,
+      previewUrl,
+    ],
+  );
 
   const hasMediaAttached = Boolean(mediaInfo?.url || mediaInfo?.id || mediaInfo?.name);
   const hasVideoPreview = Boolean(previewUrl) && contentType === "video";
@@ -212,10 +223,14 @@ export function LessonMediaWorkspace({
   const isGroupedVideo =
     contentType === "video" &&
     (isAttachedVideo || (hasVideoStage && Boolean(videoUploadSection)));
-  const hasPersistedThumbnail = Boolean(mediaInfo?.thumbnailUrl);
+  const thumbnailUrl =
+    mediaInfo?.thumbnailUrl && mediaInfo.thumbnailUrl !== failedThumbnailUrl
+      ? mediaInfo.thumbnailUrl
+      : null;
+  const hasPersistedThumbnail = Boolean(thumbnailUrl);
 
   const formatFileSize = (bytes?: number) => {
-    if (!bytes || bytes <= 0) return "0 MB";
+    if (!bytes || bytes <= 0) return null;
     if (bytes >= 1024 * 1024 * 1024) {
       return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
     }
@@ -223,7 +238,7 @@ export function LessonMediaWorkspace({
   };
 
   const formatDuration = (secs?: number) => {
-    if (!secs || secs <= 0) return "12:34";
+    if (!secs || secs <= 0) return null;
     const m = Math.floor(secs / 60);
     const s = secs % 60;
     return `${m}:${s.toString().padStart(2, "0")}`;
@@ -408,7 +423,9 @@ export function LessonMediaWorkspace({
               {mediaInfo?.name || "Document Preview"}
             </h4>
             <p className="m-0 mt-1 text-xs text-(--muted)">
-              {formatFileSize(mediaInfo?.sizeBytes)} • Ready for students
+              {[formatFileSize(mediaInfo?.sizeBytes), "Ready for students"]
+                .filter(Boolean)
+                .join(" • ")}
             </p>
           </div>
         )
@@ -506,16 +523,19 @@ export function LessonMediaWorkspace({
             <div className="min-w-0">
               <p className="m-0 truncate text-[0.82rem] sm:text-[0.86rem] font-bold text-(--text)">
                 {hasMediaAttached
-                  ? mediaInfo?.name || `intro-to-web-dev.${contentType === "video" ? "mp4" : contentType === "audio" ? "mp3" : contentType === "image" ? "png" : "pdf"}`
+                  ? mediaInfo?.name || `${contentType[0]!.toUpperCase()}${contentType.slice(1)} attached`
                   : `No ${contentType} uploaded yet`}
               </p>
               <p className="m-0 mt-0.5 truncate text-[0.70rem] sm:text-[0.74rem] text-(--muted)">
                 {hasMediaAttached ? (
                   <span>
-                    {formatFileSize(mediaInfo?.sizeBytes || 128 * 1024 * 1024)}
-                    {mediaInfo?.dimensions ? ` • ${mediaInfo.dimensions}` : contentType === "video" || contentType === "image" ? " • 1920 × 1080" : ""}
-                    {contentType === "audio" ? ` • ${formatDuration(mediaInfo?.durationSeconds)}` : ""}
-                    {contentType === "audio" ? " • .mp3" : ""}
+                    {[
+                      formatFileSize(mediaInfo?.sizeBytes),
+                      mediaInfo?.dimensions,
+                      formatDuration(mediaInfo?.durationSeconds),
+                    ]
+                      .filter(Boolean)
+                      .join(" • ") || "Ready for students"}
                   </span>
                 ) : (
                   `Upload a ${contentType} file to get started.`
@@ -572,11 +592,12 @@ export function LessonMediaWorkspace({
           >
             <div className="flex min-w-0 items-center gap-3">
               <div className="relative flex h-10 w-14 sm:h-11 sm:w-16 shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[radial-gradient(ellipse_at_center,_#1e1b4b_0%,_#09090b_100%)]">
-                {hasPersistedThumbnail ? (
+                {thumbnailUrl ? (
                   <img
-                    src={mediaInfo?.thumbnailUrl || ""}
+                    src={thumbnailUrl}
                     alt="Current thumbnail"
                     className="h-full w-full object-cover"
+                    onError={() => setFailedThumbnailUrl(thumbnailUrl)}
                   />
                 ) : contentType === "audio" ? (
                   <Headphones

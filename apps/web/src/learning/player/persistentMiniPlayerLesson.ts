@@ -1,8 +1,7 @@
 import { upsertCoursePlayerSessionFromRoute } from "../coursePlayerNavigation";
 import {
-  getCourseVideoForLesson,
-  lessonsById as defaultLessonsById,
-  sections as defaultSections,
+  createLessonSequence,
+  createLessonVideo,
 } from "../courseContent";
 import {
   getCachedVideoPlaybackBootstrap,
@@ -61,8 +60,7 @@ export function resolveLearningMiniPlayerLessonPath({
 export function buildPersistentMiniPlayerLessonSequence(
   registration: PersistentLearningPlayerRegistration,
 ): number[] {
-  const sections = registration.curriculumSections ?? defaultSections;
-  return sections.flatMap(({ lessons }) => lessons.map(([id]) => id));
+  return createLessonSequence(registration.curriculumSections ?? []);
 }
 
 export function applyPersistentMiniPlayerLessonChange(
@@ -72,9 +70,7 @@ export function applyPersistentMiniPlayerLessonChange(
 ): PersistentLearningPlayerRegistration | null {
   if (lessonNumber === registration.selectedLesson) return null;
 
-  const lessonsById =
-    registration.curriculumLessonsById ?? defaultLessonsById;
-  const lesson = lessonsById.get(lessonNumber);
+  const lesson = registration.curriculumLessonsById?.get(lessonNumber);
   if (!lesson) return null;
 
   if (
@@ -88,7 +84,7 @@ export function applyPersistentMiniPlayerLessonChange(
   const lessonIndex = lessonSequence.indexOf(lessonNumber);
   if (lessonIndex < 0) return null;
 
-  const media = getCourseVideoForLesson(lessonNumber);
+  const media = createLessonVideo(lesson[1]);
   const search = registration.lessonPath.includes("?")
     ? registration.lessonPath.slice(registration.lessonPath.indexOf("?"))
     : "";

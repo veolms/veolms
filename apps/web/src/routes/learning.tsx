@@ -15,12 +15,8 @@ import {
 import type { CourseLesson } from "@veolms/contracts";
 import type { Route } from "./+types/learning";
 import {
-  getLearningHlsBootstrap,
-  getLearningHlsPreconnectHref,
   getLearningPlaybackRequestMetadata,
   LEARNING_COURSE_SLUG_META_NAME,
-  LEARNING_HLS_MANIFEST_META_NAME,
-  LEARNING_HLS_MEDIA_KEY_META_NAME,
   LEARNING_LESSON_NUMBER_META_NAME,
 } from "../learning/learningHlsBootstrap";
 import { resolveLessonIdentifier } from "../learning/courseContent";
@@ -56,7 +52,6 @@ export function meta({ location, params }: Route.MetaArgs) {
   ).map(([name, content]) =>
     name === "title" ? { title: content } : { name, content },
   );
-  const bootstrap = getLearningHlsBootstrap(params);
   const requestMetadata = getLearningPlaybackRequestMetadata(params);
   const safeMetadata = requestMetadata
     ? [
@@ -70,26 +65,13 @@ export function meta({ location, params }: Route.MetaArgs) {
         },
       ]
     : [];
-  if (!bootstrap) return [...descriptors, ...safeMetadata];
-  return [
-    ...descriptors,
-    ...safeMetadata,
-    { name: LEARNING_HLS_MANIFEST_META_NAME, content: bootstrap.manifestUrl },
-    { name: LEARNING_HLS_MEDIA_KEY_META_NAME, content: bootstrap.mediaKey },
-  ];
+  return [...descriptors, ...safeMetadata];
 }
 
-export function links(args?: Pick<Route.MetaArgs, "params">) {
-  const bootstrap = getLearningHlsBootstrap(args?.params ?? {});
-  if (!bootstrap) {
-    const apiOrigin = getVideoPlaybackApiOrigin();
-    return apiOrigin
-      ? [{ rel: "preconnect", href: apiOrigin, crossOrigin: "anonymous" }]
-      : [];
-  }
-  const preconnectHref = getLearningHlsPreconnectHref(bootstrap.manifestUrl);
-  return preconnectHref
-    ? [{ rel: "preconnect", href: preconnectHref, crossOrigin: "anonymous" }]
+export function links() {
+  const apiOrigin = getVideoPlaybackApiOrigin();
+  return apiOrigin
+    ? [{ rel: "preconnect", href: apiOrigin, crossOrigin: "anonymous" }]
     : [];
 }
 
@@ -215,7 +197,7 @@ export default function LearningRoute() {
     void import("../learning/earlyHlsPreload")
       .then(({ startEarlyHlsPreload }) =>
         startEarlyHlsPreload(
-          getLearningHlsBootstrap({ courseSlug, lectureSlug }),
+          null,
           getLearningPlaybackRequestMetadata({ courseSlug, lectureSlug }),
         ),
       )
