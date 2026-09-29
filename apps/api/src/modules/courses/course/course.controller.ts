@@ -4,14 +4,18 @@ import type {
   UpdateCourseBasicsRequest,
   CourseListQuery,
   CourseSlugParams,
+  CourseStaticPageRefreshStatus,
 } from "@veolms/contracts";
 import { httpError } from "../../../lib/errors.ts";
 import type { CourseService } from "./course.service.ts";
+import type { CourseStaticPageRefreshService } from "../../../services/course-static-page-refresh.service.ts";
 
 export function createCourseController({
   service,
+  staticPages,
 }: {
   service: CourseService;
+  staticPages?: CourseStaticPageRefreshService;
 }) {
   async function listCourses(
     request: FastifyRequest<{
@@ -74,7 +78,11 @@ export function createCourseController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.getCourseEditorData(id, creatorId, request.user?.roles);
+    return await service.getCourseEditorData(
+      id,
+      creatorId,
+      request.user?.roles,
+    );
   }
 
   async function updateCourseBasics(
@@ -126,6 +134,30 @@ export function createCourseController({
     return await service.deleteCourse(id, creatorId, request.user?.roles);
   }
 
+  async function getStaticPageRefreshStatus(
+    request: FastifyRequest<{ Params: { id: string } }>,
+  ): Promise<CourseStaticPageRefreshStatus> {
+    return (
+      staticPages?.getStatus(request.params.id) ?? {
+        courseId: request.params.id,
+        status: "idle",
+        message: null,
+        updatedAt: new Date().toISOString(),
+        requestId: null,
+        runUrl: null,
+      }
+    );
+  }
+
+  async function retryStaticPageRefresh(
+    request: FastifyRequest<{ Params: { id: string } }>,
+  ): Promise<CourseStaticPageRefreshStatus> {
+    return (
+      staticPages?.retry(request.params.id) ??
+      getStaticPageRefreshStatus(request)
+    );
+  }
+
   async function updateCourseThumbnail(
     request: FastifyRequest<{
       Params: { id: string };
@@ -174,6 +206,8 @@ export function createCourseController({
     archiveCourse,
     getCourseOverview,
     deleteCourse,
+    getStaticPageRefreshStatus,
+    retryStaticPageRefresh,
   };
 }
 

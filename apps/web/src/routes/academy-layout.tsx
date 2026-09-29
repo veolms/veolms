@@ -19,8 +19,8 @@ import {
 } from "react-router";
 import type { Route } from "./+types/academy-layout";
 import academyShellStylesheet from "../shell-theme.css?url";
-import { CoursesPage } from "../CoursesPage";
 import type { AcademyStaticPageData } from "./academyStaticPageData";
+import { CoursesPage } from "../CoursesPage";
 import {
   getCourseRouteKey,
   type Course,

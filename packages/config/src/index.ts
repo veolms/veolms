@@ -64,6 +64,13 @@ const serverConfigSchema = z.object({
   API_DEV_PRETTY_LOGS: booleanEnvironmentValueSchema.default(true),
   API_DOCS_ENABLED: booleanEnvironmentValueSchema.default(true),
   API_PUBLIC_URL: z.string().optional(),
+  COURSE_STATIC_REFRESH_GITHUB_TOKEN: z.string().optional(),
+  COURSE_STATIC_REFRESH_REPOSITORY: z.string().optional(),
+  COURSE_STATIC_REFRESH_REF: z.string().min(1).default("development"),
+  COURSE_STATIC_REFRESH_WORKFLOW: z
+    .string()
+    .min(1)
+    .default("refresh-cloudflare-course-pages.yml"),
   TRUST_PROXY: z
     .string()
     .default("false")

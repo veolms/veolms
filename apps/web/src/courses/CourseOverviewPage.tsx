@@ -1,28 +1,26 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { useParams } from "react-router";
-import {
-  ArrowLeft,
-  ArrowsInLineVertical,
-  ArrowsOutLineVertical,
-  BookOpen,
-  CaretDown,
-  CheckCircle,
-  Circle,
-  CircleNotch,
-  Clock,
-  FileText,
-  Heart,
-  Play,
-  PlayCircle,
-  Question,
-  ShoppingBag,
-  Stack,
-  Tag,
-  Ticket,
-  User,
-  X,
-} from "@phosphor-icons/react";
+import { ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { ArrowsInLineVertical } from "@phosphor-icons/react/ArrowsInLineVertical";
+import { ArrowsOutLineVertical } from "@phosphor-icons/react/ArrowsOutLineVertical";
+import { BookOpen } from "@phosphor-icons/react/BookOpen";
+import { CaretDown } from "@phosphor-icons/react/CaretDown";
+import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { Circle } from "@phosphor-icons/react/Circle";
+import { CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { Clock } from "@phosphor-icons/react/Clock";
+import { FileText } from "@phosphor-icons/react/FileText";
+import { Heart } from "@phosphor-icons/react/Heart";
+import { Play } from "@phosphor-icons/react/Play";
+import { PlayCircle } from "@phosphor-icons/react/PlayCircle";
+import { Question } from "@phosphor-icons/react/Question";
+import { ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
+import { Stack } from "@phosphor-icons/react/Stack";
+import { Tag } from "@phosphor-icons/react/Tag";
+import { Ticket } from "@phosphor-icons/react/Ticket";
+import { User } from "@phosphor-icons/react/User";
+import { X } from "@phosphor-icons/react/X";
 import {
   MAX_VOLUNTARY_AMOUNT,
   type Category,

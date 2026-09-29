@@ -1,7 +1,7 @@
 /* Shared app foundation and the Tailwind v4 utility layer. Feature styles
    live with their route or component owner and are loaded when that feature
    is rendered. */
-@import "tailwindcss";
+@import "tailwindcss" source("./");
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "./styles/base/theme-contract.css";
@@ -11,7 +11,6 @@
 @import "./reading-mode.css";
 @import "./settings/scrollbars/scrollbarPreferences.css";
 @import "./accessibility/tabFocusVisibility.css";
-@source "../../../packages/video-player/src";
 
 @font-face {
   font-family: "Manrope Variable";

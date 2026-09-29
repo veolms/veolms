@@ -460,6 +460,8 @@ export const purchaseSchema = z.strictObject({
   discountAmount: z.number().int().nonnegative().default(0),
   taxAmount: z.number().int().nonnegative().default(0),
   totalAmount: z.number().int().nonnegative(),
+  /** Creator earnings after platform/PG commission (paise). Null when unknown. */
+  afterCommissionAmount: z.number().int().nonnegative().nullable().optional(),
   couponId: z.uuid().nullable().optional(),
   idempotencyKey: z.string().nullable().optional(),
   paymentSummary: orderPaymentSummarySchema.nullable().optional(),
@@ -573,7 +575,11 @@ export const orderStatsQuerySchema = z.object({
 export type OrderStatsQuery = z.infer<typeof orderStatsQuerySchema>;
 
 export const orderStatsResponseSchema = z.strictObject({
+  /** Gross of successful orders minus partial refunds on those orders. */
   netRevenue: z.number().int(),
+  /** Sum of after_commission_amount for paid / partially_refunded (excludes fully refunded). */
+  totalEarnings: z.number().int().nonnegative().default(0),
+  /** Count of successful orders (`paid` + `partially_refunded`) only. */
   totalOrders: z.number().int().nonnegative(),
   uniqueBuyers: z.number().int().nonnegative(),
   refundedAmount: z.number().int().nonnegative(),

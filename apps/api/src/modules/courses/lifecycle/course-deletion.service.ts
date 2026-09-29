@@ -136,10 +136,10 @@ export function createCourseDeletionService({
         updated_at: now,
       });
 
-      return purgeAt;
+      return { purgeAt, slug: course.slug };
     });
 
-    return { purgeAt: result.toISOString() };
+    return { purgeAt: result.purgeAt.toISOString(), slug: result.slug };
   }
 
   async function listDeletedCourses({ limit, cursor }: DeletedCoursesQuery) {

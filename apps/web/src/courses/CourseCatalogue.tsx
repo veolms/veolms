@@ -1,5 +1,6 @@
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
-import { HeartIcon as Heart, PlusIcon as Plus } from "@phosphor-icons/react";
+import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
+import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { useState } from "react";
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
 import { ExpandableSearch } from "../ExpandableSearch";
@@ -10,7 +11,11 @@ import {
   courseThumbnailSizes,
   getCourseThumbnailSrcSet,
 } from "./CourseCard";
-import { CourseCardSkeleton } from "./CourseCardSkeleton";
+import {
+  CourseCatalogueLoadingSkeleton,
+  getCourseCatalogueGridClasses,
+} from "./CourseCatalogueSkeleton";
+export { CourseCatalogueLoadingSkeleton } from "./CourseCatalogueSkeleton";
 import type {
   Course,
   CourseEnrollmentFilter,
@@ -49,6 +54,8 @@ export interface CourseCatalogueProps {
   isAdmin?: boolean;
   currentUserId?: string;
   isLoading?: boolean;
+  hasLoadError?: boolean;
+  onRetryLoad?: () => void;
   preloadFirstCourseImage?: boolean;
   onDeleteCourse?: (course: Course) => Promise<void> | void;
   onRestoreCourse?: (course: Course) => Promise<void> | void;
@@ -61,6 +68,8 @@ export function CourseCatalogue({
   isAdmin = false,
   currentUserId,
   isLoading = false,
+  hasLoadError = false,
+  onRetryLoad,
   preloadFirstCourseImage = false,
   wishlisted,
   enrollmentFilter,
@@ -141,16 +150,21 @@ export function CourseCatalogue({
     ["completed", "Completed"],
   ] satisfies readonly (readonly [CourseStatusFilter, string])[];
 
-  const gridClasses =
-    role === "creator"
-      ? "grid grid-cols-1 gap-4 min-[560px]:grid-cols-2 xl:grid-cols-3"
-      : "grid grid-cols-1 gap-4 min-[560px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4";
+  const gridClasses = getCourseCatalogueGridClasses(role);
 
   const firstImageIndex = visibleCourses.findIndex((course) =>
     Boolean(course.thumbnail),
   );
   const firstImageCourse =
     firstImageIndex >= 0 ? visibleCourses[firstImageIndex] : undefined;
+  const priorityImageIndexes = new Set<number>();
+  for (
+    let index = firstImageIndex;
+    index >= 0 && index < visibleCourses.length && priorityImageIndexes.size < 2;
+    index += 1
+  ) {
+    if (visibleCourses[index]?.thumbnail) priorityImageIndexes.add(index);
+  }
 
   const renderCard = (course: Course, isPriorityImage: boolean) => (
     <CourseCard
@@ -313,16 +327,28 @@ export function CourseCatalogue({
       </div>
 
       {isLoading ? (
+        <CourseCatalogueLoadingSkeleton role={role} />
+      ) : hasLoadError ? (
         <div
-          className="mt-4 min-[640px]:mt-6"
-          data-course-grid-section
-          data-course-catalogue-grid
-          suppressHydrationWarning
+          className="mt-6 grid min-h-90 place-items-center rounded-xl border border-dashed border-(--border-strong) px-6 text-center"
+          role="alert"
         >
-          <div className={gridClasses} data-testid="course-catalogue-skeleton">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <CourseCardSkeleton key={i} role={role} />
-            ))}
+          <div>
+            <h2 className="text-base font-semibold text-(--text)">
+              Courses couldn’t load
+            </h2>
+            <p className="mt-1.5 max-w-sm text-[0.82rem] leading-6 text-(--muted)">
+              Check your connection and try again.
+            </p>
+            {onRetryLoad ? (
+              <button
+                type="button"
+                className="mt-4 min-h-10 rounded-(--control-radius-action) bg-(--accent) px-4 text-[0.8rem] font-semibold text-(--on-accent) hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+                onClick={onRetryLoad}
+              >
+                Retry
+              </button>
+            ) : null}
           </div>
         </div>
       ) : visibleCourses.length ? (
@@ -334,7 +360,7 @@ export function CourseCatalogue({
         >
           <div className={gridClasses}>
             {visibleCourses.map((course, index) =>
-              renderCard(course, index === firstImageIndex),
+              renderCard(course, priorityImageIndexes.has(index)),
             )}
           </div>
         </div>

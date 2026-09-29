@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-performance.mjs",
+    "refresh:course-pages": "node scripts/refresh-course-static-pages.mjs",
     "benchmark:web-vitals": "node scripts/benchmark-web-vitals.mjs",
     "dev": "react-router dev",
     "dev:lan": "react-router dev --host 0.0.0.0",

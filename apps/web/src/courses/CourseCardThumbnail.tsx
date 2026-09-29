@@ -65,7 +65,7 @@ export function CourseCardThumbnail({
       height={540}
       loading={priority ? "eager" : "lazy"}
       fetchPriority={priority ? "high" : "low"}
-      decoding={priority ? "sync" : "async"}
+      decoding="async"
     />
   );
 }

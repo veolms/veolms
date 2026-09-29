@@ -27,6 +27,7 @@ export interface OrderRowLike {
   discount_amount: number;
   tax_amount: number;
   total_amount: number;
+  after_commission_amount?: number | null;
   coupon_id: string | null;
   idempotency_key: string | null;
   expires_at: Date;
@@ -175,6 +176,7 @@ export function toOrderContract(
     discountAmount: row.discount_amount,
     taxAmount: row.tax_amount,
     totalAmount: row.total_amount,
+    afterCommissionAmount: row.after_commission_amount ?? null,
     couponId: row.coupon_id,
     idempotencyKey: row.idempotency_key,
     items: items.map(toOrderItemContract),

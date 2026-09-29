@@ -3,8 +3,10 @@ import {
   cloneElement,
   useCallback,
   useEffect,
+  lazy,
   useMemo,
   useRef,
+  Suspense,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -55,7 +57,6 @@ import { useDiscussionsWorkspace } from "../services/learning-interactions";
 import { ThemedSelect } from "../ThemedSelect";
 import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
 import { DiscussionAvatar } from "../learning/DiscussionAvatar";
-import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 import type { DiscussionContent } from "../learning/discussion-editor/types";
 import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
 import {
@@ -82,6 +83,14 @@ import {
   getApplicationScrollElement,
   type ApplicationScrollPosition,
 } from "../shell/applicationScroll";
+
+const loadDiscussionMarkdown = () =>
+  import("../learning/discussion-editor/DiscussionMarkdown");
+const DiscussionMarkdown = lazy(() =>
+  loadDiscussionMarkdown().then((module) => ({
+    default: module.DiscussionMarkdown,
+  })),
+);
 
 type DiscussionStatus = NonNullable<DiscussionWorkspaceCard["status"]>;
 type DiscussionEffectiveOwnership = "all" | "mine";
@@ -610,7 +619,7 @@ function DiscussionWorkspaceCardContent({
   );
 
   useEffect(() => {
-    if (expanded) return undefined;
+    if (!expandable || expanded) return undefined;
 
     const node = previewRef.current;
     if (!node) return undefined;
@@ -626,7 +635,7 @@ function DiscussionWorkspaceCardContent({
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [collapsedPreview, expanded]);
+  }, [collapsedPreview, expandable, expanded]);
 
   const utility = (showExpandedLabel: boolean) =>
     (canExpand || parentContext) && (
@@ -671,13 +680,21 @@ function DiscussionWorkspaceCardContent({
               {normalizedTitle}
             </div>
           )}
-          <DiscussionMarkdown
-            content={content}
-            label={`${label} by ${thread.author}`}
-            enableLinkPreview={!isMobileOrCoarsePointer}
-            preserveSoftBreaks
-            className="discussion-hub__card-expanded-markdown max-w-none"
-          />
+          <Suspense
+            fallback={
+              <div className="discussion-hub__card-expanded-markdown max-w-none">
+                {normalizedBody}
+              </div>
+            }
+          >
+            <DiscussionMarkdown
+              content={content}
+              label={`${label} by ${thread.author}`}
+              enableLinkPreview={!isMobileOrCoarsePointer}
+              preserveSoftBreaks
+              className="discussion-hub__card-expanded-markdown max-w-none"
+            />
+          </Suspense>
           {utility(true)}
         </div>
       ) : (
@@ -1680,6 +1697,10 @@ export function DiscussionsWorkspace({
     top: string;
     width: string;
   } | null>(null);
+
+  useEffect(() => {
+    void loadDiscussionMarkdown().catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     setMobileActionTarget(null);

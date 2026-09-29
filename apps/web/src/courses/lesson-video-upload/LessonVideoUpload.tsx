@@ -1,14 +1,12 @@
-import {
-  ArrowsClockwise,
-  CheckCircle,
-  CircleNotch,
-  CloudArrowUp,
-  FileVideo,
-  PlayCircle,
-  UploadSimple,
-  WarningCircle,
-  X,
-} from "@phosphor-icons/react";
+import { ArrowsClockwise } from "@phosphor-icons/react/ArrowsClockwise";
+import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { CloudArrowUp } from "@phosphor-icons/react/CloudArrowUp";
+import { FileVideo } from "@phosphor-icons/react/FileVideo";
+import { PlayCircle } from "@phosphor-icons/react/PlayCircle";
+import { UploadSimple } from "@phosphor-icons/react/UploadSimple";
+import { WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import { X } from "@phosphor-icons/react/X";
 import {
   forwardRef,
   useCallback,
