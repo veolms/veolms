@@ -63,6 +63,10 @@ export async function probeVideoSource(
   const args = [
     "-v",
     "error",
+    "-protocol_whitelist",
+    "file,http,https,tcp,tls",
+    "-format_whitelist",
+    "mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi,flv,mpegts",
     "-show_entries",
     "format=duration,size,bit_rate:stream=width,height,codec_name,codec_type,r_frame_rate,avg_frame_rate,duration,bit_rate",
     "-of",

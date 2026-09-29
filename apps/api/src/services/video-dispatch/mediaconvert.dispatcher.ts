@@ -133,9 +133,6 @@ export function createMediaConvertDispatcher(options: {
     if (config.MEDIACONVERT_WEBHOOK_URL) {
       userMetadata.webhookUrl = config.MEDIACONVERT_WEBHOOK_URL;
     }
-    if (config.MEDIACONVERT_WEBHOOK_SECRET) {
-      userMetadata.webhookSecret = config.MEDIACONVERT_WEBHOOK_SECRET;
-    }
 
     const destination = outputPrefix.startsWith("s3://")
       ? outputPrefix

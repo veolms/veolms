@@ -1311,43 +1311,49 @@ export function createMediaService({
     logger?: FastifyBaseLogger;
   }): Promise<MediaConvertWebhookResponse> {
     const webhookSecret = services.config?.MEDIACONVERT_WEBHOOK_SECRET;
-    if (webhookSecret) {
-      const signatureHeader =
-        headers["x-fleet-signature"] ||
-        headers["x-hub-signature-256"] ||
-        headers["x-mediaconvert-signature"];
-      if (!signatureHeader) {
-        throw new AppError(
-          401,
-          "UNAUTHORIZED",
-          "Missing MediaConvert webhook signature header.",
-        );
-      }
-      const rawPayload = rawBody
-        ? typeof rawBody === "string"
-          ? rawBody
-          : rawBody.toString("utf-8")
-        : typeof body === "string"
-          ? body
-          : JSON.stringify(body);
+    if (!webhookSecret) {
+      throw new AppError(
+        401,
+        "UNAUTHORIZED",
+        "MediaConvert webhook secret is not configured.",
+      );
+    }
 
-      const expectedSignature = `sha256=${crypto
-        .createHmac("sha256", webhookSecret)
-        .update(rawPayload)
-        .digest("hex")}`;
+    const signatureHeader =
+      headers["x-fleet-signature"] ||
+      headers["x-hub-signature-256"] ||
+      headers["x-mediaconvert-signature"];
+    if (!signatureHeader) {
+      throw new AppError(
+        401,
+        "UNAUTHORIZED",
+        "Missing MediaConvert webhook signature header.",
+      );
+    }
+    const rawPayload = rawBody
+      ? typeof rawBody === "string"
+        ? rawBody
+        : rawBody.toString("utf-8")
+      : typeof body === "string"
+        ? body
+        : JSON.stringify(body);
 
-      const sigBuf = Buffer.from(signatureHeader);
-      const expBuf = Buffer.from(expectedSignature);
-      if (
-        sigBuf.length !== expBuf.length ||
-        !crypto.timingSafeEqual(sigBuf, expBuf)
-      ) {
-        throw new AppError(
-          401,
-          "UNAUTHORIZED",
-          "Invalid MediaConvert webhook signature.",
-        );
-      }
+    const expectedSignature = `sha256=${crypto
+      .createHmac("sha256", webhookSecret)
+      .update(rawPayload)
+      .digest("hex")}`;
+
+    const sigBuf = Buffer.from(signatureHeader);
+    const expBuf = Buffer.from(expectedSignature);
+    if (
+      sigBuf.length !== expBuf.length ||
+      !crypto.timingSafeEqual(sigBuf, expBuf)
+    ) {
+      throw new AppError(
+        401,
+        "UNAUTHORIZED",
+        "Invalid MediaConvert webhook signature.",
+      );
     }
 
     const eventDetail = body?.detail || body;
@@ -1391,6 +1397,14 @@ export function createMediaService({
     }
 
     if (statusRaw === "COMPLETE" || statusRaw === "COMPLETED") {
+      if (job.status === "cancelled") {
+        logger?.info(
+          { jobId: job.id, videoId: job.video_id },
+          "[mediaconvert-webhook] Ignoring completion callback for cancelled job",
+        );
+        return { success: true, status: "cancelled", jobId: job.id };
+      }
+
       const outputGroupDetails = eventDetail?.outputGroupDetails;
       const firstOutput = outputGroupDetails?.[0];
       const playlistPaths = firstOutput?.playlistFilePaths;
