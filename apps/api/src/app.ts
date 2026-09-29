@@ -5,6 +5,7 @@ import fastifyAutoload from "@fastify/autoload";
 import type { Database } from "@veolms/database";
 import Fastify, {
   type FastifyInstance,
+  type FastifyRequest,
   type FastifyServerOptions,
 } from "fastify";
 import type { Kysely } from "kysely";
@@ -21,6 +22,51 @@ import { config } from "./config.ts";
 import { registerBackgroundJobs } from "./background-jobs.ts";
 
 export const API_ROUTE_PREFIX = "/v1";
+
+interface PendingCourseStaticRefresh {
+  courseId: string;
+  courseSlug?: string;
+}
+
+function getCourseMutation(
+  request: FastifyRequest,
+): PendingCourseStaticRefresh | null {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) return null;
+  if (request.routeOptions.url?.includes("static-page-refresh")) return null;
+  const courseId = request.url.match(
+    /\/(?:bin\/)?courses\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})(?:\/|\?|$)/iu,
+  )?.[1];
+  return courseId ? { courseId } : null;
+}
+
+function getCourseSlugFromResponse(payload: unknown): string | undefined {
+  if (typeof payload !== "string" && !Buffer.isBuffer(payload))
+    return undefined;
+  try {
+    const serialized = Buffer.isBuffer(payload)
+      ? payload.toString("utf8")
+      : payload;
+    const parsed: unknown = JSON.parse(serialized);
+    const envelope =
+      parsed && typeof parsed === "object" && "data" in parsed
+        ? parsed.data
+        : parsed;
+    if (!envelope || typeof envelope !== "object") return undefined;
+    if (
+      "course" in envelope &&
+      envelope.course &&
+      typeof envelope.course === "object" &&
+      "slug" in envelope.course &&
+      typeof envelope.course.slug === "string"
+    )
+      return envelope.course.slug;
+    return "slug" in envelope && typeof envelope.slug === "string"
+      ? envelope.slug
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Must stay above the longest path parameter any contract accepts (currently
@@ -49,6 +95,33 @@ export async function createApp({
   });
 
   const appServices = services ?? createServices({ config, logger: app.log });
+  const pendingCourseRefreshes = new WeakMap<
+    FastifyRequest,
+    PendingCourseStaticRefresh
+  >();
+
+  app.addHook("onSend", async (request, _reply, payload) => {
+    const pending = getCourseMutation(request);
+    if (pending) {
+      const courseSlug = getCourseSlugFromResponse(payload);
+      pendingCourseRefreshes.set(request, {
+        ...pending,
+        ...(courseSlug ? { courseSlug } : {}),
+      });
+    }
+    return payload;
+  });
+
+  app.addHook("onResponse", async (request, reply) => {
+    if (reply.statusCode < 200 || reply.statusCode >= 300) return;
+    const pending = pendingCourseRefreshes.get(request);
+    if (!pending || !appServices.courseStaticPages) return;
+    const status = appServices.courseStaticPages.requestRefresh(pending);
+    request.log.info(
+      { courseId: pending.courseId, refreshStatus: status.status },
+      "Queued public course page refresh",
+    );
+  });
 
   // Await this: it installs the Zod compilers and the route-discovery hook that
   // everything registered below depends on.
@@ -150,8 +223,7 @@ export async function createApp({
   // Configure CORS. Private LAN origins are allowed for device-based local
   // development so credentialed requests work from any local IPv4 address.
   await app.register(fastifyCors, {
-    origin: (origin, callback) =>
-      callback(null, isAllowedLanOrigin(origin)),
+    origin: (origin, callback) => callback(null, isAllowedLanOrigin(origin)),
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });

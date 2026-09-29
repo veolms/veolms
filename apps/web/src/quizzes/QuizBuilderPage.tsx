@@ -1,16 +1,14 @@
 import { lazy, Suspense, useMemo, useState } from "react";
-import {
-  BookOpenIcon as BookOpen,
-  CircleNotchIcon as CircleNotch,
-  MagnifyingGlassIcon as MagnifyingGlass,
-  PlusIcon as Plus,
-  PuzzlePieceIcon as PuzzlePiece,
-  ArrowLeftIcon as ArrowLeft,
-} from "@phosphor-icons/react";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
+import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
+import { PuzzlePieceIcon as PuzzlePiece } from "@phosphor-icons/react/PuzzlePiece";
+import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 
 import { useMyCourses } from "../services/courses";
 import { Button } from "../components/Button";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
+import { QuizAuthoringLoadingSkeleton } from "./QuizAuthoringLoadingSkeleton";
 
 const QuizAuthoringPanel = lazy(() =>
   import("./QuizAuthoringPanel").then((module) => ({
@@ -48,14 +46,7 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
         data-quiz-surface=""
         className="mx-auto w-full max-w-[1320px] px-0 py-0.5 sm:px-4 sm:py-6 lg:px-8"
       >
-        <Suspense
-          fallback={
-            <div className="grid min-h-52 place-items-center" role="status">
-              <CircleNotch size={26} className="animate-spin text-(--accent)" />
-              <span className="sr-only">Loading quiz authoring</span>
-            </div>
-          }
-        >
+        <Suspense fallback={<QuizAuthoringLoadingSkeleton />}>
           <QuizAuthoringPanel
             initialQuizId={quizId}
             onBack={() => onNavigatePage?.("/quizzes")}

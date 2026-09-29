@@ -1,9 +1,8 @@
 import { useLayoutEffect, type ReactNode } from "react";
-import { Links, Meta, Outlet, Scripts } from "react-router";
+import { Links, Meta, Outlet, Scripts, useLocation } from "react-router";
 import type { Route } from "./+types/root";
 import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
-import { getEarlyApiBootstrapScript } from "./bootstrap/earlyApiBootstrap";
-import { appBaseStylesheet, fullAppStylesheet } from "./appStylesheet";
+import { appBaseStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
 import { getLearningPlayerBootstrapScript } from "./learning/learningPlayerPreferences";
@@ -18,7 +17,6 @@ import {
 } from "./learning/learningHlsBootstrap";
 import { getVideoPlaybackCdnOrigin } from "./learning/videoPlaybackBootstrap";
 import { QueryProvider } from "./providers/query-provider";
-import { loadAcademyStaticPageData } from "./routes/academyStaticPageData";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
 import {
@@ -46,12 +44,6 @@ interface LayoutProps {
 
 const academyThemeIds = JSON.stringify(academyThemes.map(({ id }) => id));
 const videoPlaybackCdnOrigin = getVideoPlaybackCdnOrigin();
-// React Router's static renderer may evaluate the root through Vite's dev
-// server during a production build. The build flag keeps the SPA fallback on
-// the production route stylesheet path in that case.
-const useDevelopmentStylesheet =
-  import.meta.env.DEV && process.env.VEO_REACT_ROUTER_BUILD !== "true";
-
 const getAppearanceBootstrapScript = () =>
   `(()=>{const r=document.documentElement,p=${academyThemeIds};try{const t=localStorage.getItem("veolms-theme")||"dark";r.dataset.theme=t==="device"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t==="light"?"light":"dark"}catch{}try{const e=localStorage.getItem("veolms-randomize-academy-theme")==="true",s=sessionStorage.getItem("veolms-session-academy-theme"),l=localStorage.getItem("veolms-academy-theme"),c=localStorage.getItem("veolms-academy-theme-version")===${JSON.stringify(ACADEMY_THEME_VERSION)},v=e&&p.includes(s||"")?s:c&&p.includes(l||"")?l:${JSON.stringify(DEFAULT_ACADEMY_THEME)};r.dataset.palette=v}catch{}})();`;
 
@@ -141,6 +133,16 @@ const getInitialLayoutDomState = (): InitialLayoutDomState => {
 };
 // Shared HTML shell wrapping both the academy and authentication routes.
 export function Layout({ children }: LayoutProps) {
+  const { pathname } = useLocation();
+  const isPublicRoute =
+    pathname === "/login" ||
+    pathname === "/mfa-setup" ||
+    pathname === "/register" ||
+    pathname === "/auth/callback" ||
+    pathname === "/explore-courses" ||
+    pathname.startsWith("/explore-courses/");
+  const shouldPreloadAcademyRoute = import.meta.env.DEV && !isPublicRoute;
+
   // The preference scripts run before hydration so they can prevent visual
   // flashes. Snapshot the already-mutated document into React's first render;
   // the server uses the deterministic defaults above.
@@ -190,9 +192,6 @@ export function Layout({ children }: LayoutProps) {
           content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
         />
         <meta name="theme-color" content="#151718" />
-        <script
-          dangerouslySetInnerHTML={{ __html: getEarlyApiBootstrapScript() }}
-        />
         {videoPlaybackCdnOrigin ? (
           <link
             rel="preconnect"
@@ -238,21 +237,25 @@ export function Layout({ children }: LayoutProps) {
             __html: getControlRadiusBootstrapScript(),
           }}
         />
-        <link
-          rel="stylesheet"
-          href={useDevelopmentStylesheet ? fullAppStylesheet : appBaseStylesheet}
-        />
-        {!useDevelopmentStylesheet ? (
-          <script
-            dangerouslySetInnerHTML={{
-              __html: getAcademyPaletteStylesheetBootstrapScript(),
-            }}
-          />
+        {shouldPreloadAcademyRoute ? (
+          <>
+            <link
+              rel="modulepreload"
+              href={`${import.meta.env.BASE_URL}src/routes/academy-layout.tsx?import`}
+            />
+            <link
+              rel="modulepreload"
+              href={`${import.meta.env.BASE_URL}src/CoursesPage.tsx`}
+            />
+          </>
         ) : null}
-        {/* Development keeps the complete stylesheet linked above to avoid
-            React Router's route-critical stylesheet fetch waterfall. In
-            production, route and feature modules provide their own CSS links. */}
-        {!useDevelopmentStylesheet && <Links />}
+        <link rel="stylesheet" href={appBaseStylesheet} />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: getAcademyPaletteStylesheetBootstrapScript(),
+          }}
+        />
+        <Links />
       </head>
       <body {...initialLayoutDomState.bodyAttributes}>
         <div id="root">{children}</div>
@@ -272,15 +275,19 @@ export const meta = () => [
   },
 ];
 
-export function loader({ request, params }: Route.LoaderArgs) {
+export async function loader({ request, params }: Route.LoaderArgs) {
+  if (process.env.VEO_REACT_ROUTER_BUILD !== "true") return null;
+
+  const { loadAcademyStaticPageData } = await import(
+    "./routes/academyStaticPageData"
+  );
   return loadAcademyStaticPageData(request, params.courseSlug);
 }
 
 export function HydrateFallback() {
-  // Route loaders decide whether the user belongs in the academy or auth
-  // flow. Keep the build-time SPA fallback neutral so it cannot expose the
-  // wrong screen while that secure session check is in flight.
-  return <div aria-hidden="true" className="fixed inset-0 bg-(--canvas)" />;
+  // Wait for the academy route to mount before rendering its page-level
+  // loading state. A root-level skeleton would cover the real sidebar/layout.
+  return <div aria-hidden="true" className="min-h-dvh bg-(--canvas)" />;
 }
 
 function SessionInitializer({ children }: { children: ReactNode }) {

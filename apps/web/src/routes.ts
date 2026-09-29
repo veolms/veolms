@@ -3,6 +3,14 @@ import { index, layout, route } from "@react-router/dev/routes";
 
 const marker = "routes/academy-marker.tsx";
 const homeMarker = "routes/home-marker.tsx";
+const publicCoursesRoute =
+  process.env.VEO_REACT_ROUTER_BUILD === "true"
+    ? "routes/public-courses.tsx"
+    : "routes/public-courses.dev.tsx";
+const publicCourseOverviewRoute =
+  process.env.VEO_REACT_ROUTER_BUILD === "true"
+    ? "routes/public-course-overview.tsx"
+    : "routes/public-course-overview.dev.tsx";
 
 export default [
   layout("routes/academy-layout.tsx", { id: "academy-layout" }, [
@@ -116,4 +124,12 @@ export default [
       caseSensitive: true,
     }),
   ]),
+  route("explore-courses", publicCoursesRoute, {
+    id: "public-courses",
+    caseSensitive: true,
+  }),
+  route("explore-courses/:courseSlug", publicCourseOverviewRoute, {
+    id: "public-course-overview",
+    caseSensitive: true,
+  }),
 ] satisfies RouteConfig;

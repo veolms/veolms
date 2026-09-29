@@ -177,6 +177,30 @@ When an exception is necessary:
 - Avoid hidden coupling between features, broad selectors, and imports that cause one module's styling or behavior to leak into another.
 - Do not create, restore, or update unit-test cases for frontend work. Validate changes with the relevant typecheck, lint, build, and existing Playwright E2E checks when applicable.
 
+---
+
+## 6. Performance-First Frontend Development
+
+Performance is part of implementing every new or modified frontend feature. Understand the existing architecture, implement the feature, apply optimizations that have a concrete benefit, and verify functionality and performance before considering the work complete. Follow the patterns already used by similar screens and modules; do not introduce a separate performance architecture.
+
+### Evaluate the relevant costs
+
+For each feature, assess the areas that apply:
+
+- **Routes and bundles:** Keep the initial route bundle reasonably small. Use route-level splitting and lazy loading for genuinely heavy or non-critical code; keep first-render dependencies static. Avoid excessive chunks and unnecessary client-side JavaScript.
+- **Dependencies and runtime:** Check whether existing utilities or native APIs suffice before adding a package. Consider bundle size, hydration, and runtime overhead.
+- **Data:** Fetch only required data, avoid duplicate requests and request waterfalls, parallelize independent requests, and reuse the existing TanStack Query caching and pagination patterns. Do not add another caching system without a demonstrated need.
+- **Rendering and lists:** Avoid unnecessary renders. Add `useMemo`, `useCallback`, or `React.memo` only when profiling or the code path gives a concrete reason. Determine likely dataset size and item cost before choosing normal rendering, pagination, infinite scrolling, or virtualization; do not virtualize by default.
+- **Images:** Reuse existing image utilities. Lazy-load below-the-fold images, preserve eager/high-priority loading for important above-the-fold or LCP images, use responsive variants when available, reserve layout space, and avoid oversized downloads or high priority on every image.
+- **Loading and navigation:** Reuse established skeleton and loading behavior. Do not add a spinner before an existing skeleton or cause a skeleton-to-content double-loading sequence. Prefetch only when it provides a real benefit. Leave the initial application bootstrap/loading workspace unchanged.
+- **Styles and responsive behavior:** Keep feature styles scoped and load them only with the feature. Reuse Tailwind and existing CSS patterns, avoid duplicate or global styles, and preserve the current design and mobile behavior. Maintain accessibility without unnecessary runtime code.
+
+Do not optimize blindly or add memoization, virtualization, dynamic imports, lazy loading, caching, prefetching, libraries, or infrastructure without an actual reason. Use the simplest approach that provides a real benefit, and do not rewrite working code unnecessarily.
+
+### Verification and protection
+
+Preserve existing UI, business logic, functionality, responsive behavior, accessibility, authentication and authorization, API behavior, and performance optimizations. After a feature change, verify its functional behavior and, where relevant, inspect bundle/chunk size, network requests, rendering, loading, list and image behavior, CSS loading, route transitions, and runtime performance. Use observable evidence for performance claims; report checks that could not be run, and do not claim an improvement without evidence. Follow the frontend unit-test and validation requirements above.
+
 ## Manual commit verification
 
 - Do not add or configure a pre-commit hook for the browser memory regression tests.

@@ -15,6 +15,7 @@ import { createPortal } from "react-dom";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
 import { CourseQuizPricingCard } from "./CourseQuizPricingCard";
+import { CourseStaticPageRefreshNotice } from "./CourseStaticPageRefreshNotice";
 import {
   LessonResourceManager,
   toLessonResourceItem,
@@ -3718,6 +3719,7 @@ export function CourseCreatePage({
   const [actionLoading, setActionLoading] = useState<
     "draft" | "save" | "publish" | "unpublish" | "validate" | null
   >(null);
+  const saveActionInFlightRef = useRef(false);
 
   // Page-specific in-flight save states
   const [isSavingBasics, setIsSavingBasics] = useState(false);
@@ -9279,7 +9281,11 @@ export function CourseCreatePage({
 
   const navigateToStep = async (destination: CourseWizardStepId) => {
     cancelTitleCreationDebounce();
-    if (actionLoading !== null || isSavingAllDirtyLessonsRef.current) {
+    if (
+      actionLoading !== null ||
+      saveActionInFlightRef.current ||
+      isSavingAllDirtyLessonsRef.current
+    ) {
       return;
     }
     if (destination === activeStep) {
@@ -9312,6 +9318,9 @@ export function CourseCreatePage({
       setToastMessage("Add a course title to continue.");
       return;
     }
+
+    if (saveActionInFlightRef.current) return;
+    saveActionInFlightRef.current = true;
 
     const wasDirty = isStepDirty(leavingStep);
 
@@ -9355,6 +9364,7 @@ export function CourseCreatePage({
         );
       } finally {
         setActionLoading(null);
+        saveActionInFlightRef.current = false;
       }
     };
 
@@ -9364,7 +9374,9 @@ export function CourseCreatePage({
       leavingStep === "access-rules" ||
       leavingStep === "pricing"
     ) {
-      void persistPreviousStep();
+      await persistPreviousStep();
+    } else {
+      saveActionInFlightRef.current = false;
     }
   };
 
@@ -9432,7 +9444,8 @@ export function CourseCreatePage({
   };
 
   const handleValidateCourseAction = async () => {
-    if (actionLoading || isValidating) return;
+    if (actionLoading || isValidating || saveActionInFlightRef.current) return;
+    saveActionInFlightRef.current = true;
     setActionLoading("validate");
     try {
       await reconcileDirtyState();
@@ -9456,11 +9469,13 @@ export function CourseCreatePage({
       setToastMessage(errorMsg);
     } finally {
       setActionLoading(null);
+      saveActionInFlightRef.current = false;
     }
   };
 
   const handleFinalPublishCourse = async () => {
-    if (actionLoading || isValidating) return;
+    if (actionLoading || isValidating || saveActionInFlightRef.current) return;
+    saveActionInFlightRef.current = true;
     setActionLoading("publish");
     setPublishValidationError(null);
 
@@ -9502,11 +9517,13 @@ export function CourseCreatePage({
       setToastMessage(errorMsg);
     } finally {
       setActionLoading(null);
+      saveActionInFlightRef.current = false;
     }
   };
 
   const handleConfirmUnpublishCourse = async () => {
-    if (!currentCourseId || actionLoading) return;
+    if (!currentCourseId || actionLoading || saveActionInFlightRef.current) return;
+    saveActionInFlightRef.current = true;
     setActionLoading("unpublish");
     try {
       const draftCourse =
@@ -9521,6 +9538,7 @@ export function CourseCreatePage({
       setToastMessage(errorMsg);
     } finally {
       setActionLoading(null);
+      saveActionInFlightRef.current = false;
     }
   };
 
@@ -9587,6 +9605,7 @@ export function CourseCreatePage({
       className="relative flex w-full flex-1 flex-col min-h-full p-0 text-[--text] box-border"
       data-course-wizard
     >
+      <CourseStaticPageRefreshNotice courseId={currentCourseId} />
       {/* Wizard Header */}
       <header className="relative shrink-0 mb-2 max-[768px]:mb-1.5 max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0 max-[768px]:box-border">
         <div className="flex items-start justify-between gap-4 mb-1 max-[768px]:flex-col max-[768px]:gap-2 max-[768px]:mb-1.5">
@@ -9722,10 +9741,7 @@ export function CourseCreatePage({
 
       {/* Wizard Step Panels using SwipeableTabPanel */}
       {isInitialLoadingCourse ? (
-        <CenteredLoadingSpinner
-          label="Loading course details"
-          className="min-h-80 w-full flex-1"
-        />
+        <CourseWizardSkeleton activeStep={activeStep} />
       ) : (
         <Suspense
           fallback={
