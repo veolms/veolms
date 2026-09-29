@@ -6,8 +6,8 @@
 .courses-app {
   --shell-frame-block-space: 22px;
   grid-template-columns: var(--sidebar-expanded-width) minmax(0, 1fr);
-  gap: 14px;
-  padding: 12px;
+  gap: 0;
+  padding: 12px 12px 10px 0;
   background:
     radial-gradient(
       circle at 16% 2%,
@@ -19,16 +19,15 @@
 
 .courses-app--collapsed,
 :root[data-sidebar-state="collapsed"] .courses-app {
-  grid-template-columns: 78px minmax(0, 1fr);
-  padding: 12px;
-  gap: 14px;
+  grid-template-columns: 76px minmax(0, 1fr);
+  padding-left: 0;
 }
 
 .courses-app--hidden,
 :root[data-sidebar-state="hidden"] .courses-app {
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
-  padding: 12px;
+  padding-left: 14px;
 }
 
 .courses-sidebar,
@@ -40,33 +39,10 @@
   position: sticky;
   top: 12px;
   z-index: 50;
-  height: calc(100vh - 24px);
-  height: calc(100dvh - 24px);
-  border-radius: 22px;
-  padding: 20px 14px 16px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--surface) 60%, var(--app-shell)) 0%,
-    color-mix(in srgb, var(--surface) 40%, var(--app-shell)) 100%
-  );
-  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-  box-shadow:
-    0 16px 40px -10px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  -webkit-backdrop-filter: blur(28px) saturate(1.2);
-  backdrop-filter: blur(28px) saturate(1.2);
-}
-
-:root[data-theme="light"] .courses-sidebar {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--surface) 92%, var(--app-shell)) 0%,
-    color-mix(in srgb, var(--surface) 80%, var(--app-shell)) 100%
-  );
-  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-  box-shadow:
-    0 14px 34px -8px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  height: calc(100vh - 22px);
+  border-radius: 0;
+  padding: 12px 14px 0;
+  background: transparent;
 }
 
 .courses-main {
@@ -222,7 +198,19 @@
   }
 
   :root[data-content-layout="framed"] .courses-app::after {
-    display: none !important;
+    content: "";
+    position: absolute;
+    z-index: 46;
+    top: 12px;
+    right: 12px;
+    bottom: 10px;
+    left: var(--main-surface-inline-start);
+    border-radius: 18px;
+    pointer-events: none;
+    box-shadow: var(
+      --application-frame-edge-shadow,
+      var(--surface-depth-edge-shadow, none)
+    );
   }
 }
 
@@ -362,70 +350,48 @@
 }
 
 :root {
-  --sidebar-toggle-surface: color-mix(in srgb, var(--surface-strong) 70%, var(--surface));
-  --sidebar-toggle-ink: #ffffff;
-}
-
-:root[data-theme="light"] {
-  --sidebar-toggle-surface: color-mix(in srgb, var(--surface) 80%, white);
-  --sidebar-toggle-ink: var(--text);
+  --sidebar-toggle-surface: color-mix(
+    in srgb,
+    var(--accent) 28%,
+    var(--surface)
+  );
+  --sidebar-toggle-ink: color-mix(in srgb, var(--accent) 22%, var(--text));
 }
 
 .sidebar-collapse {
-  display: inline-flex;
-  min-width: 34px;
-  width: 34px;
-  height: 32px;
-  flex: 0 0 34px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9px;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-  color: var(--sidebar-toggle-ink);
-  cursor: pointer;
-  transition: all 180ms ease;
+  display: inline-grid;
+  min-width: 36px;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  align-self: auto;
+  border: 0;
   padding: 0;
+  overflow: visible;
+  color: var(--muted);
+  background: transparent;
 }
 
 .sidebar-collapse__asset,
 .sidebar-collapse__asset > svg {
   display: block;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
 }
 
 .sidebar-collapse__asset {
   line-height: 0;
   color: var(--sidebar-toggle-ink);
-  transform: none;
+  transform: translateX(1px);
 }
 
 .sidebar-collapse:hover {
-  transform: scale(1.05);
-  box-shadow: none;
+  border-color: transparent;
   color: var(--text);
-}
-
-.courses-app--collapsed .sidebar-collapse {
-  width: 28px !important;
-  height: 28px !important;
-  flex: 0 0 28px !important;
-}
-
-.courses-app--collapsed .sidebar-collapse__asset,
-.courses-app--collapsed .sidebar-collapse__asset > svg {
-  width: 28px !important;
-  height: 28px !important;
-}
-
-.courses-app--collapsed .sidebar-collapse__asset > svg > rect:nth-of-type(2) {
-  display: none !important;
-}
-
-.courses-app--collapsed .sidebar-collapse__asset > svg > path {
-  transform: translateX(11px) !important;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong));
+  box-shadow: 0 8px 22px
+    color-mix(in srgb, var(--accent-shadow) 48%, transparent);
 }
 
 .sidebar-resize-handle {
@@ -450,13 +416,13 @@
   bottom: 14px;
   left: 4px;
   border-radius: 999px;
-  opacity: 0.38;
+  opacity: 0.34;
   background: linear-gradient(
     180deg,
     transparent 0%,
-    color-mix(in srgb, var(--accent) 36%, transparent) 13%,
-    color-mix(in srgb, var(--accent) 64%, transparent) 50%,
-    color-mix(in srgb, var(--accent) 36%, transparent) 87%,
+    color-mix(in srgb, var(--accent) 34%, transparent) 13%,
+    color-mix(in srgb, var(--accent) 58%, transparent) 50%,
+    color-mix(in srgb, var(--accent) 34%, transparent) 87%,
     transparent 100%
   );
   transition:
@@ -468,7 +434,7 @@
 .sidebar-resize-handle:focus-visible::after,
 .courses-app--resizing .sidebar-resize-handle::after {
   opacity: 1;
-  box-shadow: 0 0 16px color-mix(in srgb, var(--accent-shadow) 75%, transparent);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--accent-shadow) 65%, transparent);
 }
 
 .sidebar-resize-handle:focus-visible {

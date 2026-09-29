@@ -27,6 +27,7 @@ import {
   type CourseOpenOptions,
 } from "../courses/catalogue";
 import { useCurrentUser, useSignOut } from "../services/auth";
+import { useSidenav } from "../services/navigation";
 import { useAuthStore } from "../store/auth.store";
 import type { LearningCourse } from "../StudentPages";
 import {
@@ -94,16 +95,14 @@ import { buildLoginPath } from "../routing/routeAccess";
 import {
   getDefaultNavigationOrder,
   getDefaultNavigationVisibility,
+  getInitialNavigationOrder,
   getInitialNavigationVisibility,
   getVisibleOrderedNavigation,
   getNavigationDestination,
   resolveShellNavigation,
   type NavigationItemWithMetadata,
 } from "../shell/navigation";
-import {
-  getUserRoles,
-  getWorkspaceRoleStorageKey,
-} from "../shell/workspaceRole";
+import { getWorkspaceRoleStorageKey } from "../shell/workspaceRole";
 import {
   readApplicationScrollPosition,
   scrollApplicationTo,
@@ -329,9 +328,10 @@ export default function AcademyLayout() {
   } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
+  const { data: sidenavData } = useSidenav();
   const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
-    () => resolveShellNavigation(getUserRoles(activeUser), Boolean(activeUser)),
-    [activeUser],
+    () => resolveShellNavigation(sidenavData?.menus),
+    [sidenavData?.menus],
   );
 
   useLayoutEffect(() => {
@@ -588,7 +588,13 @@ export default function AcademyLayout() {
         localStorage.getItem(getWorkspaceRoleStorageKey(activeUser?.id)) ||
         "student";
       const orderedNavigation = getVisibleOrderedNavigation(
-        getDefaultNavigationOrder(navigationItems),
+        isPublicNavigation
+          ? getDefaultNavigationOrder(navigationItems)
+          : getInitialNavigationOrder(
+              navigationRole,
+              navigationItems,
+              activeUser?.id,
+            ),
         isPublicNavigation
           ? getDefaultNavigationVisibility(navigationItems)
           : getInitialNavigationVisibility(

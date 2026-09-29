@@ -1,8 +1,8 @@
 import { lazy, Suspense, useMemo, useState } from "react";
-import { BrainIcon as Brain } from "@phosphor-icons/react/Brain";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
+import { PuzzlePieceIcon as PuzzlePiece } from "@phosphor-icons/react/PuzzlePiece";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 
 import { useMyCourses } from "../services/courses";
@@ -94,7 +94,7 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
         <div className="flex items-center justify-between gap-4 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] pb-4 mb-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] text-(--accent)">
-              <Brain size={22} weight="duotone" />
+              <PuzzlePiece size={22} weight="duotone" />
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-bold text-(--text) m-0">

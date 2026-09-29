@@ -130,6 +130,9 @@
     --settings-page-inline-gutter: 0px;
     padding: 0;
   }
+  .settings-tabs {
+    margin-top: 20px;
+  }
   .settings-tabs button {
     min-height: 43px;
     padding-inline: 10px;
