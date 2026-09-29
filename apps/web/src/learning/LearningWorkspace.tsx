@@ -857,6 +857,15 @@ export function LearningWorkspace({
         lessonNumber: selectedLesson,
       });
     });
+  // Lessons only play from their bootstrap manifest, so a failed request must
+  // surface to the learner with a way to try again.
+  const [playbackBootstrapError, setPlaybackBootstrapError] = useState<
+    string | null
+  >(null);
+  const [playbackBootstrapAttempt, setPlaybackBootstrapAttempt] = useState(0);
+  const retryPlaybackBootstrap = useCallback(() => {
+    setPlaybackBootstrapAttempt((attempt) => attempt + 1);
+  }, []);
   const refreshPlaybackToken = useCallback(async () => {
     if (!courseSlug) {
       throw new Error("A course is required to refresh playback access.");
@@ -868,6 +877,7 @@ export function LearningWorkspace({
   }, [courseSlug, selectedLesson]);
 
   useEffect(() => {
+    setPlaybackBootstrapError(null);
     if (!courseSlug) {
       setPlaybackBootstrap(null);
       return;
@@ -889,16 +899,22 @@ export function LearningWorkspace({
       .then((bootstrap) => {
         if (active) setPlaybackBootstrap(bootstrap);
       })
-      .catch(() => {
-        // The early request is an optimization. The player keeps its normal
-        // fallback source and error UI when authorization or the network fails.
-        if (active && !cached) setPlaybackBootstrap(null);
+      .catch((error: unknown) => {
+        // A cached bootstrap stays playable. Without one there is no source,
+        // so report the failure instead of leaving the player preparing.
+        if (!active || cached) return;
+        setPlaybackBootstrap(null);
+        setPlaybackBootstrapError(
+          error instanceof Error && error.message
+            ? error.message
+            : "This video could not be loaded.",
+        );
       });
 
     return () => {
       active = false;
     };
-  }, [courseSlug, selectedLesson]);
+  }, [courseSlug, playbackBootstrapAttempt, selectedLesson]);
   const lessonSequence = useMemo(
     () =>
       curriculumSections.flatMap(({ lessons }) => lessons.map(([id]) => id)),
@@ -2325,6 +2341,8 @@ export function LearningWorkspace({
       media: currentLessonMedia,
       description: selectedLessonDescription,
       playbackBootstrap,
+      playbackUnavailableMessage: playbackBootstrapError,
+      onRetryPlayback: retryPlaybackBootstrap,
       refreshPlaybackToken,
       protectedPlayback,
       lessonTitle: currentLesson[1],
@@ -2390,8 +2408,10 @@ export function LearningWorkspace({
       onMiniPlayerRestoreReady,
       onMinimizePlayer,
       playbackBootstrap,
+      playbackBootstrapError,
       protectedPlayback,
       registerLessonPlayerSeek,
+      retryPlaybackBootstrap,
       refreshPlaybackToken,
       playerCourseLessonsOpen,
       playerCourseLessonsSecondPressHold,

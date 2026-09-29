@@ -167,11 +167,14 @@ export function LearningMiniPlayer({
       ? lessonSequence[selectedLessonIndex + 1]
       : undefined;
 
+  // Latest lesson the user asked for; older bootstrap responses are ignored.
+  const requestedLessonRef = useRef<number | null>(null);
   const handleSelectLesson = useCallback(
     (lessonNumber: number) => {
       const newLesson = curriculumLessonsById.get(lessonNumber);
       const courseSlug = session.courseSlug;
       if (!newLesson || !courseSlug) return;
+      requestedLessonRef.current = lessonNumber;
       const lessonIndex = lessonSequence.indexOf(lessonNumber);
       const lessonPath =
         resolveLearningMiniPlayerLessonPath({
@@ -212,7 +215,11 @@ export function LearningMiniPlayer({
       void getVideoPlaybackBootstrap({ courseSlug, lessonNumber })
         .then((bootstrap) => {
           const current = getLearningMiniPlayerSnapshot();
-          if (current && current.courseSlug === courseSlug) {
+          if (
+            current &&
+            current.courseSlug === courseSlug &&
+            requestedLessonRef.current === lessonNumber
+          ) {
             openLesson(bootstrap.manifestUrl, bootstrap.mediaKey);
           }
         })

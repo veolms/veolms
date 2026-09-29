@@ -7349,6 +7349,17 @@ export function CourseCreatePage({
     }
 
     clearVideoPlaybackBootstrapCache();
+    // A cancelled editor leaves a local draft that wins over server data on
+    // the next editor refresh. Keep its media in sync so the draft cannot
+    // restore the replaced video.
+    const storedDraft = readLessonEditorDraft(courseId, lessonId);
+    if (storedDraft) {
+      const { savedAt: _savedAt, ...draft } = storedDraft;
+      writeLessonEditorDraft(courseId, lessonId, {
+        ...draft,
+        contentMediaId: mediaAssetId,
+      });
+    }
     const latestLesson = (sectionsRef.current || sections)
       .find((section) => section.id === sectionId)
       ?.lessons.find((item) => item.id === lessonId);
@@ -10608,11 +10619,13 @@ export function CourseCreatePage({
                           await mediaService.confirmUpload(
                             presigned.mediaAssetId,
                           );
-                          await handleLessonMediaAttached(
+                          const attached = await handleLessonMediaAttached(
                             activeSection.id,
                             activeLesson.id,
                             presigned.mediaAssetId,
                           );
+                          // A failed attach has already shown its own error.
+                          if (!attached) return;
                           setToastMessage(
                             "Media uploaded and attached successfully.",
                           );
@@ -11614,11 +11627,14 @@ export function CourseCreatePage({
                                           await mediaService.confirmUpload(
                                             presigned.mediaAssetId,
                                           );
-                                          await handleLessonMediaAttached(
-                                            sec.id,
-                                            les.id,
-                                            presigned.mediaAssetId,
-                                          );
+                                          const attached =
+                                            await handleLessonMediaAttached(
+                                              sec.id,
+                                              les.id,
+                                              presigned.mediaAssetId,
+                                            );
+                                          // A failed attach has already shown its own error.
+                                          if (!attached) return;
                                           setToastMessage(
                                             "Media uploaded and attached successfully.",
                                           );
