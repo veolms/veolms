@@ -8,6 +8,50 @@ export interface EnrollmentAnalyticsFilters {
   to?: Date;
 }
 
+export async function listAcademyEnrollments(
+  database: Executor,
+  limit: number,
+) {
+  return await database
+    .selectFrom("enrollments as e")
+    .innerJoin("users as u", "u.id", "e.user_id")
+    .innerJoin("courses as c", "c.id", "e.course_id")
+    .leftJoin("learning_progress as lp", (join) =>
+      join
+        .onRef("lp.user_id", "=", "e.user_id")
+        .onRef("lp.course_id", "=", "e.course_id"),
+    )
+    .select([
+      "e.id as enrollment_id",
+      "e.created_at as enrolled_at",
+      "u.id as student_id",
+      "u.username as student_username",
+      "u.display_name as student_display_name",
+      "u.avatar_data_url as student_avatar_data_url",
+      "c.id as course_id",
+      "c.title as course_title",
+      sql<number | null>`avg(lp.progress_percent)`.as(
+        "average_progress_percent",
+      ),
+    ])
+    .where("u.is_deleted", "=", false)
+    .where("c.deleted_at", "is", null)
+    .groupBy([
+      "e.id",
+      "e.created_at",
+      "u.id",
+      "u.username",
+      "u.display_name",
+      "u.avatar_data_url",
+      "c.id",
+      "c.title",
+    ])
+    .orderBy("e.created_at", "desc")
+    .orderBy("e.id", "desc")
+    .limit(limit)
+    .execute();
+}
+
 function toCourseIdList(courseId: string | string[] | undefined): string[] {
   if (!courseId) return [];
   return Array.isArray(courseId) ? courseId : [courseId];
@@ -112,6 +156,45 @@ export async function getEnrollmentStats(
   };
 }
 
+/**
+ * Counts enrollment-row creation events in UTC 8-hour buckets. `to` is an
+ * exclusive upper bound so the returned buckets compose cleanly into the
+ * adjacent current and previous seven-day windows.
+ */
+export async function getEnrollmentActivityBuckets(
+  database: Executor,
+  filters: EnrollmentAnalyticsFilters,
+): Promise<Array<{ start: Date; value: number }>> {
+  const courseIds = toCourseIdList(filters.courseId);
+  const bucketStart = sql<string>`date_trunc('day', created_at at time zone 'UTC') + floor(extract(hour from created_at at time zone 'UTC') / 8) * interval '8 hours'`;
+  const bucketLabel = sql<string>`to_char(${bucketStart}, 'YYYY-MM-DD"T"HH24:MI:SS.MS')`;
+
+  let query = database
+    .selectFrom("enrollments")
+    .select([
+      bucketLabel.as("bucket_start"),
+      sql<number>`count(*)::int`.as("value"),
+    ])
+    .groupBy(bucketStart)
+    .orderBy(bucketStart);
+
+  if (courseIds.length > 0) {
+    query = query.where("course_id", "in", courseIds);
+  }
+  if (filters.from) {
+    query = query.where("created_at", ">=", filters.from);
+  }
+  if (filters.to) {
+    query = query.where("created_at", "<", filters.to);
+  }
+
+  const rows = await query.execute();
+  return rows.map((row) => ({
+    start: new Date(`${row.bucket_start}Z`),
+    value: Number(row.value),
+  }));
+}
+
 export async function listTopCoursesByEnrollment(
   database: Executor,
   options: {
@@ -143,6 +226,29 @@ export async function listTopCoursesByEnrollment(
   }
 
   const rows = await query.execute();
+  return rows.map((row) => ({
+    courseId: row.course_id,
+    enrollmentCount: Number(row.enrollment_count),
+  }));
+}
+
+export async function listEnrollmentCountsByCourse(
+  database: Executor,
+  options: { courseId?: string | string[] } = {},
+): Promise<Array<{ courseId: string; enrollmentCount: number }>> {
+  const courseIds = toCourseIdList(options.courseId);
+  if (courseIds.length === 0) return [];
+
+  const rows = await database
+    .selectFrom("enrollments")
+    .select([
+      "course_id",
+      sql<number>`count(*)::int`.as("enrollment_count"),
+    ])
+    .where("course_id", "in", courseIds)
+    .groupBy("course_id")
+    .execute();
+
   return rows.map((row) => ({
     courseId: row.course_id,
     enrollmentCount: Number(row.enrollment_count),

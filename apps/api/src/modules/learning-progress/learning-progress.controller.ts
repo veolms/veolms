@@ -20,6 +20,15 @@ export function createLearningProgressController({
     );
   }
 
+  async function getResumeContext(
+    request: FastifyRequest<{ Params: LearningProgressCourseParams }>,
+  ) {
+    return await service.getResumeContext(
+      { id: request.user!.id, roles: request.user!.roles },
+      request.params.courseKey,
+    );
+  }
+
   async function sync(
     request: FastifyRequest<{
       Params: LearningProgressCourseParams;
@@ -33,7 +42,7 @@ export function createLearningProgressController({
     );
   }
 
-  return { get, sync };
+  return { get, getResumeContext, sync };
 }
 
 export type LearningProgressController = ReturnType<

@@ -1,5 +1,10 @@
 export const authorizationKeys = {
   all: ["authorization"] as const,
-  capabilities: (params?: { courseId?: string }) =>
-    [...authorizationKeys.all, "capabilities", params?.courseId ?? "none"] as const,
+  capabilities: (params?: { courseId?: string; userId?: string | null }) =>
+    [
+      ...authorizationKeys.all,
+      "capabilities",
+      params?.userId ?? "none",
+      params?.courseId ?? "none",
+    ] as const,
 };

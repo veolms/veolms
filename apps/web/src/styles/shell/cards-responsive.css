@@ -39,11 +39,6 @@
   display: none !important;
 }
 
-.home-resume-list {
-  border: 0;
-  background: var(--card-surface-raised);
-}
-
 /* Breakpoint defaults are layout synchronization, not an interaction. Keep
    that responsive state change instantaneous so resizing never animates the
    shell track or briefly reveals the sidebar's expanded content. */
@@ -63,7 +58,6 @@
 
 .home-update-list > button,
 .home-discussion-list article,
-.resume-view-all,
 .learning-page-header,
 .creator-metrics,
 .home-goal-summary > div + div {
@@ -662,14 +656,6 @@
     border-radius: 12px;
   }
 
-  /* The lesson list starts below the mobile hero. Let the browser defer its
-     internal layout until it approaches the viewport while retaining a stable
-     remembered block size for scroll continuity. */
-  .home-resume-list {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 260px;
-  }
-
   .home-goal-summary > div {
     min-width: 0;
     gap: clamp(9px, 2vw, 12px);
@@ -756,6 +742,10 @@
 
   .home-resume-copy > p {
     margin-top: 10px;
+  }
+
+  .home-resume-lesson-links {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .home-resume-progress {

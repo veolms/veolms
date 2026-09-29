@@ -1,10 +1,15 @@
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { HeartIcon as Heart, PlusIcon as Plus } from "@phosphor-icons/react";
 import { useState } from "react";
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
 import { ExpandableSearch } from "../ExpandableSearch";
 import { ThemedSelect } from "../ThemedSelect";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
-import { CourseCard } from "./CourseCard";
+import {
+  CourseCard,
+  courseThumbnailSizes,
+  getCourseThumbnailSrcSet,
+} from "./CourseCard";
 import { CourseCardSkeleton } from "./CourseCardSkeleton";
 import type {
   Course,
@@ -30,8 +35,12 @@ export interface CourseCatalogueProps {
   onSortChange: (sort: CourseSort) => void;
   visibleCourses: readonly Course[];
   totalCoursesCount?: number;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  onLoadMore?: () => void;
   onWishlist: (courseId: string) => void;
   onOpenCourse: (course: Course, options?: CourseOpenOptions) => void;
+  onEditIntent?: (course: Course) => void;
   courseMenu: string | null;
   setCourseMenu: (courseId: string | null) => void;
   setNotice: (notice: string) => void;
@@ -40,6 +49,7 @@ export interface CourseCatalogueProps {
   isAdmin?: boolean;
   currentUserId?: string;
   isLoading?: boolean;
+  preloadFirstCourseImage?: boolean;
   onDeleteCourse?: (course: Course) => Promise<void> | void;
   onRestoreCourse?: (course: Course) => Promise<void> | void;
   deletingCourseIds?: ReadonlySet<string>;
@@ -51,6 +61,7 @@ export function CourseCatalogue({
   isAdmin = false,
   currentUserId,
   isLoading = false,
+  preloadFirstCourseImage = false,
   wishlisted,
   enrollmentFilter,
   onEnrollmentFilterChange,
@@ -62,8 +73,12 @@ export function CourseCatalogue({
   onSortChange,
   visibleCourses,
   totalCoursesCount,
+  hasNextPage = false,
+  isFetchingNextPage = false,
+  onLoadMore,
   onWishlist,
   onOpenCourse,
+  onEditIntent,
   courseMenu,
   setCourseMenu,
   setNotice,
@@ -84,7 +99,9 @@ export function CourseCatalogue({
     enrollmentFilter !== "all" ||
     statusFilter !== "all";
   const hasCourses =
-    totalCoursesCount !== undefined ? totalCoursesCount > 0 : isFiltered;
+    totalCoursesCount !== undefined
+      ? totalCoursesCount > 0 || isFiltered
+      : isFiltered;
 
   const isCourseDeleting = (courseId: string) =>
     Boolean(deletingCourseIds?.has(courseId) || localDeletingIds.has(courseId));
@@ -129,7 +146,13 @@ export function CourseCatalogue({
       ? "grid grid-cols-1 gap-4 min-[560px]:grid-cols-2 xl:grid-cols-3"
       : "grid grid-cols-1 gap-4 min-[560px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4";
 
-  const renderCard = (course: Course, index: number) => (
+  const firstImageIndex = visibleCourses.findIndex((course) =>
+    Boolean(course.thumbnail),
+  );
+  const firstImageCourse =
+    firstImageIndex >= 0 ? visibleCourses[firstImageIndex] : undefined;
+
+  const renderCard = (course: Course, isPriorityImage: boolean) => (
     <CourseCard
       key={course.id}
       course={course}
@@ -151,28 +174,32 @@ export function CourseCatalogue({
           `/courses/${encodeURIComponent(getCourseRouteKey(selected))}/overview`,
         )
       }
-      onEdit={(selected) =>
+      onEdit={(selected) => {
+        onEditIntent?.(selected);
         onNavigatePage(
           `/courses/${encodeURIComponent(selected.id)}/edit/basics`,
-        )
-      }
-      onManage={(selected) =>
+        );
+      }}
+      onEditIntent={onEditIntent}
+      onManage={(selected) => {
+        onEditIntent?.(selected);
         onNavigatePage(
           `/courses/${encodeURIComponent(selected.id)}/edit/curriculum`,
-        )
-      }
-      onPublish={(selected) =>
+        );
+      }}
+      onPublish={(selected) => {
+        onEditIntent?.(selected);
         onNavigatePage(
           `/courses/${encodeURIComponent(selected.id)}/edit/publish`,
-        )
-      }
+        );
+      }}
       onDeleteRequested={setPendingDelete}
       onRestoreRequested={onRestoreCourse}
       onNavigatePage={onNavigatePage}
       menuOpen={courseMenu === course.id}
       setMenuOpen={setCourseMenu}
       setNotice={setNotice}
-      imagePriority={index === 0}
+      imagePriority={isPriorityImage}
       isBin={enrollmentFilter === "bin"}
       isDeleting={isCourseDeleting(course.id)}
     />
@@ -183,6 +210,16 @@ export function CourseCatalogue({
       aria-label={activeSection}
       className="mx-auto w-full max-w-[1800px]"
     >
+      {preloadFirstCourseImage && firstImageCourse?.thumbnail ? (
+        <link
+          rel="preload"
+          as="image"
+          href={firstImageCourse.thumbnail}
+          imageSrcSet={getCourseThumbnailSrcSet(firstImageCourse)}
+          imageSizes={courseThumbnailSizes}
+          fetchPriority="high"
+        />
+      ) : null}
       <header className="relative flex flex-col gap-4 border-b border-(--border) pb-0 min-[640px]:pb-4 min-[900px]:flex-row min-[900px]:items-center min-[900px]:gap-3">
         <ExpandableSearch
           inputId="courses-search-input"
@@ -276,7 +313,12 @@ export function CourseCatalogue({
       </div>
 
       {isLoading ? (
-        <div className="mt-4 min-[640px]:mt-6" data-course-grid-section>
+        <div
+          className="mt-4 min-[640px]:mt-6"
+          data-course-grid-section
+          data-course-catalogue-grid
+          suppressHydrationWarning
+        >
           <div className={gridClasses} data-testid="course-catalogue-skeleton">
             {Array.from({ length: 6 }).map((_, i) => (
               <CourseCardSkeleton key={i} role={role} />
@@ -284,9 +326,16 @@ export function CourseCatalogue({
           </div>
         </div>
       ) : visibleCourses.length ? (
-        <div className="mt-4 min-[640px]:mt-6" data-course-grid-section>
+        <div
+          className="mt-4 min-[640px]:mt-6"
+          data-course-grid-section
+          data-course-catalogue-grid
+          suppressHydrationWarning
+        >
           <div className={gridClasses}>
-            {visibleCourses.map((course, index) => renderCard(course, index))}
+            {visibleCourses.map((course, index) =>
+              renderCard(course, index === firstImageIndex),
+            )}
           </div>
         </div>
       ) : (
@@ -329,6 +378,24 @@ export function CourseCatalogue({
           ) : null}
         </div>
       )}
+
+      {hasNextPage && onLoadMore ? (
+        <div className="mt-6 flex justify-center">
+          <button
+            type="button"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-(--control-radius-action) border border-(--border-strong) bg-(--card-surface) px-4 text-[0.8rem] font-semibold text-(--text-secondary) transition-colors hover:bg-(--hover) hover:text-(--text) disabled:cursor-wait disabled:opacity-60"
+            onClick={onLoadMore}
+            aria-busy={isFetchingNextPage}
+            aria-label={isFetchingNextPage ? "Loading more courses" : undefined}
+            disabled={isFetchingNextPage}
+          >
+            {isFetchingNextPage ? (
+              <CircleNotch size={16} className="animate-spin" aria-hidden="true" />
+            ) : null}
+            {isFetchingNextPage ? null : "Load more courses"}
+          </button>
+        </div>
+      ) : null}
 
       <ConfirmDeleteModal
         isOpen={pendingDelete !== null}

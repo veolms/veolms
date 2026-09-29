@@ -11,6 +11,7 @@ import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { LockOpenIcon as LockOpen } from "@phosphor-icons/react/LockOpen";
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import {
   useCallback,
   useContext,
@@ -155,6 +156,7 @@ interface DiscussionThreadPanelProps {
     following: boolean,
   ) => Promise<boolean> | void;
   onSeekToTimestamp?: (seconds: number) => void;
+  onCopyTextNotice?: (message: string) => void;
   onReplyCreateError?: () => void;
   onReplyEditError?: () => void;
   onReplyDeleteError?: () => void;
@@ -184,6 +186,7 @@ export function DiscussionThreadPanel({
   onToggleBookmark,
   onToggleFollow,
   onSeekToTimestamp,
+  onCopyTextNotice,
   onReplyCreateError,
   onReplyEditError,
   onReplyDeleteError,
@@ -717,6 +720,7 @@ export function DiscussionThreadPanel({
                   onToggleBookmark={onToggleBookmark}
                   onToggleFollow={onToggleFollow}
                   onSeekToTimestamp={onSeekToTimestamp}
+                  onCopyTextNotice={onCopyTextNotice}
                   onReplyCreateError={onReplyCreateError}
                   onReplyEditError={onReplyEditError}
                   onReplyDeleteError={onReplyDeleteError}
@@ -780,6 +784,7 @@ interface ThreadSlideProps {
     following: boolean,
   ) => Promise<boolean> | void;
   onSeekToTimestamp?: (seconds: number) => void;
+  onCopyTextNotice?: (message: string) => void;
   onReplyCreateError?: () => void;
   onReplyEditError?: () => void;
   onReplyDeleteError?: () => void;
@@ -808,6 +813,7 @@ function ThreadSlide({
   onToggleBookmark,
   onToggleFollow,
   onSeekToTimestamp,
+  onCopyTextNotice,
   onReplyCreateError,
   onReplyEditError,
   onReplyDeleteError,
@@ -1062,6 +1068,7 @@ function ThreadSlide({
           onToggleBookmark={onToggleBookmark}
           onToggleFollow={onToggleFollow}
           onSeekToTimestamp={onSeekToTimestamp}
+          onCopyTextNotice={onCopyTextNotice}
           onLike={onLike}
           onReply={entry.isLocked ? () => {} : focusComposer}
           onEdit={() => onEditEntry(entry)}
@@ -1078,13 +1085,12 @@ function ThreadSlide({
         <div className="mx-auto max-w-4xl">
           {!active ? null : isBackend && isRepliesLoading && !repliesData ? (
             <div
-              className="py-12 text-center"
+              className="grid min-h-36 place-items-center py-12"
               data-testid="learning-replies-loading"
+              role="status"
+              aria-label="Loading replies"
             >
-              <div className="mx-auto mb-2.5 h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-              <p className="text-sm font-medium text-(--muted)">
-                Loading replies…
-              </p>
+              <LoadingSpinnerIcon size={24} />
             </div>
           ) : isBackend && isRepliesError && !repliesData ? (
             <div
@@ -1128,6 +1134,7 @@ function ThreadSlide({
                 onLikeReply={handleLikeReply}
                 onReport={onReport}
                 onSeekToTimestamp={onSeekToTimestamp}
+                onCopyTextNotice={onCopyTextNotice}
                 courseId={courseId}
               />
             ))
@@ -1158,9 +1165,13 @@ function ThreadSlide({
                   Retry loading replies
                 </button>
               ) : isFetchingNextPage ? (
-                <p className="text-xs font-medium text-(--muted)">
-                  Loading more replies…
-                </p>
+                <span
+                  className="grid place-items-center py-2"
+                  role="status"
+                  aria-label="Loading more replies"
+                >
+                  <LoadingSpinnerIcon size={16} />
+                </span>
               ) : null}
             </div>
           )}
@@ -1198,6 +1209,7 @@ function ThreadRootEntry({
   onToggleBookmark,
   onToggleFollow,
   onSeekToTimestamp,
+  onCopyTextNotice,
   onLike,
   onReply,
   onEdit,
@@ -1222,6 +1234,7 @@ function ThreadRootEntry({
   onDelete: () => void;
   onReport: () => void;
   onSeekToTimestamp?: (seconds: number) => void;
+  onCopyTextNotice?: (message: string) => void;
 }) {
   const isEntryLiked = Boolean(entry.liked);
   const isNote = entry.entryKind === "note" || (entry as any).kind === "note";
@@ -1296,6 +1309,8 @@ function ThreadRootEntry({
               kind={
                 entry.entryKind ?? (entry.isQuestion ? "question" : "comment")
               }
+              textToCopy={entry.content?.markdown ?? entry.text}
+              onCopyTextNotice={onCopyTextNotice}
               isOwn={Boolean(entry.isOwn)}
               canEdit={!isBackendMode || (Boolean(serverId) && !isEditing)}
               canDelete={!isBackendMode || (Boolean(serverId) && !isEditing)}
@@ -1339,6 +1354,7 @@ function ThreadRootEntry({
             linkedAttachments={entry.attachments}
             enableInlineTimestamps={Boolean(onSeekToTimestamp)}
             onSeekToTimestamp={onSeekToTimestamp}
+            preserveSoftBreaks
             className="mt-0.5 max-w-3xl pr-9 sm:pr-10"
           />
           {entry.attachments && entry.attachments.length > 0 ? (
@@ -1410,6 +1426,7 @@ function ThreadReplyEntry({
   onLikeReply,
   onReport,
   onSeekToTimestamp,
+  onCopyTextNotice,
   courseId,
 }: {
   parentId: string | number;
@@ -1440,6 +1457,7 @@ function ThreadReplyEntry({
       | (string | number),
   ) => void;
   onSeekToTimestamp?: (seconds: number) => void;
+  onCopyTextNotice?: (message: string) => void;
   courseId?: string;
 }) {
   const canAcceptReply =
@@ -1492,6 +1510,9 @@ function ThreadReplyEntry({
             <DiscussionAvatar
               src={reply.avatar}
               className="size-9 sm:size-10"
+              loading="lazy"
+              width={40}
+              height={40}
             />
             <div className="min-w-0 flex-1">
               <div className="relative flex items-start gap-2 pr-9">
@@ -1523,6 +1544,8 @@ function ThreadReplyEntry({
                 <CommentActionMenu
                   name={reply.name}
                   kind="reply"
+                  textToCopy={reply.content?.markdown ?? reply.text}
+                  onCopyTextNotice={onCopyTextNotice}
                   isOwn={Boolean(reply.isOwn)}
                   canEdit={
                     !isBackendMode || (Boolean(replyServerId) && !isEditing)
@@ -1605,6 +1628,7 @@ function ThreadReplyEntry({
                   linkedAttachments={reply.attachments}
                   enableInlineTimestamps={Boolean(onSeekToTimestamp)}
                   onSeekToTimestamp={onSeekToTimestamp}
+                  preserveSoftBreaks
                   className="mt-0.5 max-w-3xl pr-9 sm:pr-10"
                 />
               )}

@@ -23,6 +23,7 @@ import {
   SectionHeading,
   StatCard,
 } from "../components/analytics/StatTiles";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import { ThemedSelect, type ThemedSelectOption } from "../ThemedSelect";
 import { useMyCourses } from "../services/courses";
 import { useStudents } from "../services/students";
@@ -148,13 +149,11 @@ function InfiniteScrollSentinel({
   return (
     <div
       ref={sentinelRef}
-      className="flex items-center justify-center p-3 text-xs text-(--muted)"
-      aria-live="polite"
+      className="grid place-items-center p-3"
+      role="status"
+      aria-label="Loading more quiz results"
     >
-      <span className="inline-flex items-center gap-1.5 opacity-75">
-        <span className="size-1.5 rounded-full bg-(--accent) animate-ping" />
-        Loading more…
-      </span>
+      <LoadingSpinnerIcon size={18} />
     </div>
   );
 }

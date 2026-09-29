@@ -13,7 +13,11 @@ import { CommerceErrors } from "../shared/commerce.errors.ts";
 import { AppError } from "../../../lib/errors.ts";
 import * as orderRepo from "./order.repository.ts";
 import * as setupRepo from "../../auth/setup/setup.repository.ts";
-import { toOrderAdminDetails, toOrderContract } from "./order.mapper.ts";
+import {
+  toOrderAdminDetails,
+  toOrderContract,
+  toOrderPaymentSummary,
+} from "./order.mapper.ts";
 
 export interface OrderService {
   getOrderById(scope: OrderScope, orderId: string): Promise<Order>;
@@ -44,12 +48,18 @@ export interface OrderService {
       courseId?: string | string[];
       from?: Date;
       to?: Date;
+      toExclusive?: Date;
       currency?: string;
     },
   ): Promise<orderRepo.OrderStatsRow>;
   getOrderStatusFunnel(
     scope: OrderScope,
-    filters: { from?: Date; to?: Date; courseId?: string | string[] },
+    filters: {
+      from?: Date;
+      to?: Date;
+      toExclusive?: Date;
+      courseId?: string | string[];
+    },
   ): Promise<{ created: number; paid: number; refunded: number }>;
   /** The scope admin-view requests run under (single academy per deployment). */
   getAcademyScope(): Promise<OrderScope>;
@@ -155,7 +165,7 @@ export function createOrderService({
     ];
 
     // Batch load relations in parallel
-    const [allItems, users, coupons, payments, refunds] = await Promise.all([
+    const [allItems, users, coupons, payments, refunds, userPaymentSummaries] = await Promise.all([
       orderRepo.listOrderItemsByOrderIds(database, orderIds),
       scope.type === "academy"
         ? orderRepo.listUsersByIds(database, userIds)
@@ -168,6 +178,9 @@ export function createOrderService({
         : Promise.resolve([]),
       scope.type === "academy"
         ? orderRepo.listRefundsByOrderIds(database, orderIds)
+        : Promise.resolve([]),
+      scope.type === "user"
+        ? orderRepo.listPaymentSummariesByOrderIds(database, orderIds)
         : Promise.resolve([]),
     ]);
 
@@ -198,6 +211,18 @@ export function createOrderService({
       }
     }
 
+    const paymentSummariesByOrderId = new Map<string, ReturnType<typeof toOrderPaymentSummary>>();
+    for (const payment of payments) {
+      if (!paymentSummariesByOrderId.has(payment.order_id)) {
+        paymentSummariesByOrderId.set(payment.order_id, toOrderPaymentSummary(payment));
+      }
+    }
+    for (const payment of userPaymentSummaries) {
+      if (!paymentSummariesByOrderId.has(payment.order_id)) {
+        paymentSummariesByOrderId.set(payment.order_id, toOrderPaymentSummary(payment));
+      }
+    }
+
     const refundsByOrderId = new Map<string, typeof refunds>();
     for (const r of refunds) {
       const list = refundsByOrderId.get(r.order_id) ?? [];
@@ -219,7 +244,10 @@ export function createOrderService({
             })
           : undefined;
 
-      return toOrderContract(order, items, { admin: adminDetails });
+      return toOrderContract(order, items, {
+        admin: adminDetails,
+        paymentSummary: paymentSummariesByOrderId.get(order.id) ?? null,
+      });
     });
 
     const lastOrder = pageRows[pageRows.length - 1]!;
@@ -325,6 +353,7 @@ export function createOrderService({
       courseId?: string | string[];
       from?: Date;
       to?: Date;
+      toExclusive?: Date;
       currency?: string;
     },
   ): Promise<orderRepo.OrderStatsRow> {
@@ -332,6 +361,7 @@ export function createOrderService({
       courseId: filters.courseId,
       from: filters.from,
       to: filters.to,
+      toExclusive: filters.toExclusive,
     });
     const requestedCurrency = filters.currency?.toUpperCase();
     const selected = requestedCurrency
@@ -353,7 +383,12 @@ export function createOrderService({
 
   async function getOrderStatusFunnel(
     scope: OrderScope,
-    filters: { from?: Date; to?: Date; courseId?: string | string[] },
+    filters: {
+      from?: Date;
+      to?: Date;
+      toExclusive?: Date;
+      courseId?: string | string[];
+    },
   ) {
     return await orderRepo.getOrderStatusFunnel(database, scope, filters);
   }

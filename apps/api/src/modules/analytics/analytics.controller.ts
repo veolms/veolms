@@ -1,16 +1,18 @@
 import type { FastifyRequest } from "fastify";
-import type { AnalyticsFilterQuery } from "@veolms/contracts";
+import type { AnalyticsFilterQuery, DashboardQuery } from "@veolms/contracts";
 import type { AnalyticsService } from "./analytics.service.ts";
 
 type RequestContext = FastifyRequest & {
   user: NonNullable<FastifyRequest["user"]>;
+  authorization?: {
+    permission?: string;
+  };
 };
 const context = (request: FastifyRequest) => request as RequestContext;
 const actor = (request: FastifyRequest) => ({
   id: context(request).user.id,
   roles: context(request).user.roles,
 });
-
 export function createAnalyticsController({
   service,
 }: {
@@ -23,6 +25,9 @@ export function createAnalyticsController({
     instructorOverview: async (
       request: FastifyRequest<{ Querystring: AnalyticsFilterQuery }>,
     ) => service.instructorOverview(actor(request), request.query),
+    dashboard: async (
+      request: FastifyRequest<{ Querystring: DashboardQuery }>,
+    ) => service.dashboard(actor(request), "platform", request.query.range),
   };
 }
 

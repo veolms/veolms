@@ -7,6 +7,7 @@ import type {
   VideoQualityLevel,
 } from "@veolms/database";
 import type {
+  MediaImageVariantManifest,
   PresignMediaRequest,
   VideoPlaybackBootstrap,
   VideoPlaybackToken,
@@ -721,6 +722,40 @@ export function createMediaService({
       mediaId,
       isAdmin ? undefined : ownerId,
     );
+  }
+
+  async function getImageVariantManifest(
+    mediaId: string,
+    ownerId?: string,
+    userRoles?: readonly string[],
+  ): Promise<MediaImageVariantManifest> {
+    const media = await getMediaAsset(mediaId, ownerId, userRoles);
+    if (!media || media.type !== "image") {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Image asset not found.");
+    }
+
+    const metadata = isRecord(media.metadata) ? media.metadata : {};
+    const variants = Array.isArray(metadata.variants)
+      ? metadata.variants.flatMap((variant) => {
+          if (!isRecord(variant)) return [];
+          const width = variant.width;
+          const height = variant.height;
+          return typeof width === "number" &&
+            Number.isInteger(width) &&
+            width > 0 &&
+            typeof height === "number" &&
+            Number.isInteger(height) &&
+            height > 0
+            ? [{ width, height }]
+            : [];
+        })
+      : [];
+
+    return {
+      width: media.width,
+      height: media.height,
+      variants: variants.sort((left, right) => left.width - right.width),
+    };
   }
 
   /**
@@ -1474,6 +1509,7 @@ export function createMediaService({
     cancelTranscodeJob,
     getMediaAsset,
     getMediaAssets,
+    getImageVariantManifest,
     getVideoJobProgress,
     getPlaybackBootstrap,
     getPlaybackToken,

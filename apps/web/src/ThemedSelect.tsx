@@ -59,6 +59,8 @@ export interface ThemedSelectProps<Value extends string = string> {
   compactOnMobile?: boolean;
   /** Match the menu to the visible control wrapper around the trigger. */
   matchMenuToContainer?: boolean;
+  onOpen?: () => void;
+  onClose?: () => void;
 }
 
 const joinClasses = (
@@ -98,6 +100,8 @@ export function ThemedSelect<Value extends string>({
   action,
   compactOnMobile = false,
   matchMenuToContainer = false,
+  onOpen,
+  onClose,
 }: ThemedSelectProps<Value>) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -252,6 +256,7 @@ export function ThemedSelect<Value extends string>({
 
   const openMenu = () => {
     if (disabled) return;
+    if (!open) onOpen?.();
     setSearchQuery("");
     const pos = calculatePosition();
     setPosition(pos);
@@ -271,6 +276,7 @@ export function ThemedSelect<Value extends string>({
   };
 
   const closeMenu = (restoreFocus = false) => {
+    if (open) onClose?.();
     setOpen(false);
     setSearchQuery("");
     setPosition(null);

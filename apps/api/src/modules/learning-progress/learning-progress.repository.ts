@@ -10,7 +10,7 @@ export function listUserCourseProgress(
 ) {
   return database
     .selectFrom("learning_progress")
-    .select(["lesson_id", "progress_percent"])
+    .select(["lesson_id", "progress_percent", "updated_at"])
     .where("user_id", "=", userId)
     .where("course_id", "=", courseId)
     .execute();
@@ -65,7 +65,11 @@ export async function getAverageProgressAndCompletionRate(
   const courseIds = toIdList(filters.courseId);
   let query = database
     .selectFrom("learning_progress")
-    .select(["user_id", "course_id", sql<number>`avg(progress_percent)`.as("avg_percent")])
+    .select([
+      "user_id",
+      "course_id",
+      sql<number>`avg(progress_percent)`.as("avg_percent"),
+    ])
     .groupBy(["user_id", "course_id"]);
   if (courseIds.length > 0) {
     query = query.where("course_id", "in", courseIds);
@@ -86,6 +90,38 @@ export async function getAverageProgressAndCompletionRate(
   };
 }
 
+export async function getAverageProgressByCourse(
+  database: LearningProgressExecutor,
+  filters: { courseId?: string | string[] } = {},
+): Promise<Array<{ courseId: string; averageProgressPercent: number }>> {
+  const courseIds = toIdList(filters.courseId);
+  if (courseIds.length === 0) return [];
+
+  const rows = await database
+    .selectFrom("learning_progress")
+    .select([
+      "course_id",
+      "user_id",
+      sql<number>`avg(progress_percent)`.as("avg_percent"),
+    ])
+    .where("course_id", "in", courseIds)
+    .groupBy(["course_id", "user_id"])
+    .execute();
+
+  const totals = new Map<string, { total: number; count: number }>();
+  for (const row of rows) {
+    const current = totals.get(row.course_id) ?? { total: 0, count: 0 };
+    current.total += Number(row.avg_percent);
+    current.count += 1;
+    totals.set(row.course_id, current);
+  }
+
+  return Array.from(totals, ([courseId, value]) => ({
+    courseId,
+    averageProgressPercent: value.total / value.count,
+  }));
+}
+
 /**
  * Distinct-user counts of progress *events* (not full-course averages) in a
  * date range — a simplified stand-in for a per-cohort "started"/"completed"
@@ -97,14 +133,16 @@ export async function getStartedAndCompletedCounts(
   filters: { courseId?: string | string[]; from?: Date; to?: Date },
 ): Promise<{ started: number; completed: number }> {
   const courseIds = toIdList(filters.courseId);
-  let query = database.selectFrom("learning_progress").select([
-    sql<number>`count(distinct user_id) filter (where progress_percent > 0)::int`.as(
-      "started",
-    ),
-    sql<number>`count(distinct user_id) filter (where progress_percent >= 100)::int`.as(
-      "completed",
-    ),
-  ]);
+  let query = database
+    .selectFrom("learning_progress")
+    .select([
+      sql<number>`count(distinct user_id) filter (where progress_percent > 0)::int`.as(
+        "started",
+      ),
+      sql<number>`count(distinct user_id) filter (where progress_percent >= 100)::int`.as(
+        "completed",
+      ),
+    ]);
   if (courseIds.length > 0) {
     query = query.where("course_id", "in", courseIds);
   }
@@ -115,7 +153,10 @@ export async function getStartedAndCompletedCounts(
     query = query.where("updated_at", "<=", filters.to);
   }
   const row = await query.executeTakeFirst();
-  return { started: Number(row?.started ?? 0), completed: Number(row?.completed ?? 0) };
+  return {
+    started: Number(row?.started ?? 0),
+    completed: Number(row?.completed ?? 0),
+  };
 }
 
 /**

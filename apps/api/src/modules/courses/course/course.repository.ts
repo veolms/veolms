@@ -89,7 +89,13 @@ export async function findCourseBySlugIncludingDeleted(
 
 export async function listPublishedCourses(
   database: Kysely<Database>,
-  filters?: { creatorId?: string },
+  filters?: {
+    creatorId?: string;
+    limit?: number;
+    cursor?: { value: string; id: string };
+    search?: string;
+    sort?: "latest" | "title";
+  },
 ) {
   let query = database
     .selectFrom("courses")
@@ -107,6 +113,8 @@ export async function listPublishedCourses(
     .leftJoin("course_settings", "course_settings.course_id", "courses.id")
     .select((eb) => [
       "courses.id",
+      "courses.created_at",
+      sql<string>`courses.created_at::text`.as("created_at_cursor"),
       "courses.slug",
       "courses.title",
       "courses.short_description",
@@ -171,7 +179,53 @@ export async function listPublishedCourses(
     query = query.where("courses.creator_id", "=", filters.creatorId);
   }
 
-  return await query.orderBy("courses.created_at", "asc").execute();
+  if (filters?.search) {
+    const escapedSearch = filters.search.replace(/[\\%_]/gu, "\\$&");
+    const searchPattern = `%${escapedSearch}%`;
+    query = query.where((eb) =>
+      eb.or([
+        eb("courses.title", "ilike", searchPattern),
+        eb("courses.short_description", "ilike", searchPattern),
+        eb("courses.description", "ilike", searchPattern),
+      ]),
+    );
+  }
+
+  if (filters?.cursor) {
+    if (filters.sort === "title") {
+      query = query.where(
+        sql<boolean>`(courses.title, courses.id) > (${filters.cursor.value}, ${filters.cursor.id}::uuid)`,
+      );
+    } else {
+      query = query.where(
+        sql<boolean>`(courses.created_at, courses.id) > (${filters.cursor.value}::timestamptz, ${filters.cursor.id}::uuid)`,
+      );
+    }
+  }
+
+  if (filters?.sort === "title") {
+    query = query.orderBy("courses.title", "asc");
+    query = query.orderBy("courses.id", "asc");
+  } else {
+    query = query.orderBy("courses.created_at", "asc");
+    query = query.orderBy("courses.id", "asc");
+  }
+  if (filters?.limit) query = query.limit(filters.limit + 1);
+
+  return await query.execute();
+}
+
+export async function listPublishedCourseOptions(
+  database: Kysely<Database>,
+) {
+  return await database
+    .selectFrom("courses")
+    .select(["id", "title"])
+    .where("status", "=", "published")
+    .where("deleted_at", "is", null)
+    .orderBy("created_at", "asc")
+    .orderBy("id", "asc")
+    .execute();
 }
 
 export async function findPublishedCourseBySlug(
@@ -271,7 +325,18 @@ export async function listAllCourses(database: Kysely<Database>) {
         .as("lesson_duration_seconds"),
     ])
     .where("courses.deleted_at", "is", null)
+    .orderBy("courses.updated_at", "desc")
     .orderBy("courses.created_at", "desc")
+    .execute();
+}
+
+export async function listAllCourseScope(database: Kysely<Database>) {
+  return await database
+    .selectFrom("courses")
+    .select(["id", "status"])
+    .where("deleted_at", "is", null)
+    .orderBy("updated_at", "desc")
+    .orderBy("created_at", "desc")
     .execute();
 }
 
@@ -343,6 +408,7 @@ export async function listCoursesByCreator(
     ])
     .where("courses.creator_id", "=", creatorId)
     .where("courses.deleted_at", "is", null)
+    .orderBy("courses.updated_at", "desc")
     .orderBy("courses.created_at", "desc")
     .execute();
 }
@@ -354,6 +420,20 @@ export async function listAvailableCoursesByCreator(
   return await database
     .selectFrom("courses")
     .selectAll()
+    .where("creator_id", "=", creatorId)
+    .where("status", "=", "published")
+    .where("deleted_at", "is", null)
+    .orderBy("created_at", "desc")
+    .execute();
+}
+
+export async function listAvailableCourseScopeByCreator(
+  database: Kysely<Database>,
+  creatorId: string,
+) {
+  return await database
+    .selectFrom("courses")
+    .select(["id", "status"])
     .where("creator_id", "=", creatorId)
     .where("status", "=", "published")
     .where("deleted_at", "is", null)

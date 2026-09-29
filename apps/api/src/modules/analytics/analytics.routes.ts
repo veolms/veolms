@@ -1,6 +1,8 @@
 import {
+  dashboardQuerySchema,
   analyticsFilterQuerySchema,
   analyticsOverviewResponseSchema,
+  dashboardSummaryResponseSchema,
 } from "@veolms/contracts";
 import { createAuthContext } from "../auth/shared/auth.context.ts";
 import {
@@ -95,6 +97,32 @@ const analyticsRoutes: RoutePlugin = async (app, options) => {
       ],
     },
     controller.instructorOverview,
+  );
+
+  app.get(
+    "/analytics/dashboard",
+    {
+      schema: {
+        operationId: "getDashboardSummary",
+        tags: ["Analytics"],
+        summary: "Get the dashboard summary",
+        description:
+          "Returns the top dashboard card metrics, Learning Activity, and the range-aware Revenue Overview. Requires the platform-wide analytics.revenue.read permission.",
+        querystring: dashboardQuerySchema,
+        response: {
+          200: jsonResponse(
+            "Dashboard summary",
+            dashboardSummaryResponseSchema,
+          ),
+          ...errors,
+        },
+      },
+      preHandler: [
+        ...auth.mfaVerified,
+        authGuard.authorize("analytics.revenue.read", "platform"),
+      ],
+    },
+    controller.dashboard,
   );
 };
 

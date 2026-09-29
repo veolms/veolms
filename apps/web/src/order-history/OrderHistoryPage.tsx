@@ -1,39 +1,20 @@
-import { useEffect, useRef } from "react";
-import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
-import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { useEffect } from "react";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
-import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
-import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
 import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
-import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
-import { XCircleIcon as XCircle } from "@phosphor-icons/react/XCircle";
 import type { NavigateTo } from "../routing/navigation";
-import type { OrderHistoryTabId } from "./orderHistoryData";
 import { OrderHistoryFiltersBar } from "./OrderHistoryFiltersBar";
 import { OrderHistoryInvoiceModal } from "./OrderHistoryInvoiceModal";
 import { OrderHistoryPagination } from "./OrderHistoryPagination";
 import { OrderHistoryTable } from "./OrderHistoryTable";
 import { useOrderHistoryFilter } from "./useOrderHistoryFilter";
 import { ordersService } from "../services/orders";
+import type { OrderHistoryItem } from "./orderHistoryData";
 
 export interface OrderHistoryPageProps {
   onNavigatePage?: NavigateTo;
   setNotice?: (message: string) => void;
 }
-
-const tabsConfig: readonly {
-  id: OrderHistoryTabId;
-  label: string;
-  Icon: typeof Receipt;
-}[] = [
-  { id: "all", label: "All Orders", Icon: Receipt },
-  { id: "completed", label: "Completed", Icon: CheckCircle },
-  { id: "processing", label: "Processing", Icon: Clock },
-  { id: "refunded", label: "Refunded", Icon: ArrowCounterClockwise },
-  { id: "failed", label: "Failed", Icon: XCircle },
-  { id: "canceled", label: "Canceled", Icon: Prohibit },
-];
 
 export function OrderHistoryPage({
   onNavigatePage,
@@ -43,8 +24,6 @@ export function OrderHistoryPage({
     paginatedOrders,
     totalFilteredCount,
     totalLoadedCount,
-    activeTab,
-    setActiveTab,
     searchQuery,
     setSearchQuery,
     dateRangeFilter,
@@ -57,7 +36,8 @@ export function OrderHistoryPage({
     setCurrentPage,
     pageSize,
     totalPages,
-    tabCounts,
+    sortOrder,
+    toggleSortOrder,
     selectedReceiptOrder,
     setSelectedReceiptOrder,
     resetFilters,
@@ -69,22 +49,20 @@ export function OrderHistoryPage({
     refetch,
   } = useOrderHistoryFilter(setNotice);
 
-  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
-
-  // Keyboard shortcut listener (/ or Cmd+K to search)
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent) => {
       const activeTag = (document.activeElement?.tagName || "").toLowerCase();
       const isInput =
         activeTag === "input" ||
         activeTag === "textarea" ||
         (document.activeElement as HTMLElement)?.isContentEditable;
-
-      if (!isInput) {
-        if (e.key === "/" || ((e.metaKey || e.ctrlKey) && e.key === "k")) {
-          e.preventDefault();
-          document.getElementById("order-history-search-input")?.focus();
-        }
+      if (
+        !isInput &&
+        (event.key === "/" ||
+          ((event.metaKey || event.ctrlKey) && event.key === "k"))
+      ) {
+        event.preventDefault();
+        document.getElementById("order-history-search-input")?.focus();
       }
     };
 
@@ -92,195 +70,172 @@ export function OrderHistoryPage({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const handleDownloadReceipt = (order: typeof selectedReceiptOrder) => {
-    if (!order) return;
-    setNotice?.(
-      `Downloading invoice ${order.invoiceNumber} for order ${order.orderNumber}...`,
-    );
-    window.open(ordersService.getInvoiceDownloadUrl(order.id), "_blank");
+  const handleDownloadReceipt = (order: OrderHistoryItem) => {
+    setNotice?.(`Opening invoice for order ${order.orderNumber}...`);
+    window.open(ordersService.getInvoiceDownloadUrl(order.id, "student"), "_blank", "noopener,noreferrer");
   };
 
+  const hasFilters = Boolean(
+    searchQuery ||
+      statusFilter !== "all" ||
+      dateRangeFilter !== "all" ||
+      paymentMethodFilter !== "all",
+  );
+
   return (
-    <div
-      className="w-full min-w-0 flex flex-col font-sans"
+    <main
+      className="mx-auto flex w-full min-w-0 max-w-[1400px] flex-col gap-5 px-3 pb-8 sm:px-6 sm:pb-12 font-sans"
       aria-labelledby="order-history-page-title"
     >
-      {/* Top Header Row with Title, Description, and Header Icon Badge */}
-      <header className="flex items-start justify-between gap-5 mb-6">
+      {/* Page Header */}
+      <header className="flex items-start justify-between gap-5 pt-1">
         <div>
           <h1
             id="order-history-page-title"
             className="text-[clamp(1.9rem,3.4vw,2.7rem)] font-[740] tracking-[-0.055em] leading-[1.02] text-(--text)"
           >
-            Order History
+            Purchase History
           </h1>
           <p className="mt-2 text-[0.92rem] text-(--muted) leading-normal">
-            Review your academy purchases and payment activity.
+            View your purchases, invoices, and payment history.
           </p>
         </div>
+
         <span
-          className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-[19px] text-(--accent) transition-transform hover:scale-105"
-          style={{
-            background: "color-mix(in srgb, var(--accent) 16%, var(--surface))",
-            boxShadow:
-              "0 14px 26px color-mix(in srgb, var(--accent-shadow) 40%, transparent)",
-          }}
+          className="inline-flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl bg-(--accent)/12 text-(--accent)"
           aria-hidden="true"
         >
-          <ShoppingBag size={28} weight="duotone" />
+          <Receipt size={26} weight="duotone" />
         </span>
       </header>
 
-      {/* Tab Navigation Bar with delicate thin bottom line and icons */}
-      <nav
-        aria-label="Order history categories"
-        className="scrollbar-none mb-5 flex min-w-0 gap-1 overflow-x-auto border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)] bg-transparent md:gap-3"
-        role="tablist"
-      >
-        {tabsConfig.map((tab, idx) => {
-          const isActive = activeTab === tab.id;
-          const count = tabCounts[tab.id];
-          const Icon = tab.Icon;
-          return (
-            <button
-              key={tab.id}
-              ref={(el) => {
-                tabRefs.current[idx] = el;
-              }}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setActiveTab(tab.id)}
-              className={`relative inline-flex min-h-11.5 shrink-0 items-center gap-2 px-3.5 pb-2.5 pt-1 text-xs md:text-sm font-[650] transition-colors cursor-pointer select-none ${
-                isActive
-                  ? "text-(--text)"
-                  : "text-(--muted) hover:text-(--text)"
-              }`}
-            >
-              <Icon
-                size={18}
-                weight={isActive ? "fill" : "regular"}
-                className={
-                  isActive ? "text-(--accent)" : "text-(--muted)"
-                }
-              />
-              <span>
-                {tab.label} ({count})
-              </span>
-              {isActive && (
-                <span
-                  className="absolute bottom-0 left-0 right-0 h-[2.5px] rounded-t-full bg-(--accent)"
-                  aria-hidden="true"
-                />
-              )}
-            </button>
-          );
-        })}
-      </nav>
+      {/* Filter and Search Bar */}
+      <OrderHistoryFiltersBar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        dateRangeFilter={dateRangeFilter}
+        onDateRangeFilterChange={setDateRangeFilter}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        paymentMethodFilter={paymentMethodFilter}
+        onPaymentMethodFilterChange={setPaymentMethodFilter}
+        isFiltered={hasFilters}
+        onResetFilters={resetFilters}
+      />
 
-      {/* Filter and Search Toolbar */}
-      <section aria-label="Order history filters" className="mb-5">
-        <OrderHistoryFiltersBar
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          dateRangeFilter={dateRangeFilter}
-          onDateRangeFilterChange={setDateRangeFilter}
-          statusFilter={statusFilter}
-          onStatusFilterChange={setStatusFilter}
-          paymentMethodFilter={paymentMethodFilter}
-          onPaymentMethodFilterChange={setPaymentMethodFilter}
-        />
-      </section>
-
-      {/* Orders Table Feed */}
-      <section aria-label="Orders history list" className="flex flex-col gap-4">
+      {/* Purchase History Content Section */}
+      <section aria-label="Purchase history" className="min-w-0">
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center">
-            <CircleNotch size={32} className="animate-spin text-(--accent) mb-3" />
-            <h3 className="text-base font-semibold text-(--text)">Loading order history...</h3>
+          <div
+            className="grid min-h-72 place-items-center rounded-2xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface) shadow-(--card-shadow)"
+            style={{ boxShadow: "var(--card-shadow)" }}
+          >
+            <CircleNotch size={32} className="animate-spin text-(--accent)" aria-label="Loading" />
           </div>
         ) : isError ? (
-          <div className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center">
-            <WarningCircle size={32} className="text-rose-400 mb-3" />
-            <h3 className="text-base font-semibold text-(--text)">Unable to load order history</h3>
-            <p className="mt-1 text-xs text-(--muted)">Please check your connection and try again.</p>
+          <div
+            className="flex min-h-72 flex-col items-center justify-center rounded-2xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface) p-6 text-center shadow-(--card-shadow)"
+            style={{ boxShadow: "var(--card-shadow)" }}
+          >
+            <WarningCircle size={30} className="mb-3 text-rose-400" />
+            <h2 className="font-semibold text-(--text)">Unable to load purchase history</h2>
             <button
               type="button"
-              onClick={() => refetch()}
-              className="mt-4 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-white cursor-pointer"
+              onClick={() => void refetch()}
+              className="mt-4 rounded-xl bg-(--accent) px-4 py-2 text-xs sm:text-sm font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer"
             >
-              Retry
+              Try again
             </button>
           </div>
         ) : paginatedOrders.length > 0 ? (
           <>
             <OrderHistoryTable
               orders={paginatedOrders}
+              sortOrder={sortOrder}
+              onToggleSortOrder={toggleSortOrder}
               onViewInvoice={setSelectedReceiptOrder}
+              onDownloadReceipt={handleDownloadReceipt}
+              onNavigatePage={onNavigatePage}
               setNotice={setNotice}
             />
-
             {hasNextPage && (
-              <div className="mt-2 flex items-center justify-center pt-2">
+              <div className="flex justify-center pt-4">
                 <button
                   type="button"
-                  onClick={() => fetchNextPage()}
+                  onClick={() => void fetchNextPage()}
+                  aria-busy={isFetchingNextPage}
+                  aria-label={isFetchingNextPage ? "Loading more orders" : undefined}
                   disabled={isFetchingNextPage}
-                  className="rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs md:text-sm font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer disabled:opacity-50"
+                  className="rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs md:text-sm font-semibold text-(--text) hover:bg-(--hover) transition-colors cursor-pointer disabled:cursor-wait disabled:opacity-60"
                   style={{ boxShadow: "var(--card-shadow)" }}
                 >
-                  {isFetchingNextPage ? "Loading more orders..." : "Load more orders"}
+                  {isFetchingNextPage ? (
+                    <span className="inline-flex items-center">
+                      <CircleNotch size={15} className="animate-spin text-(--accent)" aria-hidden="true" />
+                    </span>
+                  ) : (
+                    "Load more orders"
+                  )}
                 </button>
               </div>
             )}
-
-            {/* Pagination Controls (legacy component kept for compatibility) */}
-            <OrderHistoryPagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalFilteredCount={totalFilteredCount}
-              pageSize={pageSize}
-              onPageChange={setCurrentPage}
-            />
+            {totalFilteredCount > pageSize && (
+              <OrderHistoryPagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalFilteredCount={totalFilteredCount}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+              />
+            )}
+            <p className="mt-3 text-center text-xs text-(--muted)">
+              Showing {paginatedOrders.length} of {totalFilteredCount} loaded orders
+              {hasNextPage ? ` · ${totalLoadedCount} loaded` : ""}
+            </p>
           </>
         ) : (
           <div
-            className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center"
-            style={{ boxShadow: "var(--card-shadow)" }}
+            className="relative flex min-h-85 sm:min-h-96 flex-col items-center justify-center overflow-hidden rounded-2xl sm:rounded-[22px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] p-8 sm:p-12 text-center shadow-(--card-shadow)"
+            style={{
+              background:
+                "radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in srgb, var(--accent) 18%, transparent) 0%, color-mix(in srgb, var(--accent) 6%, transparent) 50%, transparent 75%), linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, var(--card-surface)) 0%, var(--card-surface) 48%, var(--card-surface) 100%)",
+              boxShadow: "var(--card-shadow)",
+            }}
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-(--hover) text-(--muted) mb-3">
-              <Receipt size={24} />
-            </div>
-            <h3 className="text-base font-semibold text-(--text)">
-              No order records found
-            </h3>
-            <p className="mt-1 max-w-sm text-xs md:text-sm text-(--muted)">
-              {searchQuery ||
-              statusFilter !== "all" ||
-              dateRangeFilter !== "all" ||
-              paymentMethodFilter !== "all"
-                ? "Try changing your search query or reset your active filters to view all orders."
-                : "There are no orders in this category."}
-            </p>
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="mt-4 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90 cursor-pointer"
+            <div
+              className="mb-4 flex size-14 sm:size-16 items-center justify-center rounded-2xl sm:rounded-[20px] border border-[color-mix(in_srgb,var(--accent)_22%,transparent)] bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface-strong))] text-(--accent) shadow-[0_12px_24px_color-mix(in_srgb,var(--accent-shadow)_22%,transparent)]"
+              aria-hidden="true"
             >
-              Reset filters
-            </button>
+              <Receipt size={30} weight="duotone" />
+            </div>
+            <h2 className="text-base sm:text-lg font-bold tracking-tight text-(--text)">
+              {hasFilters ? "No purchases match these filters" : "No purchases yet"}
+            </h2>
+            <p className="mt-1.5 max-w-sm text-xs sm:text-sm text-(--muted) leading-relaxed">
+              {hasFilters
+                ? "Try changing your search query or reset your active filters to view all orders."
+                : "Your completed purchases, invoices, and payment history will appear here."}
+            </p>
+            {hasFilters && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-(--accent) px-4 py-2 text-xs sm:text-sm font-semibold text-(--on-accent,#ffffff) shadow-sm transition-all hover:opacity-90 active:scale-[0.98] cursor-pointer"
+              >
+                Reset filters
+              </button>
+            )}
           </div>
         )}
       </section>
 
-      {/* Invoice Modal Dialog */}
+      {/* Invoice Modal */}
       <OrderHistoryInvoiceModal
         order={selectedReceiptOrder}
         isOpen={Boolean(selectedReceiptOrder)}
         onClose={() => setSelectedReceiptOrder(null)}
         onDownloadReceipt={handleDownloadReceipt}
       />
-    </div>
+    </main>
   );
 }
-

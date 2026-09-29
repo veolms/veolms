@@ -13,6 +13,7 @@ export interface AuthorizationDecision {
   allowed: boolean;
   code?: "ALLOWED" | "PERMISSION_DENIED" | "FEATURE_DISABLED";
   reason?: string;
+  permission?: Permission;
   scope?: {
     courseId?: string | null;
   };

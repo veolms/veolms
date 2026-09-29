@@ -5,6 +5,10 @@
   min-width: 0;
 }
 
+.auth-page__container .auth-mfa-setup .auth-card__form-slot {
+  min-height: 0;
+}
+
 .auth-otp {
   display: grid;
   grid-template-columns: repeat(6, 44px);

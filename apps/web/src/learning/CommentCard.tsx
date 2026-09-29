@@ -5,6 +5,7 @@ import { BookmarkSimpleIcon as BookmarkSimple } from "@phosphor-icons/react/Book
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { CopySimpleIcon as CopySimple } from "@phosphor-icons/react/CopySimple";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
@@ -15,6 +16,7 @@ import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { CourseActionMenu, MenuAction, MenuDivider } from "../courses";
 import type {
@@ -30,6 +32,7 @@ import {
 } from "./discussion-editor/types";
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { DiscussionEditor } from "./discussion-editor/DiscussionEditor";
+import { copyTextToClipboard } from "../lib/clipboard";
 import { UndoDeleteButton } from "./useUndoableDeletion";
 import { QueryClientContext } from "@tanstack/react-query";
 import {
@@ -148,6 +151,7 @@ interface CommentCardProps {
     following: boolean,
   ) => Promise<boolean> | void;
   onSeekToTimestamp?: (seconds: number) => void;
+  onCopyTextNotice?: (message: string) => void;
   isBackendMode?: boolean;
   currentUserId?: string;
   userRole?: string;
@@ -172,6 +176,7 @@ export const CommentCard = React.memo(function CommentCard({
   onToggleBookmark,
   onToggleFollow,
   onSeekToTimestamp,
+  onCopyTextNotice,
   isBackendMode = false,
   currentUserId,
   userRole,
@@ -570,6 +575,8 @@ export const CommentCard = React.memo(function CommentCard({
                 <CommentActionMenu
                   name={comment.name}
                   kind={entryKind}
+                  textToCopy={comment.content?.markdown ?? comment.text}
+                  onCopyTextNotice={onCopyTextNotice}
                   isOwn={Boolean(comment.isOwn)}
                   canEdit={
                     canEdit &&
@@ -637,6 +644,7 @@ export const CommentCard = React.memo(function CommentCard({
                 linkedAttachments={comment.attachments}
                 enableInlineTimestamps={Boolean(onSeekToTimestamp)}
                 onSeekToTimestamp={onSeekToTimestamp}
+                preserveSoftBreaks
                 className="mt-0.5 pr-9 sm:pr-10"
               />
 
@@ -785,13 +793,12 @@ export const CommentCard = React.memo(function CommentCard({
             >
               {isBackendEntity && isRepliesLoading && !repliesData ? (
                 <div
-                  className="py-4 text-center"
+                  className="grid min-h-20 place-items-center py-4"
                   data-testid="learning-replies-loading"
+                  role="status"
+                  aria-label="Loading replies"
                 >
-                  <div className="mx-auto mb-2 h-5 w-5 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-                  <p className="text-xs font-medium text-(--muted)">
-                    Loading replies…
-                  </p>
+                  <LoadingSpinnerIcon size={20} />
                 </div>
               ) : isBackendEntity && isRepliesError && !repliesData ? (
                 <div
@@ -841,6 +848,7 @@ export const CommentCard = React.memo(function CommentCard({
                       })
                     }
                     onSeekToTimestamp={onSeekToTimestamp}
+                    onCopyTextNotice={onCopyTextNotice}
                     parentThreadId={comment.id}
                     courseId={courseId}
                   />
@@ -869,9 +877,15 @@ export const CommentCard = React.memo(function CommentCard({
                       disabled={isFetchingNextPage}
                       onClick={() => void fetchNextPage()}
                       data-testid="learning-replies-load-more"
+                      aria-busy={isFetchingNextPage}
+                      aria-label={isFetchingNextPage ? "Loading more replies" : undefined}
                       className="inline-flex items-center rounded-lg bg-(--surface) px-2.5 py-1 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover) disabled:cursor-wait disabled:opacity-60"
                     >
-                      {isFetchingNextPage ? "Loading replies…" : "Load more replies"}
+                      {isFetchingNextPage ? (
+                        <LoadingSpinnerIcon size={16} />
+                      ) : (
+                        "Load more replies"
+                      )}
                     </button>
                   )}
                 </div>
@@ -912,6 +926,7 @@ interface ReplyCardProps {
   onLike: (replyId: string | number) => void;
   onReport: () => void;
   onSeekToTimestamp?: (seconds: number) => void;
+  onCopyTextNotice?: (message: string) => void;
   courseId?: string;
 }
 
@@ -928,6 +943,7 @@ function ReplyCard({
   onLike,
   onReport,
   onSeekToTimestamp,
+  onCopyTextNotice,
   courseId,
 }: ReplyCardProps) {
   const [editing, setEditing] = useState(false);
@@ -977,6 +993,9 @@ function ReplyCard({
             <DiscussionAvatar
               src={reply.avatar}
               className="relative z-10 size-9 sm:size-10"
+              loading="lazy"
+              width={40}
+              height={40}
             />
 
             <div className="min-w-0 flex-1">
@@ -1016,6 +1035,8 @@ function ReplyCard({
                 <CommentActionMenu
                   name={reply.name}
                   kind="reply"
+                  textToCopy={reply.content?.markdown ?? reply.text}
+                  onCopyTextNotice={onCopyTextNotice}
                   isOwn={Boolean(reply.isOwn)}
                   canEdit={!isBackendMode || Boolean(getServerEntityId(reply))}
                   canAcceptAnswer={
@@ -1090,6 +1111,7 @@ function ReplyCard({
                   linkedAttachments={reply.attachments}
                   enableInlineTimestamps={Boolean(onSeekToTimestamp)}
                   onSeekToTimestamp={onSeekToTimestamp}
+                  preserveSoftBreaks
                   className="mt-0.5 pr-9 sm:pr-10"
                 />
               )}
@@ -1275,6 +1297,8 @@ interface CommentActionMenuProps {
   onToggleBookmark?: () => void;
   isFollowing?: boolean;
   onToggleFollow?: () => void;
+  textToCopy?: string;
+  onCopyTextNotice?: (message: string) => void;
   onEdit: () => void;
   onShare: () => void;
   onDelete: () => void;
@@ -1298,6 +1322,8 @@ export function CommentActionMenu({
   onToggleBookmark,
   isFollowing = false,
   onToggleFollow,
+  textToCopy,
+  onCopyTextNotice,
   onEdit,
   onShare,
   onDelete,
@@ -1314,6 +1340,15 @@ export function CommentActionMenu({
   const canBookmark = Boolean(onToggleBookmark);
   const canFollow =
     (kind === "comment" || kind === "question") && Boolean(onToggleFollow);
+  const copyTextAction = textToCopy?.trim() ? (
+    <MenuAction
+      Icon={CopySimple}
+      label="Copy text"
+      onClick={() => {
+        void copyTextToClipboard(textToCopy, onCopyTextNotice);
+      }}
+    />
+  ) : null;
 
   return (
     <CourseActionMenu
@@ -1343,6 +1378,7 @@ export function CommentActionMenu({
                 onClick={onToggleBookmark}
               />
             )}
+            {copyTextAction}
             <MenuDivider />
             {canDelete && (
               <MenuAction
@@ -1367,6 +1403,7 @@ export function CommentActionMenu({
               label={`Share ${actionLabel}`}
               onClick={onShare}
             />
+            {copyTextAction}
             <MenuDivider />
             <MenuAction
               Icon={Flag}
@@ -1403,6 +1440,7 @@ export function CommentActionMenu({
             label={`Share ${actionLabel}`}
             onClick={onShare}
           />
+          {copyTextAction}
           {canLock && onToggleLock && (
             <MenuAction
               Icon={isLocked ? LockOpen : Lock}
@@ -1448,6 +1486,7 @@ export function CommentActionMenu({
             label={`Share ${actionLabel}`}
             onClick={onShare}
           />
+          {copyTextAction}
           {canLock && onToggleLock && (
             <MenuAction
               Icon={isLocked ? LockOpen : Lock}

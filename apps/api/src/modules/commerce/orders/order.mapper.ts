@@ -4,6 +4,7 @@ import type {
   OrderItemSnapshot,
   OrderAdminDetails,
   OrderPaymentMethod,
+  OrderPaymentSummary,
 } from "@veolms/contracts";
 import type { Database, OrderItemType, OrderStatus } from "@veolms/database";
 import type { Selectable } from "kysely";
@@ -88,6 +89,20 @@ export function toOrderPaymentMethod(raw: unknown): OrderPaymentMethod | null {
   return parsed.success ? parsed.data : null;
 }
 
+export function toOrderPaymentSummary(
+  payment?: Pick<Selectable<Database["payments"]>, "gateway_provider" | "payment_method">,
+): OrderPaymentSummary | null {
+  if (!payment) return null;
+  const method = toOrderPaymentMethod(payment.payment_method);
+  if (!method) return null;
+
+  return {
+    provider: payment.gateway_provider,
+    method: method.method,
+    detail: method.wallet ?? method.bank ?? method.cardNetwork ?? null,
+  };
+}
+
 type AdminUserRow = Pick<
   Selectable<Database["users"]>,
   "display_name" | "username" | "email"
@@ -144,6 +159,7 @@ export function toOrderContract(
     status?: OrderStatus;
     paidAt?: Date | null;
     admin?: OrderAdminDetails;
+    paymentSummary?: OrderPaymentSummary | null;
   },
 ): Order {
   const result: Order = {
@@ -170,6 +186,9 @@ export function toOrderContract(
 
   if (overrides?.admin) {
     result.admin = overrides.admin;
+  }
+  if (overrides && "paymentSummary" in overrides) {
+    result.paymentSummary = overrides.paymentSummary;
   }
 
   return result;

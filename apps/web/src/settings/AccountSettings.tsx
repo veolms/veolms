@@ -5,6 +5,7 @@ import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/Down
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { useDeactivateAccount, useSignOut } from "../services/auth";
+import "../styles/features/workspace.css";
 import { ConfirmActionModal } from "../shell/ConfirmActionModal";
 import { LogoutConfirmModal } from "../shell/LogoutConfirmModal";
 import { autosyncManager } from "../lib/autosync";

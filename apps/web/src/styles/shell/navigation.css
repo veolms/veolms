@@ -482,7 +482,7 @@
     var(--surface-strong) 90%,
     var(--accent) 10%
   );
-  background-image: url("/assets/theme-menu-grain.webp");
+  background-image: url("/static/theme-menu-grain.webp");
   background-blend-mode: soft-light;
   background-position: center;
   background-size: cover;

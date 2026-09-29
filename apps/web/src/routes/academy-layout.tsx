@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   startTransition,
   useCallback,
   useEffect,
@@ -15,7 +17,10 @@ import {
   useNavigate,
   useParams,
 } from "react-router";
+import type { Route } from "./+types/academy-layout";
+import academyShellStylesheet from "../shell-theme.css?url";
 import { CoursesPage } from "../CoursesPage";
+import type { AcademyStaticPageData } from "./academyStaticPageData";
 import {
   getCourseRouteKey,
   type Course,
@@ -30,14 +35,12 @@ import {
   getCoursePlayerReturnPath,
   getCoursePlayerSession,
 } from "../learning/coursePlayerNavigation";
-import { LearningMiniPlayer } from "../learning/player/LearningMiniPlayer";
-import {
-  PersistentLearningPlayerHost,
-  type LearningPlayerPresentation,
-  type LessonPlayerMinimizeGestureState,
-  type PersistentLearningPlayerRegistration,
-  type RegisterPersistentLearningPlayer,
-} from "../learning/player";
+import type {
+  LearningPlayerPresentation,
+  PersistentLearningPlayerRegistration,
+  RegisterPersistentLearningPlayer,
+} from "../learning/player/PersistentLearningPlayerHost";
+import type { LessonPlayerMinimizeGestureState } from "../learning/player/useLessonPlayerMinimizeGesture";
 import {
   easeLearningPlayerMotionProgress,
   getLearningBackgroundMotionState,
@@ -60,6 +63,21 @@ import {
   getVideoPlaybackBootstrap,
   refreshVideoPlaybackToken,
 } from "../learning/videoPlaybackBootstrap";
+
+const loadPersistentLearningPlayerHost = () =>
+  import("../learning/player/PersistentLearningPlayerHost");
+const PersistentLearningPlayerHost = lazy(() =>
+  loadPersistentLearningPlayerHost().then((module) => ({
+    default: module.PersistentLearningPlayerHost,
+  })),
+);
+const loadLearningMiniPlayer = () =>
+  import("../learning/player/LearningMiniPlayer");
+const LearningMiniPlayer = lazy(() =>
+  loadLearningMiniPlayer().then((module) => ({
+    default: module.LearningMiniPlayer,
+  })),
+);
 import type { LearningMiniPlayerSession } from "../learning/player/learningMiniPlayerTypes";
 import {
   closeLearningMiniPlayerSession,
@@ -102,6 +120,10 @@ import {
   getMatchedRouteDescriptor,
   normalizeNavigationPath,
 } from "../routing/routeDescriptors";
+
+export const links: Route.LinksFunction = () => [
+  { rel: "stylesheet", href: academyShellStylesheet },
+];
 
 export interface AcademyOutletContext {
   mobileBottomNavigation: boolean;
@@ -297,6 +319,8 @@ export default function AcademyLayout() {
   const selectLessonTokenRef = useRef(0);
   const currentLocationPath = `${location.pathname}${location.search}${location.hash}`;
   const route = getMatchedRouteDescriptor(matches, location.pathname);
+  const staticCourseRouteData = matches.find((match) => match.id === "root")
+    ?.loaderData as AcademyStaticPageData | undefined;
   const {
     data: authUser,
     isError: authUserError,
@@ -432,6 +456,9 @@ export default function AcademyLayout() {
         const routeChanged =
           normalizeNavigationPath(path) !==
           normalizeNavigationPath(locationPathRef.current);
+        const resetDestinationScroll =
+          options?.resetScroll ||
+          (isSettingsPath(path) && !isSettingsPath(sourcePath));
         const sourceStorageKey = getApplicationScrollStorageKey(
           sourcePath,
           options?.sourceScrollRestorationKey,
@@ -455,20 +482,20 @@ export default function AcademyLayout() {
         }
 
         const hasScrollTransition =
-          options?.resetScroll ||
+          resetDestinationScroll ||
           options?.scrollRestorationKey !== undefined ||
           options?.sourceScrollRestorationKey !== undefined;
 
         if (!routeChanged) {
           if (!hasScrollTransition) return;
 
-          const storedDestination = options?.resetScroll
+          const storedDestination = resetDestinationScroll
             ? undefined
             : applicationScrollPositionsRef.current.get(destinationStorageKey);
           const position = storedDestination?.position ?? { left: 0, top: 0 };
           const restorePosition = () => {
             const shouldRestore =
-              options?.resetScroll ||
+              resetDestinationScroll ||
               options?.canRestoreScroll?.(position) !== false;
             scrollApplicationTo({
               ...(shouldRestore ? position : { left: 0, top: 0 }),
@@ -480,10 +507,12 @@ export default function AcademyLayout() {
           return;
         }
 
-        const storedDestination = options?.scrollRestorationKey
-          ? applicationScrollPositionsRef.current.get(destinationStorageKey)
-          : applicationScrollPositionsRef.current.get(path);
-        const position = options?.resetScroll
+        const storedDestination = resetDestinationScroll
+          ? undefined
+          : options?.scrollRestorationKey
+            ? applicationScrollPositionsRef.current.get(destinationStorageKey)
+            : applicationScrollPositionsRef.current.get(path);
+        const position = resetDestinationScroll
           ? { left: 0, top: 0 }
           : options?.preserveScroll
             ? sourcePosition
@@ -492,8 +521,9 @@ export default function AcademyLayout() {
           destinationPath: path,
           sourcePath,
           position,
-          canRestoreScroll:
-            options?.canRestoreScroll ?? storedDestination?.canRestoreScroll,
+          canRestoreScroll: resetDestinationScroll
+            ? undefined
+            : (options?.canRestoreScroll ?? storedDestination?.canRestoreScroll),
         };
         // Update synchronously so a second shortcut pressed before React's
         // route render still compares against the destination just requested.
@@ -680,6 +710,7 @@ export default function AcademyLayout() {
 
   const registerPersistentPlayer =
     useCallback<RegisterPersistentLearningPlayer>((registration) => {
+      void loadPersistentLearningPlayerHost().catch(() => undefined);
       const token = Symbol("persistent-learning-player-registration");
       const restoreVersionAtRegistration = playerRestoreVersionRef.current;
       persistentRegistrationTokenRef.current = token;
@@ -738,6 +769,7 @@ export default function AcademyLayout() {
 
   const openLearningMiniPlayer = useCallback(
     (session: LearningMiniPlayerSession) => {
+      void loadLearningMiniPlayer().catch(() => undefined);
       playerPresentationRef.current = "mini";
       setPlayerPresentation("mini");
       openLearningMiniPlayerSession(session);
@@ -1250,6 +1282,16 @@ export default function AcademyLayout() {
   return (
     <AcademyRouteGuard>
       <CoursesPage
+        isDashboardRoute={
+          normalizeNavigationPath(location.pathname) === "/dashboard"
+        }
+        initialPublishedCoursePage={
+          staticCourseRouteData?.publishedCoursePage
+        }
+        initialPublishedCoursePageNeedsRefresh={
+          staticCourseRouteData?.publishedCoursePageNeedsRefresh
+        }
+        initialCourseOverview={staticCourseRouteData?.courseOverview}
         page={route.page}
         section={route.section}
         settingsTab={route.settingsTab}
@@ -1295,21 +1337,25 @@ export default function AcademyLayout() {
         }
       />
       {persistentPlayer ? (
-        <PersistentLearningPlayerHost
-          player={persistentPlayer}
-          presentation={playerPresentation}
-          onClose={closeLearningMiniPlayer}
-          onRestore={restoreLearningMiniPlayer}
-          onSelectMiniPlayerLesson={selectPersistentMiniPlayerLesson}
-          onOpenCourseOverview={openPersistentPlayerCourseOverview}
-        />
+        <Suspense fallback={null}>
+          <PersistentLearningPlayerHost
+            player={persistentPlayer}
+            presentation={playerPresentation}
+            onClose={closeLearningMiniPlayer}
+            onRestore={restoreLearningMiniPlayer}
+            onSelectMiniPlayerLesson={selectPersistentMiniPlayerLesson}
+            onOpenCourseOverview={openPersistentPlayerCourseOverview}
+          />
+        </Suspense>
       ) : learningMiniPlayer ? (
-        <LearningMiniPlayer
-          session={learningMiniPlayer}
-          onClose={closeLearningMiniPlayer}
-          onRestore={restoreLearningMiniPlayer}
-          onOpenCourseOverview={openStandaloneMiniPlayerCourseOverview}
-        />
+        <Suspense fallback={null}>
+          <LearningMiniPlayer
+            session={learningMiniPlayer}
+            onClose={closeLearningMiniPlayer}
+            onRestore={restoreLearningMiniPlayer}
+            onOpenCourseOverview={openStandaloneMiniPlayerCourseOverview}
+          />
+        </Suspense>
       ) : null}
     </AcademyRouteGuard>
   );

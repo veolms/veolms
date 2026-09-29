@@ -6,6 +6,9 @@ import type {
   CourseDeleteResponse,
   CourseEditorDataResponse,
   CourseOverviewResponse,
+  CourseListResponse,
+  CourseListQuery,
+  CourseOptionsResponse,
   CoursePricing,
   CourseSettings,
   CourseSummary,
@@ -37,11 +40,14 @@ import type {
 } from "@veolms/contracts";
 
 export const coursesService = {
-  list: (creatorId?: string): Promise<{ courses: CourseSummary[] }> => {
-    return api.get<{ courses: CourseSummary[] }>("/courses", {
-      params: creatorId ? { creatorId } : undefined,
+  list: (params?: CourseListQuery): Promise<CourseListResponse> => {
+    return api.get<CourseListResponse>("/courses", {
+      params,
     });
   },
+
+  listOptions: (): Promise<CourseOptionsResponse> =>
+    api.get<CourseOptionsResponse>("/courses/options"),
 
   getBySlug: (slug: string): Promise<PublicCourse> => {
     return api.get<PublicCourse>(`/courses/${encodeURIComponent(slug)}`);

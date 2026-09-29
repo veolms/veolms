@@ -27,11 +27,11 @@
 
 .reading-mode-effects__texture {
   z-index: 2147483645;
-  background-image: url("/assets/reading-mode-grain.webp");
+  background-image: url("/static/reading-mode-grain.webp");
   background-image: image-set(
-    url("/assets/reading-mode-grain.webp") 1x,
-    url("/assets/reading-mode-grain@2x.webp") 2x,
-    url("/assets/reading-mode-grain@3x.webp") 3x
+    url("/static/reading-mode-grain.webp") 1x,
+    url("/static/reading-mode-grain@2x.webp") 2x,
+    url("/static/reading-mode-grain@3x.webp") 3x
   );
   background-repeat: repeat;
   background-position: 0 0;
@@ -224,11 +224,11 @@
 
 .settings-reading-mode__preview-texture {
   z-index: 1;
-  background-image: url("/assets/reading-mode-grain.webp");
+  background-image: url("/static/reading-mode-grain.webp");
   background-image: image-set(
-    url("/assets/reading-mode-grain.webp") 1x,
-    url("/assets/reading-mode-grain@2x.webp") 2x,
-    url("/assets/reading-mode-grain@3x.webp") 3x
+    url("/static/reading-mode-grain.webp") 1x,
+    url("/static/reading-mode-grain@2x.webp") 2x,
+    url("/static/reading-mode-grain@3x.webp") 3x
   );
   background-repeat: repeat;
   background-position: 0 0;

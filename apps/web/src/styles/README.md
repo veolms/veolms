@@ -1,24 +1,22 @@
 # Web CSS structure
 
-`full-app.css` remains the single application stylesheet. It imports
-`styles.css`, then `shell-theme.css`, then reading-mode CSS in the same
-cascade order used before the modular split.
+- `styles.css` is the shared entry for Tailwind v4, resets, theme contracts,
+  reading mode, and browser-wide accessibility and scrollbar behavior.
+- `shell-theme.css` is linked by the academy layout. It contains the academy
+  shell, navigation, shared controls, and course catalogue styling.
+- Route and lazy component styles are imported by their owning modules so the
+  browser fetches them when that route or feature is rendered. The learning
+  player styles are grouped in `learning/learning-feature.css` to retain their
+  package, player, and workspace cascade order.
+- The first document request links only the active palette's dark and light
+  sheets. The palette catalog is fetched when the user opens palette selection
+  so previews and changes remain immediate after the picker is opened.
+- `full-app.css` is the development-only aggregate used to avoid the large
+  route stylesheet waterfall in the local dev server. Production uses the
+  shared entry, academy layout, and route/component-owned styles.
 
-- `base/` contains global tokens, resets, and shared controls.
-- `features/` contains page- and feature-owned rules.
-- `shell/` contains navigation, shell controls, cards, and responsive shell rules.
-- `themes/dark/` and `themes/light/` contain one CSS file per palette.
-- `themes/contracts.css` and `themes/accent-contract.css` contain behavior shared
-  by multiple palettes.
-- `global/` contains app-wide behavior that must remain late in the cascade.
-
-The existing modules are intentionally assembled into one application stylesheet
-for now. Do not reorder those entrypoints without visual-regression coverage:
-the current UI relies on the established cascade.
-
-New work is Tailwind-first and feature-owned. Add exceptional CSS only when
-Tailwind cannot express the required browser behavior, keep it beside its
-component or feature, import it from that owner, and document the browser
-constraint. Global CSS is reserved for resets, theme tokens, and shared browser
-workarounds; existing global rules are legacy code and should be moved only as
-part of a focused, visually verified migration.
+Tailwind remains the shared utility layer and is compiled by Tailwind v4 from
+application sources plus the video player package source. Keep new styling
+Tailwind-first; custom CSS belongs with the route or component that needs it.
+Keep theme contracts, preference-driven global behavior, and the established
+cascade order in their shared entries.

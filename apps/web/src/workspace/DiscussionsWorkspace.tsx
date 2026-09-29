@@ -8,6 +8,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import "../styles/features/discussions.css";
 import type {
   CSSProperties,
   FormEvent,
@@ -37,6 +38,7 @@ import { SealCheckIcon as SealCheck } from "@phosphor-icons/react/SealCheck";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { XIcon as X } from "@phosphor-icons/react/X";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import type { CourseRole } from "../courses/catalogue";
 import { formatRelativeDate } from "../settings/sessionDisplay";
 import {
@@ -83,6 +85,7 @@ import {
 
 type DiscussionStatus = NonNullable<DiscussionWorkspaceCard["status"]>;
 type DiscussionEffectiveOwnership = "all" | "mine";
+type DiscussionWorkspaceCardVariant = "default" | "compact";
 
 const normalizeDiscussionRestorationValue = (
   value: string | undefined,
@@ -375,12 +378,16 @@ function getDiscussionThreadDestination(
   thread: DiscussionWorkspaceCard,
   returnPath = "/discussions/q-and-a",
 ): string {
+  const threadId =
+    thread.itemType === "reply" && thread.parentThreadId
+      ? thread.parentThreadId
+      : thread.id;
   const basePath = getCoursePlayerPath(
     thread.courseId,
     "courses",
     1,
     returnPath,
-    { threadId: thread.id },
+    { threadId },
   );
   if (!thread.lessonId) return basePath;
 
@@ -563,6 +570,7 @@ function DiscussionWorkspaceCardContent({
   expandedTitle,
   previewText,
   parentContext,
+  expandable = true,
 }: {
   thread: DiscussionWorkspaceCard;
   label: string;
@@ -571,6 +579,7 @@ function DiscussionWorkspaceCardContent({
   expandedTitle?: string | null;
   previewText?: string | null;
   parentContext?: string | null;
+  expandable?: boolean;
 }) {
   const isMobileOrCoarsePointer = useSyncExternalStore(
     subscribeToDiscussionSwipePreview,
@@ -590,7 +599,7 @@ function DiscussionWorkspaceCardContent({
   const hasAdditionalContent =
     (Boolean(normalizedTitle) && normalizedTitle !== collapsedPreview) ||
     (Boolean(normalizedBody) && normalizedBody !== collapsedPreview);
-  const canExpand = hasAdditionalContent || isPreviewTruncated;
+  const canExpand = expandable && (hasAdditionalContent || isPreviewTruncated);
   const content = useMemo<DiscussionContent>(
     () => ({
       format: "markdown",
@@ -666,7 +675,8 @@ function DiscussionWorkspaceCardContent({
             content={content}
             label={`${label} by ${thread.author}`}
             enableLinkPreview={!isMobileOrCoarsePointer}
-            className="max-w-none"
+            preserveSoftBreaks
+            className="discussion-hub__card-expanded-markdown max-w-none"
           />
           {utility(true)}
         </div>
@@ -729,7 +739,7 @@ function DiscussionWorkspaceNavigationLink({
 }: {
   destination: string;
   label: string;
-  onNavigatePage: NavigateTo;
+  onNavigatePage?: NavigateTo;
 }) {
   return (
     <a
@@ -749,6 +759,7 @@ function DiscussionWorkspaceNavigationLink({
         }
         const card = event.currentTarget.parentElement;
         if (card && hasTextSelectionWithin(card)) return;
+        if (!onNavigatePage) return;
         event.preventDefault();
         onNavigatePage(destination, { exact: true });
       }}
@@ -794,6 +805,8 @@ function DiscussionWorkspaceCardShell({
   thread,
   className,
   expanded,
+  variant = "default",
+  expandable = true,
   navigation,
   onNavigate,
   actions,
@@ -804,6 +817,8 @@ function DiscussionWorkspaceCardShell({
   thread: DiscussionWorkspaceCard;
   className: string;
   expanded: boolean;
+  variant?: DiscussionWorkspaceCardVariant;
+  expandable?: boolean;
   navigation?: ReactNode;
   onNavigate?: () => void;
   actions?: ReactNode;
@@ -836,7 +851,7 @@ function DiscussionWorkspaceCardShell({
       return;
     }
 
-    if (isMobileOrCoarsePointer && !expanded) {
+    if (expandable && isMobileOrCoarsePointer && !expanded) {
       const readMore = getVisibleCollapsedCardToggle(event.currentTarget);
       if (readMore) {
         readMore.click();
@@ -856,6 +871,7 @@ function DiscussionWorkspaceCardShell({
         "select-none",
         className,
         navigation ? "is-navigable" : "is-static",
+        variant === "compact" ? "is-compact" : "",
         expanded ? "is-expanded" : "is-collapsed",
         onMobileActions
           ? "transition-transform duration-100 ease-out motion-reduce:transition-none"
@@ -903,15 +919,19 @@ function DiscussionWorkspaceQuestionCard({
   showActions,
   onRequestMobileActions,
   setNotice,
+  variant = "default",
+  expandable = true,
 }: {
   thread: DiscussionWorkspaceCard;
-  onNavigatePage: NavigateTo;
+  onNavigatePage?: NavigateTo;
   showActions: boolean;
   onRequestMobileActions?: (
     card: DiscussionWorkspaceCard,
     destination: string | null,
   ) => void;
   setNotice?: (message: string) => void;
+  variant?: DiscussionWorkspaceCardVariant;
+  expandable?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const metadataItems = getDiscussionWorkspaceMetadataItems(thread);
@@ -931,7 +951,9 @@ function DiscussionWorkspaceQuestionCard({
     <DiscussionWorkspaceCardShell
       thread={thread}
       className="discussion-thread--question"
-      expanded={expanded}
+      expanded={expandable && expanded}
+      variant={variant}
+      expandable={expandable}
       navigation={
         <DiscussionWorkspaceNavigationLink
           destination={destination}
@@ -941,7 +963,11 @@ function DiscussionWorkspaceQuestionCard({
           onNavigatePage={onNavigatePage}
         />
       }
-      onNavigate={() => onNavigatePage(destination, { exact: true })}
+      onNavigate={
+        onNavigatePage
+          ? () => onNavigatePage(destination, { exact: true })
+          : undefined
+      }
       onMobileActions={
         onRequestMobileActions
           ? () => onRequestMobileActions(thread, destination)
@@ -997,9 +1023,10 @@ function DiscussionWorkspaceQuestionCard({
       <DiscussionWorkspaceCardContent
         thread={thread}
         label="Question"
-        expanded={expanded}
+        expanded={expandable && expanded}
         onExpandedChange={setExpanded}
         expandedTitle={thread.title}
+        expandable={expandable}
       />
       <DiscussionWorkspaceMetadataRow items={metadataItems} />
     </DiscussionWorkspaceCardShell>
@@ -1012,15 +1039,19 @@ function DiscussionWorkspaceCommentCard({
   showActions,
   onRequestMobileActions,
   setNotice,
+  variant = "default",
+  expandable = true,
 }: {
   thread: DiscussionWorkspaceCard;
-  onNavigatePage: NavigateTo;
+  onNavigatePage?: NavigateTo;
   showActions: boolean;
   onRequestMobileActions?: (
     card: DiscussionWorkspaceCard,
     destination: string | null,
   ) => void;
   setNotice?: (message: string) => void;
+  variant?: DiscussionWorkspaceCardVariant;
+  expandable?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const metadataItems = getDiscussionWorkspaceMetadataItems(thread);
@@ -1036,7 +1067,9 @@ function DiscussionWorkspaceCommentCard({
     <DiscussionWorkspaceCardShell
       thread={thread}
       className="discussion-thread--comment"
-      expanded={expanded}
+      expanded={expandable && expanded}
+      variant={variant}
+      expandable={expandable}
       navigation={
         <DiscussionWorkspaceNavigationLink
           destination={destination}
@@ -1046,7 +1079,11 @@ function DiscussionWorkspaceCommentCard({
           onNavigatePage={onNavigatePage}
         />
       }
-      onNavigate={() => onNavigatePage(destination, { exact: true })}
+      onNavigate={
+        onNavigatePage
+          ? () => onNavigatePage(destination, { exact: true })
+          : undefined
+      }
       onMobileActions={
         onRequestMobileActions
           ? () => onRequestMobileActions(thread, destination)
@@ -1085,8 +1122,9 @@ function DiscussionWorkspaceCommentCard({
       <DiscussionWorkspaceCardContent
         thread={thread}
         label="Comment"
-        expanded={expanded}
+        expanded={expandable && expanded}
         onExpandedChange={setExpanded}
+        expandable={expandable}
       />
       <DiscussionWorkspaceMetadataRow items={metadataItems} />
     </DiscussionWorkspaceCardShell>
@@ -1234,12 +1272,7 @@ function DiscussionWorkspaceMentionCard({
     : null;
   const destination = isNote
     ? getDiscussionNoteDestination(mention, "/discussions/mentions")
-    : getDiscussionThreadDestination(
-        isReply && mention.parentThreadId
-          ? { ...mention, id: mention.parentThreadId }
-          : mention,
-        "/discussions/mentions",
-      );
+    : getDiscussionThreadDestination(mention, "/discussions/mentions");
   const destinationLabel = [mention.course, mention.lesson]
     .filter(Boolean)
     .join(", ");
@@ -1351,15 +1384,19 @@ function DiscussionWorkspaceNoteCard({
   showActions,
   onRequestMobileActions,
   setNotice,
+  variant = "default",
+  expandable = true,
 }: {
   note: DiscussionWorkspaceCard;
-  onNavigatePage: NavigateTo;
+  onNavigatePage?: NavigateTo;
   showActions: boolean;
   onRequestMobileActions?: (
     card: DiscussionWorkspaceCard,
     destination: string | null,
   ) => void;
   setNotice?: (message: string) => void;
+  variant?: DiscussionWorkspaceCardVariant;
+  expandable?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const timestampLabel = formatNoteTimestamp(note.timestampSeconds);
@@ -1375,7 +1412,9 @@ function DiscussionWorkspaceNoteCard({
     <DiscussionWorkspaceCardShell
       thread={note}
       className="discussion-thread--note"
-      expanded={expanded}
+      expanded={expandable && expanded}
+      variant={variant}
+      expandable={expandable}
       navigation={
         destination ? (
           <DiscussionWorkspaceNavigationLink
@@ -1388,7 +1427,7 @@ function DiscussionWorkspaceNoteCard({
         ) : undefined
       }
       onNavigate={
-        destination
+        destination && onNavigatePage
           ? () => onNavigatePage(destination, { exact: true })
           : undefined
       }
@@ -1428,12 +1467,59 @@ function DiscussionWorkspaceNoteCard({
       <DiscussionWorkspaceCardContent
         thread={note}
         label="Note"
-        expanded={expanded}
         onExpandedChange={setExpanded}
+        expanded={expandable && expanded}
         expandedTitle={note.title}
+        expandable={expandable}
       />
       <DiscussionWorkspaceMetadataRow items={metadataItems} />
     </DiscussionWorkspaceCardShell>
+  );
+}
+
+export function DiscussionWorkspaceCard({
+  card,
+  onNavigatePage,
+  variant = "default",
+  expandable = true,
+}: {
+  card: DiscussionWorkspaceCard;
+  onNavigatePage?: NavigateTo;
+  variant?: DiscussionWorkspaceCardVariant;
+  expandable?: boolean;
+}) {
+  if (card.itemType === "note" || card.kind === "note") {
+    return (
+      <DiscussionWorkspaceNoteCard
+        note={card}
+        onNavigatePage={onNavigatePage}
+        showActions={false}
+        variant={variant}
+        expandable={expandable}
+      />
+    );
+  }
+
+  if (card.kind === "question" || card.kind === "qna") {
+    return (
+      <DiscussionWorkspaceQuestionCard
+        thread={card}
+        onNavigatePage={onNavigatePage}
+        showActions={false}
+        variant={variant}
+        expandable={expandable}
+      />
+    );
+  }
+
+  return (
+    <DiscussionWorkspaceCommentCard
+      thread={card}
+      onNavigatePage={onNavigatePage}
+      showActions={false}
+      variant={variant}
+      expandable={expandable}
+    />
   );
 }
 
@@ -2276,6 +2362,9 @@ export function DiscussionsWorkspace({
             <ThemedSelect
               onValueChange={setCourse}
               ariaLabel="Filter discussions by course"
+              searchable
+              searchPlaceholder="Search courses..."
+              defaultLimit={8}
               triggerClassName="discussion-hub__select-trigger"
               contentClassName={selectContentClassName}
               menuMaxWidth={inSheet ? Number.POSITIVE_INFINITY : undefined}
@@ -2731,19 +2820,16 @@ export function DiscussionsWorkspace({
                       aria-live="polite"
                     >
                       {isFetchingNextPage && (
-                        <p className="py-1.5 text-center text-xs font-medium text-(--muted)">
-                          {isCommentsTab
-                            ? "Loading more comments…"
-                            : isNotesTab
-                              ? "Loading more notes…"
-                              : isMentionsTab
-                                ? "Loading more mentions…"
-                                : isFollowingTab
-                                  ? "Loading more followed discussions…"
-                                  : isBookmarksTab
-                                    ? "Loading more bookmarks…"
-                                    : "Loading more discussions…"}
-                        </p>
+                        <div
+                          className="grid min-h-12 place-items-center"
+                          role="status"
+                          aria-label={activeLoadingLabel.replace(
+                            "Loading ",
+                            "Loading more ",
+                          )}
+                        >
+                          <LoadingSpinnerIcon size={18} />
+                        </div>
                       )}
                       {isFetchNextPageError && (
                         <div className="flex justify-center py-3">

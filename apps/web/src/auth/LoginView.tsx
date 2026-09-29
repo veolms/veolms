@@ -19,6 +19,7 @@ import { resolveAuthenticatedDestination } from "../routing/routeAccess";
 import { productName } from "../routing/routeDescriptors";
 import { useLogin, useRegister, useSendOtp } from "../services/auth";
 import { authStore } from "../store/auth.store";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 
 function resolvePayload(identifier: AuthIdentifier) {
   return identifier.method === "email"
@@ -226,6 +227,9 @@ export function LoginView() {
           onDone={() => {
             dispatch({ type: "ADMIN_MFA_SETUP_DONE" });
           }}
+          onClearError={() => {
+            dispatch({ type: "ADMIN_MFA_SETUP_ERROR_CLEARED" });
+          }}
           onError={(message) => {
             dispatch({ type: "ADMIN_MFA_SETUP_FAILED", message });
           }}
@@ -336,9 +340,9 @@ export function LoginView() {
           }}
         >
           <AuthBrandMark />
-          <p className="auth-mfa-setup__loading" style={{ margin: 0 }}>
-            Redirecting to your profile…
-          </p>
+          <span role="status" aria-label="Redirecting to your profile">
+            <LoadingSpinnerIcon size={24} />
+          </span>
         </div>
       );
     }
