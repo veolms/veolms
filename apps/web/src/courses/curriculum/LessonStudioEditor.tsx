@@ -10,13 +10,13 @@ import { LockKeyIcon as LockKey } from "@phosphor-icons/react/LockKey";
 import { PaperclipIcon as Paperclip } from "@phosphor-icons/react/Paperclip";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
-import { UploadSimpleIcon as UploadSimple } from "@phosphor-icons/react/UploadSimple";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import {
   forwardRef,
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
   type DragEvent,
@@ -37,6 +37,7 @@ import {
   type AttachedMediaInfo,
 } from "./LessonMediaWorkspace";
 import { LessonResourceIcon } from "../lesson-resources/LessonResourceIcon";
+import { mediaService } from "../../services/media";
 
 export interface StudioLessonResourceItem {
   id: string;
@@ -62,6 +63,7 @@ export interface LessonStudioEditorProps {
   sectionNumber: number;
   sectionTitle: string;
   lessonNumber: number;
+  playbackLessonNumber?: number;
   lessonTitle: string;
   courseSlug?: string;
   courseTitle?: string;
@@ -105,6 +107,7 @@ export const LessonStudioEditor = forwardRef<
   sectionNumber,
   sectionTitle,
   lessonNumber,
+  playbackLessonNumber,
   lessonTitle: initialTitle,
   courseSlug,
   courseTitle,
@@ -137,6 +140,11 @@ export const LessonStudioEditor = forwardRef<
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [contentType, setContentType] = useState<StudioLessonContentType>(initialContentType);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
+  // Bumped when processing finishes so the workspace requests playback again.
+  const [playbackRevision, setPlaybackRevision] = useState(0);
+  // Asset whose generated thumbnail is available while it is still processing.
+  const [processingThumbnailMediaId, setProcessingThumbnailMediaId] =
+    useState<string | null>(null);
   const [isPublished, setIsPublished] = useState(initialIsPublished);
   const [isPreview, setIsPreview] = useState(initialIsPreview);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -154,6 +162,19 @@ export const LessonStudioEditor = forwardRef<
   useEffect(() => {
     setTitle(initialTitle);
   }, [initialTitle]);
+
+  const attachedMediaId = mediaInfo?.id;
+  useEffect(() => {
+    setProcessingThumbnailMediaId(null);
+  }, [attachedMediaId]);
+
+  const workspaceMediaInfo = useMemo<AttachedMediaInfo | null>(() => {
+    if (!processingThumbnailMediaId) return mediaInfo ?? null;
+    const thumbnailUrl = mediaService.getVideoThumbnailUrl(
+      processingThumbnailMediaId,
+    );
+    return mediaInfo ? { ...mediaInfo, thumbnailUrl } : { thumbnailUrl };
+  }, [mediaInfo, processingThumbnailMediaId]);
 
   useEffect(() => {
     setContentType(initialContentType);
@@ -494,11 +515,12 @@ export const LessonStudioEditor = forwardRef<
         <div className="lg:col-span-7 flex flex-col gap-4 min-w-0">
           <LessonMediaWorkspace
             contentType={contentType}
-            lessonNumber={lessonNumber}
+            lessonNumber={playbackLessonNumber}
             lessonTitle={title}
             courseSlug={courseSlug}
             courseTitle={courseTitle}
-            mediaInfo={mediaInfo}
+            mediaInfo={workspaceMediaInfo}
+            playbackRevision={playbackRevision}
             previewFile={previewFile}
             disabled={isSaving}
             onUploadFile={(file) => {
@@ -517,7 +539,9 @@ export const LessonStudioEditor = forwardRef<
                 disabled={isSaving}
                 onPreviewFile={setPreviewFile}
                 onMediaAttached={onMediaAttached}
+                onThumbnailAvailable={setProcessingThumbnailMediaId}
                 onProcessingComplete={() => {
+                  setPlaybackRevision((revision) => revision + 1);
                   void onProcessingComplete?.();
                 }}
               />

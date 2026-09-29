@@ -37,6 +37,19 @@ export const mediaService = {
     return `${getApiBaseUrl().replace(/\/$/, "")}/media/${mediaAssetId}`;
   },
 
+  /**
+   * Public CDN URL of the frame the transcoder captures for a video asset.
+   * The key mirrors the API's `thumbnailDestination`; the file exists once
+   * the transcode job has passed its thumbnail step.
+   */
+  getVideoThumbnailUrl(mediaAssetId: string): string {
+    const cdnBaseUrl = String(import.meta.env.VITE_CDN_URL || "/cdn").replace(
+      /\/+$/,
+      "",
+    );
+    return `${cdnBaseUrl}/public/thumbnails/${encodeURIComponent(mediaAssetId)}/original.webp`;
+  },
+
   presignMediaUpload(
     payload: PresignMediaRequest,
   ): Promise<PresignMediaResponse> {

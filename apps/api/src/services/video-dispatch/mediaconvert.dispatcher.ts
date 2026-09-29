@@ -216,7 +216,10 @@ export function createMediaConvertDispatcher(options: {
           ? rawDest
           : `${rawDest}/`;
 
-      outputGroups.push({
+      // Output groups are processed in order. Capturing the frame first makes
+      // the thumbnail available early in processing instead of after every
+      // rendition has been encoded.
+      outputGroups.unshift({
         Name: "Thumbnail_Group",
         OutputGroupSettings: {
           Type: "FILE_GROUP_SETTINGS",

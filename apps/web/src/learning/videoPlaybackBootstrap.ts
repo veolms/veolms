@@ -28,6 +28,7 @@ export class VideoPlaybackBootstrapError extends Error {
 export interface VideoPlaybackBootstrapRequest {
   courseSlug: string;
   lessonNumber: number;
+  mediaId?: string;
   signal?: AbortSignal;
 }
 
@@ -83,8 +84,9 @@ export function getVideoPlaybackCdnOrigin(): string | null {
 function requestKey({
   courseSlug,
   lessonNumber,
+  mediaId,
 }: VideoPlaybackBootstrapRequest) {
-  return `${courseSlug}\u0000${lessonNumber}`;
+  return `${courseSlug}\u0000${lessonNumber}\u0000${mediaId ?? ""}`;
 }
 
 function playbackPath(

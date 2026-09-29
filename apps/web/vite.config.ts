@@ -188,6 +188,22 @@ export default defineConfig(({ command, mode }) => {
         "axios",
         "clsx",
         "tailwind-merge",
+        // The markdown pipeline (unified/micromark) reaches CommonJS packages
+        // such as `debug` and `extend`. With discovery disabled they would be
+        // served as raw ESM and fail with a missing `default` export.
+        "react-markdown",
+        "remark-gfm",
+        // The workspace video player is served from source, so its own
+        // markdown dependencies must be listed explicitly as well.
+        "@veolms/video-player > unified",
+        "@veolms/video-player > remark-parse",
+        "@veolms/video-player > remark-gfm",
+        "@veolms/video-player > mdast-util-to-string",
+        // Other CommonJS/UMD packages used by the app. Without prebundling
+        // their default export is missing when served as native ESM.
+        "iso-639-1",
+        "qrcode.react",
+        "@veolms/video-player > shaka-player",
       ],
       holdUntilCrawlEnd: false,
     },
