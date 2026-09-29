@@ -133,9 +133,11 @@ export function createServices({
       forcePathStyle: config.STORAGE_FORCE_PATH_STYLE,
     }),
     videoDispatch: createVideoDispatchService({
+      strategy: config.VIDEO_DISPATCH_STRATEGY,
+      config,
+      logger,
       triggerUrl: config.FLEET_MANAGER_TRIGGER_URL,
       lambdaName: config.PROBE_LAMBDA_NAME || config.FLEET_MANAGER_LAMBDA_NAME,
-      logger,
     }),
 
     paymentGateway: createPaymentGateway(config),

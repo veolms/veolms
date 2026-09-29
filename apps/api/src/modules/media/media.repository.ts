@@ -126,6 +126,33 @@ export async function updateMediaAssetMetadata(
   await database.updateTable("media_assets").set({ metadata, updated_at: new Date() }).where("id", "=", mediaId).execute();
 }
 
+export async function updateMediaAssetProbedDetails(
+  database: Kysely<Database>,
+  mediaId: string,
+  details: {
+    size_bytes?: number | string;
+    width?: number | null;
+    height?: number | null;
+    duration_seconds?: number | null;
+    metadata?: Json;
+  },
+) {
+  const updates: Record<string, unknown> = {
+    updated_at: new Date(),
+  };
+  if (details.size_bytes !== undefined) updates["size_bytes"] = details.size_bytes;
+  if (details.width !== undefined) updates["width"] = details.width;
+  if (details.height !== undefined) updates["height"] = details.height;
+  if (details.duration_seconds !== undefined) updates["duration_seconds"] = details.duration_seconds;
+  if (details.metadata !== undefined) updates["metadata"] = details.metadata;
+
+  await database
+    .updateTable("media_assets")
+    .set(updates)
+    .where("id", "=", mediaId)
+    .execute();
+}
+
 export async function insertVideoJob(
   database: Kysely<Database>,
   values: {
@@ -139,14 +166,17 @@ export async function insertVideoJob(
     worker_id?: string | null;
     progress_percent?: number;
     error_message?: string | null;
+    video_metadata?: Record<string, unknown> | null;
     created_at?: Date;
   },
 ) {
+  const { video_metadata, ...rest } = values;
   await database
     .insertInto("video_jobs")
     .values({
       status: "queued",
-      ...values,
+      ...rest,
+      video_metadata: video_metadata ? JSON.stringify(video_metadata) : undefined,
     })
     .execute();
 }
@@ -169,6 +199,17 @@ export async function updateVideoJobStatus(
     })
     .where("id", "=", jobId)
     .execute();
+}
+
+export async function findVideoJobById(
+  database: Kysely<Database>,
+  jobId: string,
+) {
+  return await database
+    .selectFrom("video_jobs")
+    .selectAll()
+    .where("id", "=", jobId)
+    .executeTakeFirst();
 }
 
 export async function findVideoJobByVideoId(

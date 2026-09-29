@@ -192,7 +192,13 @@ export async function createApp({
   });
 
   const isAllowedLanOrigin = (origin: string | undefined): boolean => {
-    if (!origin || config.WEBAUTHN_ORIGINS.includes(origin)) return true;
+    if (
+      !origin ||
+      config.CORS_ORIGINS.includes(origin) ||
+      config.WEBAUTHN_ORIGINS.includes(origin)
+    ) {
+      return true;
+    }
     if (config.NODE_ENV === "production") return false;
 
     try {

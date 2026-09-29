@@ -1,112 +1,76 @@
-import { InvokeCommand } from "@aws-sdk/client-lambda";
-import type { FastifyBaseLogger } from "fastify";
+import type { VideoDispatchOptions, VideoDispatchService } from "./types.ts";
+import { createMediaConvertDispatcher } from "./mediaconvert.dispatcher.ts";
+import { createDirectDispatcher } from "./direct.dispatcher.ts";
+import { createDistributedDispatcher } from "./distributed.dispatcher.ts";
 
-import { getLambdaClient } from "../../lib/lambda.ts";
-import type { VideoJobEvent } from "@veolms/contracts";
-
-export interface VideoDispatchService {
-  dispatch(payload: VideoJobEvent): Promise<void>;
-}
-
-export interface FleetManagerTriggerOptions {
-  triggerUrl?: string;
-  lambdaName?: string;
-  logger: FastifyBaseLogger;
-}
+export * from "./types.ts";
+export * from "./mediaconvert.dispatcher.ts";
+export * from "./direct.dispatcher.ts";
+export * from "./distributed.dispatcher.ts";
 
 /**
- * Builds the service responsible for triggering Fleet Manager (Serverless Mode).
- * In serverless mode, notifies Fleet Manager Lambda via HTTP Function URL or AWS SDK Invoke.
- * In serverful mode or local dev with no lambda configured, Fleet Manager polls DB directly.
+ * Creates the VideoDispatchService based on configured strategy:
+ * 1. "mediaconvert" (inbuilt): Direct AWS MediaConvert SDK client integration.
+ * 2. "direct" (api-server): In-process direct HLS on this API server instance (stubbed).
+ * 3. "distributed" (worker-vm / lambda): External worker VMs, Lambda, or Fleet Manager trigger.
  */
 export function createVideoDispatchService(
-  options: FleetManagerTriggerOptions,
+  options: VideoDispatchOptions,
 ): VideoDispatchService {
-  async function triggerViaHttp(
-    url: string,
-    payload: VideoJobEvent,
-  ): Promise<void> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+  const strategyRaw =
+    options.strategy ||
+    options.config.VIDEO_DISPATCH_STRATEGY ||
+    "mediaconvert";
 
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
+  const strategy = strategyRaw.toLowerCase();
 
-      if (!response.ok) {
-        throw new Error(
-          `Fleet Manager trigger returned HTTP status ${response.status}: ${response.statusText}`,
-        );
-      }
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-
-  async function triggerViaLambdaSdk(
-    functionName: string,
-    payload: VideoJobEvent,
-  ): Promise<void> {
-    const client = getLambdaClient();
-    const command = new InvokeCommand({
-      FunctionName: functionName,
-      InvocationType: "Event", // Asynchronous fire-and-forget
-      Payload: Buffer.from(JSON.stringify(payload)),
-    });
-
-    const response = await client.send(command);
-    if (response.StatusCode && (response.StatusCode < 200 || response.StatusCode >= 300)) {
-      throw new Error(
-        `Lambda invocation returned status code ${response.StatusCode}: ${response.FunctionError ?? "unknown error"}`,
-      );
-    }
-  }
-
-  async function dispatch(payload: VideoJobEvent): Promise<void> {
-    options.logger.info(
-      { jobId: payload.jobId, videoId: payload.videoId },
-      "Triggering Fleet Manager for video job",
-    );
-
-    if (options.triggerUrl) {
-      try {
-        await triggerViaHttp(options.triggerUrl, payload);
-        options.logger.info(
-          { jobId: payload.jobId, triggerUrl: options.triggerUrl },
-          "Successfully triggered Fleet Manager via HTTP trigger URL",
-        );
-      } catch (err) {
-        options.logger.error(
-          { err, jobId: payload.jobId },
-          "Failed to trigger Fleet Manager via HTTP trigger URL",
-        );
-        throw err;
-      }
-    } else if (options.lambdaName) {
-      try {
-        await triggerViaLambdaSdk(options.lambdaName, payload);
-        options.logger.info(
-          { jobId: payload.jobId, lambdaName: options.lambdaName },
-          "Successfully triggered Fleet Manager Lambda via AWS SDK",
-        );
-      } catch (err) {
-        options.logger.error(
-          { err, jobId: payload.jobId },
-          "Failed to trigger Fleet Manager Lambda via AWS SDK",
-        );
-        throw err;
-      }
-    } else {
+  switch (strategy) {
+    case "mediaconvert":
+    case "inbuilt": {
       options.logger.info(
-        { jobId: payload.jobId },
-        "Fleet Manager trigger not configured (serverful or local mode); Fleet Manager will reconcile directly from database",
+        {
+          strategy: "mediaconvert",
+          endpoint: options.config.MEDIACONVERT_ENDPOINT || "aws-default",
+          region:
+            options.config.MEDIACONVERT_REGION ||
+            options.config.STORAGE_REGION ||
+            "us-east-1",
+        },
+        "Initializing VideoDispatchService with Strategy 1: AWS MediaConvert (inbuilt)",
       );
+      return createMediaConvertDispatcher({
+        config: options.config,
+        logger: options.logger,
+      });
+    }
+
+    case "direct":
+    case "api-server": {
+      options.logger.info(
+        { strategy: "direct" },
+        "Initializing VideoDispatchService with Strategy 2: Direct API Server HLS (stubbed)",
+      );
+      return createDirectDispatcher({
+        config: options.config,
+        logger: options.logger,
+      });
+    }
+
+    case "distributed":
+    case "worker-vm":
+    case "lambda":
+    case "fleet":
+    default: {
+      options.logger.info(
+        { strategy: "distributed" },
+        "Initializing VideoDispatchService with Strategy 3: Distributed Worker VM / Lambda",
+      );
+      return createDistributedDispatcher({
+        config: options.config,
+        logger: options.logger,
+        triggerUrl: options.triggerUrl,
+        lambdaName: options.lambdaName,
+      });
     }
   }
-
-  return { dispatch };
 }

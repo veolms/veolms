@@ -105,6 +105,7 @@ const serverConfigSchema = z.object({
   RP_ID: z.string().optional(),
   RP_NAME: z.string().default("VeoLMS"),
   WEBAUTHN_ORIGINS: z.string().optional(),
+  CORS_ORIGINS: z.string().optional(),
 
   // TOTP Configuration
   TOTP_STEP_SECONDS: z.coerce.number().int().min(1).default(30),
@@ -204,6 +205,32 @@ const serverConfigSchema = z.object({
   STORAGE_FORCE_PATH_STYLE: booleanEnvironmentValueSchema.default(false),
 
   // Fleet Manager & Video Processing Dispatch
+  // 1. "mediaconvert" (inbuilt): Direct AWS MediaConvert SDK client
+  // 2. "direct": Processed directly on API server (stubbed for future extension)
+  // 3. "distributed": External worker VM / Lambda / Fleet Manager trigger
+  VIDEO_DISPATCH_STRATEGY: z
+    .enum([
+      "mediaconvert",
+      "inbuilt",
+      "direct",
+      "api-server",
+      "distributed",
+      "worker-vm",
+      "lambda",
+      "fleet",
+    ])
+    .default("mediaconvert"),
+
+  // AWS MediaConvert Configuration
+  MEDIACONVERT_ENDPOINT: z.string().optional(),
+  MEDIACONVERT_REGION: z.string().optional(),
+  MEDIACONVERT_ROLE_ARN: z.string().optional(),
+  MEDIACONVERT_QUEUE_ARN: z.string().optional(),
+  MEDIACONVERT_ACCESS_KEY_ID: z.string().optional(),
+  MEDIACONVERT_SECRET_ACCESS_KEY: z.string().optional(),
+  MEDIACONVERT_WEBHOOK_URL: z.string().url().optional(),
+  MEDIACONVERT_WEBHOOK_SECRET: z.string().optional(),
+
   FLEET_MANAGER_TRIGGER_URL: z.string().url().optional(),
   FLEET_MANAGER_LAMBDA_NAME: z.string().optional(),
   PROBE_LAMBDA_NAME: z.string().optional(),
@@ -347,14 +374,34 @@ function resolveWebAuthnRpIds(
   return Array.from(rpIds);
 }
 
+function resolveCorsOrigins(parsed: ParsedServerConfig): string[] {
+  const origins = new Set(resolveWebAuthnOrigins(parsed));
+
+  if (parsed.CORS_ORIGINS) {
+    for (const origin of parsed.CORS_ORIGINS.split(",")) {
+      const trimmed = origin.trim();
+      if (trimmed) {
+        try {
+          origins.add(new URL(trimmed).origin);
+        } catch {
+          origins.add(trimmed);
+        }
+      }
+    }
+  }
+
+  return Array.from(origins);
+}
+
 export type ServerConfig = Omit<
   ParsedServerConfig,
-  "RP_ID" | "WEBAUTHN_ORIGINS"
+  "RP_ID" | "WEBAUTHN_ORIGINS" | "CORS_ORIGINS"
 > & {
   EMAIL_TRANSPORT: "smtp" | "console";
   RP_ID: string;
   WEBAUTHN_ORIGINS: string[];
   WEBAUTHN_RP_IDS: string[];
+    CORS_ORIGINS: string[];
 };
 
 export function loadServerConfig(
@@ -388,6 +435,7 @@ export function loadServerConfig(
   const resolvedRpId = resolveWebAuthnRpId(parsed);
   const origins = resolveWebAuthnOrigins(parsed);
   const rpIds = resolveWebAuthnRpIds(resolvedRpId, origins);
+    const corsOrigins = resolveCorsOrigins(parsed);
 
   return {
     ...parsed,
@@ -395,6 +443,7 @@ export function loadServerConfig(
     RP_ID: resolvedRpId,
     WEBAUTHN_ORIGINS: origins,
     WEBAUTHN_RP_IDS: rpIds,
+    CORS_ORIGINS: corsOrigins,
   };
 }
 
