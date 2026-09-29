@@ -2,7 +2,7 @@ import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { CurrencyInrIcon as CurrencyInr } from "@phosphor-icons/react/CurrencyInr";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
-import { formatRupees } from "./couponHelpers";
+import { formatPaiseAsRupees } from "./couponHelpers";
 import type { CouponTabFilter } from "./couponHelpers";
 
 export interface CouponSummaryMetrics {
@@ -136,7 +136,7 @@ export function CouponSummaryCards({
       <StatCard
         icon={<CurrencyInr size={18} weight="bold" />}
         label="Discount given"
-        value={formatRupees(metrics.totalDiscountGiven)}
+        value={formatPaiseAsRupees(metrics.totalDiscountGiven)}
         detail="Across redeemed orders"
       />
     </div>

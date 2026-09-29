@@ -83,7 +83,7 @@ export function adaptOrderToOrderItem(order: Order): OrderItem {
     order.status === "cancelled"
   ) {
     status = "failed";
-    statusLabel = order.status === "cancelled" ? "Cancelled" : "Failed";
+    statusLabel = "Failed";
   } else if (
     order.status === "refunded" ||
     order.status === "partially_refunded"
@@ -167,13 +167,11 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
     statusLabel = "Processing";
   } else if (
     order.status === "payment_failed" ||
-    order.status === "expired"
+    order.status === "expired" ||
+    order.status === "cancelled"
   ) {
     status = "failed";
     statusLabel = "Failed";
-  } else if (order.status === "cancelled") {
-    status = "canceled";
-    statusLabel = "Canceled";
   } else if (
     order.status === "refunded" ||
     order.status === "partially_refunded"

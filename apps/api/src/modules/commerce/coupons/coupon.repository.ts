@@ -231,7 +231,6 @@ export async function getCouponRedemptionStats(
   const result = await database
     .selectFrom("coupon_redemptions")
     .select((eb) => [
-      "coupon_id",
       eb.fn.countAll<number>().as("redemption_count"),
       eb.fn.sum<number>("discount_amount").as("total_discount_given"),
     ])
