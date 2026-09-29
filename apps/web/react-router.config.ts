@@ -12,6 +12,7 @@ const staticApplicationPages = [
   "/register",
   "/auth/callback",
   "/courses",
+  "/explore-courses",
   "/settings",
   "/settings/profile",
   "/settings/appearance",
@@ -68,22 +69,16 @@ async function getStaticCataloguePaths() {
     throw new Error("The build API returned an invalid published course catalogue.");
   }
   return result.data.courses.map(
-    ({ slug }) => `/courses/${encodeURIComponent(slug)}/overview`,
+    ({ slug }) => `/explore-courses/${encodeURIComponent(slug)}`,
   );
 }
 
 const prerenderConfig = {
-  // React Router still renders configured prerender paths through its dev
-  // server. Include the initial catalogue and profile-settings routes so
-  // their first document has the app shell before client modules load. Keep
-  // the remaining development routes on SPA fallback.
-  paths: isDevelopment
-    ? [...staticLearningPages, "/", "/courses", "/settings/profile"]
-    : async () => [
-        ...staticApplicationPages,
-        ...(await getStaticCataloguePaths()),
-        ...staticLearningPages,
-      ],
+  paths: async () => [
+    ...staticApplicationPages,
+    ...(await getStaticCataloguePaths()),
+    ...staticLearningPages,
+  ],
   concurrency: 1,
   timeout: 120_000,
   retryCount: 2,
@@ -94,7 +89,12 @@ export default {
   appDirectory: "src",
   // React Router accepts timeout/retry options at build time even though the
   // public Config type only documents paths and concurrency.
-  prerender: prerenderConfig as NonNullable<Config["prerender"]>,
+  // Prerendering is a build-time feature. Enabling it in `react-router dev`
+  // disables SPA mode and makes the first request build the full server route
+  // graph before it can render. Keep dev on the configured SPA fallback.
+  prerender: isDevelopment
+    ? false
+    : (prerenderConfig as NonNullable<Config["prerender"]>),
   routeDiscovery: { mode: "initial" },
   ssr: false,
 } satisfies Config;

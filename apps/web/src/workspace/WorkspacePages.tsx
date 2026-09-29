@@ -1,9 +1,10 @@
 import { lazy, Suspense, useState } from "react";
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
-import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import "../styles/features/workspace.css";
 import type { CourseRole } from "../courses/catalogue";
 import type { NavigateTo } from "../routing/navigation";
+import { normalizeDiscussionTab } from "../routing/tabSessionState";
+import { DiscussionWorkspaceSkeletonList } from "./DiscussionWorkspaceSkeleton";
 
 const DiscussionsWorkspace = lazy(() =>
   import("./DiscussionsWorkspace").then((module) => ({
@@ -103,9 +104,9 @@ export function WorkspacePage({
     return (
       <Suspense
         fallback={
-          <CenteredLoadingSpinner
-            label="Loading discussions"
-            className="min-h-52"
+          <DiscussionWorkspaceSkeletonList
+            mode="loading"
+            variant={normalizeDiscussionTab(discussionTab)}
           />
         }
       >

@@ -395,7 +395,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   Coupons: "/coupons",
   "/Coupons": "/coupons",
   "/coupons": "/coupons",
-  "/explore-courses": "/courses",
+  "/explore-courses": "/explore-courses",
   "/my-courses": "/courses",
   "/my-learning": "/courses",
   Students: "/students",

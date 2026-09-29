@@ -6,6 +6,7 @@ import type {
   CourseDeleteResponse,
   CourseEditorDataResponse,
   CourseOverviewResponse,
+  CourseStaticPageRefreshStatus,
   CourseListResponse,
   CourseListQuery,
   CourseOptionsResponse,
@@ -43,6 +44,9 @@ export const coursesService = {
   list: (params?: CourseListQuery): Promise<CourseListResponse> => {
     return api.get<CourseListResponse>("/courses", {
       params,
+      // Keep an unavailable API from leaving the catalogue skeleton mounted
+      // indefinitely. The local API responds in well under a second.
+      timeout: 5_000,
     });
   },
 
@@ -58,6 +62,20 @@ export const coursesService = {
       `/courses/${encodeURIComponent(idOrSlug)}/overview`,
     );
   },
+
+  getStaticPageRefreshStatus: (
+    courseId: string,
+  ): Promise<CourseStaticPageRefreshStatus> =>
+    api.get<CourseStaticPageRefreshStatus>(
+      `/courses/${courseId}/static-page-refresh`,
+    ),
+
+  retryStaticPageRefresh: (
+    courseId: string,
+  ): Promise<CourseStaticPageRefreshStatus> =>
+    api.post<CourseStaticPageRefreshStatus>(
+      `/courses/${courseId}/static-page-refresh/retry`,
+    ),
 
   listMyCourses: (): Promise<MyCoursesListResponse> => {
     return api.get<MyCoursesListResponse>("/courses/mine");

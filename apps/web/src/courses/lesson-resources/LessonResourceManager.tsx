@@ -1,9 +1,7 @@
-import {
-  CircleNotch,
-  UploadSimple,
-  WarningCircle,
-  X,
-} from "@phosphor-icons/react";
+import { CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { UploadSimple } from "@phosphor-icons/react/UploadSimple";
+import { WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import { X } from "@phosphor-icons/react/X";
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import type {
   CreateLessonResourceRequest,

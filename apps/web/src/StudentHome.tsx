@@ -16,9 +16,6 @@ import {
   type ImgHTMLAttributes,
 } from "react";
 import { useNavigate } from "react-router";
-import javascriptThumbnail from "./assets/course-thumbnails/javascript-960.webp";
-import nodeThumbnail from "./assets/course-thumbnails/nodejs-960.webp";
-import typescriptThumbnail from "./assets/course-thumbnails/typescript-960.webp";
 import typescriptInstructorHero512 from "./assets/learning-thumbnails/typescript-instructor-hero-512.webp";
 import typescriptInstructorHero640 from "./assets/learning-thumbnails/typescript-instructor-hero-640.webp";
 import typescriptInstructorHero800 from "./assets/learning-thumbnails/typescript-instructor-hero-800.webp";
@@ -43,7 +40,7 @@ import {
 } from "./workspace/DashboardDiscussionPreview";
 import "./styles/features/student-learning.css";
 import "./styles/features/home.css";
-import "./styles/features/creator-dashboard.css";
+import "./styles/features/dashboard-discussion-preview.css";
 
 interface StudentHomeProps {
   onOpenCourse: (course: LearningCourse) => void;
@@ -57,45 +54,6 @@ interface SectionHeaderProps {
   action?: string;
   onAction?: () => void;
 }
-
-/*
-// LEGACY CODE REFERENCE:
-const legacyCurrentCourse: LearningCourse = {
-  id: "typescript-course",
-  title: "The Ultimate TypeScript Course",
-  sections: 24,
-  lectures: 160,
-  status: "in-progress",
-  progress: 52,
-  lastLesson: "Conditional Types",
-  accessed: "2h ago",
-  thumbnail: typescriptThumbnail,
-};
-
-const legacyJavascriptCourse: LearningCourse = {
-  id: "javascript-course",
-  title: "The Complete JavaScript Course",
-  sections: 20,
-  lectures: 142,
-  status: "in-progress",
-  progress: 38,
-  lastLesson: "Closures and the Event Loop",
-  accessed: "4h ago",
-  thumbnail: javascriptThumbnail,
-};
-
-const legacyBackendCourse: LearningCourse = {
-  id: "backend-nodejs",
-  title: "Complete Backend with Node.js",
-  sections: 23,
-  lectures: 600,
-  status: "in-progress",
-  progress: 76,
-  lastLesson: "Error Handling in Express",
-  accessed: "1d ago",
-  thumbnail: nodeThumbnail,
-};
-*/
 
 function getCourseTimestamp(value: string | Date | null | undefined) {
   if (!value) return null;
@@ -533,13 +491,8 @@ export function StudentHome({
       .sort(compareContinueLearningCourses);
   }, [enrolledCourses]);
 
-  const heroCourse = useMemo(() => {
-    return continueLearningCourses[0] || null;
-  }, [continueLearningCourses]);
-
-  const miniCourses = useMemo(() => {
-    return continueLearningCourses.slice(1, 3);
-  }, [continueLearningCourses]);
+  const heroCourse = continueLearningCourses[0] ?? null;
+  const miniCourses = continueLearningCourses.slice(1, 3);
   const readyToStartCourse = useMemo(() => {
     return (
       enrolledCourses
@@ -555,13 +508,14 @@ export function StudentHome({
     useLearningProgressResumeContext(primaryCourseKey, {
       enabled: hasEnrolledCourseData && Boolean(heroCourse),
     });
-  const resumeContext = useMemo(() => {
-    if (!heroCourse || !primaryCourseKey || !resumeContextData) return null;
-    return resumeContextData.courseId === heroCourse.id ||
-      resumeContextData.courseSlug === primaryCourseKey
+  const resumeContext =
+    heroCourse &&
+    primaryCourseKey &&
+    resumeContextData &&
+    (resumeContextData.courseId === heroCourse.id ||
+      resumeContextData.courseSlug === primaryCourseKey)
       ? resumeContextData
       : null;
-  }, [heroCourse, primaryCourseKey, resumeContextData]);
   const heroFocusCourse = heroCourse ?? readyToStartCourse;
 
   return (
@@ -645,6 +599,7 @@ export function StudentHome({
                 alt=""
                 loading="eager"
                 decoding="async"
+                fetchPriority="high"
               />
             </div>
             <div className="home-resume-copy">
@@ -712,7 +667,7 @@ export function StudentHome({
                 width={1600}
                 height={900}
                 loading="eager"
-                decoding="sync"
+                decoding="async"
                 fetchPriority="high"
               />
             </div>

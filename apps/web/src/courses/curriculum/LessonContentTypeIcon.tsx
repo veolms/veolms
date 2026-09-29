@@ -1,10 +1,8 @@
-import {
-  FileTextIcon as FileText,
-  HeadphonesIcon as Headphones,
-  ImageIcon as Image,
-  PlayCircleIcon as PlayCircle,
-  QuestionIcon as Question,
-} from "@phosphor-icons/react";
+import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
+import { HeadphonesIcon as Headphones } from "@phosphor-icons/react/Headphones";
+import { ImageIcon as Image } from "@phosphor-icons/react/Image";
+import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
+import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import type { ComponentType } from "react";
 
 export type LessonListContentType =

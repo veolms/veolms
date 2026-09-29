@@ -12,6 +12,7 @@ import {
   myCoursesListResponseSchema,
   courseOverviewSchema,
   courseDeleteResponseSchema,
+  courseStaticPageRefreshStatusSchema,
 } from "@veolms/contracts";
 
 import { errorResponse } from "../../../lib/errors.ts";
@@ -28,7 +29,50 @@ const courseRoutes: RoutePlugin = async (app, options) => {
     database: options.database,
     services: options.services,
   });
-  const controller = createCourseController({ service });
+  const controller = createCourseController({
+    service,
+    staticPages: options.services.courseStaticPages,
+  });
+
+  app.get(
+    "/courses/:id/static-page-refresh",
+    {
+      schema: {
+        operationId: "getCourseStaticPageRefreshStatus",
+        tags: ["Course Authoring"],
+        summary: "Get public course page refresh status",
+        params: z.object({ id: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Current public page refresh status.",
+            courseStaticPageRefreshStatusSchema,
+          ),
+        },
+      },
+      preHandler: ctx.authorize("course.details.update", "course"),
+    },
+    controller.getStaticPageRefreshStatus,
+  );
+
+  app.post(
+    "/courses/:id/static-page-refresh/retry",
+    {
+      schema: {
+        operationId: "retryCourseStaticPageRefresh",
+        tags: ["Course Authoring"],
+        summary: "Retry a failed public course page refresh",
+        params: z.object({ id: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Queued public page refresh retry.",
+            courseStaticPageRefreshStatusSchema,
+          ),
+        },
+      },
+      preHandler: ctx.authorize("course.details.update", "course"),
+    },
+    controller.retryStaticPageRefresh,
+  );
 
   // --- Public Catalogue Routes ---
 
@@ -285,7 +329,9 @@ const courseRoutes: RoutePlugin = async (app, options) => {
           subtitle: z.string().max(500).optional().nullable(),
           description: z.string().max(20000).optional().nullable(),
           language: z.string().max(10).optional(),
-          level: z.enum(["beginner", "intermediate", "advanced", "all_levels"]).optional(),
+          level: z
+            .enum(["beginner", "intermediate", "advanced", "all_levels"])
+            .optional(),
           categoryId: z.string().uuid().optional().nullable(),
         }),
         response: {
@@ -307,10 +353,12 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         tags: ["Course Authoring"],
         summary: "Update course thumbnail only",
         params: z.object({ id: z.uuid() }),
-        body: z.object({
-          thumbnailUrl: z.string().url().max(2048),
-          thumbnailMediaId: z.string().uuid().optional().nullable(),
-        }).strict(),
+        body: z
+          .object({
+            thumbnailUrl: z.string().url().max(2048),
+            thumbnailMediaId: z.string().uuid().optional().nullable(),
+          })
+          .strict(),
         response: {
           200: jsonResponse("Course thumbnail updated", courseSchema),
           403: errorResponse("Forbidden - not permitted"),

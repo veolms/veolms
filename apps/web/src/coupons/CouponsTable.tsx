@@ -8,6 +8,7 @@ import { ToggleLeftIcon as ToggleLeft } from "@phosphor-icons/react/ToggleLeft";
 import { ToggleRightIcon as ToggleRight } from "@phosphor-icons/react/ToggleRight";
 import { Button } from "../components/Button";
 import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
+import { CouponsTableLoadingRows } from "./CouponsTableLoadingRows";
 import {
   couponCampaignTitle,
   couponStatusClass,
@@ -27,19 +28,6 @@ export interface CouponsTableProps {
   onToggleStatus: (coupon: Coupon) => void;
   onCreateNew: () => void;
   setNotice?: (message: string) => void;
-}
-
-function LoadingRows() {
-  return (
-    <div className="grid gap-2.5 sm:gap-3 px-3 py-3 sm:px-7 sm:py-5">
-      {[1, 2, 3].map((item) => (
-        <div
-          key={item}
-          className="h-16 animate-pulse rounded-xl bg-(--canvas)"
-        />
-      ))}
-    </div>
-  );
 }
 
 export function CouponsTable({
@@ -88,7 +76,7 @@ export function CouponsTable({
   };
 
   if (isLoading) {
-    return <LoadingRows />;
+    return <CouponsTableLoadingRows />;
   }
 
   if (coupons.length === 0) {

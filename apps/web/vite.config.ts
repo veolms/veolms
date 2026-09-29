@@ -55,76 +55,6 @@ const homePhosphorIcons = new Set([
   "Target",
 ]);
 const settingsPhosphorIcons = new Set(["ShieldCheck", "UserCircle"]);
-const settingsRoutePhosphorIcons = new Set([
-  "Archive",
-  "ArrowFatUp",
-  "ArrowLineUp",
-  "ArrowCounterClockwise",
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowUp",
-  "ArrowsClockwise",
-  "ArrowsDownUp",
-  "ArrowsInLineHorizontal",
-  "At",
-  "BellRinging",
-  "Camera",
-  "Check",
-  "CheckCircle",
-  "CircleHalf",
-  "CircleNotch",
-  "ClosedCaptioning",
-  "CornersOut",
-  "CaretDoubleUp",
-  "CaretUp",
-  "CreditCard",
-  "DeviceMobile",
-  "DotsNine",
-  "DotsSixVertical",
-  "DownloadSimple",
-  "EnvelopeSimple",
-  "Fingerprint",
-  "Flask",
-  "GithubLogo",
-  "Globe",
-  "Grains",
-  "Heart",
-  "House",
-  "Image",
-  "Info",
-  "Keyboard",
-  "Laptop",
-  "LinkedinLogo",
-  "Lock",
-  "LockKey",
-  "LockOpen",
-  "MagicWand",
-  "MagnifyingGlass",
-  "Medal",
-  "Moon",
-  "Palette",
-  "Phone",
-  "PlayCircle",
-  "Plus",
-  "SealCheck",
-  "ShieldWarning",
-  "SignOut",
-  "Sparkle",
-  "Stack",
-  "Star",
-  "Sun",
-  "Tabs",
-  "Target",
-  "TextAa",
-  "TextT",
-  "ThermometerSimple",
-  "Timer",
-  "Trophy",
-  "Trash",
-  "WarningCircle",
-  "UsersThree",
-  "X",
-]);
 
 const getPhosphorIconName = (id: string) =>
   id
@@ -241,13 +171,11 @@ export default defineConfig(({ command, mode }) => {
   return {
     envDir: workspaceRoot,
     optimizeDeps: {
-      // React Router creates a separate SSR environment for the dev server.
-      // Do not hold the first request while Vite crawls the entire client
-      // graph; this app's editor, Shiki, and icon trees make that crawl long
-      // enough for the SSR module runner's 60s transport request to time out.
-      holdUntilCrawlEnd: false,
-      // Prebundle shell and settings icons which otherwise appear during idle
-      // tab preloads and force Vite to reload the open page.
+      // Do not crawl the academy route graph here: CoursesPage owns many
+      // deferred screens, and Vite follows their dynamic imports during its
+      // scan (including Atomic Editor/CodeMirror). Prebundle only the shared
+      // runtime used at startup; Vite serves deferred route modules on demand.
+      noDiscovery: true,
       include: [
         "react",
         "react-dom/client",
@@ -260,14 +188,8 @@ export default defineConfig(({ command, mode }) => {
         "axios",
         "clsx",
         "tailwind-merge",
-        "swiper/react",
-        ...[
-          ...shellPhosphorIcons,
-          ...homePhosphorIcons,
-          ...settingsPhosphorIcons,
-          ...settingsRoutePhosphorIcons,
-        ].map((icon) => `@phosphor-icons/react/${icon}`),
       ],
+      holdUntilCrawlEnd: false,
     },
     define: {
       "process.env.VEO_REACT_ROUTER_BUILD": JSON.stringify(
@@ -286,18 +208,29 @@ export default defineConfig(({ command, mode }) => {
       host: "127.0.0.1",
     },
     resolve: {
-      alias: {
-        "@": webSourceRoot,
+      alias: [
+        { find: "@", replacement: webSourceRoot },
+        // React 19 provides the hook directly; Base UI's CommonJS shim cannot
+        // be imported as native ESM when dependency optimization is disabled.
+        {
+          find: /^use-sync-external-store\/shim(?:\/with-selector)?$/,
+          replacement: fileURLToPath(
+            new URL("./src/compat/useSyncExternalStoreShim.ts", import.meta.url),
+          ),
+        },
         // Axios' package ESM entry currently resolves its Node platform in
         // Vite, which exposes the Node-only `process` global to the browser.
-        axios: axiosBrowserEntry,
-        "@veolms/video-player/shaka-preload": fileURLToPath(
-          new URL(
-            "../../packages/video-player/src/engines/shaka/shaka-early-preload.ts",
-            import.meta.url,
+        { find: "axios", replacement: axiosBrowserEntry },
+        {
+          find: "@veolms/video-player/shaka-preload",
+          replacement: fileURLToPath(
+            new URL(
+              "../../packages/video-player/src/engines/shaka/shaka-early-preload.ts",
+              import.meta.url,
+            ),
           ),
-        ),
-      },
+        },
+      ],
     },
     ssr: {
       // The package publishes extensionless internal ESM imports. Bundling it
@@ -331,34 +264,19 @@ export default defineConfig(({ command, mode }) => {
     server: {
       port: config.WEB_PORT,
       strictPort: true,
+      warmup: {
+        clientFiles: [
+          "./src/entry.client.tsx",
+          "./src/styles.css",
+          "./src/routes/academy-layout.tsx",
+        ],
+      },
       // A production build can run beside `dev` (the preview is served on
       // 4173). Its generated HTML lives under this Vite root; watching those
       // files makes Vite send a full-page reload for every prerendered route
       // and can keep a cold browser session reloading for minutes.
       watch: {
         ignored: [path.resolve(workspaceRoot, "apps/web/build/**")],
-      },
-      warmup: {
-        ssrFiles: [
-          "./src/root.tsx",
-          "./src/routes/academy-layout.tsx",
-          "./src/routes/academy-marker.tsx",
-        ],
-        clientFiles: [
-          "./src/entry.client.tsx",
-          "./src/root.tsx",
-          // The development document uses this aggregate stylesheet directly;
-          // compile Tailwind's full feature layer before the first browser hit.
-          "./src/full-app.css",
-          "./src/routes/academy-layout.tsx",
-          "./src/CoursesPage.tsx",
-          "./src/StudentPages.tsx",
-          // Settings is split from the academy shell, then its selected tab
-          // is split again. Warm the route shown most often in local dev so
-          // the first visit does not pay both transform costs interactively.
-          "./src/SettingsPage.tsx",
-          "./src/settings/ProfileSettings.tsx",
-        ],
       },
       proxy: {
         "/v1": {

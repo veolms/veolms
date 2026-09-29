@@ -57,6 +57,7 @@ import type {
   CourseStatusFilter,
 } from "./courses/catalogue";
 import { AcademyPaletteMenu } from "./shell/AcademyPaletteMenu";
+import { AcademyRouteSkeleton } from "./routing/AcademyRouteSkeleton";
 import { FloatingScrollbar } from "./shell/FloatingScrollbar";
 import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
 import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
@@ -325,15 +326,7 @@ const CouponsAccessDenied = lazy(() =>
 );
 
 function AcademyPageFallback() {
-  return (
-    <div
-      className="grid min-h-52 place-items-center"
-      role="status"
-      aria-label="Loading page"
-    >
-      <CircleNotch size={26} className="animate-spin text-(--accent)" />
-    </div>
-  );
+  return <AcademyRouteSkeleton />;
 }
 
 type ThemePreference = "light" | "dark" | "device";
@@ -949,21 +942,15 @@ export function CoursesPage({
   }, [signOut]);
   const isCourseCataloguePage =
     page === "courses" || learningBackground?.page === "courses";
-  useLayoutEffect(() => {
-    if (!window.__VEO_CREATOR_CATALOGUE_HINT__) return;
-    const grid = document.querySelector<HTMLElement>(
-      "[data-course-catalogue-grid]",
-    );
-    if (!grid) return;
-    grid.style.removeProperty("visibility");
-    window.__VEO_CREATOR_CATALOGUE_HINT__ = false;
-  }, []);
   const shouldLoadCourseSurface =
     (!renderMain || Boolean(learningBackground)) && !isEditingOrCreatingCourse;
   const shouldQueryCourses =
     isCourseCataloguePage &&
-    isAuthReady &&
     shouldLoadCourseSurface &&
+    // The published catalogue is public, so do not serialize it behind the
+    // `/auth/me` request. A signed-out visitor can load courses while auth is
+    // resolving; a known account still waits for its workspace role to avoid
+    // showing the student catalogue in a creator workspace.
     (!isAuthenticated || isWorkspaceRoleHydrated);
   const shouldQueryCreatorCourses =
     isCourseCataloguePage &&
@@ -1002,9 +989,9 @@ export function CoursesPage({
     : pagedPublishedCourses;
   const hasPublishedCourseData =
     completeCourseQuery.data !== undefined || pagedCourseQuery.data !== undefined;
-  const isPublishedPending = needsCompleteCourseList
-    ? completeCourseQuery.isPending
-    : pagedCourseQuery.isPending;
+  const isPublishedFetching = needsCompleteCourseList
+    ? completeCourseQuery.isFetching
+    : pagedCourseQuery.isFetching;
   const { data: enrolledCoursesData } = useEnrolledCourses({
     enabled:
       isCourseCataloguePage &&
@@ -1013,20 +1000,34 @@ export function CoursesPage({
       (isAuthenticated ||
         (!authUserFetched && authStore.hasSessionHint())),
   });
-  const { data: myCoursesData, isPending: isMyCoursesPending } = useMyCourses({
+  const myCoursesQuery = useMyCourses({
     enabled:
       enrollmentFilter !== "bin" &&
       ((shouldQueryCourses && effectiveRole === "creator") ||
         shouldQueryCreatorCourses),
   });
-  const { data: deletedCoursesData, isPending: isDeletedPending } =
-    useDeletedCourses(undefined, {
-      enabled:
-        shouldQueryCourses &&
-        isAdmin &&
-        effectiveRole === "creator" &&
-        enrollmentFilter === "bin",
-    });
+  const myCoursesData = myCoursesQuery.data;
+  const deletedCoursesQuery = useDeletedCourses(undefined, {
+    enabled:
+      shouldQueryCourses &&
+      isAdmin &&
+      effectiveRole === "creator" &&
+      enrollmentFilter === "bin",
+  });
+  const deletedCoursesData = deletedCoursesQuery.data;
+  const isCourseCatalogueLoadError =
+    effectiveRole === "student"
+      ? (needsCompleteCourseList
+          ? completeCourseQuery.isError && !completeCourseQuery.isFetching
+          : pagedCourseQuery.isError && !pagedCourseQuery.isFetching) &&
+        !hasPublishedCourseData
+      : enrollmentFilter === "bin"
+        ? deletedCoursesQuery.isError &&
+          !deletedCoursesQuery.isFetching &&
+          !deletedCoursesData
+        : myCoursesQuery.isError &&
+          !myCoursesQuery.isFetching &&
+          !myCoursesData;
 
   const isRestoringCreatorWorkspace =
     isCourseCataloguePage &&
@@ -1039,14 +1040,22 @@ export function CoursesPage({
     !isWorkspaceRoleHydrated &&
     (effectiveRole === "creator" || workspaceRoleHint === "creator");
   const isLoadingCourses =
-    (!isAuthReady && !initialPublishedCoursePage) ||
     isRestoringCreatorWorkspace ||
     isResolvingCreatorWorkspace ||
+    // Keep the prerendered public catalogue visible while auth and saved
+    // workspace preferences hydrate. Those requests must not replace usable
+    // static course data with a skeleton.
+    (isAuthenticated && !isWorkspaceRoleHydrated && !hasPublishedCourseData) ||
     (effectiveRole === "student"
-      ? isPublishedPending && !hasPublishedCourseData
+      ? shouldQueryCourses && isPublishedFetching && !hasPublishedCourseData
       : enrollmentFilter === "bin"
-        ? isDeletedPending
-        : isMyCoursesPending);
+        ? shouldQueryCourses &&
+          isAdmin &&
+          deletedCoursesQuery.isFetching &&
+          !deletedCoursesData
+        : shouldQueryCreatorCourses &&
+          myCoursesQuery.isFetching &&
+          !myCoursesData);
 
   useEffect(() => {
     if (
@@ -3587,7 +3596,13 @@ export function CoursesPage({
     surfaceUsername?: string;
   } = {}): ReactNode => {
     if (routeContentBlocked) {
-      return <AcademyPageFallback />;
+      return (
+        <AcademyRouteSkeleton
+          page={surfacePage}
+          role={effectiveRole}
+          quizId={quizId}
+        />
+      );
     }
 
     const surfaceActiveSection =
@@ -3741,7 +3756,7 @@ export function CoursesPage({
     }
     if (surfacePage === "coupons" || surfaceActiveSection === "Coupons") {
       return (
-        <Suspense fallback={<AcademyPageFallback />}>
+        <Suspense fallback={<AcademyRouteSkeleton page="coupons" />}>
           <CouponsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
         </Suspense>
       );
@@ -3797,7 +3812,7 @@ export function CoursesPage({
         return null;
       }
       return (
-        <Suspense fallback={<AcademyPageFallback />}>
+        <Suspense fallback={<AcademyRouteSkeleton page="quiz-builder" quizId={quizId} />}>
           <QuizBuilderPage quizId={quizId} onNavigatePage={onNavigatePage} />
         </Suspense>
       );
@@ -3814,7 +3829,7 @@ export function CoursesPage({
     }
     if (surfacePage === "quizzes") {
       return (
-        <Suspense fallback={<AcademyPageFallback />}>
+        <Suspense fallback={<AcademyRouteSkeleton page="quizzes" />}>
           <QuizAnalyticsPage role={role} onNavigatePage={onNavigatePage} />
         </Suspense>
       );
@@ -3824,7 +3839,7 @@ export function CoursesPage({
         return null;
       }
       return (
-        <Suspense fallback={<AcademyPageFallback />}>
+        <Suspense fallback={<AcademyRouteSkeleton page="student-details" />}>
           <StudentDetailsPage
             username={surfaceUsername}
             onNavigatePage={onNavigatePage}
@@ -3838,7 +3853,7 @@ export function CoursesPage({
         return null;
       }
       return (
-        <Suspense fallback={<AcademyPageFallback />}>
+        <Suspense fallback={<AcademyRouteSkeleton page="students" />}>
           <StudentsPage onNavigatePage={onNavigatePage} setNotice={setNotice} />
         </Suspense>
       );
@@ -3848,11 +3863,13 @@ export function CoursesPage({
         return null;
       }
       return (
-        <AnalyticsDashboardPage
-          role={role}
-          isAdmin={isAdmin}
-          onNavigatePage={onNavigatePage}
-        />
+        <Suspense fallback={<AcademyRouteSkeleton page="analytics" />}>
+          <AnalyticsDashboardPage
+            role={role}
+            isAdmin={isAdmin}
+            onNavigatePage={onNavigatePage}
+          />
+        </Suspense>
       );
     }
     if (surfacePage === "placeholder") {
@@ -3873,6 +3890,18 @@ export function CoursesPage({
         isAdmin={isAdmin}
         currentUserId={activeUser?.id}
         isLoading={isLoadingCourses}
+        hasLoadError={isCourseCatalogueLoadError}
+        onRetryLoad={() => {
+          if (effectiveRole === "student") {
+            void (needsCompleteCourseList
+              ? completeCourseQuery.refetch()
+              : pagedCourseQuery.refetch());
+          } else if (enrollmentFilter === "bin") {
+            void deletedCoursesQuery.refetch();
+          } else {
+            void myCoursesQuery.refetch();
+          }
+        }}
         preloadFirstCourseImage={Boolean(initialPublishedCoursePage)}
         wishlisted={wishlisted}
         enrollmentFilter={enrollmentFilter}
@@ -4506,7 +4535,13 @@ export function CoursesPage({
             data-learning-motion-stage={renderMain ? "" : undefined}
           >
             {renderMain ? (
-              routeContentBlocked ? <AcademyPageFallback /> : learningBackground ? (
+              routeContentBlocked ? (
+                <AcademyRouteSkeleton
+                  page={page}
+                  role={effectiveRole}
+                  quizId={quizId}
+                />
+              ) : learningBackground ? (
                 <div
                   className={`courses-main pointer-events-none sticky top-0 z-0 h-dvh max-h-dvh min-h-0! self-start overflow-clip! transition-opacity ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${learningBackground.page !== "courses" ? "student-surface-main" : ""}`}
                   style={{
@@ -4529,7 +4564,11 @@ export function CoursesPage({
                 </div>
               ) : null
             ) : routeContentBlocked ? (
-              <AcademyPageFallback />
+              <AcademyRouteSkeleton
+                page={page}
+                role={effectiveRole}
+                quizId={quizId}
+              />
             ) : (
               <div className="contents">{renderPageContent()}</div>
             )}

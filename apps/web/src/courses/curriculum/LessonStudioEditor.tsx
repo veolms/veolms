@@ -1,19 +1,17 @@
-import {
-  ArrowLeftIcon as ArrowLeft,
-  BrainIcon as Brain,
-  CaretRightIcon as CaretRight,
-  CircleNotchIcon as CircleNotch,
-  CloudArrowUpIcon as CloudArrowUp,
-  DotsThreeIcon as DotsThree,
-  EyeIcon as Eye,
-  FileTextIcon as FileText,
-  LockKeyIcon as LockKey,
-  PaperclipIcon as Paperclip,
-  PencilSimpleIcon as PencilSimple,
-  TrashIcon as Trash,
-  UploadSimpleIcon as UploadSimple,
-  XIcon as X,
-} from "@phosphor-icons/react";
+import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { BrainIcon as Brain } from "@phosphor-icons/react/Brain";
+import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { CloudArrowUpIcon as CloudArrowUp } from "@phosphor-icons/react/CloudArrowUp";
+import { DotsThreeIcon as DotsThree } from "@phosphor-icons/react/DotsThree";
+import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
+import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
+import { LockKeyIcon as LockKey } from "@phosphor-icons/react/LockKey";
+import { PaperclipIcon as Paperclip } from "@phosphor-icons/react/Paperclip";
+import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
+import { UploadSimpleIcon as UploadSimple } from "@phosphor-icons/react/UploadSimple";
+import { XIcon as X } from "@phosphor-icons/react/X";
 import {
   forwardRef,
   useCallback,

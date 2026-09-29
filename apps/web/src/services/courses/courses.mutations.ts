@@ -43,6 +43,17 @@ export function useCreateCourse() {
   });
 }
 
+export function useRetryCourseStaticPageRefresh() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (courseId: string) =>
+      coursesService.retryStaticPageRefresh(courseId),
+    onSuccess: (status, courseId) => {
+      queryClient.setQueryData(courseKeys.staticPageRefresh(courseId), status);
+    },
+  });
+}
+
 export function useUpdateCourseBasics() {
   const queryClient = useQueryClient();
 
