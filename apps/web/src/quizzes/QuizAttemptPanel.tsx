@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
-import { BrainIcon as Brain } from "@phosphor-icons/react/Brain";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
+import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import type { LearnerQuizAttempt, QuizResult } from "@veolms/contracts";
 import { Button } from "../components/Button";
@@ -276,7 +276,7 @@ export function QuizAttemptPanel({
             )}
             {lessonBadge ? (
               <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
-                <Brain size={14} className="text-(--accent)" weight="bold" />
+                <Exam size={14} className="text-(--accent)" weight="bold" />
                 <span>{lessonBadge}</span>
               </div>
             ) : null}
@@ -319,7 +319,7 @@ export function QuizAttemptPanel({
             )}
             {lessonBadge ? (
               <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
-                <Brain size={14} className="text-(--accent)" weight="bold" />
+                <Exam size={14} className="text-(--accent)" weight="bold" />
                 <span>{lessonBadge}</span>
               </div>
             ) : null}
@@ -355,7 +355,7 @@ export function QuizAttemptPanel({
             )}
             {lessonBadge ? (
               <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
-                <Brain size={14} className="text-(--accent)" weight="bold" />
+                <Exam size={14} className="text-(--accent)" weight="bold" />
                 <span>{lessonBadge}</span>
               </div>
             ) : null}
@@ -444,7 +444,7 @@ export function QuizAttemptPanel({
               )}
               {lessonBadge ? (
                 <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
-                  <Brain size={14} className="text-(--accent)" weight="bold" />
+                  <Exam size={14} className="text-(--accent)" weight="bold" />
                   <span>{lessonBadge}</span>
                 </div>
               ) : null}
@@ -469,7 +469,7 @@ export function QuizAttemptPanel({
                 className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted)"
                 style={{ boxShadow: "var(--card-compact-shadow)" }}
               >
-                <Brain size={13} weight="bold" className="text-(--accent)" aria-hidden="true" />
+                <Exam size={13} weight="bold" className="text-(--accent)" aria-hidden="true" />
                 <span>Attempt {attempt.attemptNumber}{maxAttempts > 1 ? ` / ${maxAttempts}` : ""}</span>
               </span>
               <span

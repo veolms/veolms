@@ -10,11 +10,10 @@ export interface AuthState {
 }
 
 export interface AuthIdentityHint {
-  // Identity and role hints are only for display and locating UI preferences.
-  // Authenticated state and all access decisions still come from `/auth/me`.
+  // Identity hints are only for display and locating UI preferences. Roles
+  // and authenticated state still come from `/auth/me`.
   displayName: string;
   userId?: string;
-  roleHints?: string[];
 }
 
 const AUTH_IDENTITY_HINT_KEY = "veolms-auth-identity";
@@ -36,13 +35,6 @@ function readIdentityHint(): AuthIdentityHint | null {
             ...(typeof hint.userId === "string" && hint.userId.trim()
               ? { userId: hint.userId.trim() }
               : {}),
-            ...(Array.isArray(hint.roleHints)
-              ? {
-                  roleHints: hint.roleHints.filter(
-                    (role): role is string => typeof role === "string",
-                  ),
-                }
-              : {}),
           };
         }
       }
@@ -60,17 +52,13 @@ function writeIdentityHint(user: AuthUser | null) {
   if (typeof window === "undefined") return;
   try {
     const displayName = user?.displayName?.trim();
-    if (displayName && user) {
+    if (displayName) {
       const userId = typeof user?.id === "string" ? user.id.trim() : "";
-      const roles = Array.isArray(user.roles)
-        ? user.roles.filter((role): role is string => typeof role === "string")
-        : [];
       window.sessionStorage.setItem(
         AUTH_IDENTITY_HINT_KEY,
         JSON.stringify({
           displayName,
           ...(userId ? { userId } : {}),
-          ...(roles.length > 0 ? { roleHints: roles } : {}),
         } satisfies AuthIdentityHint),
       );
     } else {

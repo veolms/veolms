@@ -6,11 +6,11 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { BrainIcon as Brain } from "@phosphor-icons/react/Brain";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
+import { PuzzlePieceIcon as PuzzlePiece } from "@phosphor-icons/react/PuzzlePiece";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { useMyCourses } from "../services/courses";
 import { useBackDismiss } from "../navigation/useBackDismiss";
@@ -137,7 +137,7 @@ export function SelectCourseForQuizModal({
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] text-(--accent)"
               aria-hidden="true"
             >
-              <Brain size={22} weight="duotone" />
+              <PuzzlePiece size={22} weight="duotone" />
             </div>
             <div>
               <h3

@@ -60,15 +60,15 @@ export type SidebarDockItem =
 export const SIDEBAR_DOCK_MAX_ITEMS = 5;
 export const SIDEBAR_DOCK_DEFAULT_ORDER: readonly SidebarDockItem[] = [
   "appearance",
-  "reading-mode",
-  "settings",
   "theme",
+  "reading-mode",
   "fullscreen",
+  "settings",
 ];
 export const SIDEBAR_DOCK_DEFAULT_ITEMS: readonly SidebarDockItem[] = [
   "appearance",
   "reading-mode",
-  "settings",
+  "fullscreen",
 ];
 
 export const PAGE_TAB_COLORS_KEY = "veolms-page-tab-colors";
@@ -278,11 +278,7 @@ export const normalizeSidebarDockItems = (
       SIDEBAR_DOCK_ITEMS.has(item as SidebarDockItem) &&
       value.indexOf(item) === index,
   );
-  const upgraded = items.map((item) =>
-    item === "fullscreen" ? "settings" : item,
-  );
-  const unique = Array.from(new Set(upgraded));
-  return unique.slice(0, SIDEBAR_DOCK_MAX_ITEMS);
+  return items.slice(0, SIDEBAR_DOCK_MAX_ITEMS);
 };
 
 export const normalizeSidebarDockOrder = (

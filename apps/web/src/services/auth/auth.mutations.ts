@@ -31,6 +31,7 @@ import { authStore } from "../../store/auth.store";
 import { clearCoursePlayerSessions } from "../../learning/coursePlayerNavigation";
 import { authKeys } from "./auth.keys";
 import { authService, type TotpSetupResponse } from "./auth.service";
+import { navigationKeys } from "../navigation";
 import {
   learningInteractionKeys,
   desiredStateCoordinator,
@@ -79,6 +80,7 @@ function persistAuthenticatedSession(
   queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
   queryClient.removeQueries({ queryKey: authKeys.avatars() });
   queryClient.setQueryData(authKeys.me(), currentUser);
+  queryClient.invalidateQueries({ queryKey: navigationKeys.all });
 }
 
 export function useSendOtp() {
@@ -340,7 +342,9 @@ export function useLogout() {
       queryClient.removeQueries({ queryKey: authKeys.me() });
       queryClient.removeQueries({ queryKey: authKeys.avatars() });
       queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
+      queryClient.removeQueries({ queryKey: navigationKeys.all });
       queryClient.invalidateQueries({ queryKey: authKeys.me() });
+      queryClient.invalidateQueries({ queryKey: navigationKeys.all });
     },
   });
 }

@@ -37,9 +37,7 @@ import { MoonIcon as Moon } from "@phosphor-icons/react/Moon";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { ToastNotification, type ToastMessage } from "./ToastNotification";
-import { SignInIcon as SignIn } from "@phosphor-icons/react/SignIn";
 import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
-import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import logoDarkSvg from "./assets/procodrr-logo-dark.svg?raw";
 import type { LearningCourse } from "./StudentPages";
 import {
@@ -66,6 +64,7 @@ import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
 import { useCurrentUser, useSignOut } from "./services/auth";
+import { useSidenav } from "./services/navigation";
 import {
   authStore,
   useAuthIdentityHint,
@@ -90,6 +89,7 @@ import {
 import {
   getDefaultNavigationOrder,
   getDefaultNavigationVisibility,
+  getInitialNavigationOrder,
   getInitialNavigationVisibility,
   getMobileOverflowNavigation,
   getMobilePrimaryNavigation,
@@ -332,6 +332,7 @@ function AcademyPageFallback() {
 type ThemePreference = "light" | "dark" | "device";
 type AppearanceOption = ThemePreference | "theme";
 type AppearanceSwipeSource = AppearanceOption;
+type NavigationDropPosition = "before" | "after";
 
 interface CoursesPageProps {
   initialPublishedCoursePage?: CourseListResponse;
@@ -368,6 +369,25 @@ interface CoursesPageProps {
 export interface CoursesPageRenderContext {
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden: boolean;
+}
+
+interface NavigationDropTarget {
+  label: string;
+  position: NavigationDropPosition;
+}
+
+interface NavigationDrag {
+  pointerId: number;
+  label: string;
+  startX: number;
+  startY: number;
+  dragging: boolean;
+  requiresLongPress: boolean;
+  timer: number | null;
+  handle: HTMLButtonElement;
+  scrolling: boolean;
+  scrollRegion: HTMLElement | null;
+  startScrollTop: number;
 }
 
 interface AppearanceSwipe {
@@ -539,6 +559,8 @@ const SIDEBAR_HIDDEN_OFFSET_EXTRA = 18;
 const SIDEBAR_REVEAL_COMMIT_THRESHOLD = 0.4;
 const APPEARANCE_LONG_PRESS_DURATION = 500;
 const APPEARANCE_LONG_PRESS_MOVE_TOLERANCE = 10;
+const NAVIGATION_LONG_PRESS_DURATION = 480;
+const NAVIGATION_LONG_PRESS_MOVE_TOLERANCE = 10;
 const MOBILE_NAV_HIDE_SCROLL_THRESHOLD = 56;
 const MOBILE_NAV_SHOW_SCROLL_THRESHOLD = 18;
 const MOBILE_NAV_TOP_GUARD = 12;
@@ -606,13 +628,11 @@ function LoginProfileButton({
   arrowSize,
   onLogin,
   displayName,
-  roleLabel,
 }: {
   className: string;
   arrowSize: number;
   onLogin: () => void;
   displayName?: string;
-  roleLabel?: string;
 }) {
   return (
     <button
@@ -620,8 +640,8 @@ function LoginProfileButton({
       className={`${className} courses-profile__login-button`}
       aria-label={
         displayName
-          ? `${displayName}${roleLabel ? `, ${roleLabel}` : ""}. Log in`
-          : "Login. Access your learning journey"
+          ? `Account for ${displayName}. Open account access`
+          : "Login. Access Your Learning Journey"
       }
       data-auth-identity-button=""
       onClick={onLogin}
@@ -638,12 +658,12 @@ function LoginProfileButton({
           className="courses-profile__login-subtitle"
           data-auth-identity-subtitle=""
         >
-          {roleLabel || "Access your learning journey"}
+          {displayName ? "Account" : "Access Your Learning Journey"}
         </small>
       </span>
       <i
         aria-hidden="true"
-        className="courses-profile__login-arrow ml-auto flex shrink-0 items-center justify-center text-(--muted)"
+        className="courses-profile__login-arrow ml-auto flex shrink-0 items-center justify-center text-(--accent)"
       >
         <CaretRight size={arrowSize} weight="bold" />
       </i>
@@ -710,12 +730,23 @@ export function CoursesPage({
   const [sidebarOverlaySwipeOffset, setSidebarOverlaySwipeOffset] = useState<
     number | null
   >(null);
+  const [navigationOrders, setNavigationOrders] = useState<
+    Record<CourseRole, string[]>
+  >(() => ({
+    student: getDefaultNavigationOrder(publicNavigationItems),
+    creator: getDefaultNavigationOrder(publicNavigationItems),
+  }));
   const [navigationVisibility, setNavigationVisibility] = useState<
     Record<CourseRole, string[]>
   >(() => ({
     student: getDefaultNavigationOrder(publicNavigationItems),
     creator: getDefaultNavigationOrder(publicNavigationItems),
   }));
+  const [draggedNavigationLabel, setDraggedNavigationLabel] = useState<
+    string | null
+  >(null);
+  const [navigationDropTarget, setNavigationDropTarget] =
+    useState<NavigationDropTarget | null>(null);
   // Browser-only input capabilities are applied after startup so the loading
   // boundary remains deterministic across the build and the first client pass.
   const [compactNavigation, setCompactNavigation] = useState(
@@ -858,23 +889,23 @@ export function CoursesPage({
     routeContentBlocked,
   } = useAcademyRouteGuardState();
   const isEditingOrCreatingCourse = page === "course-create";
+  const { data: sidenavData } = useSidenav();
   const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
-    () => resolveShellNavigation(getUserRoles(activeUser), isAuthenticated),
-    [activeUser, isAuthenticated],
+    () => resolveShellNavigation(sidenavData?.menus),
+    [sidenavData?.menus],
   );
   const navigationItemsWithDashboard = useMemo(() => {
     const authorizedItems = navigationItems.filter(
       ([label]) => label !== "Dashboard" || canAccessDashboard,
     );
     if (
-      !isAuthenticated ||
       !canAccessDashboard ||
       authorizedItems.some(([label]) => label === "Dashboard")
     ) {
       return authorizedItems;
     }
     return [...authorizedItems, FALLBACK_DASHBOARD_NAVIGATION_ITEM];
-  }, [canAccessDashboard, isAuthenticated, navigationItems]);
+  }, [canAccessDashboard, navigationItems]);
   const navigationSignature = useMemo(
     () =>
       navigationItemsWithDashboard
@@ -1044,15 +1075,6 @@ export function CoursesPage({
     activeUser?.displayName?.trim() ||
     (!authUserFetched ? authIdentityHint?.displayName : undefined) ||
     "Your name";
-  const shellProfileRoleLabel =
-    activeUser || authIdentityHint
-      ? getRoleDisplayName(
-          isWorkspaceRoleHydrated
-            ? effectiveRole
-            : (workspaceRoleHint ?? effectiveRole),
-          userRoles ?? authIdentityHint?.roleHints,
-        )
-      : undefined;
   const shellProfileAvatarUrl = activeUser?.avatarDataUrl ?? null;
   const shellProfileAvatarSrcSet = activeUser?.avatarSrcSet ?? [];
   const profileRef = useRef<HTMLDivElement>(null);
@@ -1146,6 +1168,9 @@ export function CoursesPage({
     ((event: PointerPositionEvent, cancelled?: boolean) => void) | null
   >(null);
   const sidebarOverlaySwipeConsumedRef = useRef(false);
+  const navigationDragRef = useRef<NavigationDrag | null>(null);
+  const navigationDropRef = useRef<NavigationDropTarget | null>(null);
+  const navigationDragConsumedRef = useRef(false);
   const appearanceSwipeRef = useRef<AppearanceSwipe | null>(null);
   const appearanceSwipeConsumedRef = useRef(false);
   const dockLongPressRef = useRef<DockLongPress | null>(null);
@@ -1251,6 +1276,16 @@ export function CoursesPage({
     if (!dashboardCapabilitiesResolved) return;
     if (hydratedNavigationKey === navigationHydrationKey) return;
 
+    setNavigationOrders((current) => ({
+      ...current,
+      [effectiveRole]: isPublicNavigation
+        ? getDefaultNavigationOrder(navigationItemsWithDashboard)
+        : getInitialNavigationOrder(
+            effectiveRole,
+            navigationItemsWithDashboard,
+            activeUser?.id,
+          ),
+    }));
     setNavigationVisibility((current) => ({
       ...current,
       [effectiveRole]: isPublicNavigation
@@ -1278,6 +1313,13 @@ export function CoursesPage({
     dashboardCapabilitiesResolved &&
     hydratedNavigationKey === navigationHydrationKey;
 
+  const getSafeInitialNavigationOrder = (
+    items: readonly NavigationItemWithMetadata[],
+  ) =>
+    isPublicNavigation || dashboardCapabilitiesResolved
+      ? getInitialNavigationOrder(effectiveRole, items, activeUser?.id)
+      : getDefaultNavigationOrder(items);
+
   const getSafeInitialNavigationVisibility = (
     items: readonly NavigationItemWithMetadata[],
   ) =>
@@ -1289,6 +1331,10 @@ export function CoursesPage({
     () => () => {
       const press = dockLongPressRef.current;
       if (press) window.clearTimeout(press.timer);
+      const navigationDrag = navigationDragRef.current;
+      if (navigationDrag?.timer != null) {
+        window.clearTimeout(navigationDrag.timer);
+      }
       void longPressAudioContextRef.current?.close();
     },
     [],
@@ -1482,6 +1528,27 @@ export function CoursesPage({
       return nextWidth;
     });
   }, [sidebarMaxWidth, storedPreferencesReady]);
+
+  useEffect(() => {
+    if (!storedPreferencesReady) return;
+    if (isPublicNavigation) return;
+    if (!dashboardCapabilitiesResolved) return;
+    if (hydratedNavigationKey !== navigationHydrationKey) return;
+    Object.entries(navigationOrders).forEach(([roleName, order]) => {
+      localStorage.setItem(
+        getNavigationPreferenceStorageKey("order", roleName, activeUser?.id),
+        JSON.stringify(order),
+      );
+    });
+  }, [
+    dashboardCapabilitiesResolved,
+    hydratedNavigationKey,
+    isPublicNavigation,
+    navigationHydrationKey,
+    navigationOrders,
+    storedPreferencesReady,
+    activeUser?.id,
+  ]);
 
   useEffect(() => {
     if (!storedPreferencesReady) return;
@@ -1889,14 +1956,18 @@ export function CoursesPage({
   }, [canAccessDashboard, effectiveRole, navigationItemsWithDashboard]);
 
   const navigation = getVisibleOrderedNavigation(
-    getDefaultNavigationOrder(roleFilteredNavigationItems),
+    navigationPreferencesReady && !isPublicNavigation
+      ? navigationOrders[effectiveRole]
+      : isPublicNavigation
+        ? getDefaultNavigationOrder(roleFilteredNavigationItems)
+        : getSafeInitialNavigationOrder(roleFilteredNavigationItems),
     navigationPreferencesReady && !isPublicNavigation
       ? navigationVisibility[effectiveRole]
       : isPublicNavigation
         ? getDefaultNavigationVisibility(roleFilteredNavigationItems)
         : getSafeInitialNavigationVisibility(roleFilteredNavigationItems),
     roleFilteredNavigationItems,
-  );
+  ).filter(([label]) => label !== "Settings" || !settingsInSidebarDock);
   const updateNavigationScrollFade = () => {
     const nav = navigationRef.current;
     if (!nav) return;
@@ -2139,10 +2210,220 @@ export function CoursesPage({
     });
   };
 
+  const reorderNavigation = (
+    sourceLabel: string,
+    targetLabel: string,
+    position: NavigationDropPosition = "before",
+  ) => {
+    if (!sourceLabel || !targetLabel || sourceLabel === targetLabel) return;
+    setNavigationOrders((current) => {
+      const currentOrder =
+        navigationPreferencesReady && !isPublicNavigation
+          ? current[effectiveRole] ||
+            getSafeInitialNavigationOrder(navigationItemsWithDashboard)
+          : isPublicNavigation
+            ? getDefaultNavigationOrder(navigationItemsWithDashboard)
+            : getSafeInitialNavigationOrder(navigationItemsWithDashboard);
+      const sourceIndex = currentOrder.indexOf(sourceLabel);
+      if (sourceIndex < 0 || !currentOrder.includes(targetLabel))
+        return current;
+      const nextOrder = [...currentOrder];
+      nextOrder.splice(sourceIndex, 1);
+      const targetIndex = nextOrder.indexOf(targetLabel);
+      nextOrder.splice(
+        targetIndex + (position === "after" ? 1 : 0),
+        0,
+        sourceLabel,
+      );
+      return { ...current, [effectiveRole]: nextOrder };
+    });
+  };
+
+  const moveNavigationWithKeyboard = (label: string, direction: -1 | 1) => {
+    const currentOrder =
+      navigationPreferencesReady && !isPublicNavigation
+        ? navigationOrders[effectiveRole] ||
+          getSafeInitialNavigationOrder(navigationItemsWithDashboard)
+        : isPublicNavigation
+          ? getDefaultNavigationOrder(navigationItemsWithDashboard)
+          : getSafeInitialNavigationOrder(navigationItemsWithDashboard);
+    const currentIndex = currentOrder.indexOf(label);
+    const targetLabel = currentOrder[currentIndex + direction];
+    if (!targetLabel) return;
+    reorderNavigation(label, targetLabel, direction < 0 ? "before" : "after");
+    setNotice(`${label} moved ${direction < 0 ? "up" : "down"}.`);
+  };
+
+  const activateNavigationPointerDrag = (
+    drag: NavigationDrag,
+    acknowledge = false,
+  ) => {
+    if (navigationDragRef.current !== drag || drag.dragging) return;
+    if (drag.timer !== null) {
+      window.clearTimeout(drag.timer);
+      drag.timer = null;
+    }
+    drag.dragging = true;
+    navigationDragConsumedRef.current = true;
+    try {
+      drag.handle.setPointerCapture?.(drag.pointerId);
+    } catch {
+      // Pointer capture is optional; hit testing still determines drop targets.
+    }
+    setDraggedNavigationLabel(drag.label);
+    setSidebarTooltip(null);
+    if (acknowledge) acknowledgeLongPress();
+  };
+
+  const startNavigationPointerDrag = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    label: string,
+  ) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const requiresLongPress =
+      event.pointerType !== "mouse" ||
+      compactNavigation ||
+      coarseNavigationInput;
+    const drag: NavigationDrag = {
+      pointerId: event.pointerId,
+      label,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+      requiresLongPress,
+      timer: null,
+      handle: event.currentTarget,
+      scrolling: false,
+      scrollRegion: event.currentTarget.closest<HTMLElement>(
+        ".courses-nav, .mobile-menu-sheet__list",
+      ),
+      startScrollTop:
+        event.currentTarget.closest<HTMLElement>(
+          ".courses-nav, .mobile-menu-sheet__list",
+        )?.scrollTop ?? 0,
+    };
+    navigationDragRef.current = drag;
+    navigationDropRef.current = null;
+    navigationDragConsumedRef.current = false;
+    setNavigationDropTarget(null);
+    if (!requiresLongPress) return;
+
+    event.stopPropagation();
+    primeLongPressFeedback();
+    drag.timer = window.setTimeout(
+      () => activateNavigationPointerDrag(drag, true),
+      NAVIGATION_LONG_PRESS_DURATION,
+    );
+    try {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Native scrolling may retain the pointer until long press activates.
+    }
+  };
+
+  const moveNavigationPointerDrag = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
+    const drag = navigationDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (drag.requiresLongPress) event.stopPropagation();
+    if (drag.scrolling) {
+      event.preventDefault();
+      if (drag.scrollRegion) {
+        drag.scrollRegion.scrollTop =
+          drag.startScrollTop - (event.clientY - drag.startY);
+      }
+      return;
+    }
+    if (!drag.dragging) {
+      const distance = Math.hypot(
+        event.clientX - drag.startX,
+        event.clientY - drag.startY,
+      );
+      if (drag.requiresLongPress) {
+        if (distance <= NAVIGATION_LONG_PRESS_MOVE_TOLERANCE) return;
+        if (drag.timer !== null) window.clearTimeout(drag.timer);
+        drag.timer = null;
+        drag.scrolling = true;
+        navigationDragConsumedRef.current = true;
+        event.preventDefault();
+        if (drag.scrollRegion) {
+          drag.scrollRegion.scrollTop =
+            drag.startScrollTop - (event.clientY - drag.startY);
+        }
+        return;
+      }
+      if (distance < 7) return;
+      activateNavigationPointerDrag(drag);
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const targetButton = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>("[data-navigation-label]");
+    const targetLabel = targetButton?.dataset.navigationLabel;
+    if (!targetLabel || targetLabel === drag.label) {
+      navigationDropRef.current = null;
+      setNavigationDropTarget(null);
+      return;
+    }
+    const targetRect = targetButton.getBoundingClientRect();
+    const position: NavigationDropPosition =
+      event.clientY >= targetRect.top + targetRect.height / 2
+        ? "after"
+        : "before";
+    const dropTarget = { label: targetLabel, position };
+    navigationDropRef.current = dropTarget;
+    setNavigationDropTarget((current) =>
+      current?.label === targetLabel && current.position === position
+        ? current
+        : dropTarget,
+    );
+  };
+
+  const finishNavigationPointerDrag = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    cancelled = false,
+  ) => {
+    const drag = navigationDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    navigationDragRef.current = null;
+    if (drag.timer !== null) window.clearTimeout(drag.timer);
+    if (drag.requiresLongPress) event.stopPropagation();
+    try {
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    } catch {
+      // Capture may already have been released by the browser.
+    }
+    if (!drag.dragging && !drag.scrolling) return;
+    event.preventDefault();
+    navigationDragConsumedRef.current = true;
+    if (drag.dragging && !cancelled && navigationDropRef.current) {
+      reorderNavigation(
+        drag.label,
+        navigationDropRef.current.label,
+        navigationDropRef.current.position,
+      );
+      setNotice("Navigation order saved.");
+    }
+    navigationDropRef.current = null;
+    setDraggedNavigationLabel(null);
+    setNavigationDropTarget(null);
+    window.setTimeout(() => {
+      navigationDragConsumedRef.current = false;
+    }, 1000);
+  };
+
   const handleNavigationClick = (
+    event: ReactMouseEvent<HTMLButtonElement>,
     label: string,
     item?: NavigationItemWithMetadata,
   ) => {
+    if (navigationDragConsumedRef.current) {
+      navigationDragConsumedRef.current = false;
+      event.preventDefault();
+      return;
+    }
     selectNavigation(label, item);
   };
 
@@ -2704,6 +2985,7 @@ export function CoursesPage({
     sidebarOverlaySwipeOffset !== null ? "courses-app--overlay-swiping" : "",
     sidebarResizing ? "courses-app--resizing" : "",
     sidebarResizeContentVisible ? "courses-app--resize-content-visible" : "",
+    draggedNavigationLabel ? "courses-app--navigation-dragging" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -2743,7 +3025,8 @@ export function CoursesPage({
       (!sidebarCollapsed && !showWhenExpanded) ||
       sidebarHidden ||
       compactNavigation ||
-      coarseNavigationInput
+      coarseNavigationInput ||
+      navigationDragRef.current?.dragging
     )
       return;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -3289,22 +3572,9 @@ export function CoursesPage({
     navigation,
     mobileNavigation,
   );
-  const isProfileActive = Boolean(
-    isAuthenticated &&
-      (page === "settings" ||
-        activeNavigationSection === "Settings" ||
-        profileMenu),
-  );
-  const isLoginActive = Boolean(
-    !isAuthenticated &&
-      (page === "login" || activeNavigationSection === "Login"),
-  );
   const mobileMoreActive = Boolean(
     activeNavigationSection &&
-      !isProfileActive &&
-      mobileMoreNavigation.some(
-        (item) => item[0] !== "Settings" && isNavigationItemActive(item),
-      ),
+    mobileMoreNavigation.some(isNavigationItemActive),
   );
   const currentAcademyThemeIndex = academyThemes.findIndex(
     (item) => item.id === academyTheme,
@@ -3831,6 +4101,7 @@ export function CoursesPage({
               {navigation.map((item, navigationIndex) => {
                 const [label, Icon] = item;
                 const active = isNavigationItemActive(item);
+                const navigationShortcutIndex = navigationIndex + 1;
                 const displayLabel = label;
                 const accessibleLabel = [
                   displayLabel,
@@ -3857,13 +4128,37 @@ export function CoursesPage({
                       aria-current={active ? "page" : undefined}
                       aria-keyshortcuts={
                         label === "Settings"
-                          ? `${navigationIndex + 1} ${primaryShortcutModifier}+Comma Control+ArrowUp Control+ArrowDown`
-                          : `${navigationIndex + 1} Control+ArrowUp Control+ArrowDown`
+                          ? `${navigationIndex + 1} ${primaryShortcutModifier}+Comma Control+ArrowUp Control+ArrowDown Alt+ArrowUp Alt+ArrowDown`
+                          : `${navigationIndex + 1} Control+ArrowUp Control+ArrowDown Alt+ArrowUp Alt+ArrowDown`
                       }
-                      onClick={() => handleNavigationClick(label, item)}
+                      data-navigation-label={label}
+                      data-sortable="true"
+                      onClick={(event) =>
+                        handleNavigationClick(event, label, item)
+                      }
                       onContextMenu={(event) => {
                         if (navigationUsesCompactInteraction)
                           event.preventDefault();
+                      }}
+                      onPointerDown={(event) =>
+                        startNavigationPointerDrag(event, label)
+                      }
+                      onPointerMove={moveNavigationPointerDrag}
+                      onPointerUp={finishNavigationPointerDrag}
+                      onPointerCancel={(event) =>
+                        finishNavigationPointerDrag(event, true)
+                      }
+                      onKeyDown={(event) => {
+                        if (
+                          !event.altKey ||
+                          (event.key !== "ArrowUp" && event.key !== "ArrowDown")
+                        )
+                          return;
+                        event.preventDefault();
+                        moveNavigationWithKeyboard(
+                          label,
+                          event.key === "ArrowUp" ? -1 : 1,
+                        );
                       }}
                       onMouseEnter={(event) =>
                         showSidebarTooltip(event, displayLabel, active)
@@ -3876,10 +4171,14 @@ export function CoursesPage({
                     >
                       <Icon size={23} weight={active ? "fill" : "regular"} />
                       <span className="courses-nav__text">{displayLabel}</span>
-                      {showKeyboardShortcuts && label === "Settings" && (
+                      {showKeyboardShortcuts && (
                         <ShortcutKeys
                           className="courses-nav__shortcut"
-                          keys={settingsShortcutKeys}
+                          keys={
+                            label === "Settings"
+                              ? settingsShortcutKeys
+                              : [String(navigationShortcutIndex)]
+                          }
                         />
                       )}
                       {label === "Wishlist" && wishlisted.size > 0 && (
@@ -3936,7 +4235,6 @@ export function CoursesPage({
                   className="courses-profile__button"
                   arrowSize={16}
                   displayName={authIdentityHint?.displayName}
-                  roleLabel={shellProfileRoleLabel}
                   onLogin={() => onNavigatePage("/login")}
                 />
               )}
@@ -3969,19 +4267,7 @@ export function CoursesPage({
                         data-dock-item={item}
                         data-palette-trigger
                         type="button"
-                        className={
-                          paletteMenu && paletteMenuSource === "appearance"
-                            ? "is-active"
-                            : ""
-                        }
-                        style={
-                          {
-                            "--nav-icon-color": getNavigationIconColor(
-                              "Appearance",
-                              sidebarPreferences,
-                            ),
-                          } as CSSProperties
-                        }
+                        className="is-active"
                         aria-haspopup="menu"
                         aria-expanded={
                           paletteMenu && paletteMenuSource === "appearance"
@@ -4030,14 +4316,6 @@ export function CoursesPage({
                           data-palette-trigger
                           type="button"
                           className="sidebar-palette-trigger"
-                          style={
-                            {
-                              "--nav-icon-color": getNavigationIconColor(
-                                "Theme",
-                                sidebarPreferences,
-                              ),
-                            } as CSSProperties
-                          }
                           aria-label="Choose color theme"
                           title="Choose color theme"
                           aria-haspopup="menu"
@@ -4088,14 +4366,6 @@ export function CoursesPage({
                         data-reading-mode-trigger
                         type="button"
                         className={`sidebar-appearance__reading-mode${readingModeEnabled ? " is-active" : ""}`}
-                        style={
-                          {
-                            "--nav-icon-color": getNavigationIconColor(
-                              "Reading Mode",
-                              sidebarPreferences,
-                            ),
-                          } as CSSProperties
-                        }
                         aria-label={`${readingModeEnabled ? "Reading mode active. Turn reading mode off" : "Turn reading mode on"}`}
                         title={`Reading mode - ${readingModeEnabled ? "on" : "off"}`}
                         aria-pressed={readingModeEnabled}
@@ -4168,14 +4438,6 @@ export function CoursesPage({
                       data-dock-item={item}
                       type="button"
                       className={`sidebar-appearance__fullscreen${isFullscreen ? " is-active" : ""}`}
-                      style={
-                        {
-                          "--nav-icon-color": getNavigationIconColor(
-                            "Fullscreen",
-                            sidebarPreferences,
-                          ),
-                        } as CSSProperties
-                      }
                       aria-label={fullscreenActionLabel}
                       title={fullscreenActionLabel}
                       aria-pressed={isFullscreen}
@@ -4365,6 +4627,7 @@ export function CoursesPage({
                   ]
                     .filter(Boolean)
                     .join(", ")}
+                  data-navigation-label={label}
                   onClick={() => selectNavigation(label, item)}
                 >
                   <span>
@@ -4404,58 +4667,6 @@ export function CoursesPage({
             </span>
             <small>More</small>
           </button>
-          {isAuthenticated ? (
-            <button
-              id="mobile-navigation-profile"
-              type="button"
-              className={isProfileActive ? "is-active" : ""}
-              aria-label={`${shellProfileDisplayName}, Profile`}
-              aria-current={isProfileActive ? "page" : undefined}
-              onClick={() => {
-                dismissMobileMenuThen(() => {
-                  onNavigatePage?.("/settings/profile");
-                });
-              }}
-            >
-              {shellProfileAvatarUrl ? (
-                <span className="mobile-bottom-nav__avatar-wrap">
-                  <ShellProfileAvatar
-                    avatarUrl={shellProfileAvatarUrl}
-                    avatarSrcSet={shellProfileAvatarSrcSet}
-                  />
-                </span>
-              ) : (
-                <span>
-                  <UserCircle
-                    size={24}
-                    weight={isProfileActive ? "fill" : "regular"}
-                  />
-                </span>
-              )}
-              <small>Profile</small>
-            </button>
-          ) : (
-            <button
-              id="mobile-navigation-login"
-              type="button"
-              className={isLoginActive ? "is-active" : ""}
-              aria-label="Log in to your account"
-              aria-current={isLoginActive ? "page" : undefined}
-              onClick={() => {
-                dismissMobileMenuThen(() => {
-                  onNavigatePage?.("/login");
-                });
-              }}
-            >
-              <span>
-                <SignIn
-                  size={24}
-                  weight={isLoginActive ? "fill" : "regular"}
-                />
-              </span>
-              <small>Login</small>
-            </button>
-          )}
         </nav>
       )}
 
@@ -4534,7 +4745,6 @@ export function CoursesPage({
                   className="mobile-menu-sheet__profile"
                   arrowSize={17}
                   displayName={authIdentityHint?.displayName}
-                  roleLabel={shellProfileRoleLabel}
                   onLogin={() => onNavigatePage("/login")}
                 />
               )}
@@ -4569,6 +4779,14 @@ export function CoursesPage({
                     key={label}
                     className={[
                       active ? "is-active" : "",
+                      draggedNavigationLabel === label ? "is-dragging" : "",
+                      navigationDropTarget?.label === label
+                        ? "is-drop-target"
+                        : "",
+                      navigationDropTarget?.label === label &&
+                      navigationDropTarget.position === "after"
+                        ? "is-drop-after"
+                        : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
@@ -4589,7 +4807,10 @@ export function CoursesPage({
                     ]
                       .filter(Boolean)
                       .join(", ")}
-                    onClick={() => handleNavigationClick(label, item)}
+                    data-navigation-label={label}
+                    onClick={(event) =>
+                      handleNavigationClick(event, label, item)
+                    }
                   >
                     <Icon size={23} weight={active ? "fill" : "regular"} />
                     <span>{displayLabel}</span>
@@ -4619,19 +4840,7 @@ export function CoursesPage({
                       data-dock-item={item}
                       data-mobile-palette-trigger
                       type="button"
-                      className={
-                        mobilePaletteMenu && paletteMenuSource === "appearance"
-                          ? "is-active"
-                          : ""
-                      }
-                      style={
-                        {
-                          "--nav-icon-color": getNavigationIconColor(
-                            "Appearance",
-                            sidebarPreferences,
-                          ),
-                        } as CSSProperties
-                      }
+                      className="is-active"
                       aria-haspopup="menu"
                       aria-expanded={
                         mobilePaletteMenu && paletteMenuSource === "appearance"
@@ -4676,14 +4885,6 @@ export function CoursesPage({
                       data-mobile-palette-trigger
                       type="button"
                       className={mobilePaletteMenu ? "is-active" : ""}
-                      style={
-                        {
-                          "--nav-icon-color": getNavigationIconColor(
-                            "Theme",
-                            sidebarPreferences,
-                          ),
-                        } as CSSProperties
-                      }
                       aria-haspopup="menu"
                       aria-expanded={
                         mobilePaletteMenu && paletteMenuSource === "theme"
@@ -4730,14 +4931,6 @@ export function CoursesPage({
                       data-reading-mode-trigger
                       type="button"
                       className={`sidebar-appearance__reading-mode${readingModeEnabled ? " is-active" : ""}`}
-                      style={
-                        {
-                          "--nav-icon-color": getNavigationIconColor(
-                            "Reading Mode",
-                            sidebarPreferences,
-                          ),
-                        } as CSSProperties
-                      }
                       aria-label={`${readingModeEnabled ? "Reading mode active. Turn reading mode off" : "Turn reading mode on"}`}
                       title={`Reading mode - ${readingModeEnabled ? "on" : "off"}`}
                       aria-pressed={readingModeEnabled}
@@ -4812,14 +5005,6 @@ export function CoursesPage({
                     data-dock-item={item}
                     type="button"
                     className={`sidebar-appearance__fullscreen${isFullscreen ? " is-active" : ""}`}
-                    style={
-                      {
-                        "--nav-icon-color": getNavigationIconColor(
-                          "Fullscreen",
-                          sidebarPreferences,
-                        ),
-                      } as CSSProperties
-                    }
                     aria-label={fullscreenActionLabel}
                     title={fullscreenActionLabel}
                     aria-pressed={isFullscreen}

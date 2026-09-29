@@ -49,7 +49,7 @@ export function ShellProfileAvatar({
           onError={() => setImageFailed(true)}
         />
       ) : (
-        <UserCircle size={26} weight="regular" />
+        <UserCircle size={28} weight="duotone" />
       )}
     </i>
   );

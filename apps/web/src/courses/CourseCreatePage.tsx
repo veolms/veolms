@@ -80,7 +80,6 @@ import { NotePencilIcon as NotePencil } from "@phosphor-icons/react/NotePencil";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
-import { BrainIcon as Brain } from "@phosphor-icons/react/Brain";
 import { PuzzlePieceIcon as PuzzlePiece } from "@phosphor-icons/react/PuzzlePiece";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
@@ -12106,7 +12105,7 @@ export function CourseCreatePage({
                                             <div className="flex flex-col gap-3">
                                               <div className="flex items-center justify-between gap-3">
                                                 <div className="flex items-center gap-2 text-xs font-semibold text-(--text)">
-                                                  <Brain
+                                                  <PuzzlePiece
                                                     size={16}
                                                     className="text-(--accent)"
                                                     weight="fill"
@@ -12146,7 +12145,7 @@ export function CourseCreatePage({
                                               className="inline-flex min-h-9 items-center gap-2 rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] px-3 text-xs font-semibold text-(--accent-ink,var(--accent)) transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] disabled:cursor-not-allowed disabled:opacity-50"
                                               onClick={() => setQuizOpen(true)}
                                             >
-                                              <Brain size={15} weight="fill" />
+                                              <PuzzlePiece size={15} weight="fill" />
                                               Add Quiz
                                             </button>
                                           )}

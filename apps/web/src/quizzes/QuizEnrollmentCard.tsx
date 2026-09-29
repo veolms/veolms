@@ -4,7 +4,7 @@ import { ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { CurrencyInr } from "@phosphor-icons/react/CurrencyInr";
-import { Brain } from "@phosphor-icons/react/Brain";
+import { Exam } from "@phosphor-icons/react/Exam";
 import { Lock } from "@phosphor-icons/react/Lock";
 import { Tag } from "@phosphor-icons/react/Tag";
 import { Button } from "../components/Button";
@@ -248,7 +248,7 @@ export function QuizEnrollmentCard({
           )}
           {lessonBadge ? (
             <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
-              <Brain size={14} className="text-(--accent)" weight="bold" />
+              <Exam size={14} className="text-(--accent)" weight="bold" />
               <span>{lessonBadge}</span>
             </div>
           ) : null}
