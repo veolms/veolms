@@ -192,7 +192,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
   );
 
   app.get(
-    "/media/:mediaId/delivery",
+    "/media/:mediaId/delivery/*",
     {
       schema: {
         operationId: "getMediaDelivery",

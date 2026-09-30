@@ -8,24 +8,22 @@ import {
   CenteredLoadingSpinner,
   LoadingSpinnerIcon,
 } from "../components/LoadingSpinner";
-import {
-  ArrowLeft,
-  BookOpen,
-  CaretDown,
-  Check,
-  CheckCircle,
-  CircleNotch,
-  DotsSixVertical,
-  FileText,
-  Info,
-  ListBullets,
-  PencilSimple,
-  Plus,
-  Question,
-  Trash,
-  WarningCircle,
-  X,
-} from "@phosphor-icons/react";
+import { ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { BookOpen } from "@phosphor-icons/react/BookOpen";
+import { CaretDown } from "@phosphor-icons/react/CaretDown";
+import { Check } from "@phosphor-icons/react/Check";
+import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { DotsSixVertical } from "@phosphor-icons/react/DotsSixVertical";
+import { FileText } from "@phosphor-icons/react/FileText";
+import { Info } from "@phosphor-icons/react/Info";
+import { ListBullets } from "@phosphor-icons/react/ListBullets";
+import { PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { Plus } from "@phosphor-icons/react/Plus";
+import { Question } from "@phosphor-icons/react/Question";
+import { Trash } from "@phosphor-icons/react/Trash";
+import { WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import { X } from "@phosphor-icons/react/X";
 import { useQueryClient } from "@tanstack/react-query";
 import { quizKeys } from "../services/quizzes/quizzes.keys";
 import {
@@ -66,6 +64,7 @@ import {
   type QuizBuilderQuestionDraft,
   type QuizBuilderOptionDraft,
 } from "./quizBuilderDraft";
+import { QuizAuthoringLoadingSkeleton } from "./QuizAuthoringLoadingSkeleton";
 
 interface Props {
   courseId?: string;
@@ -98,23 +97,6 @@ const inputClass =
 
 const textareaClass =
   "rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-2.5 sm:px-3.5 py-2 sm:py-2.5 text-xs sm:text-sm text-(--text) outline-none transition-all placeholder:text-(--muted) focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20";
-
-function QuizAuthoringLoadingSkeleton() {
-  return (
-    <div
-      role="status"
-      aria-label="Loading quiz section"
-      className="rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-5"
-    >
-      <div className="animate-pulse motion-reduce:animate-none space-y-3">
-        <div className="h-4 w-40 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
-        <div className="h-9 w-full rounded-[10px] bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
-        <div className="h-24 w-full rounded-[10px] bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
-      </div>
-      <span className="sr-only">Loading quiz data…</span>
-    </div>
-  );
-}
 
 const QUESTION_TYPES: readonly {
   type: QuizQuestionType;
@@ -1461,12 +1443,8 @@ export function QuizAuthoringPanel({
       </div>
 
       {quiz.isLoading && !quiz.data && !lastLoadedQuizIdRef.current ? (
-        <div
-          className="my-8 grid min-h-20 place-items-center"
-          role="status"
-          aria-label="Loading quiz details"
-        >
-          <LoadingSpinnerIcon size={18} />
+        <div className="my-8">
+          <QuizAuthoringLoadingSkeleton />
         </div>
       ) : null}
 

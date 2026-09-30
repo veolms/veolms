@@ -58,11 +58,10 @@ import {
 import { writeAutoplayPreference } from "./player/lessonPlayerPersistence";
 import {
   type Lesson,
-  createCurriculumSections,
+  createLessonVideo,
   createLessonsById,
-  getCourseVideoForLesson,
 } from "./courseContent";
-import { getLearningHlsBootstrap } from "./learningHlsBootstrap";
+import { mediaService } from "../services/media";
 import { Curriculum } from "./Curriculum";
 import {
   FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT,
@@ -87,9 +86,7 @@ import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { adaptCourseOverviewToCurriculum } from "./courseCurriculumAdapter";
 import {
-  clearVideoPlaybackBootstrapErrorCache,
   getCachedVideoPlaybackBootstrap,
-  getCachedVideoPlaybackBootstrapError,
   getVideoPlaybackBootstrap,
   refreshVideoPlaybackToken,
   VideoPlaybackBootstrapError,
@@ -111,7 +108,6 @@ import {
   applyLearningShellToDocument,
   getInitialLearningShellState,
 } from "./learningShellPreferences";
-import { useCurriculumTestPreferences } from "./useCurriculumTestPreferences";
 import { useLearningProgress } from "./useLearningProgress";
 import {
   getPhoneLessonDrawerCollapsedSnapPoint,
@@ -558,8 +554,6 @@ export function LearningWorkspace({
     }
   }, [courseContentDrawerViewport, curriculumCollapsed]);
 
-  const { preferences: curriculumTestPreferences } =
-    useCurriculumTestPreferences();
   const [theaterMode, setTheaterMode] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
   const playerWrapRef = useRef<HTMLDivElement>(null);
@@ -662,24 +656,10 @@ export function LearningWorkspace({
     return adaptCourseOverviewToCurriculum(courseOverview);
   }, [courseOverview]);
 
-  const curriculumSections = useMemo(() => {
-    if (adaptedCurriculum) {
-      return adaptedCurriculum.sections;
-    }
-    if (isApiRoute || isCourseOverviewError) {
-      return [];
-    }
-    return createCurriculumSections(
-      curriculumTestPreferences.sectionCount,
-      curriculumTestPreferences.lectureCount,
-    );
-  }, [
-    adaptedCurriculum,
-    isApiRoute,
-    isCourseOverviewError,
-    curriculumTestPreferences.lectureCount,
-    curriculumTestPreferences.sectionCount,
-  ]);
+  const curriculumSections = useMemo(
+    () => adaptedCurriculum?.sections ?? [],
+    [adaptedCurriculum],
+  );
   const curriculumLessonsById = useMemo(
     () => createLessonsById(curriculumSections),
     [curriculumSections],
@@ -875,32 +855,21 @@ export function LearningWorkspace({
       window.removeEventListener("playing", handlePlayCapture, true);
     };
   }, [showingQuiz]);
-  const publicPlaybackBootstrap = useMemo(
-    () =>
-      courseSlug
-        ? getLearningHlsBootstrap({
-            courseSlug,
-            lectureSlug: String(selectedLesson),
-          })
-        : null,
-    [courseSlug, selectedLesson],
-  );
-  const protectedPlayback = Boolean(courseSlug && !publicPlaybackBootstrap);
+  const protectedPlayback = Boolean(courseSlug);
   const playbackRequestKey = `${courseSlug ?? ""}\u0000${selectedLesson}\u0000${isAuthenticated ? "authenticated" : "guest"}`;
   const [playbackBootstrap, setPlaybackBootstrap] =
     useState<VideoPlaybackBootstrap | null>(() => {
-      if (!courseSlug || publicPlaybackBootstrap) return null;
+      if (!courseSlug) return null;
       return getCachedVideoPlaybackBootstrap({
         courseSlug,
         lessonNumber: selectedLesson,
       });
     });
-  const [playbackBootstrapError, setPlaybackBootstrapError] =
-    useState<VideoPlaybackBootstrapError | null>(null);
-  const [playbackBootstrapRetryNonce, setPlaybackBootstrapRetryNonce] =
-    useState(0);
+  const [playbackBootstrapError, setPlaybackBootstrapError] = useState<
+    VideoPlaybackBootstrapError | null
+  >(null);
+  const [playbackBootstrapAttempt, setPlaybackBootstrapAttempt] = useState(0);
   const playbackRequestKeyRef = useRef<string | null>(null);
-  const previousAuthenticationRef = useRef(isAuthenticated);
   const refreshPlaybackToken = useCallback(async () => {
     if (!courseSlug) {
       throw new Error("A course is required to refresh playback access.");
@@ -915,22 +884,12 @@ export function LearningWorkspace({
     playbackRequestKeyRef.current = null;
     setPlaybackBootstrapError(null);
     setPlaybackBootstrap(null);
-    setPlaybackBootstrapRetryNonce((nonce) => nonce + 1);
+    setPlaybackBootstrapAttempt((attempt) => attempt + 1);
   }, []);
 
   useEffect(() => {
-    if (
-      previousAuthenticationRef.current !== isAuthenticated ||
-      isAuthenticated
-    ) {
-      previousAuthenticationRef.current = isAuthenticated;
-      clearVideoPlaybackBootstrapErrorCache();
-      playbackRequestKeyRef.current = null;
-    }
-  }, [isAuthenticated]);
-
-  useEffect(() => {
-    if (!courseSlug || publicPlaybackBootstrap) {
+    setPlaybackBootstrapError(null);
+    if (!courseSlug) {
       setPlaybackBootstrap(null);
       setPlaybackBootstrapError(null);
       playbackRequestKeyRef.current = null;
@@ -947,16 +906,6 @@ export function LearningWorkspace({
     if (cached) {
       setPlaybackBootstrap(cached);
       setPlaybackBootstrapError(null);
-      return;
-    }
-
-    const cachedError = getCachedVideoPlaybackBootstrapError({
-      courseSlug,
-      lessonNumber: selectedLesson,
-    });
-    if (cachedError) {
-      setPlaybackBootstrap(null);
-      setPlaybackBootstrapError(cachedError);
       return;
     }
 
@@ -993,8 +942,7 @@ export function LearningWorkspace({
     courseSlug,
     isAuthenticated,
     playbackRequestKey,
-    playbackBootstrapRetryNonce,
-    publicPlaybackBootstrap,
+    playbackBootstrapAttempt,
     selectedLesson,
   ]);
   const playbackAccessError = useMemo<
@@ -1040,10 +988,6 @@ export function LearningWorkspace({
     protectedPlayback && !playbackBootstrap && !playbackBootstrapError,
   );
   const lessonContentAccess = useMemo<LessonContentAccessState>(() => {
-    // A static public bootstrap is a content metadata signal, not a playback
-    // health signal. It remains sufficient to grant discussion reads even if
-    // the subsequent HLS request fails.
-    if (publicPlaybackBootstrap) return "granted";
     if (isAuthResolutionPending || !courseOverview || !adaptedCurriculum) {
       return "pending";
     }
@@ -1078,7 +1022,6 @@ export function LearningWorkspace({
     enrolledCoursesQuery.isFetched,
     isAuthResolutionPending,
     isAuthenticated,
-    publicPlaybackBootstrap,
     resolvedAuthUser?.id,
     resolvedAuthUser?.roles,
     selectedLesson,
@@ -1188,18 +1131,22 @@ export function LearningWorkspace({
     const section = curriculumSections.find(({ lessons }) =>
       lessons.some(([id]) => id === nextLessonId),
     );
-    const video = getCourseVideoForLesson(nextLessonId);
+    const nextLessonMediaId =
+      adaptedCurriculum?.lessonsByNumber.get(nextLessonId)?.contentMediaId;
     const nextIndex = lessonSequence.indexOf(nextLessonId);
     return {
       id: nextLessonId,
       title: lesson[1],
       duration: lesson[2],
       sectionTitle: section?.title,
-      thumbnailSrc: video?.thumbnailSrc || courseThumbnail,
+      thumbnailSrc: nextLessonMediaId
+        ? mediaService.getVideoThumbnailUrl(nextLessonMediaId)
+        : courseThumbnail,
       lectureNumber: nextIndex >= 0 ? nextIndex + 1 : undefined,
       totalLessons: lessonSequence.length,
     };
   }, [
+    adaptedCurriculum,
     courseThumbnail,
     curriculumLessonsById,
     curriculumSections,
@@ -2513,13 +2460,34 @@ export function LearningWorkspace({
     lessonPlayerSeekRef.current?.(seconds);
   }, []);
 
+  const currentLessonTitle = currentLesson[1];
+  const selectedLessonDurationSeconds = selectedLessonRecord?.durationSeconds;
+  const selectedLessonMediaId = selectedLessonRecord?.contentMediaId;
+  const currentLessonMedia = useMemo(
+    () =>
+      createLessonVideo(currentLessonTitle, {
+        durationSeconds: selectedLessonDurationSeconds,
+        thumbnailSrc: selectedLessonMediaId
+          ? mediaService.getVideoThumbnailUrl(selectedLessonMediaId)
+          : courseThumbnail,
+      }),
+    [
+      courseThumbnail,
+      currentLessonTitle,
+      selectedLessonDurationSeconds,
+      selectedLessonMediaId,
+    ],
+  );
+
   const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
     () => ({
-      media: getCourseVideoForLesson(currentLesson[0]),
+      media: currentLessonMedia,
       description: selectedLessonDescription,
       playbackBootstrap,
       playbackAccessError,
       playbackBootstrapPending,
+      playbackUnavailableMessage: playbackBootstrapError?.message ?? null,
+      onRetryPlayback: retryPlaybackBootstrap,
       refreshPlaybackToken,
       protectedPlayback,
       lessonTitle: currentLesson[1],
@@ -2569,6 +2537,7 @@ export function LearningWorkspace({
       courseSlug,
       courseTitle,
       currentLesson,
+      currentLessonMedia,
       currentLessonIndex,
       curriculumShortcutLabel,
       fullscreenCoursePanel,
@@ -2586,8 +2555,10 @@ export function LearningWorkspace({
       playbackBootstrap,
       playbackAccessError,
       playbackBootstrapPending,
+      playbackBootstrapError,
       protectedPlayback,
       registerLessonPlayerSeek,
+      retryPlaybackBootstrap,
       refreshPlaybackToken,
       playerCourseLessonsOpen,
       playerCourseLessonsSecondPressHold,

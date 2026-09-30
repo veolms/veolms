@@ -1,19 +1,17 @@
-import {
-  ArrowLeft,
-  ArrowRight,
-  CheckIcon,
-  ClockIcon,
-  Copy as CopyIcon,
-  DeviceMobile,
-  DownloadSimple,
-  EnvelopeSimple,
-  KeyIcon,
-  LockIcon,
-  ShieldCheckIcon,
-  StarIcon,
-  UserCircleIcon,
-  WarningCircle,
-} from "@phosphor-icons/react";
+import { ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { ArrowRight } from "@phosphor-icons/react/ArrowRight";
+import { CheckIcon } from "@phosphor-icons/react/Check";
+import { ClockIcon } from "@phosphor-icons/react/Clock";
+import { Copy as CopyIcon } from "@phosphor-icons/react/Copy";
+import { DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
+import { DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
+import { EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
+import { KeyIcon } from "@phosphor-icons/react/Key";
+import { LockIcon } from "@phosphor-icons/react/Lock";
+import { ShieldCheckIcon } from "@phosphor-icons/react/ShieldCheck";
+import { StarIcon } from "@phosphor-icons/react/Star";
+import { UserCircleIcon } from "@phosphor-icons/react/UserCircle";
+import { WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import {
   ArrowLeft as ArrowLeftGlyph,
   ArrowRight as ArrowRightGlyph,

@@ -1,0 +1,270 @@
+/* Shared by student home and creator dashboard. Keeping these preview rules
+   separate prevents student home from loading the full creator dashboard CSS. */
+.creator-dashboard-state-content {
+  display: grid;
+  min-width: 0;
+  justify-items: center;
+  align-content: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.creator-dashboard-state-content strong {
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.creator-dashboard-state-content small {
+  max-width: 280px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+
+.creator-dashboard-state-retry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 4px;
+  border: 0;
+  border-radius: 5px;
+  padding: 4px 8px;
+  color: var(--accent-ink, var(--accent));
+  background: transparent;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+.creator-dashboard-state-retry:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.creator-dashboard-state-retry:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.creator-dashboard-state-retry:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.creator-dashboard-state-retry-icon.is-retrying {
+  animation: creator-dashboard-state-retry-spin 720ms linear infinite;
+}
+
+@keyframes creator-dashboard-state-retry-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.creator-discussion-list {
+  box-sizing: border-box;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  height: 294px;
+  max-height: 294px;
+  overflow-y: auto;
+  padding-block-end: 3px;
+  scrollbar-gutter: stable;
+}
+
+.creator-discussion-state {
+  display: flex;
+  box-sizing: border-box;
+  min-height: 100%;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.creator-discussion-state > strong,
+.creator-discussion-state > small {
+  display: block;
+}
+
+.creator-discussion-state > strong {
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.creator-discussion-state > small {
+  max-width: 260px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+
+.creator-discussion-skeleton-list {
+  display: grid;
+  gap: 12px;
+}
+
+.creator-discussion-skeleton-card {
+  display: grid;
+  box-sizing: border-box;
+  grid-template-columns: 46px minmax(0, 1fr) 96px;
+  column-gap: 10px;
+  align-items: start;
+  height: 110px;
+  min-height: 110px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 15px;
+  padding: 12px 14px;
+  background: var(--card-surface-raised, var(--surface-strong));
+}
+
+.creator-discussion-skeleton-avatar,
+.creator-discussion-skeleton-author,
+.creator-discussion-skeleton-preview,
+.creator-discussion-skeleton-context,
+.creator-discussion-skeleton-badge,
+.creator-discussion-skeleton-meta {
+  display: block;
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+  animation: creator-discussion-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.creator-discussion-skeleton-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+}
+
+.creator-discussion-skeleton-body {
+  display: grid;
+  grid-template-rows: 18px 39px 18px;
+  gap: 4px;
+  min-width: 0;
+  height: 83px;
+}
+
+.creator-discussion-skeleton-author {
+  width: 64%;
+  height: 0.72rem;
+  align-self: center;
+  border-radius: 4px;
+}
+
+.creator-discussion-skeleton-preview {
+  width: 94%;
+  height: 0.86rem;
+  align-self: center;
+  border-radius: 4px;
+}
+
+.creator-discussion-skeleton-context {
+  width: 72%;
+  height: 0.66rem;
+  align-self: center;
+  border-radius: 4px;
+}
+
+.creator-discussion-skeleton-rail {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.creator-discussion-skeleton-badge {
+  width: 68px;
+  height: 22px;
+  border-radius: 7px;
+}
+
+.creator-discussion-skeleton-meta {
+  width: 52px;
+  height: 0.66rem;
+  border-radius: 4px;
+}
+
+@keyframes creator-discussion-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Dashboard-only treatment for reused compact discussion cards. Keep the
+   shared Discussions surfaces and elevation unchanged. */
+.creator-discussion-list[data-dashboard-discussion-preview]
+  > .discussion-thread--workspace-card.is-compact {
+  --creator-discussion-card-surface: var(
+    --card-surface-raised,
+    var(--surface-strong)
+  );
+  --creator-discussion-card-hover-surface: color-mix(
+    in srgb,
+    var(--creator-discussion-card-surface) 92%,
+    var(--card-surface-hover, var(--card-surface-raised)) 8%
+  );
+
+  border: 1px solid transparent;
+  background: var(--creator-discussion-card-surface);
+  box-shadow: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.creator-discussion-list[data-dashboard-discussion-preview]
+  > .discussion-thread--workspace-card.is-compact:is(:hover, :focus-within) {
+  border-color: transparent;
+  background: var(--creator-discussion-card-hover-surface);
+  box-shadow: none;
+}
+
+.creator-discussion-list[data-dashboard-discussion-preview] {
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .creator-discussion-list {
+    height: 360px;
+    max-height: 360px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-block-end: 6px;
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .creator-dashboard-state-retry,
+  .creator-dashboard-state-retry-icon,
+  .creator-discussion-skeleton-card,
+  .creator-discussion-skeleton-avatar,
+  .creator-discussion-skeleton-author,
+  .creator-discussion-skeleton-preview,
+  .creator-discussion-skeleton-context,
+  .creator-discussion-skeleton-badge,
+  .creator-discussion-skeleton-meta {
+    animation: none;
+    transition: none;
+  }
+}

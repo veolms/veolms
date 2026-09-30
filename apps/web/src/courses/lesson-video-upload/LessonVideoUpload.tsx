@@ -1,14 +1,12 @@
-import {
-  ArrowsClockwise,
-  CheckCircle,
-  CircleNotch,
-  CloudArrowUp,
-  FileVideo,
-  PlayCircle,
-  UploadSimple,
-  WarningCircle,
-  X,
-} from "@phosphor-icons/react";
+import { ArrowsClockwise } from "@phosphor-icons/react/ArrowsClockwise";
+import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { CloudArrowUp } from "@phosphor-icons/react/CloudArrowUp";
+import { FileVideo } from "@phosphor-icons/react/FileVideo";
+import { PlayCircle } from "@phosphor-icons/react/PlayCircle";
+import { UploadSimple } from "@phosphor-icons/react/UploadSimple";
+import { WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import { X } from "@phosphor-icons/react/X";
 import {
   forwardRef,
   useCallback,
@@ -29,6 +27,7 @@ import {
   type VideoJobStatus,
 } from "@veolms/contracts";
 import { mediaService } from "../../services/media";
+import { useBeforeUnloadWarning } from "../../hooks/useBeforeUnloadWarning";
 import { LessonUploadDropzone } from "../LessonUploadDropzone";
 
 export interface LessonVideoUploadProps {
@@ -45,6 +44,12 @@ export interface LessonVideoUploadProps {
     mediaAssetId: string,
   ) => void | boolean | Promise<void | boolean>;
   onProcessingComplete?: (mediaAssetId: string) => void | Promise<void>;
+  /**
+   * Called once per uploaded asset when its generated thumbnail can be shown.
+   * The transcoder captures the thumbnail before encoding renditions, so it
+   * exists once processing passes THUMBNAIL_READY_PROGRESS_PERCENT.
+   */
+  onThumbnailAvailable?: (mediaAssetId: string) => void;
 }
 
 export interface LessonVideoUploadHandle {
@@ -62,6 +67,8 @@ type UploadPhase =
 
 type StreamConnectionState =
   "idle" | "connecting" | "connected" | "reconnecting" | "terminal" | "closed";
+
+const THUMBNAIL_READY_PROGRESS_PERCENT = 10;
 
 const BUSY_PHASES = new Set<UploadPhase>([
   "uploading",
@@ -101,6 +108,7 @@ export const LessonVideoUpload = forwardRef<
     onPreviewFile,
     onMediaAttached,
     onProcessingComplete,
+    onThumbnailAvailable,
   },
   ref,
 ) {
@@ -120,6 +128,8 @@ export const LessonVideoUpload = forwardRef<
   const streamReconnectAttemptRef = useRef(0);
   const onMediaAttachedRef = useRef(onMediaAttached);
   const onProcessingCompleteRef = useRef(onProcessingComplete);
+  const onThumbnailAvailableRef = useRef(onThumbnailAvailable);
+  const thumbnailNotifiedMediaIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     onMediaAttachedRef.current = onMediaAttached;
@@ -128,6 +138,10 @@ export const LessonVideoUpload = forwardRef<
   useEffect(() => {
     onProcessingCompleteRef.current = onProcessingComplete;
   }, [onProcessingComplete]);
+
+  useEffect(() => {
+    onThumbnailAvailableRef.current = onThumbnailAvailable;
+  }, [onThumbnailAvailable]);
 
   const clearScheduledReconnect = useCallback(() => {
     if (reconnectTimerRef.current !== null) {
@@ -169,6 +183,12 @@ export const LessonVideoUpload = forwardRef<
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isReplacingVideo, setIsReplacingVideo] = useState(false);
+
+  // Leaving the page loses an in-flight upload, and a processed video is only
+  // attached to the lesson when this component sees processing complete.
+  useBeforeUnloadWarning(
+    isBusy(phase) || (phase === "ready" && candidateMediaId !== null),
+  );
   const isUploadSurfaceActive = inline || isOpen;
 
   useEffect(() => {
@@ -304,6 +324,16 @@ export const LessonVideoUpload = forwardRef<
         next.progressPercent,
       );
       setTranscodeProgress(highestTranscodeProgressRef.current);
+
+      if (
+        thumbnailNotifiedMediaIdRef.current !== activeMediaId &&
+        (next.status === "completed" ||
+          highestTranscodeProgressRef.current >=
+            THUMBNAIL_READY_PROGRESS_PERCENT)
+      ) {
+        thumbnailNotifiedMediaIdRef.current = activeMediaId;
+        onThumbnailAvailableRef.current?.(activeMediaId);
+      }
 
       if (next.status === "completed") {
         receivedTerminalEvent = true;

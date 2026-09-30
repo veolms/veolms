@@ -58,7 +58,15 @@ const courseSummaryObjectSchema = z.strictObject({
     .nullable()
     .optional(),
   thumbnailUrl: z.string().nullable().optional(),
-  thumbnailSrcSet: z.array(z.object({ url: z.string(), width: z.number().int().positive(), height: z.number().int().positive() })).optional(),
+  thumbnailSrcSet: z
+    .array(
+      z.object({
+        url: z.string(),
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+      }),
+    )
+    .optional(),
   instructorName: z.string().nullable().optional(),
   categoryName: z.string().nullable().optional(),
   totalSections: z.number().int().nonnegative().default(0),
@@ -119,9 +127,7 @@ export const courseListQuerySchema = z.object({
 });
 
 export type CourseListResponse = z.infer<typeof courseListResponseSchema>;
-export type CourseOptionsResponse = z.infer<
-  typeof courseOptionsResponseSchema
->;
+export type CourseOptionsResponse = z.infer<typeof courseOptionsResponseSchema>;
 export type CourseListQuery = z.infer<typeof courseListQuerySchema>;
 
 export const courseSlugSchema = z
@@ -496,7 +502,20 @@ export const myCoursesListResponseSchema = z.object({
 
 export const courseDeleteResponseSchema = z.object({
   purgeAt: z.string(),
+  slug: z.string().optional(),
 });
+
+export const courseStaticPageRefreshStatusSchema = z.object({
+  courseId: z.uuid(),
+  status: z.enum(["idle", "queued", "running", "succeeded", "failed"]),
+  message: z.string().nullable(),
+  updatedAt: z.string(),
+  requestId: z.string().nullable(),
+  runUrl: z.string().url().nullable(),
+});
+export type CourseStaticPageRefreshStatus = z.infer<
+  typeof courseStaticPageRefreshStatusSchema
+>;
 
 export const courseDeletionPurgeStateSchema = z.enum([
   "scheduled",
@@ -654,6 +673,9 @@ z.globalRegistry.add(myCoursesListResponseSchema, {
 });
 z.globalRegistry.add(courseDeleteResponseSchema, {
   id: "CourseDeleteResponse",
+});
+z.globalRegistry.add(courseStaticPageRefreshStatusSchema, {
+  id: "CourseStaticPageRefreshStatus",
 });
 z.globalRegistry.add(deletedCourseSchema, { id: "DeletedCourse" });
 z.globalRegistry.add(deletedCoursesListResponseSchema, {

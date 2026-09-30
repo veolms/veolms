@@ -19,8 +19,8 @@ import {
 } from "react-router";
 import type { Route } from "./+types/academy-layout";
 import academyShellStylesheet from "../shell-theme.css?url";
-import { CoursesPage } from "../CoursesPage";
 import type { AcademyStaticPageData } from "./academyStaticPageData";
+import { CoursesPage } from "../CoursesPage";
 import {
   getCourseRouteKey,
   type Course,
@@ -298,7 +298,7 @@ export default function AcademyLayout() {
   const persistentPlayerRef =
     useRef<PersistentLearningPlayerRegistration | null>(null);
   const selectPersistentMiniPlayerLessonRef = useRef<
-    (lessonNumber: number) => void
+    (lessonNumber: number, options?: { retry?: boolean }) => void
   >(() => {});
   const playerPresentationRef = useRef<LearningPlayerPresentation>("full");
   const persistentRegistrationTokenRef = useRef<symbol | null>(null);
@@ -788,14 +788,19 @@ export default function AcademyLayout() {
     closeLearningMiniPlayerSession();
   }, []);
 
-  selectPersistentMiniPlayerLessonRef.current = (lessonNumber: number) => {
+  selectPersistentMiniPlayerLessonRef.current = (
+    lessonNumber: number,
+    options,
+  ) => {
     const current = persistentPlayerRef.current;
     if (!current || playerPresentationRef.current !== "mini") return;
+    const retry = options?.retry === true;
 
     const courseSlug =
       current.courseSlug ??
       courseRouteKeyFromLessonPath(current.lessonPath) ??
       current.courseRouteKey;
+    if (!courseSlug) return;
 
     const cachedBootstrap = courseSlug
       ? getCachedVideoPlaybackBootstrap({ courseSlug, lessonNumber })
@@ -808,7 +813,7 @@ export default function AcademyLayout() {
 
     const token = ++selectLessonTokenRef.current;
 
-    if (cachedBootstrap || !isProtected || !courseSlug) {
+    if (!retry && (cachedBootstrap || !isProtected)) {
       const updated = applyPersistentMiniPlayerLessonChange(
         current,
         lessonNumber,
@@ -824,14 +829,32 @@ export default function AcademyLayout() {
       return;
     }
 
-    const updated = applyPersistentMiniPlayerLessonChange(
-      current,
-      lessonNumber,
-      {
-        playbackBootstrap: null,
-        playbackSuspended: true,
-      },
-    );
+    const retryPlaybackAccessError = retry
+      ? current.playerProps.playbackAccessError
+      : undefined;
+    const retryPlaybackUnavailableMessage = retry
+      ? current.playerProps.playbackUnavailableMessage
+      : undefined;
+    const updated = retry
+      ? {
+          ...current,
+          playerProps: {
+            ...current.playerProps,
+            playbackBootstrap: null,
+            playbackBootstrapPending: true,
+            playbackAccessError: null,
+            playbackUnavailableMessage: null,
+            playbackSuspended: true,
+          },
+        }
+      : applyPersistentMiniPlayerLessonChange(
+          current,
+          lessonNumber,
+          {
+            playbackBootstrap: null,
+            playbackSuspended: true,
+          },
+        );
     if (!updated) return;
 
     persistentPlayerRef.current = updated;
@@ -854,6 +877,9 @@ export default function AcademyLayout() {
           playerProps: {
             ...active.playerProps,
             playbackBootstrap: bootstrap,
+            playbackBootstrapPending: false,
+            playbackAccessError: null,
+            playbackUnavailableMessage: null,
             playbackSuspended: false,
             refreshPlaybackToken: () =>
               refreshVideoPlaybackToken({ courseSlug, lessonNumber }),
@@ -871,6 +897,14 @@ export default function AcademyLayout() {
           ...active,
           playerProps: {
             ...active.playerProps,
+            playbackBootstrapPending: false,
+            playbackAccessError: retry
+              ? retryPlaybackAccessError
+              : active.playerProps.playbackAccessError,
+            playbackUnavailableMessage: retry
+              ? (retryPlaybackUnavailableMessage ??
+                "Unable to prepare this video.")
+              : active.playerProps.playbackUnavailableMessage,
             playbackSuspended: false,
           },
         };
@@ -885,6 +919,13 @@ export default function AcademyLayout() {
     },
     [],
   );
+  const retryPersistentMiniPlayerPlayback = useCallback(() => {
+    const current = persistentPlayerRef.current;
+    if (!current || current.selectedLesson === undefined) return;
+    selectPersistentMiniPlayerLessonRef.current(current.selectedLesson, {
+      retry: true,
+    });
+  }, []);
 
   const mountLearningBackground = useCallback((deferred = true) => {
     if (deferred && learningBackgroundMountedRef.current) return;
@@ -1339,6 +1380,7 @@ export default function AcademyLayout() {
             onClose={closeLearningMiniPlayer}
             onRestore={restoreLearningMiniPlayer}
             onSelectMiniPlayerLesson={selectPersistentMiniPlayerLesson}
+            onRetryMiniPlayerPlayback={retryPersistentMiniPlayerPlayback}
             onOpenCourseOverview={openPersistentPlayerCourseOverview}
           />
         </Suspense>

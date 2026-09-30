@@ -7,7 +7,10 @@ import {
   usePlayerState,
   usePlayerTheme,
 } from "@veolms/video-player";
-import { Pause, Play, SkipBack, SkipForward } from "@phosphor-icons/react";
+import { Pause } from "@phosphor-icons/react/Pause";
+import { Play } from "@phosphor-icons/react/Play";
+import { SkipBack } from "@phosphor-icons/react/SkipBack";
+import { SkipForward } from "@phosphor-icons/react/SkipForward";
 import {
   LEARNING_PLAYER_EXPAND_LABEL,
   LEARNING_PLAYER_EXPAND_TITLE,

@@ -4,6 +4,7 @@ import type {
   Category,
   CourseEditorDataResponse,
   CourseOverviewResponse,
+  CourseStaticPageRefreshStatus,
   CourseListResponse,
   CourseOptionsResponse,
   CourseSummary,
@@ -27,6 +28,7 @@ export function useCourses(options?: {
     enabled: options?.enabled ?? true,
     initialData: options?.initialData,
     staleTime: options?.initialData ? Infinity : 5 * 60 * 1000,
+    retry: false,
   });
 }
 
@@ -90,6 +92,21 @@ export function useCourseEditor(courseId: string | null) {
   });
 }
 
+export function useCourseStaticPageRefreshStatus(courseId: string | null) {
+  return useQuery<CourseStaticPageRefreshStatus, ApiError>({
+    queryKey: courseId
+      ? courseKeys.staticPageRefresh(courseId)
+      : [...courseKeys.all, "static-page-refresh", null],
+    queryFn: () => coursesService.getStaticPageRefreshStatus(courseId!),
+    enabled: Boolean(courseId),
+    refetchInterval: (query) =>
+      query.state.data?.status === "queued" ||
+      query.state.data?.status === "running"
+        ? 2_000
+        : 5_000,
+  });
+}
+
 export function useCourseOptions(options?: { enabled?: boolean }) {
   return useQuery<CourseOptionsResponse, ApiError>({
     queryKey: courseKeys.options(),
@@ -129,6 +146,7 @@ export function useInfiniteCourses(options: {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: options.enabled ?? true,
+    placeholderData: (previousData) => previousData,
     initialData: canUseInitialData
       ? {
           pages: [options.initialData!],
@@ -140,6 +158,7 @@ export function useInfiniteCourses(options: {
         ? 0
         : Infinity
       : 5 * 60 * 1000,
+    retry: false,
   });
 }
 

@@ -80,7 +80,10 @@ export function isCoursesPublicPath(pathname: string): boolean {
   if (path === "/courses") {
     return true;
   }
-  return /^\/courses\/[^/]+\/overview$/.test(path);
+  if (path === "/explore-courses") {
+    return true;
+  }
+  return /^\/explore-courses\/[^/]+$/.test(path);
 }
 
 export function isLearningPath(pathname: string): boolean {

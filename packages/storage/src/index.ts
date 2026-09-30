@@ -430,7 +430,18 @@ export class S3StorageService {
                   AllowedHeaders: ["*"],
                   AllowedMethods: ["GET", "HEAD", "PUT", "POST", "DELETE"],
                   AllowedOrigins: ["*"],
-                  ExposeHeaders: ["ETag", "Content-Length", "Content-Type"],
+                  ExposeHeaders: [
+                    "ETag",
+                    "Content-Length",
+                    "Content-Type",
+                    "x-amz-request-id",
+                    "x-amz-id-2",
+                    "Content-Range",
+                    "Range",
+                    "Accept-Ranges",
+                    "x-amz-checksum-crc32",
+                    "x-amz-sdk-checksum-algorithm",
+                  ],
                   MaxAgeSeconds: 3600,
                 },
               ],
@@ -440,10 +451,12 @@ export class S3StorageService {
         .then(
           () => undefined,
           (error) => {
-            // Clear the cache so a future call can retry, but do not expose a
-            // presigned URL while the bucket is known not to support CORS.
             this.bucketCorsEnsured = null;
-            throw error;
+            console.warn(
+              `[storage] Failed to set S3 bucket CORS for ${this.bucket}:`,
+              error instanceof Error ? error.message : error,
+            );
+            return undefined;
           },
         );
     }
@@ -462,6 +475,7 @@ export class S3StorageService {
     contentLength?: number,
     expiresIn = 300,
   ): Promise<string> {
+    await this.ensureBucketCors().catch(() => {});
     const storageKey = this.keyForWrite(key);
     const command = new PutObjectCommand({
       Bucket: this.bucket,
@@ -473,6 +487,17 @@ export class S3StorageService {
       expiresIn,
       unhoistableHeaders: new Set(["content-length"]),
     });
+  }
+
+  /**
+   * Generates a pre-signed GET URL for reading/streaming an object (e.g. for probing metadata).
+   */
+  async getPresignedGetUrl(key: string, expiresIn = 900): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+    });
+    return getSignedUrl(this.client, command, { expiresIn });
   }
 
   /**

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+} from "react";
 import {
   useLocation,
   useNavigate,
@@ -7,14 +14,9 @@ import {
 } from "react-router";
 import type { CourseLesson } from "@veolms/contracts";
 import type { Route } from "./+types/learning";
-import { LearningWorkspace } from "../learning/LearningWorkspace";
 import {
-  getLearningHlsBootstrap,
-  getLearningHlsPreconnectHref,
   getLearningPlaybackRequestMetadata,
   LEARNING_COURSE_SLUG_META_NAME,
-  LEARNING_HLS_MANIFEST_META_NAME,
-  LEARNING_HLS_MEDIA_KEY_META_NAME,
   LEARNING_LESSON_NUMBER_META_NAME,
 } from "../learning/learningHlsBootstrap";
 import { resolveLessonIdentifier } from "../learning/courseContent";
@@ -39,13 +41,18 @@ import type { LearningMiniPlayerRequest } from "../learning/player/learningMiniP
 import { getVideoPlaybackApiOrigin } from "../learning/videoPlaybackBootstrap";
 import { useMyQuizAssignments } from "../services/quizzes";
 
+const LearningWorkspace = lazy(() =>
+  import("../learning/LearningWorkspace").then((module) => ({
+    default: module.LearningWorkspace,
+  })),
+);
+
 export function meta({ location, params }: Route.MetaArgs) {
   const descriptors = Object.entries(
     getRouteMeta("learning", params, location.pathname),
   ).map(([name, content]) =>
     name === "title" ? { title: content } : { name, content },
   );
-  const bootstrap = getLearningHlsBootstrap(params);
   const requestMetadata = getLearningPlaybackRequestMetadata(params);
   const safeMetadata = requestMetadata
     ? [
@@ -59,26 +66,13 @@ export function meta({ location, params }: Route.MetaArgs) {
         },
       ]
     : [];
-  if (!bootstrap) return [...descriptors, ...safeMetadata];
-  return [
-    ...descriptors,
-    ...safeMetadata,
-    { name: LEARNING_HLS_MANIFEST_META_NAME, content: bootstrap.manifestUrl },
-    { name: LEARNING_HLS_MEDIA_KEY_META_NAME, content: bootstrap.mediaKey },
-  ];
+  return [...descriptors, ...safeMetadata];
 }
 
-export function links(args?: Pick<Route.MetaArgs, "params">) {
-  const bootstrap = getLearningHlsBootstrap(args?.params ?? {});
-  if (!bootstrap) {
-    const apiOrigin = getVideoPlaybackApiOrigin();
-    return apiOrigin
-      ? [{ rel: "preconnect", href: apiOrigin, crossOrigin: "anonymous" }]
-      : [];
-  }
-  const preconnectHref = getLearningHlsPreconnectHref(bootstrap.manifestUrl);
-  return preconnectHref
-    ? [{ rel: "preconnect", href: preconnectHref, crossOrigin: "anonymous" }]
+export function links() {
+  const apiOrigin = getVideoPlaybackApiOrigin();
+  return apiOrigin
+    ? [{ rel: "preconnect", href: apiOrigin, crossOrigin: "anonymous" }]
     : [];
 }
 
@@ -204,7 +198,7 @@ export default function LearningRoute() {
     void import("../learning/earlyHlsPreload")
       .then(({ startEarlyHlsPreload }) =>
         startEarlyHlsPreload(
-          getLearningHlsBootstrap({ courseSlug, lectureSlug }),
+          null,
           getLearningPlaybackRequestMetadata({ courseSlug, lectureSlug }),
         ),
       )
@@ -340,35 +334,43 @@ export default function LearningRoute() {
   );
 
   return (
-    <LearningWorkspace
-      key={courseSlug}
-      courseSlug={courseSlug}
-      userId={activeUser?.id}
-      lessonId={lessonId}
-      initialLessonView={isQuizViewRequested ? "quiz" : "video"}
-      mobileBottomNavigation={mobileBottomNavigation}
-      mobileBottomNavigationHidden={mobileBottomNavigationHidden}
-      onSelectLesson={selectLesson}
-      onOpenCourseOverview={openCourseOverview}
-      onOpenLogin={openLogin}
-      onMinimizeGestureChange={onLearningPlayerMinimizeGestureChange}
-      onMiniPlayerRestoreReady={onMiniPlayerRestoreReady}
-      persistentPlayerCourseRouteKey={courseSlug}
-      persistentPlayerLessonPath={`${location.pathname}${location.search}`}
-      persistentPlayerReturnPath={playerReturnPath}
-      courseNavigationActionLabel={
-        hasDiscussionReturnPath ? "Back to Discussions" : undefined
+    <Suspense
+      fallback={
+        <div className="grid min-h-52 place-items-center" role="status">
+          Loading learning space…
+        </div>
       }
-      persistentPlayerMounted={persistentPlayerMounted}
-      registerPersistentPlayer={registerPersistentPlayer}
-      onMinimizePlayer={minimizePlayer}
-      deepLinkLessonUuid={deepLinkLessonUuid}
-      isDiscussionDeepLink={hasDiscussionDeepLink}
-      deepLinkRouteSettled={isDeepLinkRouteSettled}
-      noteDeepLinkId={noteDeepLinkId}
-      quizAssignment={quizAssignment ?? null}
-      quizAssignments={myQuizAssignments?.assignments ?? null}
-      quizAssignmentLoading={myQuizAssignmentsLoading}
-    />
+    >
+      <LearningWorkspace
+        key={courseSlug}
+        courseSlug={courseSlug}
+        userId={activeUser?.id}
+        lessonId={lessonId}
+        initialLessonView={isQuizViewRequested ? "quiz" : "video"}
+        mobileBottomNavigation={mobileBottomNavigation}
+        mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+        onSelectLesson={selectLesson}
+        onOpenCourseOverview={openCourseOverview}
+        onOpenLogin={openLogin}
+        onMinimizeGestureChange={onLearningPlayerMinimizeGestureChange}
+        onMiniPlayerRestoreReady={onMiniPlayerRestoreReady}
+        persistentPlayerCourseRouteKey={courseSlug}
+        persistentPlayerLessonPath={`${location.pathname}${location.search}`}
+        persistentPlayerReturnPath={playerReturnPath}
+        courseNavigationActionLabel={
+          hasDiscussionReturnPath ? "Back to Discussions" : undefined
+        }
+        persistentPlayerMounted={persistentPlayerMounted}
+        registerPersistentPlayer={registerPersistentPlayer}
+        onMinimizePlayer={minimizePlayer}
+        deepLinkLessonUuid={deepLinkLessonUuid}
+        isDiscussionDeepLink={hasDiscussionDeepLink}
+        deepLinkRouteSettled={isDeepLinkRouteSettled}
+        noteDeepLinkId={noteDeepLinkId}
+        quizAssignment={quizAssignment ?? null}
+        quizAssignments={myQuizAssignments?.assignments ?? null}
+        quizAssignmentLoading={myQuizAssignmentsLoading}
+      />
+    </Suspense>
   );
 }

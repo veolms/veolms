@@ -15,6 +15,7 @@ import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/Warnin
 import type { StudentCourseDetail } from "@veolms/contracts";
 import type { NavigateTo } from "../routing/navigation";
 import { useStudent } from "../services/students";
+import { StudentDetailsSkeleton } from "./StudentDetailsSkeleton";
 
 export interface StudentDetailsPageProps {
   username?: string;
@@ -75,19 +76,7 @@ export function StudentDetailsPage({
       </nav>
 
       {isLoading ? (
-        // Loading skeleton
-        <div className="space-y-6">
-          <div className="h-48 rounded-[14px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface) p-6 animate-pulse" />
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-24 rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface) p-4 animate-pulse"
-              />
-            ))}
-          </div>
-          <div className="h-64 rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface) p-6 animate-pulse" />
-        </div>
+        <StudentDetailsSkeleton />
       ) : isError || !student ? (
         // Error or Not Found state
         <div

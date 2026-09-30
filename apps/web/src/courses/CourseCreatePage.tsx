@@ -15,6 +15,7 @@ import { createPortal } from "react-dom";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
 import { CourseQuizPricingCard } from "./CourseQuizPricingCard";
+import { CourseStaticPageRefreshNotice } from "./CourseStaticPageRefreshNotice";
 import {
   LessonResourceManager,
   toLessonResourceItem,
@@ -31,6 +32,7 @@ import {
   type LessonStudioEditorHandle,
   type LessonEditorDraft,
   type StudioLessonContentType,
+  type AttachedMediaInfo,
 } from "./curriculum";
 import { VirtualizedLessonList } from "./curriculum/VirtualizedLessonList";
 
@@ -158,6 +160,7 @@ import type { Course, CourseLevel, CourseCategory } from "./catalogue";
 import type { Lesson } from "../learning/courseContent";
 import { formatDuration, resolveCourseDurationSeconds } from "./courseAdapter";
 import { mediaService } from "../services/media";
+import { clearVideoPlaybackBootstrapCache } from "../learning/videoPlaybackBootstrap";
 
 const EMPTY_CATEGORIES: Category[] = [];
 
@@ -335,6 +338,47 @@ interface CurriculumLessonItem {
 }
 
 const getCurriculumLessonKey = (lesson: CurriculumLessonItem) => lesson.id;
+
+/**
+ * Media details the lesson editor can show for an attached asset. The editor
+ * payload only carries the asset ID and duration, so nothing else is implied.
+ */
+const getLessonMediaInfo = (
+  lesson: Pick<
+    CurriculumLessonItem,
+    "contentMediaId" | "contentType" | "durationSeconds"
+  >,
+): AttachedMediaInfo | null =>
+  lesson.contentMediaId
+    ? {
+        id: lesson.contentMediaId,
+        durationSeconds: lesson.durationSeconds || undefined,
+        thumbnailUrl:
+          lesson.contentType === "video"
+            ? mediaService.getVideoThumbnailUrl(lesson.contentMediaId)
+            : undefined,
+      }
+    : null;
+
+/**
+ * The playback API numbers lessons by their order across the whole course
+ * (sections by position, then lessons by position). Lessons that are not
+ * saved yet do not exist server-side and are not counted.
+ */
+const getCourseWideLessonNumber = (
+  curriculumSections: readonly CurriculumSectionItem[],
+  lessonId: string,
+): number | undefined => {
+  let lessonNumber = 0;
+  for (const section of curriculumSections) {
+    for (const lesson of section.lessons) {
+      if (lesson.isPendingCreation) continue;
+      lessonNumber += 1;
+      if (lesson.id === lessonId) return lessonNumber;
+    }
+  }
+  return undefined;
+};
 
 interface CurriculumSectionItem {
   id: string;
@@ -3718,6 +3762,7 @@ export function CourseCreatePage({
   const [actionLoading, setActionLoading] = useState<
     "draft" | "save" | "publish" | "unpublish" | "validate" | null
   >(null);
+  const saveActionInFlightRef = useRef(false);
 
   // Page-specific in-flight save states
   const [isSavingBasics, setIsSavingBasics] = useState(false);
@@ -7263,12 +7308,72 @@ export function CourseCreatePage({
     return persisted;
   };
 
-  const handleLessonMediaAttached = (
+  const handleLessonMediaAttached = async (
     sectionId: string,
     lessonId: string,
     mediaAssetId: string,
-  ): boolean => {
-    handleUpdateLesson(sectionId, lessonId, { contentMediaId: mediaAssetId });
+  ): Promise<boolean> => {
+    const currentSections = sectionsRef.current || sections;
+    const lesson = currentSections
+      .find((section) => section.id === sectionId)
+      ?.lessons.find((item) => item.id === lessonId);
+    if (!lesson) return false;
+
+    const courseId = currentCourseIdRef.current || currentCourseId;
+    const isPersistedLesson =
+      !lesson.isPendingCreation &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        lessonId,
+      );
+    if (!courseId || !isPersistedLesson) {
+      // Unsaved lessons carry the media ID in their creation payload.
+      handleUpdateLesson(sectionId, lessonId, { contentMediaId: mediaAssetId });
+      return true;
+    }
+
+    // Persist the binding before exposing it to the editor. The media
+    // workspace requests playback for the lesson as soon as it sees the new
+    // media ID, and that request fails until the API lesson references it.
+    try {
+      await updateLessonMutation.mutateAsync({
+        courseId,
+        lessonId,
+        payload: { contentMediaId: mediaAssetId },
+      });
+    } catch (err: unknown) {
+      setToastMessage(
+        (err as { message?: string })?.message ||
+          "The video could not be attached to this lesson.",
+      );
+      return false;
+    }
+
+    clearVideoPlaybackBootstrapCache();
+    // A cancelled editor leaves a local draft that wins over server data on
+    // the next editor refresh. Keep its media in sync so the draft cannot
+    // restore the replaced video.
+    const storedDraft = readLessonEditorDraft(courseId, lessonId);
+    if (storedDraft) {
+      const { savedAt: _savedAt, ...draft } = storedDraft;
+      writeLessonEditorDraft(courseId, lessonId, {
+        ...draft,
+        contentMediaId: mediaAssetId,
+      });
+    }
+    const latestLesson = (sectionsRef.current || sections)
+      .find((section) => section.id === sectionId)
+      ?.lessons.find((item) => item.id === lessonId);
+    handleUpdateLesson(sectionId, lessonId, {
+      contentMediaId: mediaAssetId,
+      ...(latestLesson?.initialState
+        ? {
+            initialState: {
+              ...latestLesson.initialState,
+              contentMediaId: mediaAssetId,
+            },
+          }
+        : {}),
+    });
     return true;
   };
 
@@ -9279,7 +9384,11 @@ export function CourseCreatePage({
 
   const navigateToStep = async (destination: CourseWizardStepId) => {
     cancelTitleCreationDebounce();
-    if (actionLoading !== null || isSavingAllDirtyLessonsRef.current) {
+    if (
+      actionLoading !== null ||
+      saveActionInFlightRef.current ||
+      isSavingAllDirtyLessonsRef.current
+    ) {
       return;
     }
     if (destination === activeStep) {
@@ -9312,6 +9421,9 @@ export function CourseCreatePage({
       setToastMessage("Add a course title to continue.");
       return;
     }
+
+    if (saveActionInFlightRef.current) return;
+    saveActionInFlightRef.current = true;
 
     const wasDirty = isStepDirty(leavingStep);
 
@@ -9355,6 +9467,7 @@ export function CourseCreatePage({
         );
       } finally {
         setActionLoading(null);
+        saveActionInFlightRef.current = false;
       }
     };
 
@@ -9364,7 +9477,9 @@ export function CourseCreatePage({
       leavingStep === "access-rules" ||
       leavingStep === "pricing"
     ) {
-      void persistPreviousStep();
+      await persistPreviousStep();
+    } else {
+      saveActionInFlightRef.current = false;
     }
   };
 
@@ -9432,7 +9547,8 @@ export function CourseCreatePage({
   };
 
   const handleValidateCourseAction = async () => {
-    if (actionLoading || isValidating) return;
+    if (actionLoading || isValidating || saveActionInFlightRef.current) return;
+    saveActionInFlightRef.current = true;
     setActionLoading("validate");
     try {
       await reconcileDirtyState();
@@ -9456,11 +9572,13 @@ export function CourseCreatePage({
       setToastMessage(errorMsg);
     } finally {
       setActionLoading(null);
+      saveActionInFlightRef.current = false;
     }
   };
 
   const handleFinalPublishCourse = async () => {
-    if (actionLoading || isValidating) return;
+    if (actionLoading || isValidating || saveActionInFlightRef.current) return;
+    saveActionInFlightRef.current = true;
     setActionLoading("publish");
     setPublishValidationError(null);
 
@@ -9502,11 +9620,13 @@ export function CourseCreatePage({
       setToastMessage(errorMsg);
     } finally {
       setActionLoading(null);
+      saveActionInFlightRef.current = false;
     }
   };
 
   const handleConfirmUnpublishCourse = async () => {
-    if (!currentCourseId || actionLoading) return;
+    if (!currentCourseId || actionLoading || saveActionInFlightRef.current) return;
+    saveActionInFlightRef.current = true;
     setActionLoading("unpublish");
     try {
       const draftCourse =
@@ -9521,6 +9641,7 @@ export function CourseCreatePage({
       setToastMessage(errorMsg);
     } finally {
       setActionLoading(null);
+      saveActionInFlightRef.current = false;
     }
   };
 
@@ -9587,6 +9708,7 @@ export function CourseCreatePage({
       className="relative flex w-full flex-1 flex-col min-h-full p-0 text-[--text] box-border"
       data-course-wizard
     >
+      <CourseStaticPageRefreshNotice courseId={currentCourseId} />
       {/* Wizard Header */}
       <header className="relative shrink-0 mb-2 max-[768px]:mb-1.5 max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0 max-[768px]:box-border">
         <div className="flex items-start justify-between gap-4 mb-1 max-[768px]:flex-col max-[768px]:gap-2 max-[768px]:mb-1.5">
@@ -9722,10 +9844,7 @@ export function CourseCreatePage({
 
       {/* Wizard Step Panels using SwipeableTabPanel */}
       {isInitialLoadingCourse ? (
-        <CenteredLoadingSpinner
-          label="Loading course details"
-          className="min-h-80 w-full flex-1"
-        />
+        <CourseWizardSkeleton activeStep={activeStep} />
       ) : (
         <Suspense
           fallback={
@@ -10406,36 +10525,20 @@ export function CourseCreatePage({
                       sectionNumber={secIdx + 1}
                       sectionTitle={activeSection.title}
                       lessonNumber={lesIdx + 1}
+                      playbackLessonNumber={getCourseWideLessonNumber(
+                        sections,
+                        activeLesson.id,
+                      )}
                       lessonTitle={activeLesson.title}
                       courseSlug={editorData?.course?.slug}
-                      courseTitle={
-                        courseTitle ||
-                        "Web Development Course for Absolute Beginners | Hindi"
-                      }
+                      courseTitle={courseTitle || undefined}
                       contentType={
                         (activeLesson.contentType as StudioLessonContentType) ||
                         "video"
                       }
                       isPublished={activeLesson.isPublished !== false}
                       isPreview={activeLesson.isPreview === true}
-                      mediaInfo={
-                        activeLesson.contentMediaId
-                          ? {
-                              id: activeLesson.contentMediaId,
-                              name:
-                                activeLesson.contentType === "video"
-                                  ? "intro-to-web-dev.mp4"
-                                  : activeLesson.contentType === "audio"
-                                    ? "intro-to-web-dev.mp3"
-                                    : activeLesson.contentType === "image"
-                                      ? "web-dev-thumbnail.png"
-                                      : "intro-to-web-dev.pdf",
-                              durationSeconds:
-                                activeLesson.durationSeconds || 754,
-                              sizeBytes: 128 * 1024 * 1024,
-                            }
-                          : null
-                      }
+                      mediaInfo={getLessonMediaInfo(activeLesson)}
                       resources={activeLesson.resources.map((r) => ({
                         id: r.id,
                         name: r.name,
@@ -10516,11 +10619,13 @@ export function CourseCreatePage({
                           await mediaService.confirmUpload(
                             presigned.mediaAssetId,
                           );
-                          await handleLessonMediaAttached(
+                          const attached = await handleLessonMediaAttached(
                             activeSection.id,
                             activeLesson.id,
                             presigned.mediaAssetId,
                           );
+                          // A failed attach has already shown its own error.
+                          if (!attached) return;
                           setToastMessage(
                             "Media uploaded and attached successfully.",
                           );
@@ -11432,12 +11537,13 @@ export function CourseCreatePage({
                                       sectionNumber={sections.findIndex((item) => item.id === sec.id) + 1}
                                       sectionTitle={sec.title}
                                       lessonNumber={lesIndex + 1}
+                                      playbackLessonNumber={getCourseWideLessonNumber(
+                                        sections,
+                                        les.id,
+                                      )}
                                       lessonTitle={les.title}
                                       courseSlug={editorData?.course?.slug}
-                                      courseTitle={
-                                        courseTitle ||
-                                        "Web Development Course for Absolute Beginners | Hindi"
-                                      }
+                                      courseTitle={courseTitle || undefined}
                                       contentType={
                                         (les.contentType as StudioLessonContentType) ||
                                         "video"
@@ -11445,24 +11551,7 @@ export function CourseCreatePage({
                                       isPublished={les.isPublished !== false}
                                       isPreview={les.isPreview === true}
                                       playbackSuspended={!isExpanded}
-                                      mediaInfo={
-                                        les.contentMediaId
-                                          ? {
-                                              id: les.contentMediaId,
-                                              name:
-                                                les.contentType === "video"
-                                                  ? "intro-to-web-dev.mp4"
-                                                  : les.contentType === "audio"
-                                                    ? "intro-to-web-dev.mp3"
-                                                    : les.contentType === "image"
-                                                      ? "web-dev-thumbnail.png"
-                                                      : "intro-to-web-dev.pdf",
-                                              durationSeconds:
-                                                les.durationSeconds || 754,
-                                              sizeBytes: 128 * 1024 * 1024,
-                                            }
-                                          : null
-                                      }
+                                      mediaInfo={getLessonMediaInfo(les)}
                                       resources={les.resources.map((resource) => ({
                                         id: resource.id,
                                         name: resource.name,
@@ -11538,11 +11627,14 @@ export function CourseCreatePage({
                                           await mediaService.confirmUpload(
                                             presigned.mediaAssetId,
                                           );
-                                          await handleLessonMediaAttached(
-                                            sec.id,
-                                            les.id,
-                                            presigned.mediaAssetId,
-                                          );
+                                          const attached =
+                                            await handleLessonMediaAttached(
+                                              sec.id,
+                                              les.id,
+                                              presigned.mediaAssetId,
+                                            );
+                                          // A failed attach has already shown its own error.
+                                          if (!attached) return;
                                           setToastMessage(
                                             "Media uploaded and attached successfully.",
                                           );

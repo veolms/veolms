@@ -168,6 +168,11 @@ const OrderRow = memo(function OrderRow({
 
   // Price & Coupon
   const formattedPrice = formatCurrency(order.totalAmount, order.currency);
+  const earningsPaise = order.afterCommissionAmount ?? null;
+  const earningsTooltip =
+    earningsPaise != null
+      ? `Earnings after commission: ${formatCurrency(earningsPaise, order.currency)}`
+      : undefined;
   const coupon = order.admin?.coupon;
   const discountAmount = order.discountAmount;
 
@@ -247,13 +252,20 @@ const OrderRow = memo(function OrderRow({
           </span>
         </div>
         {/* Amount on mobile only */}
-        <span className="shrink-0 font-mono text-sm font-bold text-(--text) md:hidden">
+        <span
+          className="shrink-0 font-mono text-sm font-bold text-(--text) md:hidden"
+          title={earningsTooltip}
+        >
           {formattedPrice}
         </span>
       </div>
 
       {/* Amount Cell (Desktop Grid) */}
-      <div role="cell" className="hidden md:block px-4 py-3.5 font-mono text-sm font-bold text-(--text) whitespace-nowrap">
+      <div
+        role="cell"
+        className="hidden md:block px-4 py-3.5 font-mono text-sm font-bold text-(--text) whitespace-nowrap"
+        title={earningsTooltip}
+      >
         {formattedPrice}
       </div>
 

@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.1115.0",
+    "@aws-sdk/client-mediaconvert": "^3.1137.0",
     "@fastify/autoload": "^6.5.0",
     "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^11.3.0",

@@ -51,6 +51,7 @@ import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder
 import { useAuthStore } from "./store/auth.store";
 import { DiscussionWorkspaceCard } from "./workspace/DiscussionsWorkspace";
 import "./styles/features/creator-dashboard.css";
+import "./styles/features/dashboard-discussion-preview.css";
 
 type ActivityRow = readonly [
   label: string,

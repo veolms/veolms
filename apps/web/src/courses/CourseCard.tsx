@@ -1,24 +1,22 @@
-import {
-  ArrowCounterClockwiseIcon as ArrowCounterClockwise,
-  CertificateIcon as Certificate,
-  ChartBarIcon as ChartBar,
-  CircleNotchIcon as CircleNotch,
-  CopySimpleIcon as CopySimple,
-  EyeIcon as Eye,
-  FlagIcon as Flag,
-  GraduationCapIcon as GraduationCap,
-  HeartIcon as Heart,
-  LinkSimpleIcon as LinkSimple,
-  ListBulletsIcon as ListBullets,
-  PaperPlaneTiltIcon as PaperPlaneTilt,
-  PencilSimpleIcon as PencilSimple,
-  PlayIcon as Play,
-  PlusIcon as Plus,
-  ShareNetworkIcon as ShareNetwork,
-  TrashIcon as Trash,
-  UploadSimpleIcon as UploadSimple,
-  UsersThreeIcon as UsersThree,
-} from "@phosphor-icons/react";
+import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
+import { CertificateIcon as Certificate } from "@phosphor-icons/react/Certificate";
+import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { CopySimpleIcon as CopySimple } from "@phosphor-icons/react/CopySimple";
+import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
+import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
+import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
+import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
+import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullets";
+import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
+import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { PlayIcon as Play } from "@phosphor-icons/react/Play";
+import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
+import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
+import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
+import { UploadSimpleIcon as UploadSimple } from "@phosphor-icons/react/UploadSimple";
+import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { getCourseRouteKey } from "./catalogue";
 import type { Course, CourseRole } from "./catalogue";
 import { CourseActionMenu, MenuAction, MenuDivider } from "./CourseActionMenu";

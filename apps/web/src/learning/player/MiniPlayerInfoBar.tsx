@@ -1,4 +1,5 @@
-import { CaretDown, CaretUp } from "@phosphor-icons/react";
+import { CaretDown } from "@phosphor-icons/react/CaretDown";
+import { CaretUp } from "@phosphor-icons/react/CaretUp";
 import type { RefObject } from "react";
 import {
   ContextMenu,

@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { PresignMediaRequest } from "@veolms/contracts";
 import type { MediaService } from "./media.service.ts";
+import type { MediaConvertWebhookPayload } from "./webhooks/mediaconvert-webhook.schema.ts";
 
 export function createMediaController({ service }: { service: MediaService }) {
   async function presignMediaUpload(
@@ -30,6 +31,7 @@ export function createMediaController({ service }: { service: MediaService }) {
       ...(result.deliveryUrlExpiresAt
         ? { deliveryUrlExpiresAt: result.deliveryUrlExpiresAt }
         : {}),
+      ...(result.thumbnailUrl ? { thumbnailUrl: result.thumbnailUrl } : {}),
     };
   }
 
@@ -243,6 +245,19 @@ export function createMediaController({ service }: { service: MediaService }) {
     return reply.send(result.stream);
   }
 
+  async function handleMediaConvertWebhook(
+    request: FastifyRequest<{ Body: MediaConvertWebhookPayload }>,
+    reply: FastifyReply,
+  ) {
+    const result = await service.handleMediaConvertWebhook({
+      headers: request.headers as Record<string, string | undefined>,
+      rawBody: request.rawBody,
+      body: request.body,
+      logger: request.log,
+    });
+    return reply.status(200).send(result);
+  }
+
   return {
     presignMediaUpload,
     confirmMediaUpload,
@@ -257,6 +272,7 @@ export function createMediaController({ service }: { service: MediaService }) {
     getImageVariantManifest,
     getImageVariantStream,
     streamHlsResource,
+    handleMediaConvertWebhook,
   };
 }
 

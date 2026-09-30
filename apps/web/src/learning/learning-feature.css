@@ -1,5 +1,20 @@
 /* Keep the player package, player chrome, and learning workspace cascade in
    their established order; these styles load with the learning feature. */
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "../../../../packages/video-player/src";
+/* The lesson player chrome mixes base and responsive utilities (for example
+   `hidden sm:flex`). This sheet loads after the app stylesheet, so it must
+   generate both halves itself: otherwise its base utilities override the
+   app's responsive variants. The utilities-only import carries no theme, so
+   register the default breakpoints without emitting theme variables. */
+@source "./player";
+@theme reference {
+  --breakpoint-sm: 40rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+  --breakpoint-2xl: 96rem;
+}
 @import "@veolms/video-player/styles.css";
 @import "../styles/features/player.css";
 @import "../styles/features/learning.css";

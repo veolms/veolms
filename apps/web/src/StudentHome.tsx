@@ -19,10 +19,6 @@ import {
   type ImgHTMLAttributes,
 } from "react";
 import { useNavigate } from "react-router";
-import javascriptThumbnail from "./assets/course-thumbnails/javascript-960.webp";
-import nodeThumbnail from "./assets/course-thumbnails/nodejs-960.webp";
-import typescriptThumbnail from "./assets/course-thumbnails/typescript-960.webp";
-import { getCourseRouteKey } from "./courses/catalogue";
 import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
 import { getCourseThumbnailCdnUrl } from "./courses/courseMedia";
 import { getCourseThumbnail } from "./learning/courseMetadata";
@@ -45,7 +41,7 @@ import {
 } from "./workspace/DashboardDiscussionPreview";
 import "./styles/features/student-learning.css";
 import "./styles/features/home.css";
-import "./styles/features/creator-dashboard.css";
+import "./styles/features/dashboard-discussion-preview.css";
 
 interface StudentHomeProps {
   onOpenCourse: (course: LearningCourse) => void;
@@ -59,45 +55,6 @@ interface SectionHeaderProps {
   action?: string;
   onAction?: () => void;
 }
-
-/*
-// LEGACY CODE REFERENCE:
-const legacyCurrentCourse: LearningCourse = {
-  id: "typescript-course",
-  title: "The Ultimate TypeScript Course",
-  sections: 24,
-  lectures: 160,
-  status: "in-progress",
-  progress: 52,
-  lastLesson: "Conditional Types",
-  accessed: "2h ago",
-  thumbnail: typescriptThumbnail,
-};
-
-const legacyJavascriptCourse: LearningCourse = {
-  id: "javascript-course",
-  title: "The Complete JavaScript Course",
-  sections: 20,
-  lectures: 142,
-  status: "in-progress",
-  progress: 38,
-  lastLesson: "Closures and the Event Loop",
-  accessed: "4h ago",
-  thumbnail: javascriptThumbnail,
-};
-
-const legacyBackendCourse: LearningCourse = {
-  id: "backend-nodejs",
-  title: "Complete Backend with Node.js",
-  sections: 23,
-  lectures: 600,
-  status: "in-progress",
-  progress: 76,
-  lastLesson: "Error Handling in Express",
-  accessed: "1d ago",
-  thumbnail: nodeThumbnail,
-};
-*/
 
 function getCourseTimestamp(value: string | Date | null | undefined) {
   if (!value) return null;
@@ -635,6 +592,7 @@ export function StudentHome({
                 alt=""
                 loading="eager"
                 decoding="async"
+                fetchPriority="high"
               />
             </div>
             <div className="home-resume-copy">
@@ -719,9 +677,8 @@ export function StudentHome({
                 className="primary-learning-action"
                 onClick={() =>
                   onNavigatePage(
-                    "/courses/" +
-                      encodeURIComponent(getCourseRouteKey(discoveryCourse)) +
-                      "/overview",
+                      "/explore-courses/" +
+                      encodeURIComponent(discoveryCourse.slug),
                   )
                 }
               >

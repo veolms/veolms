@@ -27,13 +27,13 @@ import { MiniPlayerInfoBar } from "./MiniPlayerInfoBar";
 import { useLearningPlayerMinimizeShortcut } from "./useLearningPlayerMinimizeShortcut";
 import { useMiniPlayerCurriculumSections } from "./useMiniPlayerCurriculumSections";
 import { Curriculum } from "../Curriculum";
-import {
-  lessonsById as defaultLessonsById,
-  sections as defaultSections,
-} from "../courseContent";
 import type { CourseSection, Lesson } from "../courseContent";
+
 import { courseRouteKeyFromLessonPath } from "./persistentMiniPlayerLesson";
 import { getVideoPlaybackBootstrap } from "../videoPlaybackBootstrap";
+
+const EMPTY_CURRICULUM_SECTIONS: CourseSection[] = [];
+const EMPTY_LESSONS_BY_ID: ReadonlyMap<number, Lesson> = new Map();
 
 export type LearningPlayerPresentation = "full" | "mini";
 
@@ -63,6 +63,7 @@ export interface PersistentLearningPlayerHostProps {
   onClose: () => void;
   onRestore: () => void;
   onSelectMiniPlayerLesson?: (lessonNumber: number) => void;
+  onRetryMiniPlayerPlayback?: () => void;
   onOpenCourseOverview?: () => void;
 }
 
@@ -70,6 +71,7 @@ export function PersistentLearningPlayerHost({
   onClose,
   onRestore,
   onSelectMiniPlayerLesson,
+  onRetryMiniPlayerPlayback,
   onOpenCourseOverview,
   player,
   presentation,
@@ -231,10 +233,10 @@ export function PersistentLearningPlayerHost({
   const mini = presentation === "mini";
 
   const miniLessonSequence = useMemo(() => {
-    const sections = player.curriculumSections ?? defaultSections;
+    const sections = player.curriculumSections ?? EMPTY_CURRICULUM_SECTIONS;
     return sections.flatMap(({ lessons }) => lessons.map(([id]) => id));
   }, [player.curriculumSections]);
-  const miniCurriculumSections = player.curriculumSections ?? defaultSections;
+  const miniCurriculumSections = player.curriculumSections ?? EMPTY_CURRICULUM_SECTIONS;
   const miniSelectedLesson = player.selectedLesson ?? 1;
   const {
     sectionIds: miniSectionIds,
@@ -293,12 +295,27 @@ export function PersistentLearningPlayerHost({
   );
 
   const lessonVideoPlayerProps = useMemo(() => {
+    const retryPlayback = mini ? onRetryMiniPlayerPlayback : undefined;
+    const basePlayerProps =
+      retryPlayback && player.playerProps.playbackAccessError?.kind === "retry"
+        ? {
+            ...player.playerProps,
+            playbackAccessError: {
+              ...player.playerProps.playbackAccessError,
+              onAction: retryPlayback,
+            },
+            onRetryPlayback: retryPlayback,
+          }
+        : retryPlayback
+          ? { ...player.playerProps, onRetryPlayback: retryPlayback }
+          : player.playerProps;
+
     if (!mini || !onSelectMiniPlayerLesson) {
-      return player.playerProps;
+      return basePlayerProps;
     }
 
     return {
-      ...player.playerProps,
+      ...basePlayerProps,
       onGoNext: () => {
         if (miniNextLessonId !== undefined) {
           handleMiniSelectLesson(miniNextLessonId);
@@ -316,6 +333,7 @@ export function PersistentLearningPlayerHost({
     miniNextLessonId,
     miniPreviousLessonId,
     onSelectMiniPlayerLesson,
+    onRetryMiniPlayerPlayback,
     player.playerProps,
   ]);
 
@@ -385,7 +403,7 @@ export function PersistentLearningPlayerHost({
           <Curriculum
             hideHero
             sections={miniCurriculumSections}
-            lessonsById={player.curriculumLessonsById ?? defaultLessonsById}
+            lessonsById={player.curriculumLessonsById ?? EMPTY_LESSONS_BY_ID}
             selectedLesson={miniSelectedLesson}
             lessonProgress={player.lessonProgress}
             onSelectLesson={curriculumSelectLesson}

@@ -9,13 +9,11 @@ import {
   type KeyboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
-import {
-  CalendarBlank,
-  CaretLeft,
-  CaretRight,
-  Clock,
-  X,
-} from "@phosphor-icons/react";
+import { CalendarBlank } from "@phosphor-icons/react/CalendarBlank";
+import { CaretLeft } from "@phosphor-icons/react/CaretLeft";
+import { CaretRight } from "@phosphor-icons/react/CaretRight";
+import { Clock } from "@phosphor-icons/react/Clock";
+import { X } from "@phosphor-icons/react/X";
 import { useBackDismiss } from "./navigation/useBackDismiss";
 
 export interface ThemedDateTimePickerProps {
