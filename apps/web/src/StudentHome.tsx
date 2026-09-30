@@ -7,7 +7,10 @@ import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircl
 import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { TargetIcon as Target } from "@phosphor-icons/react/Target";
-import type { LearningProgressResumeContextResponse } from "@veolms/contracts";
+import type {
+  CourseSummary,
+  LearningProgressResumeContextResponse,
+} from "@veolms/contracts";
 import {
   useEffect,
   useMemo,
@@ -19,18 +22,17 @@ import { useNavigate } from "react-router";
 import javascriptThumbnail from "./assets/course-thumbnails/javascript-960.webp";
 import nodeThumbnail from "./assets/course-thumbnails/nodejs-960.webp";
 import typescriptThumbnail from "./assets/course-thumbnails/typescript-960.webp";
-import typescriptInstructorHero512 from "./assets/learning-thumbnails/typescript-instructor-hero-512.webp";
-import typescriptInstructorHero640 from "./assets/learning-thumbnails/typescript-instructor-hero-640.webp";
-import typescriptInstructorHero800 from "./assets/learning-thumbnails/typescript-instructor-hero-800.webp";
-import typescriptInstructorHero from "./assets/learning-thumbnails/typescript-instructor-hero.webp";
+import { getCourseRouteKey } from "./courses/catalogue";
 import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
 import { getCourseThumbnailCdnUrl } from "./courses/courseMedia";
+import { getCourseThumbnail } from "./learning/courseMetadata";
 import {
   adaptEnrolledCourseToLearningCourse,
   type LearningCourse,
 } from "./StudentPages";
 import { getCoursePlayerPath } from "./learning/coursePlayerNavigation";
 import { formatRelativeTime } from "./learning/learning-notes.adapter";
+import { useCourses } from "./services/courses";
 import { useEnrolledCourses } from "./services/enrollments";
 import { useLearningProgressResumeContext } from "./services/learning-progress";
 import { useDashboardRecentDiscussions } from "./services/learning-interactions";
@@ -120,24 +122,6 @@ function compareContinueLearningCourses(
 
   const leftEnrolledAt = getCourseTimestamp(left.enrolledAt);
   const rightEnrolledAt = getCourseTimestamp(right.enrolledAt);
-  if (leftEnrolledAt !== null || rightEnrolledAt !== null) {
-    if (leftEnrolledAt === null) return 1;
-    if (rightEnrolledAt === null) return -1;
-    if (leftEnrolledAt !== rightEnrolledAt) {
-      return rightEnrolledAt - leftEnrolledAt;
-    }
-  }
-
-  return left.id.localeCompare(right.id);
-}
-
-function compareNewestEnrolledCourses(
-  left: LearningCourse,
-  right: LearningCourse,
-) {
-  const leftEnrolledAt = getCourseTimestamp(left.enrolledAt);
-  const rightEnrolledAt = getCourseTimestamp(right.enrolledAt);
-
   if (leftEnrolledAt !== null || rightEnrolledAt !== null) {
     if (leftEnrolledAt === null) return 1;
     if (rightEnrolledAt === null) return -1;
@@ -540,16 +524,25 @@ export function StudentHome({
   const miniCourses = useMemo(() => {
     return continueLearningCourses.slice(1, 3);
   }, [continueLearningCourses]);
-  const readyToStartCourse = useMemo(() => {
-    return (
-      enrolledCourses
-        .filter((course) => course.progress === 0)
-        .sort(compareNewestEnrolledCourses)[0] ?? null
-    );
-  }, [enrolledCourses]);
   const initialEnrollmentLoading =
     enrolledCoursesLoading && !hasEnrolledCourseData;
   const initialEnrollmentError = enrolledCoursesError && !hasEnrolledCourseData;
+  const hasMeaningfulLearningProgress = enrolledCourses.some(
+    (course) => course.progress > 0,
+  );
+  const {
+    data: publishedCoursesData,
+    isLoading: publishedCoursesLoading,
+  } = useCourses({
+    enabled:
+      hasEnrolledCourseData &&
+      !initialEnrollmentError &&
+      !hasMeaningfulLearningProgress,
+  });
+  const discoveryCourse = useMemo<CourseSummary | null>(
+    () => publishedCoursesData?.courses.at(-1) ?? null,
+    [publishedCoursesData?.courses],
+  );
   const primaryCourseKey = heroCourse?.slug ?? heroCourse?.id;
   const { data: resumeContextData, isLoading: resumeContextLoading } =
     useLearningProgressResumeContext(primaryCourseKey, {
@@ -562,7 +555,6 @@ export function StudentHome({
       ? resumeContextData
       : null;
   }, [heroCourse, primaryCourseKey, resumeContextData]);
-  const heroFocusCourse = heroCourse ?? readyToStartCourse;
 
   return (
     <div className="student-home">
@@ -628,19 +620,17 @@ export function StudentHome({
             </button>
           </div>
         </section>
-      ) : heroFocusCourse ? (
+      ) : heroCourse ? (
         <section
-          className={`home-resume-card${heroCourse ? "" : " home-resume-card--ready"}`}
-          aria-labelledby={
-            heroCourse ? "continue-learning-title" : "ready-to-start-title"
-          }
+          className="home-resume-card"
+          aria-labelledby="continue-learning-title"
         >
           <div className="home-resume-layout">
             <div className="home-resume-visual">
               <StudentHomeThumbnail
-                src={heroFocusCourse.thumbnailUrl}
+                src={heroCourse.thumbnailUrl}
                 fallbackSrcs={[
-                  getCourseThumbnailCdnUrl(heroFocusCourse.thumbnailMediaId),
+                  getCourseThumbnailCdnUrl(heroCourse.thumbnailMediaId),
                 ]}
                 alt=""
                 loading="eager"
@@ -649,29 +639,19 @@ export function StudentHome({
             </div>
             <div className="home-resume-copy">
               <span
-                className={`learning-status ${heroCourse ? "in-progress" : "not-started"}`}
+                className="learning-status in-progress"
               >
-                {heroCourse ? "Continue Learning" : "Ready when you are"}
+                Continue Learning
               </span>
-              <h2
-                id={
-                  heroCourse
-                    ? "continue-learning-title"
-                    : "ready-to-start-title"
-                }
-              >
-                {heroFocusCourse.title}
-              </h2>
+              <h2 id="continue-learning-title">{heroCourse.title}</h2>
               <strong>
-                {heroFocusCourse.sections} Sections <i />{" "}
-                {heroFocusCourse.lectures} Lectures
+                {heroCourse.sections} Sections <i />{" "}
+                {heroCourse.lectures} Lectures
               </strong>
               <p>
-                {heroCourse && heroFocusCourse.enrolledOn
-                  ? `Enrolled on ${heroFocusCourse.enrolledOn}`
-                  : heroCourse
-                    ? "Ready to continue"
-                    : "Start this course whenever you're ready."}
+                {heroCourse.enrolledOn
+                  ? `Enrolled on ${heroCourse.enrolledOn}`
+                  : "Ready to continue"}
               </p>
               {heroCourse && primaryCourseKey && resumeContext ? (
                 <ResumeLessonContext
@@ -683,16 +663,69 @@ export function StudentHome({
                 <ResumeLessonContextSkeleton />
               ) : null}
               <div className="home-resume-progress">
-                <ProgressBar value={heroFocusCourse.progress} />
-                <span aria-hidden="true">{heroFocusCourse.progress}%</span>
+                <ProgressBar value={heroCourse.progress} />
+                <span aria-hidden="true">{heroCourse.progress}%</span>
               </div>
               <button
                 type="button"
                 className="primary-learning-action"
-                onClick={() => onOpenCourse(heroFocusCourse)}
+                onClick={() => onOpenCourse(heroCourse)}
               >
                 <Play size={18} weight="fill" />
-                {heroCourse ? "Continue Learning" : "Start learning"}
+                Continue Learning
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : publishedCoursesLoading ? (
+        <section className="home-resume-card home-resume-card--state">
+          <div className="home-resume-state" role="status" aria-busy="true">
+            <strong>Loading courses to explore…</strong>
+            <small>Preparing a course for you to discover.</small>
+          </div>
+        </section>
+      ) : discoveryCourse ? (
+        <section
+          className="home-resume-card home-resume-card--ready"
+          aria-labelledby="explore-course-title"
+        >
+          <div className="home-resume-layout">
+            <div className="home-resume-visual">
+              <StudentHomeThumbnail
+                src={
+                  discoveryCourse.thumbnailUrl ||
+                  getCourseThumbnail(discoveryCourse.slug)
+                }
+                alt=""
+                loading="eager"
+                decoding="async"
+              />
+            </div>
+            <div className="home-resume-copy">
+              <span className="learning-status not-started">
+                Explore courses
+              </span>
+              <h2 id="explore-course-title">{discoveryCourse.title}</h2>
+              <strong>
+                {discoveryCourse.totalSections} Sections <i />{" "}
+                {discoveryCourse.totalLessons} Lessons
+              </strong>
+              <p>
+                {discoveryCourse.shortDescription ||
+                  "Explore this course and start learning whenever you are ready."}
+              </p>
+              <button
+                type="button"
+                className="primary-learning-action"
+                onClick={() =>
+                  onNavigatePage(
+                    "/courses/" +
+                      encodeURIComponent(getCourseRouteKey(discoveryCourse)) +
+                      "/overview",
+                  )
+                }
+              >
+                <BookOpen size={18} weight="fill" /> View Course
               </button>
             </div>
           </div>
@@ -704,17 +737,7 @@ export function StudentHome({
         >
           <div className="home-resume-layout">
             <div className="home-resume-visual">
-              <img
-                src={typescriptInstructorHero800}
-                srcSet={`${typescriptInstructorHero512} 512w, ${typescriptInstructorHero640} 640w, ${typescriptInstructorHero800} 800w, ${typescriptInstructorHero} 1600w`}
-                sizes="(max-width: 820px) calc(100vw - 50px), (max-width: 1180px) 40vw, 430px"
-                alt="Course explore"
-                width={1600}
-                height={900}
-                loading="eager"
-                decoding="sync"
-                fetchPriority="high"
-              />
+              <CourseThumbnailPlaceholder />
             </div>
             <div className="home-resume-copy">
               <span className="learning-status not-started">
