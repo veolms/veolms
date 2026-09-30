@@ -62,6 +62,7 @@ import {
   getCachedVideoPlaybackBootstrap,
   getVideoPlaybackBootstrap,
   refreshVideoPlaybackToken,
+  VideoPlaybackBootstrapError,
 } from "../learning/videoPlaybackBootstrap";
 
 const loadPersistentLearningPlayerHost = () =>
@@ -91,6 +92,7 @@ import type {
   NavigationOptions,
 } from "../routing/navigation";
 import { AcademyRouteGuard } from "../routing/RouteGuards";
+import { buildLoginPath } from "../routing/routeAccess";
 import {
   getDefaultNavigationOrder,
   getDefaultNavigationVisibility,
@@ -788,6 +790,23 @@ export default function AcademyLayout() {
     closeLearningMiniPlayerSession();
   }, []);
 
+  const openPersistentPlayerCourseOverview = useCallback(() => {
+    const slug =
+      persistentPlayer?.courseSlug ?? persistentPlayer?.courseRouteKey;
+    if (!slug) return;
+    navigateTo(`/courses/${encodeURIComponent(slug)}/overview`);
+  }, [
+    navigateTo,
+    persistentPlayer?.courseRouteKey,
+    persistentPlayer?.courseSlug,
+  ]);
+
+  const openPersistentPlayerLogin = useCallback(() => {
+    const returnPath =
+      persistentPlayerRef.current?.lessonPath ?? locationPathRef.current;
+    navigateTo(buildLoginPath(returnPath), { exact: true });
+  }, [navigateTo]);
+
   selectPersistentMiniPlayerLessonRef.current = (
     lessonNumber: number,
     options,
@@ -829,12 +848,6 @@ export default function AcademyLayout() {
       return;
     }
 
-    const retryPlaybackAccessError = retry
-      ? current.playerProps.playbackAccessError
-      : undefined;
-    const retryPlaybackUnavailableMessage = retry
-      ? current.playerProps.playbackUnavailableMessage
-      : undefined;
     const updated = retry
       ? {
           ...current,
@@ -888,23 +901,51 @@ export default function AcademyLayout() {
         persistentPlayerRef.current = withBootstrap;
         setPersistentPlayer(withBootstrap);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (selectLessonTokenRef.current !== token) return;
         const active = persistentPlayerRef.current;
         if (!active || active.selectedLesson !== lessonNumber) return;
+
+        const bootstrapError =
+          error instanceof VideoPlaybackBootstrapError ? error : null;
+        const playbackAccessError =
+          bootstrapError?.status === 401 ||
+          bootstrapError?.code === "UNAUTHORIZED" ||
+          bootstrapError?.code === "MFA_REQUIRED"
+            ? {
+                kind: "login" as const,
+                message: "Log in to access this lesson.",
+                actionLabel: "Log in",
+                onAction: openPersistentPlayerLogin,
+              }
+            : bootstrapError?.status === 403
+              ? {
+                  kind: "access" as const,
+                  message: "Get access to this course to watch this lesson.",
+                  actionLabel: "Get access",
+                  onAction: openPersistentPlayerCourseOverview,
+                }
+              : {
+                  kind: "retry" as const,
+                  message: "We couldn't prepare this video.",
+                  actionLabel: "Retry",
+                  onAction: () =>
+                    selectPersistentMiniPlayerLessonRef.current(
+                      lessonNumber,
+                      { retry: true },
+                    ),
+                };
 
         const withError: PersistentLearningPlayerRegistration = {
           ...active,
           playerProps: {
             ...active.playerProps,
             playbackBootstrapPending: false,
-            playbackAccessError: retry
-              ? retryPlaybackAccessError
-              : active.playerProps.playbackAccessError,
-            playbackUnavailableMessage: retry
-              ? (retryPlaybackUnavailableMessage ??
-                "Unable to prepare this video.")
-              : active.playerProps.playbackUnavailableMessage,
+            playbackAccessError,
+            playbackUnavailableMessage:
+              playbackAccessError.kind === "retry"
+                ? (bootstrapError?.message ?? "Unable to prepare this video.")
+                : null,
             playbackSuspended: false,
           },
         };
@@ -1230,17 +1271,6 @@ export default function AcademyLayout() {
     () => () => finishLearningPlayerRestoreMotion(),
     [finishLearningPlayerRestoreMotion],
   );
-
-  const openPersistentPlayerCourseOverview = useCallback(() => {
-    const slug =
-      persistentPlayer?.courseSlug ?? persistentPlayer?.courseRouteKey;
-    if (!slug) return;
-    navigateTo(`/courses/${encodeURIComponent(slug)}/overview`);
-  }, [
-    navigateTo,
-    persistentPlayer?.courseRouteKey,
-    persistentPlayer?.courseSlug,
-  ]);
 
   const openStandaloneMiniPlayerCourseOverview = useCallback(() => {
     const slug = learningMiniPlayer?.courseSlug;

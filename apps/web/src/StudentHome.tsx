@@ -21,7 +21,6 @@ import {
 import { useNavigate } from "react-router";
 import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
 import { getCourseThumbnailCdnUrl } from "./courses/courseMedia";
-import { getCourseThumbnail } from "./learning/courseMetadata";
 import {
   adaptEnrolledCourseToLearningCourse,
   type LearningCourse,
@@ -650,10 +649,7 @@ export function StudentHome({
           <div className="home-resume-layout">
             <div className="home-resume-visual">
               <StudentHomeThumbnail
-                src={
-                  discoveryCourse.thumbnailUrl ||
-                  getCourseThumbnail(discoveryCourse.slug)
-                }
+                src={discoveryCourse.thumbnailUrl}
                 alt=""
                 loading="eager"
                 decoding="async"

@@ -16,6 +16,7 @@ import type {
   WorkspaceDiscussionItem,
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
+import { DiscussionErrors } from "../shared/discussion.errors.ts";
 import {
   createDiscussionOutbox,
   syncMentionsAndNotify,
@@ -471,6 +472,9 @@ export function createThreadsService(
           );
         }
       } else {
+        if (!actor) {
+          throw DiscussionErrors.unauthorized();
+        }
         await courseAccess.assertCanAccessThread(db, actor!, row);
       }
       const canReadPrivateState = lessonReadAccess

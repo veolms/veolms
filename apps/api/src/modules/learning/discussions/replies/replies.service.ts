@@ -339,6 +339,9 @@ export function createRepliesService({
           );
         }
       } else {
+        if (!actor) {
+          throw DiscussionErrors.unauthorized();
+        }
         await courseAccess.assertCanAccessThread(db, actor!, thread);
       }
       const canReadPrivateState = lessonReadAccess

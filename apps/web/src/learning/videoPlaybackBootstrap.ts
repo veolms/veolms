@@ -11,7 +11,6 @@ const CDN_URL = import.meta.env.VITE_CDN_URL || "/cdn";
 
 const bootstrapRequests = new Map<string, Promise<VideoPlaybackBootstrap>>();
 const bootstrapCache = new Map<string, VideoPlaybackBootstrap>();
-const bootstrapErrorCache = new Map<string, VideoPlaybackBootstrapError>();
 const playbackTokenRequests = new Map<string, Promise<VideoPlaybackToken>>();
 
 export class VideoPlaybackBootstrapError extends Error {
@@ -242,8 +241,6 @@ export function getVideoPlaybackBootstrap(
   const key = requestKey(options);
   const existing = bootstrapRequests.get(key);
   if (existing) return existing;
-  const cachedError = bootstrapErrorCache.get(key);
-  if (cachedError) return Promise.reject(cachedError);
 
   const promise = requestBootstrap(options);
   bootstrapRequests.set(key, promise);
@@ -251,17 +248,11 @@ export function getVideoPlaybackBootstrap(
     .then((bootstrap) => {
       bootstrapCache.set(key, bootstrap);
     })
-    .catch((error: unknown) => {
+    .catch(() => {
       if (bootstrapRequests.get(key) === promise) {
         bootstrapRequests.delete(key);
       }
       bootstrapCache.delete(key);
-      if (
-        error instanceof VideoPlaybackBootstrapError &&
-        (error.status === 401 || error.status === 403)
-      ) {
-        bootstrapErrorCache.set(key, error);
-      }
     });
   return promise;
 }
@@ -272,19 +263,8 @@ export function getCachedVideoPlaybackBootstrap(
   return bootstrapCache.get(requestKey(options)) ?? null;
 }
 
-export function getCachedVideoPlaybackBootstrapError(
-  options: VideoPlaybackBootstrapRequest,
-): VideoPlaybackBootstrapError | null {
-  return bootstrapErrorCache.get(requestKey(options)) ?? null;
-}
-
-export function clearVideoPlaybackBootstrapErrorCache(): void {
-  bootstrapErrorCache.clear();
-}
-
 export function clearVideoPlaybackBootstrapCache(): void {
   bootstrapRequests.clear();
   playbackTokenRequests.clear();
   bootstrapCache.clear();
-  bootstrapErrorCache.clear();
 }
