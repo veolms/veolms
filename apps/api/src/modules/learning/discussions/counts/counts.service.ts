@@ -1,11 +1,11 @@
 import type { LessonDiscussionCountsResponse } from "@veolms/contracts";
 import type { DatabaseExecutor } from "@veolms/database";
 import { findSettingsByCourseId } from "../../../courses/configuration/configuration.repository.ts";
+import type { DiscussionActor } from "../shared/discussion.access.ts";
 import {
-  createDiscussionAccess,
-  type DiscussionAccess,
-  type DiscussionActor,
-} from "../shared/discussion.access.ts";
+  createLessonDiscussionAccess,
+  type LessonDiscussionAccess,
+} from "../shared/lesson-discussion-access.ts";
 import { resolveAcademyId } from "../shared/discussion.utils.ts";
 import {
   createLessonDiscussionCountsRepository,
@@ -18,28 +18,33 @@ export interface LessonDiscussionCountsService {
     input: {
       courseId: string;
       lessonId: string;
-      actor: DiscussionActor;
+      actor: DiscussionActor | null;
     },
   ): Promise<LessonDiscussionCountsResponse>;
 }
 
 export function createLessonDiscussionCountsService(options?: {
-  access?: DiscussionAccess;
+  lessonAccess?: LessonDiscussionAccess;
   repository?: LessonDiscussionCountsRepository;
 }): LessonDiscussionCountsService {
-  const access = options?.access ?? createDiscussionAccess();
+  const lessonAccess = options?.lessonAccess ?? createLessonDiscussionAccess();
   const repository =
     options?.repository ?? createLessonDiscussionCountsRepository();
 
   return {
     async getCounts(db, { courseId, lessonId, actor }) {
-      await access.assertCanAccessCourse(db, actor, courseId);
+      const readAccess = await lessonAccess.assertCanReadLesson(db, {
+        courseId,
+        lessonId,
+        actor,
+      });
 
       const settings = await findSettingsByCourseId(db, courseId);
       const capabilities = {
         allowComments: settings?.allow_comments !== false,
         allowQa: settings?.allow_qa !== false,
-        allowNotes: settings?.allow_notes !== false,
+        allowNotes:
+          readAccess.canReadPrivateState && settings?.allow_notes !== false,
       };
       if (
         !capabilities.allowComments &&
@@ -53,7 +58,7 @@ export function createLessonDiscussionCountsService(options?: {
         academyId: await resolveAcademyId(db),
         courseId,
         lessonId,
-        userId: actor.userId,
+        userId: readAccess.canReadPrivateState ? actor?.userId : null,
         ...capabilities,
       });
 

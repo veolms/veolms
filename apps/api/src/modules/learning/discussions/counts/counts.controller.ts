@@ -20,11 +20,11 @@ export function createLessonDiscussionCountsController({
 }): LessonDiscussionCountsController {
   return {
     async getLessonInteractionCounts(request, reply) {
-      const user = request.user!;
+      const user = request.user;
       const result = await service.getCounts(database, {
         courseId: request.params.courseId,
         lessonId: request.params.lessonId,
-        actor: { userId: user.id, roles: user.roles },
+        actor: user ? { userId: user.id, roles: user.roles } : null,
       });
       return reply.status(200).send(result);
     },

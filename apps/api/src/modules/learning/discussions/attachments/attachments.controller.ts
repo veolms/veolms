@@ -5,6 +5,8 @@ import type {
   CreateLinkPreviewRequest,
   InitiateAttachmentUploadRequest,
 } from "@veolms/contracts";
+import { discussionActor } from "../shared/discussion.access.ts";
+import { readDiscussionAttachmentUploadContext } from "./attachment-upload-context.ts";
 import type { AttachmentsService } from "./attachments.service.ts";
 
 export interface AttachmentsController {
@@ -43,7 +45,7 @@ export function createAttachmentsController({
       const user = request.user!;
       const result = await service.initiateUpload(
         database,
-        user.id,
+        discussionActor(user),
         request.body,
       );
       reply.status(201).send(result);
@@ -93,13 +95,21 @@ export function createAttachmentsController({
         return;
       }
 
+      const context = readDiscussionAttachmentUploadContext(
+        multipartFile.fields,
+      );
       const buffer = await multipartFile.toBuffer();
-      const result = await service.processUpload(database, user.id, {
-        filename: multipartFile.filename,
-        mimetype: multipartFile.mimetype,
-        data: buffer,
-        ...readMultipartDimensions(multipartFile.fields),
-      });
+      const result = await service.processUpload(
+        database,
+        discussionActor(user),
+        context,
+        {
+          filename: multipartFile.filename,
+          mimetype: multipartFile.mimetype,
+          data: buffer,
+          ...readMultipartDimensions(multipartFile.fields),
+        },
+      );
 
       reply.status(201).send(result);
     },

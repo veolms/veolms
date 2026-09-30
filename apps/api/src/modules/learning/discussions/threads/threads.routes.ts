@@ -137,7 +137,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/threads/:threadId",
     {
-      preHandler: permissions.requireAuthenticated,
+      preHandler: permissions.authenticate,
       schema: {
         operationId: "getLearningThread",
         tags: ["Learning Discussions"],

@@ -53,6 +53,11 @@ export interface AttachmentUploadProgress {
   total?: number;
 }
 
+export interface DiscussionAttachmentUploadContext {
+  courseId: string;
+  lessonId: string;
+}
+
 export const learningInteractionsService = {
   getLessonInteractionCounts(
     courseId: string,
@@ -302,8 +307,16 @@ export const learningInteractionsService = {
     file: File,
     onProgress?: (progress: AttachmentUploadProgress) => void,
     dimensions?: { width?: number; height?: number },
+    context?: DiscussionAttachmentUploadContext,
   ): Promise<LearningUploadResponse> {
+    if (!context) {
+      return Promise.reject(
+        new Error("Course and lesson context are required for attachments."),
+      );
+    }
     const formData = new FormData();
+    formData.append("courseId", context.courseId);
+    formData.append("lessonId", context.lessonId);
     appendDimensions(formData, dimensions);
     formData.append("file", file, file.name);
     return api.post<LearningUploadResponse>("/attachments/upload", formData, {

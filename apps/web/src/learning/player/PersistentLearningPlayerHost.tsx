@@ -63,6 +63,7 @@ export interface PersistentLearningPlayerHostProps {
   onClose: () => void;
   onRestore: () => void;
   onSelectMiniPlayerLesson?: (lessonNumber: number) => void;
+  onRetryMiniPlayerPlayback?: () => void;
   onOpenCourseOverview?: () => void;
 }
 
@@ -70,6 +71,7 @@ export function PersistentLearningPlayerHost({
   onClose,
   onRestore,
   onSelectMiniPlayerLesson,
+  onRetryMiniPlayerPlayback,
   onOpenCourseOverview,
   player,
   presentation,
@@ -293,12 +295,27 @@ export function PersistentLearningPlayerHost({
   );
 
   const lessonVideoPlayerProps = useMemo(() => {
+    const retryPlayback = mini ? onRetryMiniPlayerPlayback : undefined;
+    const basePlayerProps =
+      retryPlayback && player.playerProps.playbackAccessError?.kind === "retry"
+        ? {
+            ...player.playerProps,
+            playbackAccessError: {
+              ...player.playerProps.playbackAccessError,
+              onAction: retryPlayback,
+            },
+            onRetryPlayback: retryPlayback,
+          }
+        : retryPlayback
+          ? { ...player.playerProps, onRetryPlayback: retryPlayback }
+          : player.playerProps;
+
     if (!mini || !onSelectMiniPlayerLesson) {
-      return player.playerProps;
+      return basePlayerProps;
     }
 
     return {
-      ...player.playerProps,
+      ...basePlayerProps,
       onGoNext: () => {
         if (miniNextLessonId !== undefined) {
           handleMiniSelectLesson(miniNextLessonId);
@@ -316,6 +333,7 @@ export function PersistentLearningPlayerHost({
     miniNextLessonId,
     miniPreviousLessonId,
     onSelectMiniPlayerLesson,
+    onRetryMiniPlayerPlayback,
     player.playerProps,
   ]);
 

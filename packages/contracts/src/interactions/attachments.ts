@@ -68,6 +68,8 @@ export type LearningAttachment = z.infer<typeof learningAttachmentSchema>;
 
 export const initiateAttachmentUploadRequestSchema = z
   .object({
+    courseId: z.uuid(),
+    lessonId: z.uuid(),
     fileName: z.string().min(1).max(255),
     mimeType: z.string().min(1).max(120),
     fileSize: z.number().int().positive().max(50_000_000),

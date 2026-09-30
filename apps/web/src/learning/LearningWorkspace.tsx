@@ -79,6 +79,8 @@ import {
 import { useAuthStore } from "../store/auth.store";
 import { QuizAttemptPanel } from "../quizzes/QuizAttemptPanel";
 import { useCourseOverview } from "../services/courses";
+import { useCurrentUser } from "../services/auth";
+import { useEnrolledCourses } from "../services/enrollments";
 import { useCourseQuizAssignments } from "../services/quizzes/quizzes.queries";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
@@ -87,11 +89,14 @@ import {
   getCachedVideoPlaybackBootstrap,
   getVideoPlaybackBootstrap,
   refreshVideoPlaybackToken,
+  VideoPlaybackBootstrapError,
 } from "./videoPlaybackBootstrap";
 import {
   Discussion,
   PrerenderedMobileCommentComposer,
   type InteractionCapabilities,
+  type LessonContentAccessState,
+  type LessonParticipationState,
 } from "./Discussion";
 import {
   clampLearningCurriculumWidth,
@@ -251,6 +256,7 @@ interface LearningWorkspaceProps {
   mobileBottomNavigationHidden?: boolean;
   onSelectLesson: (lessonId: number, view?: "video" | "quiz") => void;
   onOpenCourseOverview: () => void;
+  onOpenLogin: () => void;
   onMinimizePlayer?: (request: LearningMiniPlayerRequest) => void;
   onMinimizeGestureChange?: (state: LessonPlayerMinimizeGestureState) => void;
   onMiniPlayerRestoreReady?: () => void;
@@ -334,6 +340,7 @@ export function LearningWorkspace({
   mobileBottomNavigationHidden = false,
   onSelectLesson,
   onOpenCourseOverview,
+  onOpenLogin,
   onMinimizePlayer,
   onMinimizeGestureChange,
   onMiniPlayerRestoreReady,
@@ -347,6 +354,15 @@ export function LearningWorkspace({
   quizAssignmentLoading = false,
 }: LearningWorkspaceProps) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const storedAuthUser = useAuthStore((state) => state.user);
+  const { data: currentUser, isFetched: isCurrentUserFetched } =
+    useCurrentUser();
+  const resolvedAuthUser =
+    currentUser === undefined ? storedAuthUser : currentUser;
+  const isAuthResolutionPending = !isCurrentUserFetched && !storedAuthUser;
+  const enrolledCoursesQuery = useEnrolledCourses({
+    enabled: isAuthenticated,
+  });
   const isApiRoute = Boolean(courseSlug);
   const {
     data: courseOverview,
@@ -369,11 +385,7 @@ export function LearningWorkspace({
       allowNotes,
       allowQa,
     };
-  }, [
-    allowComments,
-    allowNotes,
-    allowQa,
-  ]);
+  }, [allowComments, allowNotes, allowQa]);
   const publicPreviewLessonNumbers = useMemo(
     () => getPublicPreviewLessonNumbers(courseOverview),
     [courseOverview],
@@ -382,7 +394,6 @@ export function LearningWorkspace({
     () => new Set(publicPreviewLessonNumbers),
     [publicPreviewLessonNumbers],
   );
-  const firstPublicPreviewLessonId = publicPreviewLessonNumbers[0] ?? 1;
   const isLessonAvailable = useCallback(
     (lessonNumber: number) =>
       canPlayCourseLesson({
@@ -395,13 +406,9 @@ export function LearningWorkspace({
   );
   const lessonStorageKey = `veolms-last-lesson-${encodeURIComponent(courseSlug || "default")}`;
   const shortcutPlatform = useShortcutPlatform();
-  const [selectedLesson, setSelectedLesson] = useState(
-    isLessonAvailable(lessonId) ? lessonId : firstPublicPreviewLessonId,
-  );
-  const [
-    deepLinkInitializationPending,
-    setDeepLinkInitializationPending,
-  ] = useState(Boolean(deepLinkLessonUuid));
+  const [selectedLesson, setSelectedLesson] = useState(lessonId);
+  const [deepLinkInitializationPending, setDeepLinkInitializationPending] =
+    useState(Boolean(deepLinkLessonUuid));
   const pendingLessonSelectionRef = useRef<number | null>(null);
   const [localLessonProgress, setLocalLessonProgress] = useState<
     Record<number, number>
@@ -849,6 +856,7 @@ export function LearningWorkspace({
     };
   }, [showingQuiz]);
   const protectedPlayback = Boolean(courseSlug);
+  const playbackRequestKey = `${courseSlug ?? ""}\u0000${selectedLesson}\u0000${isAuthenticated ? "authenticated" : "guest"}`;
   const [playbackBootstrap, setPlaybackBootstrap] =
     useState<VideoPlaybackBootstrap | null>(() => {
       if (!courseSlug) return null;
@@ -857,15 +865,11 @@ export function LearningWorkspace({
         lessonNumber: selectedLesson,
       });
     });
-  // Lessons only play from their bootstrap manifest, so a failed request must
-  // surface to the learner with a way to try again.
   const [playbackBootstrapError, setPlaybackBootstrapError] = useState<
-    string | null
+    VideoPlaybackBootstrapError | null
   >(null);
   const [playbackBootstrapAttempt, setPlaybackBootstrapAttempt] = useState(0);
-  const retryPlaybackBootstrap = useCallback(() => {
-    setPlaybackBootstrapAttempt((attempt) => attempt + 1);
-  }, []);
+  const playbackRequestKeyRef = useRef<string | null>(null);
   const refreshPlaybackToken = useCallback(async () => {
     if (!courseSlug) {
       throw new Error("A course is required to refresh playback access.");
@@ -876,12 +880,24 @@ export function LearningWorkspace({
     });
   }, [courseSlug, selectedLesson]);
 
+  const retryPlaybackBootstrap = useCallback(() => {
+    playbackRequestKeyRef.current = null;
+    setPlaybackBootstrapError(null);
+    setPlaybackBootstrap(null);
+    setPlaybackBootstrapAttempt((attempt) => attempt + 1);
+  }, []);
+
   useEffect(() => {
     setPlaybackBootstrapError(null);
     if (!courseSlug) {
       setPlaybackBootstrap(null);
+      setPlaybackBootstrapError(null);
+      playbackRequestKeyRef.current = null;
       return;
     }
+
+    if (playbackRequestKeyRef.current === playbackRequestKey) return;
+    playbackRequestKeyRef.current = playbackRequestKey;
 
     const cached = getCachedVideoPlaybackBootstrap({
       courseSlug,
@@ -889,32 +905,166 @@ export function LearningWorkspace({
     });
     if (cached) {
       setPlaybackBootstrap(cached);
+      setPlaybackBootstrapError(null);
+      return;
     }
 
+    setPlaybackBootstrap(null);
+    setPlaybackBootstrapError(null);
     let active = true;
     void getVideoPlaybackBootstrap({
       courseSlug,
       lessonNumber: selectedLesson,
     })
       .then((bootstrap) => {
-        if (active) setPlaybackBootstrap(bootstrap);
+        if (active) {
+          setPlaybackBootstrap(bootstrap);
+        }
       })
       .catch((error: unknown) => {
-        // A cached bootstrap stays playable. Without one there is no source,
-        // so report the failure instead of leaving the player preparing.
-        if (!active || cached) return;
+        if (!active) return;
         setPlaybackBootstrap(null);
         setPlaybackBootstrapError(
-          error instanceof Error && error.message
-            ? error.message
-            : "This video could not be loaded.",
+          error instanceof VideoPlaybackBootstrapError
+            ? error
+            : new VideoPlaybackBootstrapError(
+                0,
+                "PLAYBACK_BOOTSTRAP_FAILED",
+                "Unable to prepare this video.",
+              ),
         );
       });
 
     return () => {
       active = false;
     };
-  }, [courseSlug, playbackBootstrapAttempt, selectedLesson]);
+  }, [
+    courseSlug,
+    isAuthenticated,
+    playbackRequestKey,
+    playbackBootstrapAttempt,
+    selectedLesson,
+  ]);
+  const playbackAccessError = useMemo<
+    LessonVideoPlayerProps["playbackAccessError"]
+  >(() => {
+    if (!playbackBootstrapError) return null;
+
+    if (
+      playbackBootstrapError.status === 401 ||
+      playbackBootstrapError.code === "UNAUTHORIZED" ||
+      playbackBootstrapError.code === "MFA_REQUIRED"
+    ) {
+      return {
+        kind: "login",
+        message: "Log in to access this lesson.",
+        actionLabel: "Log in",
+        onAction: onOpenLogin,
+      };
+    }
+
+    if (playbackBootstrapError.status === 403) {
+      return {
+        kind: "access",
+        message: "Get access to this course to watch this lesson.",
+        actionLabel: "Get access",
+        onAction: onOpenCourseOverview,
+      };
+    }
+
+    return {
+      kind: "retry",
+      message: "We couldn't prepare this video.",
+      actionLabel: "Retry",
+      onAction: retryPlaybackBootstrap,
+    };
+  }, [
+    onOpenCourseOverview,
+    onOpenLogin,
+    playbackBootstrapError,
+    retryPlaybackBootstrap,
+  ]);
+  const playbackBootstrapPending = Boolean(
+    protectedPlayback && !playbackBootstrap && !playbackBootstrapError,
+  );
+  const lessonContentAccess = useMemo<LessonContentAccessState>(() => {
+    if (isAuthResolutionPending || !courseOverview || !adaptedCurriculum) {
+      return "pending";
+    }
+
+    const lesson = adaptedCurriculum.lessonsByNumber.get(selectedLesson);
+    if (!lesson) return "pending";
+
+    const isPublicLesson =
+      courseOverview.course.status === "published" &&
+      lesson.isPublished &&
+      (lesson.isPreview || courseOverview.pricing?.pricingType === "free");
+    if (isPublicLesson) return "granted";
+    if (!isAuthenticated) return "denied";
+
+    const isCourseOwner =
+      resolvedAuthUser?.id === courseOverview.course.creatorId;
+    const isAdmin = resolvedAuthUser?.roles?.some(
+      (role) => role.trim().toLowerCase() === "admin",
+    );
+    if (isCourseOwner || isAdmin) return "granted";
+    if (!enrolledCoursesQuery.isFetched) return "pending";
+
+    return enrolledCoursesQuery.data?.courses.some(
+      (course) => course.courseId === courseOverview.course.id,
+    )
+      ? "granted"
+      : "denied";
+  }, [
+    adaptedCurriculum,
+    courseOverview,
+    enrolledCoursesQuery.data?.courses,
+    enrolledCoursesQuery.isFetched,
+    isAuthResolutionPending,
+    isAuthenticated,
+    resolvedAuthUser?.id,
+    resolvedAuthUser?.roles,
+    selectedLesson,
+  ]);
+  const lessonContentAccessReason =
+    lessonContentAccess === "denied"
+      ? isAuthenticated
+        ? "access"
+        : "login"
+      : null;
+  const lessonParticipationState = useMemo<LessonParticipationState>(() => {
+    if (isAuthResolutionPending || !courseOverview || !adaptedCurriculum) {
+      return "pending";
+    }
+
+    if (!isAuthenticated) return "denied";
+
+    const isCourseOwner =
+      resolvedAuthUser?.id === courseOverview.course.creatorId;
+    const isAdmin = resolvedAuthUser?.roles?.some(
+      (role) => role.trim().toLowerCase() === "admin",
+    );
+    if (isCourseOwner || isAdmin) return "granted";
+    if (!enrolledCoursesQuery.isFetched) return "pending";
+
+    return enrolledCoursesQuery.data?.courses.some(
+      (course) => course.courseId === courseOverview.course.id,
+    )
+      ? "granted"
+      : "denied";
+  }, [
+    adaptedCurriculum,
+    courseOverview,
+    enrolledCoursesQuery.data?.courses,
+    enrolledCoursesQuery.isFetched,
+    isAuthResolutionPending,
+    isAuthenticated,
+    resolvedAuthUser?.id,
+    resolvedAuthUser?.roles,
+  ]);
+  const canParticipateInLessonDiscussion =
+    lessonContentAccess === "granted" &&
+    lessonParticipationState === "granted";
   const lessonSequence = useMemo(
     () =>
       curriculumSections.flatMap(({ lessons }) => lessons.map(([id]) => id)),
@@ -967,9 +1117,10 @@ export function LearningWorkspace({
     }
     return isApiRoute ? undefined : getCourseThumbnail(courseSlug);
   }, [courseOverview, courseSlug, isApiRoute, isCourseOverviewError]);
-  const courseThumbnailSrcSet = courseOverview?.course.thumbnailSrcSet
-    ?.map(({ url, width }) => `${url} ${width}w`)
-    .join(", ") ||
+  const courseThumbnailSrcSet =
+    courseOverview?.course.thumbnailSrcSet
+      ?.map(({ url, width }) => `${url} ${width}w`)
+      .join(", ") ||
     (!isApiRoute && !isCourseOverviewError
       ? getCourseThumbnailSrcSet(courseSlug)
       : undefined);
@@ -1322,9 +1473,7 @@ export function LearningWorkspace({
       pendingLessonSelectionRef.current = null;
     }
 
-    const requestedLessonId = isLessonAvailable(lessonId)
-      ? lessonId
-      : firstPublicPreviewLessonId;
+    const requestedLessonId = lessonId;
     const nextLessonId = curriculumLessonsById.has(requestedLessonId)
       ? requestedLessonId
       : firstCurriculumLessonId;
@@ -1335,8 +1484,6 @@ export function LearningWorkspace({
   }, [
     curriculumLessonsById,
     firstCurriculumLessonId,
-    firstPublicPreviewLessonId,
-    isLessonAvailable,
     lessonId,
     onSelectLesson,
     selectedLesson,
@@ -2269,7 +2416,6 @@ export function LearningWorkspace({
           selectedLesson={selectedLesson}
           lessonProgress={lessonProgress}
           onSelectLesson={selectLesson}
-          isLessonAvailable={isLessonAvailable}
           onOpenCourseOverview={onOpenCourseOverview}
           courseNavigationActionLabel={courseNavigationActionLabel}
           courseTitle={courseTitle}
@@ -2291,16 +2437,13 @@ export function LearningWorkspace({
       curriculumSections,
       fullscreenCurriculumFocusRequest,
       fullscreenVideoWidthPercent,
-      isLessonAvailable,
       lessonProgress,
       onOpenCourseOverview,
       selectLesson,
       selectedLesson,
     ],
   );
-  const lessonPlayerSeekRef = useRef<((seconds: number) => void) | null>(
-    null,
-  );
+  const lessonPlayerSeekRef = useRef<((seconds: number) => void) | null>(null);
   const registerLessonPlayerSeek = useCallback(
     (seekToTimestamp: (seconds: number) => void) => {
       lessonPlayerSeekRef.current = seekToTimestamp;
@@ -2341,7 +2484,9 @@ export function LearningWorkspace({
       media: currentLessonMedia,
       description: selectedLessonDescription,
       playbackBootstrap,
-      playbackUnavailableMessage: playbackBootstrapError,
+      playbackAccessError,
+      playbackBootstrapPending,
+      playbackUnavailableMessage: playbackBootstrapError?.message ?? null,
       onRetryPlayback: retryPlaybackBootstrap,
       refreshPlaybackToken,
       protectedPlayback,
@@ -2408,6 +2553,8 @@ export function LearningWorkspace({
       onMiniPlayerRestoreReady,
       onMinimizePlayer,
       playbackBootstrap,
+      playbackAccessError,
+      playbackBootstrapPending,
       playbackBootstrapError,
       protectedPlayback,
       registerLessonPlayerSeek,
@@ -2529,9 +2676,7 @@ export function LearningWorkspace({
           }
         >
           <Exam size={12} weight="bold" className="text-(--accent)" />
-          <span>
-            {activeLessonView === "quiz" ? "Back to video" : "Quiz"}
-          </span>
+          <span>{activeLessonView === "quiz" ? "Back to video" : "Quiz"}</span>
         </button>
       ) : null}
     </header>
@@ -2627,9 +2772,12 @@ export function LearningWorkspace({
                       }
                       className={`text-sm sm:text-base text-(--muted) ${quizAssignmentLoading || courseQuizAssignments.isLoading ? "grid min-h-12 place-items-center" : ""}`}
                     >
-                      {quizAssignmentLoading || courseQuizAssignments.isLoading
-                        ? <LoadingSpinnerIcon size={20} />
-                        : "This Quiz is not currently assigned to your course access."}
+                      {quizAssignmentLoading ||
+                      courseQuizAssignments.isLoading ? (
+                        <LoadingSpinnerIcon size={20} />
+                      ) : (
+                        "This Quiz is not currently assigned to your course access."
+                      )}
                     </p>
                   </section>
                 )}
@@ -2709,8 +2857,16 @@ export function LearningWorkspace({
                     isLearningBootstrapLoading
                   }
                   interactionCapabilities={interactionCapabilities}
-                  isInteractionCapabilitiesLoading={
-                    isLearningBootstrapLoading
+                  isInteractionCapabilitiesLoading={isLearningBootstrapLoading}
+                  lessonContentAccess={lessonContentAccess}
+                  lessonContentAccessReason={lessonContentAccessReason}
+                  canParticipate={canParticipateInLessonDiscussion}
+                  participationState={lessonParticipationState}
+                  participationActionLabel={
+                    isAuthenticated ? "Get access" : "Log in"
+                  }
+                  onParticipationAction={
+                    isAuthenticated ? onOpenCourseOverview : onOpenLogin
                   }
                   onSeekToTimestamp={seekCurrentLessonToTimestamp}
                 />
@@ -2726,7 +2882,8 @@ export function LearningWorkspace({
                       Failed to load discussion
                     </p>
                     <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
-                      There was a problem loading the course for this discussion.
+                      There was a problem loading the course for this
+                      discussion.
                     </p>
                     <button
                       type="button"
@@ -2806,7 +2963,6 @@ export function LearningWorkspace({
                 selectedLesson={selectedLesson}
                 lessonProgress={lessonProgress}
                 onSelectLesson={selectLesson}
-                isLessonAvailable={isLessonAvailable}
                 onOpenCourseOverview={onOpenCourseOverview}
                 courseNavigationActionLabel={courseNavigationActionLabel}
                 courseTitle={courseTitle}
@@ -2954,7 +3110,6 @@ export function LearningWorkspace({
               selectedLesson={selectedLesson}
               lessonProgress={lessonProgress}
               onSelectLesson={selectLesson}
-              isLessonAvailable={isLessonAvailable}
               onOpenCourseOverview={onOpenCourseOverview}
               courseNavigationActionLabel={courseNavigationActionLabel}
               courseTitle={courseTitle}

@@ -7,7 +7,7 @@ export interface LessonDiscussionCountsRepositoryInput {
   academyId: string;
   courseId: string;
   lessonId: string;
-  userId: string;
+  userId: string | null | undefined;
   allowComments: boolean;
   allowQa: boolean;
   allowNotes: boolean;
