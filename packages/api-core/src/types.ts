@@ -29,7 +29,7 @@ export interface PendingCourseStaticRefresh {
 }
 
 export interface CreateVeoLMSApiOptions<
-  TServices extends CoreAppServices,
+  TServices extends CoreAppServices = CoreAppServices,
   TDatabase extends Database = Database,
   TPaymentEventQueue = unknown,
 > {
@@ -40,13 +40,13 @@ export interface CreateVeoLMSApiOptions<
   /**
    * Pre-built services or a factory function receiving the created FastifyInstance.
    */
-  services: TServices | ((app: FastifyInstance) => TServices);
+  services?: TServices | ((app: FastifyInstance) => TServices);
   /**
    * Absolute path to the `modules/` directory containing route plugins.
    * Pass `fileURLToPath(new URL("./modules", import.meta.url))` from the
-   * calling app's `app.ts`.
+   * calling app's `app.ts`. Optional if the app only registers plugins.
    */
-  modulesDir: string;
+  modulesDir?: string;
   /**
    * Parsed server config. Passed down to OpenAPI registration and CORS logic.
    */
@@ -57,7 +57,7 @@ export interface CreateVeoLMSApiOptions<
    * autoload options. This is a callback so api-core doesn't need to import
    * the concrete job implementations.
    */
-  registerJobs: (
+  registerJobs?: (
     app: FastifyInstance,
     opts: { database: Kysely<TDatabase>; services: TServices },
   ) => TPaymentEventQueue;
@@ -66,7 +66,7 @@ export interface CreateVeoLMSApiOptions<
    * handed to every route plugin. Must include at minimum the fields declared
    * by `RoutePluginOptions` in `apps/api`.
    */
-  routePluginOptions: (
+  routePluginOptions?: (
     paymentEventQueue: TPaymentEventQueue,
     services: TServices,
   ) => Record<string, unknown>;

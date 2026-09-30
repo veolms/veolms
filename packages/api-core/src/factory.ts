@@ -105,7 +105,8 @@ export async function createVeoLMSApi<
   const appServices =
     typeof rawServices === "function"
       ? (rawServices as (app: FastifyInstance) => TServices)(app)
-      : rawServices;
+      : (rawServices ??
+        ({ email: { close: async () => {} } } as unknown as TServices));
 
   const pendingCourseRefreshes = new WeakMap<
     FastifyRequest,
@@ -127,7 +128,7 @@ export async function createVeoLMSApi<
   app.addHook("onResponse", async (request, reply) => {
     if (reply.statusCode < 200 || reply.statusCode >= 300) return;
     const pending = pendingCourseRefreshes.get(request);
-    if (!pending || !appServices.courseStaticPages) return;
+    if (!pending || !appServices?.courseStaticPages) return;
     const status = appServices.courseStaticPages.requestRefresh(pending);
     request.log.info(
       { courseId: pending.courseId, refreshStatus: status.status },
@@ -189,27 +190,38 @@ export async function createVeoLMSApi<
   });
 
   // Bootstrap background jobs and get the payment event queue reference.
-  const paymentEventQueue = registerJobs(app, {
-    database,
-    services: appServices,
-  });
+  const paymentEventQueue = registerJobs
+    ? registerJobs(app, {
+        database,
+        services: appServices,
+      })
+    : undefined;
 
   // Auto-load every *.routes.ts file from the caller's modules directory.
-  await app.register(fastifyAutoload, {
-    dir: modulesDir,
-    matchFilter: /\.routes\.ts$/,
-    // Disable index-file special-casing so barrel index.ts files next to
-    // *.routes.ts files don't silently suppress route registration.
-    indexPattern: /^$/,
-    dirNameRoutePrefix: false,
-    ignorePattern: /(?:^|[\\/])_/u,
-    options: routePluginOptions(paymentEventQueue, appServices),
-  });
+  if (modulesDir) {
+    await app.register(fastifyAutoload, {
+      dir: modulesDir,
+      matchFilter: /\.routes\.ts$/,
+      // Disable index-file special-casing so barrel index.ts files next to
+      // *.routes.ts files don't silently suppress route registration.
+      indexPattern: /^$/,
+      dirNameRoutePrefix: false,
+      ignorePattern: /(?:^|[\\/])_/u,
+      options: routePluginOptions
+        ? routePluginOptions(
+            paymentEventQueue as TPaymentEventQueue,
+            appServices,
+          )
+        : { prefix: "/v1", database, services: appServices },
+    });
+  }
 
   // Release pooled SMTP connections when the server shuts down.
-  app.addHook("onClose", async () => {
-    await appServices.email.close();
-  });
+  if (appServices?.email?.close) {
+    app.addHook("onClose", async () => {
+      await appServices.email.close();
+    });
+  }
 
   // Register cloud plugins after all core setup is complete.
   for (const plugin of plugins) {
