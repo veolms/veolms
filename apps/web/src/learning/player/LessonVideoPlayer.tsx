@@ -9,6 +9,7 @@ import {
 import type { CSSProperties, ReactNode } from "react";
 import {
   VideoPlayer as VeoVideoPlayer,
+  VideoPlayerCloseButton,
   type VideoPlayerEvent,
   type VideoPlayerHandle,
   type VideoEngine,
@@ -31,8 +32,10 @@ import {
 import {
   LessonCentralControls,
   LessonPlayerControls,
+  LessonPlayerMinimizeControl,
   type CourseLessonsSecondPressHoldProps,
 } from "./LessonPlayerControls";
+import { MiniPlayerRestoreControl } from "./MiniPlayerControls";
 import type { LearningMiniPlayerRequest } from "./learningMiniPlayerTypes";
 import {
   DEFAULT_LEARNING_PLAYER_PREFERENCES,
@@ -132,6 +135,13 @@ export interface LessonVideoPlayerProps {
   resumePersistenceKey?: string;
   /** Runtime playback data returned by the authorized bootstrap endpoint. */
   playbackBootstrap?: VideoPlaybackBootstrap | null;
+  /** A classified bootstrap result that prevents unauthorized media loading. */
+  playbackAccessError?: {
+    kind: "login" | "access" | "retry";
+    message: string;
+    actionLabel: string;
+    onAction?: () => void;
+  } | null;
   /** Refreshes only the short-lived CDN segment token when playback runs long. */
   refreshPlaybackToken?: () => Promise<VideoPlaybackToken>;
   /** Legacy caller hint retained while all protected access moves to tokens. */
@@ -185,6 +195,7 @@ export function LessonVideoPlayer({
   theaterMode,
   presentation = "full",
   playbackBootstrap,
+  playbackAccessError = null,
   refreshPlaybackToken,
   protectedPlayback = false,
 }: LessonVideoPlayerProps) {
@@ -783,6 +794,69 @@ export function LessonVideoPlayer({
           "calc(var(--learning-fullscreen-panel-offset-x) / 2)",
       } as FullscreenCoursePanelStyle)
     : undefined;
+
+  if (playbackAccessError) {
+    const MinimizeIcon = playerTheme.icons.minimize;
+    const CloseIcon = playerTheme.icons.close;
+    return (
+      <div
+        className="video-shell relative isolate aspect-video w-full overflow-hidden rounded-xl bg-black shadow-[0_18px_50px_rgba(0,0,0,.22)]"
+        data-learning-playback-gate={playbackAccessError.kind}
+        role="alert"
+      >
+        {presentation === "full" && onMinimize ? (
+          <LessonPlayerMinimizeControl
+            icon={<MinimizeIcon size={22} />}
+            onMinimize={minimizePlayerFromControl}
+          />
+        ) : null}
+        {presentation === "mini" && onMiniRestore ? (
+          <>
+            <div className="min-[641px]:hidden absolute inset-0">
+              <MiniPlayerRestoreControl mobile onRestore={onMiniRestore} />
+            </div>
+            <div
+              className="absolute inset-x-2 top-2 z-50 hidden min-[641px]:flex items-center justify-between pointer-events-none"
+              data-learning-mini-player-gesture-ignore=""
+            >
+              <MiniPlayerRestoreControl onRestore={onMiniRestore} />
+            </div>
+          </>
+        ) : null}
+        {presentation === "mini" && onMiniClose ? (
+          <VideoPlayerCloseButton
+            icon={<CloseIcon size={20} />}
+            onClose={onMiniClose}
+          />
+        ) : null}
+        <div className="pointer-events-none absolute inset-0 grid place-items-center p-6 text-center text-white">
+          <div className="relative z-20 max-w-sm space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-base font-semibold">
+                {playbackAccessError.kind === "login"
+                  ? "Login required"
+                  : playbackAccessError.kind === "access"
+                    ? "Course access required"
+                    : "Unable to play this video"}
+              </h2>
+              <p className="text-sm text-white/70">
+                {playbackAccessError.message}
+              </p>
+            </div>
+            {playbackAccessError.onAction ? (
+              <button
+                type="button"
+                className="pointer-events-auto mx-auto inline-flex min-h-10 items-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-white/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                onClick={playbackAccessError.onAction}
+              >
+                {playbackAccessError.actionLabel}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <VeoVideoPlayer
