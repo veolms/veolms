@@ -156,6 +156,7 @@ interface CommentCardProps {
   currentUserId?: string;
   userRole?: string;
   courseId?: string;
+  canParticipate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
   isDeepLinkTarget?: boolean;
@@ -181,6 +182,7 @@ export const CommentCard = React.memo(function CommentCard({
   currentUserId,
   userRole,
   courseId,
+  canParticipate = true,
   canEdit = true,
   canDelete = true,
   isDeepLinkTarget = false,
@@ -234,8 +236,10 @@ export const CommentCard = React.memo(function CommentCard({
     (authUser as any)?.role === "Instructor" ||
     (authUser as any)?.role === "Admin",
   );
-  const canLock = !isNote && (Boolean(comment.isOwn) || isModerator);
-  const canAcceptAnswer = isQuestion && (Boolean(comment.isOwn) || isModerator);
+  const canLock =
+    canParticipate && !isNote && (Boolean(comment.isOwn) || isModerator);
+  const canAcceptAnswer =
+    canParticipate && isQuestion && (Boolean(comment.isOwn) || isModerator);
 
   const {
     data: repliesData,
@@ -579,10 +583,12 @@ export const CommentCard = React.memo(function CommentCard({
                   onCopyTextNotice={onCopyTextNotice}
                   isOwn={Boolean(comment.isOwn)}
                   canEdit={
+                    canParticipate &&
                     canEdit &&
                     (!isBackendMode || (Boolean(serverId) && !isEditing))
                   }
                   canDelete={
+                    canParticipate &&
                     canDelete &&
                     (!isBackendMode || (Boolean(serverId) && !isEditing))
                   }
@@ -616,7 +622,7 @@ export const CommentCard = React.memo(function CommentCard({
                   }}
                   isBookmarked={Boolean(comment.isBookmarked)}
                   onToggleBookmark={
-                    onToggleBookmark
+                    canParticipate && onToggleBookmark
                       ? () => {
                           void Promise.resolve(
                             onToggleBookmark(comment.id, !comment.isBookmarked),
@@ -626,7 +632,7 @@ export const CommentCard = React.memo(function CommentCard({
                   }
                   isFollowing={Boolean(comment.isFollowing)}
                   onToggleFollow={
-                    onToggleFollow
+                    canParticipate && onToggleFollow
                       ? () => {
                           void Promise.resolve(
                             onToggleFollow(comment.id, !comment.isFollowing),
@@ -674,24 +680,26 @@ export const CommentCard = React.memo(function CommentCard({
                   data-comment-engagement
                   className="mt-2 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--muted) sm:text-sm"
                 >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!isBackendMode) {
-                        setLocalLiked((current) => !current);
-                      }
-                      onLike(comment.id, !isCommentLiked);
-                    }}
-                    aria-pressed={isCommentLiked}
-                    aria-label={isCommentLiked ? "Unlike" : "Like"}
-                    className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isCommentLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
-                  >
-                    <ThumbsUp
-                      size={19}
-                      weight={isCommentLiked ? "fill" : "regular"}
-                    />
-                    <span>{comment.likes}</span>
-                  </button>
+                  {canParticipate && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isBackendMode) {
+                          setLocalLiked((current) => !current);
+                        }
+                        onLike(comment.id, !isCommentLiked);
+                      }}
+                      aria-pressed={isCommentLiked}
+                      aria-label={isCommentLiked ? "Unlike" : "Like"}
+                      className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isCommentLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
+                    >
+                      <ThumbsUp
+                        size={19}
+                        weight={isCommentLiked ? "fill" : "regular"}
+                      />
+                      <span>{comment.likes}</span>
+                    </button>
+                  )}
 
                   {!isNote && replyCount > 0 && (
                     <button
@@ -722,41 +730,44 @@ export const CommentCard = React.memo(function CommentCard({
                     </span>
                   )}
 
-                  {!isNote && (!comment.isLocked || onOpenThread) && (
-                    <button
-                      type="button"
-                      aria-label={comment.isLocked ? "View thread" : "Reply"}
-                      title={comment.isLocked ? "View thread" : "Reply"}
-                      data-reply-action={!comment.isLocked ? "" : undefined}
-                      data-discussion-thread-trigger={
-                        onOpenThread ? "true" : undefined
-                      }
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (onOpenThread)
-                          onOpenThread(comment.id, !comment.isLocked);
-                        else if (!comment.isLocked)
-                          setReplyComposerOpen((open) => !open);
-                      }}
-                      aria-expanded={replyComposerOpen}
-                      className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
-                    >
-                      <ArrowBendUpLeft
-                        data-reply-icon
-                        size={20}
-                        weight="bold"
-                        className="origin-center scale-x-[1.16]"
-                        aria-hidden="true"
-                      />
-                    </button>
-                  )}
+                  {!isNote &&
+                    (!comment.isLocked || onOpenThread) &&
+                    (canParticipate || Boolean(onOpenThread)) && (
+                      <button
+                        type="button"
+                        aria-label={comment.isLocked ? "View thread" : "Reply"}
+                        title={comment.isLocked ? "View thread" : "Reply"}
+                        data-reply-action={!comment.isLocked ? "" : undefined}
+                        data-discussion-thread-trigger={
+                          onOpenThread ? "true" : undefined
+                        }
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (onOpenThread)
+                            onOpenThread(comment.id, !comment.isLocked);
+                          else if (!comment.isLocked && canParticipate)
+                            setReplyComposerOpen((open) => !open);
+                        }}
+                        aria-expanded={replyComposerOpen}
+                        className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
+                      >
+                        <ArrowBendUpLeft
+                          data-reply-icon
+                          size={20}
+                          weight="bold"
+                          className="origin-center scale-x-[1.16]"
+                          aria-hidden="true"
+                        />
+                      </button>
+                    )}
                 </div>
               )}
 
               {replyComposerOpen &&
                 !onOpenThread &&
                 !isNote &&
-                !comment.isLocked && (
+                !comment.isLocked &&
+                canParticipate && (
                   <div className="mt-3 flex max-w-2xl items-end gap-2">
                     <label className="min-w-0 flex-1">
                       <span className="sr-only">Reply to {comment.name}</span>
@@ -823,6 +834,7 @@ export const CommentCard = React.memo(function CommentCard({
                     reply={reply}
                     isBackendMode={isBackendMode}
                     isQuestion={isQuestion}
+                    canParticipate={canParticipate}
                     canAcceptAnswer={canAcceptAnswer}
                     onToggleAccept={(replyId, accepted) =>
                       onToggleAcceptReply?.(
@@ -878,7 +890,9 @@ export const CommentCard = React.memo(function CommentCard({
                       onClick={() => void fetchNextPage()}
                       data-testid="learning-replies-load-more"
                       aria-busy={isFetchingNextPage}
-                      aria-label={isFetchingNextPage ? "Loading more replies" : undefined}
+                      aria-label={
+                        isFetchingNextPage ? "Loading more replies" : undefined
+                      }
                       className="inline-flex items-center rounded-lg bg-(--surface) px-2.5 py-1 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover) disabled:cursor-wait disabled:opacity-60"
                     >
                       {isFetchingNextPage ? (
@@ -911,6 +925,7 @@ interface ReplyCardProps {
   reply: CommentReply;
   isBackendMode?: boolean;
   isQuestion?: boolean;
+  canParticipate?: boolean;
   canAcceptAnswer?: boolean;
   onToggleAccept?: (
     replyId: string | number,
@@ -935,6 +950,7 @@ function ReplyCard({
   reply,
   isBackendMode = false,
   isQuestion = false,
+  canParticipate = true,
   canAcceptAnswer = false,
   onToggleAccept,
   onReply,
@@ -1038,13 +1054,22 @@ function ReplyCard({
                   textToCopy={reply.content?.markdown ?? reply.text}
                   onCopyTextNotice={onCopyTextNotice}
                   isOwn={Boolean(reply.isOwn)}
-                  canEdit={!isBackendMode || Boolean(getServerEntityId(reply))}
+                  canEdit={
+                    canParticipate &&
+                    (!isBackendMode || Boolean(getServerEntityId(reply)))
+                  }
                   canAcceptAnswer={
-                    isQuestion && canAcceptAnswer && canAcceptReply
+                    canParticipate &&
+                    isQuestion &&
+                    canAcceptAnswer &&
+                    canAcceptReply
                   }
                   isAccepted={Boolean(reply.isAccepted)}
                   onToggleAccept={
-                    isQuestion && canAcceptAnswer && onToggleAccept
+                    canParticipate &&
+                    isQuestion &&
+                    canAcceptAnswer &&
+                    onToggleAccept
                       ? () =>
                           onToggleAccept(
                             reply.id,
@@ -1070,7 +1095,8 @@ function ReplyCard({
                     )
                   }
                   canDelete={
-                    !isBackendMode || (Boolean(replyServerId) && !isEditing)
+                    canParticipate &&
+                    (!isBackendMode || (Boolean(replyServerId) && !isEditing))
                   }
                   onDelete={() => {
                     void onDelete(reply.id);
@@ -1080,7 +1106,7 @@ function ReplyCard({
                 />
               </div>
 
-              {editing ? (
+              {editing && canParticipate ? (
                 <div>
                   <InlineEditForm
                     documentId={`reply-edit-${reply.id}`}
@@ -1124,7 +1150,8 @@ function ReplyCard({
                 data-reply-engagement
                 className="mt-1.5 flex min-h-9 items-center gap-4 text-xs text-(--muted) sm:text-sm"
               >
-                <button
+                {canParticipate && (
+                  <button
                   type="button"
                   onClick={() => {
                     if (!isBackendMode) {
@@ -1141,8 +1168,12 @@ function ReplyCard({
                     weight={isReplyLiked ? "fill" : "regular"}
                   />
                   <span>{replyLikesCount}</span>
-                </button>
-                {isQuestion && canAcceptAnswer && onToggleAccept && (
+                  </button>
+                )}
+                {canParticipate &&
+                  isQuestion &&
+                  canAcceptAnswer &&
+                  onToggleAccept && (
                   <button
                     type="button"
                     data-testid={`accept-reply-btn-${reply.id}`}
@@ -1182,7 +1213,8 @@ function ReplyCard({
                     <span>{reply.isAccepted ? "Accepted" : "Accept"}</span>
                   </button>
                 )}
-                <button
+                {canParticipate && (
+                  <button
                   type="button"
                   aria-label="Reply"
                   title="Reply"
@@ -1197,7 +1229,8 @@ function ReplyCard({
                     className="origin-center scale-x-[1.16]"
                     aria-hidden="true"
                   />
-                </button>
+                  </button>
+                )}
               </div>
             </div>
           </div>

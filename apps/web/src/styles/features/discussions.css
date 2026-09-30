@@ -35,6 +35,11 @@
   color: var(--text);
 }
 
+:root[data-content-layout="framed"]
+  .courses-main.student-surface-main:has(.discussion-hub) {
+  --student-surface-block-start: var(--application-page-block-start, 0px);
+}
+
 
 /* Graphite Studio keeps discussion copy readable on the same raised neutral
    surfaces used by the student home cards. Accent color is reserved for

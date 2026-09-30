@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { DatabaseExecutor } from "@veolms/database";
 import { discussionUploadResponseSchema } from "@veolms/contracts";
 import type { LearningAttachment } from "@veolms/contracts";
-import { errorResponse } from "../../lib/errors.ts";
+import { AppError, errorResponse } from "../../lib/errors.ts";
 import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
 import { createDiscussionPermissions } from "../learning/discussions/shared/discussion.permissions.ts";
@@ -15,6 +15,7 @@ import {
 } from "../learning/discussions/shared/discussion.access.ts";
 import { createAttachmentsRepository } from "../learning/discussions/attachments/attachments.repository.ts";
 import { createAttachmentsService } from "../learning/discussions/attachments/attachments.service.ts";
+import { readDiscussionAttachmentUploadContext } from "../learning/discussions/attachments/attachment-upload-context.ts";
 import { createNotesRepository } from "../learning/discussions/notes/notes.repository.ts";
 import { createRepliesRepository } from "../learning/discussions/replies/replies.repository.ts";
 import { createThreadsRepository } from "../learning/discussions/threads/threads.repository.ts";
@@ -123,10 +124,12 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
       }
 
       try {
+        const context = readDiscussionAttachmentUploadContext(file.fields);
         const buffer = await file.toBuffer();
         const result = await attachmentsService.processUpload(
           options.database,
-          user.id,
+          discussionActor(user),
+          context,
           {
             filename: file.filename,
             mimetype: file.mimetype,
@@ -142,6 +145,7 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
           size: result.size,
         });
       } catch (error) {
+        if (error instanceof AppError) throw error;
         const message =
           error instanceof Error ? error.message : "DISCUSSION_UPLOAD_FAILED";
         const statusCode =

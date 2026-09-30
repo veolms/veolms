@@ -16,11 +16,11 @@ import {
   takePage,
   toDate,
 } from "../shared/discussion.utils.ts";
+import type { DiscussionActor } from "../shared/discussion.access.ts";
 import {
-  createDiscussionAccess,
-  type DiscussionAccess,
-  type DiscussionActor,
-} from "../shared/discussion.access.ts";
+  createLessonDiscussionAccess,
+  type LessonDiscussionAccess,
+} from "../shared/lesson-discussion-access.ts";
 import {
   createThreadsService,
   type ThreadsListQuery,
@@ -52,10 +52,11 @@ interface FeedCapabilities {
 interface FeedContext {
   courseId: string;
   lessonId: string;
-  actorUserId: string;
+  actorUserId: string | null;
   kind: LessonDiscussionKind;
   sort: LessonDiscussionSort;
   mine: boolean;
+  publicOnly: boolean;
   capabilities: FeedCapabilities;
 }
 
@@ -89,6 +90,7 @@ function sameContext(left: FeedContext, right: FeedContext): boolean {
     left.kind === right.kind &&
     left.sort === right.sort &&
     left.mine === right.mine &&
+    left.publicOnly === right.publicOnly &&
     left.capabilities.allowComments === right.capabilities.allowComments &&
     left.capabilities.allowQa === right.capabilities.allowQa &&
     left.capabilities.allowNotes === right.capabilities.allowNotes
@@ -111,13 +113,14 @@ function isFeedContext(value: unknown): value is FeedContext {
   return (
     isUuid(candidate.courseId) &&
     isUuid(candidate.lessonId) &&
-    isUuid(candidate.actorUserId) &&
+    (candidate.actorUserId === null || isUuid(candidate.actorUserId)) &&
     (candidate.kind === "all" ||
       candidate.kind === "comment" ||
       candidate.kind === "question" ||
       candidate.kind === "note") &&
     (candidate.sort === "newest" || candidate.sort === "top") &&
     typeof candidate.mine === "boolean" &&
+    typeof candidate.publicOnly === "boolean" &&
     Boolean(capabilities) &&
     typeof capabilities?.allowComments === "boolean" &&
     typeof capabilities.allowQa === "boolean" &&
@@ -185,7 +188,7 @@ function threadKinds(
 
 async function listCandidates(
   db: DatabaseExecutor,
-  actor: DiscussionActor,
+  actor: DiscussionActor | null,
   academyId: string,
   context: FeedContext,
   cursor: ReturnType<typeof decodeFeedCursor>,
@@ -212,7 +215,11 @@ async function listCandidates(
         and t.lesson_id = ${context.lessonId}
         and t.status = 'active'
         and ${kindPredicate}
-        and ${discussionVisibilityPredicate("t", actor.userId, context.mine)}
+        and ${discussionVisibilityPredicate(
+          "t",
+          context.publicOnly ? null : actor?.userId,
+          context.mine,
+        )}
     `);
   }
 
@@ -232,7 +239,11 @@ async function listCandidates(
       where n.academy_id = ${academyId}
         and n.course_id = ${context.courseId}
         and n.lesson_id = ${context.lessonId}
-        and ${discussionVisibilityPredicate("n", actor.userId, context.mine)}
+        and ${discussionVisibilityPredicate(
+          "n",
+          context.publicOnly ? null : actor?.userId,
+          context.mine,
+        )}
     `);
   }
 
@@ -299,18 +310,18 @@ export interface LearningDiscussionsFeedService {
     input: {
       courseId: string;
       lessonId: string;
-      actor: DiscussionActor;
+      actor: DiscussionActor | null;
       query: ListLessonDiscussionsQuery;
     },
   ): Promise<LessonDiscussionsListResponse>;
 }
 
 export function createLearningDiscussionsFeedService(options?: {
-  access?: DiscussionAccess;
+  lessonAccess?: LessonDiscussionAccess;
   threads?: ThreadsService;
   notes?: NotesService;
 }): LearningDiscussionsFeedService {
-  const access = options?.access ?? createDiscussionAccess();
+  const lessonAccess = options?.lessonAccess ?? createLessonDiscussionAccess();
   const threads =
     options?.threads ??
     createThreadsService(
@@ -321,21 +332,27 @@ export function createLearningDiscussionsFeedService(options?: {
 
   return {
     async list(db, { courseId, lessonId, actor, query }) {
-      await access.assertCanAccessCourse(db, actor, courseId);
+      const readAccess = await lessonAccess.assertCanReadLesson(db, {
+        courseId,
+        lessonId,
+        actor,
+      });
 
       const settings = await findSettingsByCourseId(db, courseId);
       const capabilities: FeedCapabilities = {
         allowComments: settings?.allow_comments !== false,
         allowQa: settings?.allow_qa !== false,
-        allowNotes: settings?.allow_notes !== false,
+        allowNotes:
+          readAccess.canReadPrivateState && settings?.allow_notes !== false,
       };
       const context: FeedContext = {
         courseId,
         lessonId,
-        actorUserId: actor.userId,
+        actorUserId: actor?.userId ?? null,
         kind: query.kind,
         sort: query.sort,
-        mine: Boolean(query.mine),
+        mine: Boolean(query.mine && actor && readAccess.canReadPrivateState),
+        publicOnly: !readAccess.canReadPrivateState,
         capabilities,
       };
 
@@ -364,8 +381,11 @@ export function createLearningDiscussionsFeedService(options?: {
         sort: "latest",
         courseId,
         lessonId,
-        currentUserId: actor.userId,
-        roles: actor.roles,
+        currentUserId: readAccess.canReadPrivateState
+          ? actor?.userId
+          : undefined,
+        roles: readAccess.canReadPrivateState ? actor?.roles : undefined,
+        skipCourseAccessCheck: true,
         limit: Math.max(1, threadIds.length),
         ids: threadIds,
       };
@@ -382,7 +402,7 @@ export function createLearningDiscussionsFeedService(options?: {
           ? threads.listThreads(db, threadQuery)
           : Promise.resolve({ threads: [], nextCursor: null }),
         noteIds.length > 0
-          ? notes.listNotes(db, actor, noteQuery)
+          ? notes.listNotes(db, actor!, noteQuery)
           : Promise.resolve({ notes: [], nextCursor: null }),
       ]);
 

@@ -90,6 +90,11 @@ export function createEngagementsService({
               "Discussion thread not found",
             );
           }
+          await courseAccess.assertCanParticipateInCourse(
+            trx,
+            actor,
+            thread.courseId,
+          );
           await courseAccess.assertCanAccessThread(trx, actor, thread);
           courseAccess.assertThreadIsActive(thread);
           await courseAccess.assertNotSuspended(
@@ -111,6 +116,11 @@ export function createEngagementsService({
               "Discussion thread not found",
             );
           }
+          await courseAccess.assertCanParticipateInCourse(
+            trx,
+            actor,
+            thread.courseId,
+          );
           await courseAccess.assertCanAccessThread(trx, actor, thread);
           courseAccess.assertThreadIsActive(thread);
           courseAccess.assertReplyIsActive(reply);
@@ -125,6 +135,11 @@ export function createEngagementsService({
           if (!note) {
             throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
           }
+          await courseAccess.assertCanParticipateInCourse(
+            trx,
+            actor,
+            note.courseId,
+          );
           await courseAccess.assertCanAccessNote(trx, actor, note);
           await courseAccess.assertNotSuspended(
             trx,
@@ -210,6 +225,11 @@ export function createEngagementsService({
       if (!thread) {
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
       }
+      await courseAccess.assertCanParticipateInCourse(
+        db,
+        actor,
+        thread.courseId,
+      );
       await courseAccess.assertCanAccessThread(db, actor, thread);
       courseAccess.assertThreadIsActive(thread);
       await courseAccess.assertNotSuspended(
@@ -239,6 +259,7 @@ export function createEngagementsService({
       if (!note) {
         throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
       }
+      await courseAccess.assertCanParticipateInCourse(db, actor, note.courseId);
       await courseAccess.assertCanAccessNote(db, actor, note);
       await courseAccess.assertNotSuspended(
         db,
@@ -283,6 +304,11 @@ export function createEngagementsService({
             "Discussion thread not found",
           );
         }
+        await courseAccess.assertCanParticipateInCourse(
+          trx,
+          actor,
+          thread.courseId,
+        );
         await courseAccess.assertCanAccessThread(trx, actor, thread);
         courseAccess.assertThreadIsActive(thread);
 
@@ -322,6 +348,11 @@ export function createEngagementsService({
       if (!thread) {
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
       }
+      await courseAccess.assertCanParticipateInCourse(
+        db,
+        actor,
+        thread.courseId,
+      );
       await courseAccess.assertCanAccessThread(db, actor, thread);
       courseAccess.assertThreadIsActive(thread);
       await courseAccess.assertNotSuspended(

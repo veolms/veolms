@@ -32,6 +32,7 @@ import {
   upsertCoursePlayerSessionFromRoute,
 } from "../learning/coursePlayerNavigation";
 import { getRouteMeta } from "../routing/routeDescriptors";
+import { buildLoginPath } from "../routing/routeAccess";
 import { useCurrentUser } from "../services/auth";
 import { useCourseOverview } from "../services/courses";
 import { useAuthStore } from "../store/auth.store";
@@ -310,6 +311,12 @@ export default function LearningRoute() {
     }
     navigateTo(`/courses/${encodeURIComponent(courseSlug)}/overview`);
   }, [courseSlug, hasDiscussionReturnPath, navigateTo, routeReturnPath]);
+  const openLogin = useCallback(() => {
+    navigateTo(
+      buildLoginPath(`${location.pathname}${location.search}`),
+      { exact: true },
+    );
+  }, [location.pathname, location.search, navigateTo]);
   const minimizePlayer = useCallback(
     (request: LearningMiniPlayerRequest) => {
       openLearningMiniPlayer({
@@ -344,6 +351,7 @@ export default function LearningRoute() {
         mobileBottomNavigationHidden={mobileBottomNavigationHidden}
         onSelectLesson={selectLesson}
         onOpenCourseOverview={openCourseOverview}
+        onOpenLogin={openLogin}
         onMinimizeGestureChange={onLearningPlayerMinimizeGestureChange}
         onMiniPlayerRestoreReady={onMiniPlayerRestoreReady}
         persistentPlayerCourseRouteKey={courseSlug}

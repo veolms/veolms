@@ -133,6 +133,15 @@ export function applyPersistentMiniPlayerLessonChange(
       ...registration.playerProps,
       media,
       playbackBootstrap: resolvedBootstrap,
+      playbackAccessError: resolvedBootstrap
+        ? null
+        : registration.playerProps.playbackAccessError,
+      playbackBootstrapPending: resolvedBootstrap
+        ? false
+        : registration.playerProps.playbackBootstrapPending,
+      playbackUnavailableMessage: resolvedBootstrap
+        ? null
+        : registration.playerProps.playbackUnavailableMessage,
       refreshPlaybackToken,
       playbackSuspended,
       lessonTitle: lesson[1],

@@ -1,6 +1,7 @@
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
 import { usePlayerTheme } from "../themes/PlayerThemeContext";
+import type { ReactNode } from "react";
 
 const messages: Record<string, string> = {
   DRM: "Your browser could not play this protected content.",
@@ -10,6 +11,26 @@ const messages: Record<string, string> = {
   SOURCE: "The video source is unavailable.",
   MEDIA: "The browser could not decode this video.",
 };
+
+export function VideoPlayerCloseButton({
+  icon,
+  onClose,
+}: {
+  icon: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label="Close video player"
+      title="Close video player"
+      className="absolute right-2 top-2 z-30 inline-flex size-9 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+      onClick={onClose}
+    >
+      {icon}
+    </button>
+  );
+}
 
 export function ErrorOverlay({ onClose }: { onClose?: () => void }) {
   const controller = usePlayerController();
@@ -27,15 +48,10 @@ export function ErrorOverlay({ onClose }: { onClose?: () => void }) {
       role="alert"
     >
       {onClose ? (
-        <button
-          type="button"
-          aria-label="Close video player"
-          title="Close video player"
-          className="absolute right-2 top-2 inline-flex size-9 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-          onClick={onClose}
-        >
-          <CloseIcon size={20} />
-        </button>
+        <VideoPlayerCloseButton
+          icon={<CloseIcon size={20} />}
+          onClose={onClose}
+        />
       ) : null}
       <div className="max-w-sm space-y-4">
         <WarningIcon size={42} active className="mx-auto text-amber-300" />
