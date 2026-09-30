@@ -3,7 +3,10 @@ import {
   type InteractionAttachmentPatch,
   type LocalComposerAttachment,
 } from "./attachment-model";
-import { learningInteractionsService } from "./learning-interactions.service";
+import {
+  learningInteractionsService,
+  type DiscussionAttachmentUploadContext,
+} from "./learning-interactions.service";
 
 export async function uploadInteractionAttachments(
   attachments: readonly LocalComposerAttachment[],
@@ -11,7 +14,12 @@ export async function uploadInteractionAttachments(
     attachmentId: string,
     patch: InteractionAttachmentPatch,
   ) => void,
+  context?: DiscussionAttachmentUploadContext,
 ): Promise<LearningUploadResponse[]> {
+  if (attachments.length > 0 && !context) {
+    throw new Error("Course and lesson context are required for attachments.");
+  }
+
   return Promise.all(
     attachments.map(async (attachment) => {
       onAttachmentChange(attachment.id, {
@@ -29,6 +37,7 @@ export async function uploadInteractionAttachments(
           });
         },
         { width: attachment.width, height: attachment.height },
+        context,
       );
       onAttachmentChange(attachment.id, {
         serverId: uploaded.id,

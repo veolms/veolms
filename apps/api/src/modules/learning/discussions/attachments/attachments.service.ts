@@ -20,12 +20,14 @@ import {
   type DiscussionUploadStore,
 } from "../../../discussion-uploads/index.ts";
 import { DISCUSSION_CONSTANTS } from "../shared/discussion.constants.ts";
-import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import {
-  fetchSafeHtml,
-  extractLinkMetadata,
-} from "./attachments.preview.ts";
+  createDiscussionAccess,
+  type DiscussionActor,
+} from "../shared/discussion.access.ts";
+import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
+import { fetchSafeHtml, extractLinkMetadata } from "./attachments.preview.ts";
 import type { AttachmentsRepository } from "./attachments.repository.ts";
+import type { DiscussionAttachmentUploadContext } from "./attachment-upload-context.ts";
 
 const LINK_PREVIEW_CACHE_TTL_MS = 5 * 60 * 1000;
 const LINK_PREVIEW_CACHE_MAX_ENTRIES = 500;
@@ -85,7 +87,7 @@ function isRetryableLinkPreviewError(error: unknown): boolean {
 export interface AttachmentsService {
   initiateUpload(
     db: DatabaseExecutor,
-    userId: string,
+    actor: DiscussionActor,
     input: InitiateAttachmentUploadRequest,
   ): Promise<InitiateAttachmentUploadResponse>;
 
@@ -110,7 +112,8 @@ export interface AttachmentsService {
 
   processUpload(
     db: DatabaseExecutor,
-    userId: string,
+    actor: DiscussionActor,
+    context: DiscussionAttachmentUploadContext,
     file: {
       filename: string;
       mimetype: string;
@@ -127,6 +130,44 @@ export function createAttachmentsService(
   attachmentsRepo: AttachmentsRepository,
   uploadStore: DiscussionUploadStore,
 ): AttachmentsService {
+  const discussionAccess = createDiscussionAccess();
+
+  async function assertUploadAuthorized(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+    context: DiscussionAttachmentUploadContext,
+  ): Promise<void> {
+    const lesson = await db
+      .selectFrom("course_lessons")
+      .innerJoin("courses", "courses.id", "course_lessons.course_id")
+      .innerJoin(
+        "course_sections",
+        "course_sections.id",
+        "course_lessons.section_id",
+      )
+      .select("course_lessons.id")
+      .where("course_lessons.id", "=", context.lessonId)
+      .where("course_lessons.course_id", "=", context.courseId)
+      .where("course_lessons.deleted_at", "is", null)
+      .where("course_sections.deleted_at", "is", null)
+      .where("courses.deleted_at", "is", null)
+      .executeTakeFirst();
+
+    if (!lesson) {
+      throw httpError(
+        400,
+        "INVALID_UPLOAD_CONTEXT",
+        "The lesson does not belong to the selected course.",
+      );
+    }
+
+    await discussionAccess.assertCanParticipateInCourse(
+      db,
+      actor,
+      context.courseId,
+    );
+  }
+
   async function resolveLinkPreview(url: string): Promise<LinkPreviewResponse> {
     for (let attempt = 0; attempt < LINK_PREVIEW_FETCH_ATTEMPTS; attempt += 1) {
       try {
@@ -221,7 +262,9 @@ export function createAttachmentsService(
   }
 
   return {
-    async initiateUpload(db, userId, input) {
+    async initiateUpload(db, actor, input) {
+      await assertUploadAuthorized(db, actor, input);
+
       if (!isSupportedDiscussionUploadMimeType(input.mimeType)) {
         throw httpError(
           415,
@@ -250,7 +293,7 @@ export function createAttachmentsService(
 
       await attachmentsRepo.createAttachment(db, {
         id,
-        ownerId: userId,
+        ownerId: actor.userId,
         kind,
         storageKey,
         fileName: input.fileName,
@@ -260,6 +303,8 @@ export function createAttachmentsService(
         status: "uploading",
         metadata: {
           initiatedAt: new Date().toISOString(),
+          courseId: input.courseId,
+          lessonId: input.lessonId,
           ...dimensions,
         },
       });
@@ -434,7 +479,9 @@ export function createAttachmentsService(
       return completed;
     },
 
-    async processUpload(db, userId, file) {
+    async processUpload(db, actor, context, file) {
+      await assertUploadAuthorized(db, actor, context);
+
       if (!isSupportedDiscussionUploadMimeType(file.mimetype)) {
         throw httpError(
           415,
@@ -470,7 +517,7 @@ export function createAttachmentsService(
       try {
         await attachmentsRepo.createAttachment(db, {
           id,
-          ownerId: userId,
+          ownerId: actor.userId,
           kind,
           storageKey,
           fileName: file.filename,
@@ -480,6 +527,8 @@ export function createAttachmentsService(
           status: "ready",
           metadata: {
             uploadedAt: new Date().toISOString(),
+            courseId: context.courseId,
+            lessonId: context.lessonId,
             ...dimensions,
           },
         });

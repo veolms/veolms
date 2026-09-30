@@ -2,10 +2,7 @@ import type { Database, DatabaseExecutor } from "@veolms/database";
 import type { ExpressionBuilder } from "kysely";
 import type { DiscussionVisibility } from "@veolms/contracts";
 import { findSettingsByCourseId } from "../../../courses/configuration/configuration.repository.ts";
-import {
-  createAccessService,
-  type AccessService,
-} from "../../../access/index.ts";
+import { createAccessService } from "../../../access/index.ts";
 import { ADMIN_ROLE } from "../../../auth/index.ts";
 import { httpError } from "../../../../lib/errors.ts";
 import { DiscussionErrors } from "./discussion.errors.ts";
@@ -137,10 +134,8 @@ export interface DiscussionAccess {
   assertCanModeratePlatform(actor: DiscussionActor): void;
 }
 
-export function createDiscussionAccess(options?: {
-  access?: AccessService;
-}): DiscussionAccess {
-  const access = options?.access ?? createAccessService();
+export function createDiscussionAccess(): DiscussionAccess {
+  const access = createAccessService();
 
   function isAdmin(actor: DiscussionActor): boolean {
     return actor.roles.includes(ADMIN_ROLE);

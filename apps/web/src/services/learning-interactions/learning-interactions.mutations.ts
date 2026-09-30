@@ -20,7 +20,10 @@ import type {
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { learningInteractionKeys } from "./learning-interactions.keys";
-import { learningInteractionsService } from "./learning-interactions.service";
+import {
+  learningInteractionsService,
+  type DiscussionAttachmentUploadContext,
+} from "./learning-interactions.service";
 import { interactionCreationCoordinator } from "./interaction-creation-coordinator";
 import {
   getOptimisticEditFields,
@@ -141,6 +144,7 @@ export function useCreateLessonThread(courseId: string, lessonId: string) {
             );
           }
         },
+        { courseId, lessonId },
       );
       const attachmentIds = [
         ...(payload.attachmentIds ?? []),
@@ -270,7 +274,10 @@ type CreateNoteMutationInput = CreateLearningNoteRequest & {
 } &
   LocalAttachmentCreateMeta;
 
-export function useCreateReply(threadId?: string) {
+export function useCreateReply(
+  threadId?: string,
+  uploadContext?: DiscussionAttachmentUploadContext,
+) {
   const queryClient = useQueryClient();
   return useMutation<LearningReply, ApiError, CreateReplyMutationInput>({
     mutationFn: async (input) => {
@@ -291,6 +298,7 @@ export function useCreateReply(threadId?: string) {
             );
           }
         },
+        uploadContext,
       );
       const attachmentIds = [
         ...(payload.attachmentIds ?? []),
@@ -449,6 +457,7 @@ export function useCreateNote() {
             );
           }
         },
+        { courseId: payload.courseId, lessonId: payload.lessonId },
       );
       const attachmentIds = [
         ...(payload.attachmentIds ?? []),

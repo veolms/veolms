@@ -166,6 +166,7 @@ interface DiscussionThreadPanelProps {
   onReplyEditError?: () => void;
   onReplyDeleteError?: () => void;
   courseId?: string;
+  lessonId?: string;
 }
 
 export function DiscussionThreadPanel({
@@ -200,6 +201,7 @@ export function DiscussionThreadPanel({
   onReplyEditError,
   onReplyDeleteError,
   courseId,
+  lessonId,
 }: DiscussionThreadPanelProps) {
   const isPhone = useThreadPanelPhoneLayout();
   const viewport = useVisualViewportBounds();
@@ -738,6 +740,7 @@ export function DiscussionThreadPanel({
                   onReplyEditError={onReplyEditError}
                   onReplyDeleteError={onReplyDeleteError}
                   courseId={courseId}
+                  lessonId={lessonId}
                 />
               </SwiperSlide>
             ))}
@@ -806,6 +809,7 @@ interface ThreadSlideProps {
   onReplyEditError?: () => void;
   onReplyDeleteError?: () => void;
   courseId?: string;
+  lessonId?: string;
 }
 
 function ThreadSlide({
@@ -839,6 +843,7 @@ function ThreadSlide({
   onReplyEditError,
   onReplyDeleteError,
   courseId,
+  lessonId,
 }: ThreadSlideProps) {
   const isQuestion =
     entry.entryKind === "question" || Boolean(entry.isQuestion);
@@ -910,7 +915,10 @@ function ThreadSlide({
     isFetchingNextPage,
   ]);
 
-  const createReplyMutation = useCreateReply(threadId);
+  const createReplyMutation = useCreateReply(
+    threadId,
+    courseId && lessonId ? { courseId, lessonId } : undefined,
+  );
   const updateReplyMutation = useUpdateReply(threadId);
   const deleteReplyMutation = useDeleteReply(threadId);
 

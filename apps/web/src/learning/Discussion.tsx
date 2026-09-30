@@ -2588,6 +2588,7 @@ function DiscussionInner({
             participationActionLabel={participationActionLabel}
             onParticipationAction={onParticipationAction}
             courseId={courseId}
+            lessonId={lessonId}
             focusComposerOnOpen={Boolean(openThread?.focusComposer)}
             onOpenChange={(open) => {
               if (!open) {
