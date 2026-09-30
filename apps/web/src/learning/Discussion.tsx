@@ -348,12 +348,18 @@ export interface DiscussionProps {
   isInteractionCapabilitiesLoading?: boolean;
   lessonContentAccess: LessonContentAccessState;
   lessonContentAccessReason?: "login" | "access" | null;
+  /** Resolved by LearningWorkspace; Discussion must not recalculate access. */
+  canParticipate?: boolean;
+  participationState?: LessonParticipationState;
+  participationActionLabel?: string;
+  onParticipationAction?: () => void;
   isThreadDeepLinkReady?: boolean;
   noteDeepLinkId?: string | null;
   onSeekToTimestamp?: (seconds: number) => void;
 }
 
 export type LessonContentAccessState = "pending" | "granted" | "denied";
+export type LessonParticipationState = "pending" | "granted" | "denied";
 
 const DEFAULT_CAPABILITIES: InteractionCapabilities = {
   allowComments: true,
@@ -452,6 +458,10 @@ function DiscussionInner({
   isInteractionCapabilitiesLoading = false,
   lessonContentAccess,
   lessonContentAccessReason = null,
+  canParticipate = true,
+  participationState = "granted",
+  participationActionLabel,
+  onParticipationAction,
   isThreadDeepLinkReady = true,
   noteDeepLinkId = null,
   onSeekToTimestamp,
@@ -1178,6 +1188,7 @@ function DiscussionInner({
   const draftIsTooLong =
     countCharacters(activeDraft.plainText) > DISCUSSION_COMMENT_CHARACTER_LIMIT;
   const canSubmitDraft =
+    canParticipate &&
     draftHasContent &&
     !draftIsTooLong &&
     (isBackendMode ? Boolean(courseId) : true);
@@ -2477,6 +2488,10 @@ function DiscussionInner({
         authorAvatar={authorAvatar}
         lessonContentAccess={lessonContentAccess}
         lessonContentAccessReason={lessonContentAccessReason}
+        canParticipate={canParticipate}
+        participationState={participationState}
+        participationActionLabel={participationActionLabel}
+        onParticipationAction={onParticipationAction}
         onDraftChange={(value) => {
           if (editingEntry) {
             setEditingEntry((current) =>
@@ -2526,7 +2541,10 @@ function DiscussionInner({
           if (!entry) return;
           const clientId = getClientEntityId(entry);
           const serverId = getServerEntityId(entry);
-          setOpenThread({ id: clientId, focusComposer });
+          setOpenThread({
+            id: clientId,
+            focusComposer: canParticipate && focusComposer,
+          });
           setSearchParams(
             (prev) => {
               const next = new URLSearchParams(prev);
@@ -2565,6 +2583,10 @@ function DiscussionInner({
             currentUserId={currentUser?.id}
             userRole={currentUserRole}
             currentUser={{ name: authorName, avatar: authorAvatar }}
+            canParticipate={canParticipate}
+            participationState={participationState}
+            participationActionLabel={participationActionLabel}
+            onParticipationAction={onParticipationAction}
             courseId={courseId}
             focusComposerOnOpen={Boolean(openThread?.focusComposer)}
             onOpenChange={(open) => {
@@ -2716,6 +2738,10 @@ interface ThreadSurfaceProps {
   isInteractionCapabilitiesLoading?: boolean;
   lessonContentAccess: LessonContentAccessState;
   lessonContentAccessReason?: "login" | "access" | null;
+  canParticipate: boolean;
+  participationState: LessonParticipationState;
+  participationActionLabel?: string;
+  onParticipationAction?: () => void;
   isAllDisabled: boolean;
   availableFilters: readonly (readonly [DiscussionEntryFilter, string])[];
   enabledKinds: DiscussionEntryKind[];
@@ -3194,6 +3220,10 @@ function ThreadSurface({
   isInteractionCapabilitiesLoading = false,
   lessonContentAccess,
   lessonContentAccessReason = null,
+  canParticipate,
+  participationState,
+  participationActionLabel,
+  onParticipationAction,
   isAllDisabled,
   availableFilters,
   enabledKinds,
@@ -3498,9 +3528,16 @@ function ThreadSurface({
         onSeekToTimestamp={onSeekToTimestamp}
         onCopyTextNotice={onCopyTextNotice}
         courseId={courseId}
+        canParticipate={canParticipate}
         constrainToContainer
-        canEdit={entry.entryKind !== "note" || capabilities.allowNotes}
-        canDelete={entry.entryKind !== "note" || capabilities.allowNotes}
+        canEdit={
+          canParticipate &&
+          (entry.entryKind !== "note" || capabilities.allowNotes)
+        }
+        canDelete={
+          canParticipate &&
+          (entry.entryKind !== "note" || capabilities.allowNotes)
+        }
         isDeepLinkTarget={Boolean(
           noteDeepLinkTargetId &&
           entry.entryKind === "note" &&
@@ -3526,6 +3563,7 @@ function ThreadSurface({
       onCopyTextNotice,
       onToggleLockThread,
       capabilities.allowNotes,
+      canParticipate,
       noteDeepLinkTargetId,
       userRole,
     ],
@@ -3554,6 +3592,30 @@ function ThreadSurface({
       </p>
     </div>
   );
+
+  const participationPrompt = !canParticipate ? (
+    <div
+      className="flex flex-col items-center justify-center gap-2 py-5 text-center"
+      data-testid="learning-discussion-login-prompt"
+    >
+      <p className="text-sm font-medium text-(--muted)">
+        {participationState === "pending"
+          ? "Checking participation access…"
+          : participationActionLabel === "Get access"
+            ? "Get access to participate in this lesson's discussions."
+            : "Log in to participate in this lesson's discussions."}
+      </p>
+      {participationState !== "pending" && onParticipationAction ? (
+        <button
+          type="button"
+          onClick={onParticipationAction}
+          className="inline-flex min-h-9 items-center rounded-lg bg-(--accent) px-3 py-1.5 text-xs font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+        >
+          {participationActionLabel ?? "Log in"}
+        </button>
+      ) : null}
+    </div>
+  ) : null;
 
   const lessonAccessMessage =
     lessonContentAccess === "denied"
@@ -3879,7 +3941,7 @@ function ThreadSurface({
             hasDescriptionSurface ? "mt-3 scroll-mt-4 sm:mt-4" : "scroll-mt-4"
           }
         >
-          {composerMode === "desktop" ? (
+          {canParticipate && composerMode === "desktop" ? (
             <CommentComposer
               draft={draft}
               avatar={authorAvatar}
@@ -3905,7 +3967,7 @@ function ThreadSurface({
               onClose={closeComposer}
               courseId={courseId}
             />
-          ) : (
+          ) : canParticipate ? (
             <CompactComposer
               draft={draft}
               attachmentCount={draftAttachmentCount}
@@ -3913,6 +3975,8 @@ function ThreadSurface({
               avatar={authorAvatar}
               onOpen={() => setComposerMode("desktop")}
             />
+          ) : (
+            participationPrompt
           )}
         </div>
       )}
@@ -3963,19 +4027,22 @@ function ThreadSurface({
         )}
       </div>
 
-      {isPhone && enabledKinds.length > 0 && composerMode !== "mobile" && (
-        <MobileCompactComposerPortal
-          draft={draft}
-          attachmentCount={draftAttachmentCount}
-          promptText={promptText}
-          avatar={authorAvatar}
-          mobileBottomNavigation={mobileBottomNavigation}
-          scrollHidden={compactComposerScrollHidden}
-          onOpen={openMobileComposer}
-        />
-      )}
+      {isPhone &&
+        enabledKinds.length > 0 &&
+        canParticipate &&
+        composerMode !== "mobile" && (
+          <MobileCompactComposerPortal
+            draft={draft}
+            attachmentCount={draftAttachmentCount}
+            promptText={promptText}
+            avatar={authorAvatar}
+            mobileBottomNavigation={mobileBottomNavigation}
+            scrollHidden={compactComposerScrollHidden}
+            onOpen={openMobileComposer}
+          />
+        )}
 
-      {isPhone && enabledKinds.length > 0 && (
+      {isPhone && enabledKinds.length > 0 && canParticipate && (
         <Drawer
           open={composerMode === "mobile"}
           onOpenChange={(open) => {
@@ -4056,6 +4123,9 @@ function ThreadSurface({
           </DrawerContent>
         </Drawer>
       )}
+      {isPhone && enabledKinds.length > 0 && !canParticipate
+        ? participationPrompt
+        : null}
     </div>
   );
 }

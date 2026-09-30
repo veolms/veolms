@@ -99,6 +99,7 @@ import {
   PrerenderedMobileCommentComposer,
   type InteractionCapabilities,
   type LessonContentAccessState,
+  type LessonParticipationState,
 } from "./Discussion";
 import {
   clampLearningCurriculumWidth,
@@ -1088,6 +1089,39 @@ export function LearningWorkspace({
         ? "access"
         : "login"
       : null;
+  const lessonParticipationState = useMemo<LessonParticipationState>(() => {
+    if (isAuthResolutionPending || !courseOverview || !adaptedCurriculum) {
+      return "pending";
+    }
+
+    if (!isAuthenticated) return "denied";
+
+    const isCourseOwner =
+      resolvedAuthUser?.id === courseOverview.course.creatorId;
+    const isAdmin = resolvedAuthUser?.roles?.some(
+      (role) => role.trim().toLowerCase() === "admin",
+    );
+    if (isCourseOwner || isAdmin) return "granted";
+    if (!enrolledCoursesQuery.isFetched) return "pending";
+
+    return enrolledCoursesQuery.data?.courses.some(
+      (course) => course.courseId === courseOverview.course.id,
+    )
+      ? "granted"
+      : "denied";
+  }, [
+    adaptedCurriculum,
+    courseOverview,
+    enrolledCoursesQuery.data?.courses,
+    enrolledCoursesQuery.isFetched,
+    isAuthResolutionPending,
+    isAuthenticated,
+    resolvedAuthUser?.id,
+    resolvedAuthUser?.roles,
+  ]);
+  const canParticipateInLessonDiscussion =
+    lessonContentAccess === "granted" &&
+    lessonParticipationState === "granted";
   const lessonSequence = useMemo(
     () =>
       curriculumSections.flatMap(({ lessons }) => lessons.map(([id]) => id)),
@@ -2855,6 +2889,14 @@ export function LearningWorkspace({
                   isInteractionCapabilitiesLoading={isLearningBootstrapLoading}
                   lessonContentAccess={lessonContentAccess}
                   lessonContentAccessReason={lessonContentAccessReason}
+                  canParticipate={canParticipateInLessonDiscussion}
+                  participationState={lessonParticipationState}
+                  participationActionLabel={
+                    isAuthenticated ? "Get access" : "Log in"
+                  }
+                  onParticipationAction={
+                    isAuthenticated ? onOpenCourseOverview : onOpenLogin
+                  }
                   onSeekToTimestamp={seekCurrentLessonToTimestamp}
                 />
               ) : isLearningDeepLinkError ? (

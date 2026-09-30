@@ -327,7 +327,7 @@ export function createThreadsService(
         throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
       }
 
-      await courseAccess.assertCanAccessCourse(
+      await courseAccess.assertCanParticipateInCourse(
         db,
         {
           userId: input.userId,
@@ -721,6 +721,11 @@ export function createThreadsService(
           );
         }
 
+        await courseAccess.assertCanParticipateInCourse(
+          trx,
+          actor,
+          row.courseId,
+        );
         await courseAccess.assertCanAccessThread(trx, actor, row);
         courseAccess.assertThreadIsActive(row);
 
@@ -790,6 +795,11 @@ export function createThreadsService(
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
       }
 
+      await courseAccess.assertCanParticipateInCourse(
+        db,
+        actor,
+        row.courseId,
+      );
       await courseAccess.assertCanAccessThread(db, actor, row);
       courseAccess.assertThreadIsActive(row);
 

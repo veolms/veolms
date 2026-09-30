@@ -184,6 +184,14 @@ export function createRepliesService({
           );
         }
 
+        await courseAccess.assertCanParticipateInCourse(
+          trx,
+          {
+            userId: input.userId,
+            roles: input.roles,
+          },
+          thread.courseId,
+        );
         await courseAccess.assertCanAccessThread(
           trx,
           {
@@ -429,6 +437,11 @@ export function createRepliesService({
             "Discussion thread not found",
           );
         }
+        await courseAccess.assertCanParticipateInCourse(
+          trx,
+          actor,
+          thread.courseId,
+        );
         await courseAccess.assertCanAccessThread(trx, actor, thread);
         courseAccess.assertThreadIsActive(thread);
         courseAccess.assertReplyIsActive(reply);
@@ -493,6 +506,11 @@ export function createRepliesService({
             "Discussion thread not found",
           );
         }
+        await courseAccess.assertCanParticipateInCourse(
+          trx,
+          actor,
+          thread.courseId,
+        );
         await courseAccess.assertCanAccessThread(trx, actor, thread);
         courseAccess.assertThreadIsActive(thread);
         courseAccess.assertReplyIsActive(reply);
@@ -552,6 +570,11 @@ export function createRepliesService({
             "Discussion thread not found",
           );
         }
+        await courseAccess.assertCanParticipateInCourse(
+          trx,
+          actor,
+          thread.courseId,
+        );
         await courseAccess.assertCanAccessThread(trx, actor, thread);
         courseAccess.assertThreadIsActive(thread);
         courseAccess.assertReplyIsActive(reply);

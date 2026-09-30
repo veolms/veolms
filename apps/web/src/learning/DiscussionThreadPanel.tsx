@@ -89,6 +89,7 @@ import {
   type DiscussionDraft,
 } from "./discussion-editor/types";
 import { SurfaceTopRightAccentGlow } from "./SurfaceTopRightAccentGlow";
+import type { LessonParticipationState } from "./Discussion";
 
 const THREAD_PANEL_MIN_WIDTH = 440;
 const THREAD_PANEL_MAX_WIDTH = 1080;
@@ -117,6 +118,10 @@ interface DiscussionThreadPanelProps {
     name: string;
     avatar: string;
   };
+  canParticipate?: boolean;
+  participationState?: LessonParticipationState;
+  participationActionLabel?: string;
+  onParticipationAction?: () => void;
   focusComposerOnOpen?: boolean;
   onOpenChange: (open: boolean) => void;
   onActiveEntryChange: (entryId: string | number) => void;
@@ -171,6 +176,10 @@ export function DiscussionThreadPanel({
   currentUserId,
   userRole,
   currentUser,
+  canParticipate = true,
+  participationState = "granted",
+  participationActionLabel,
+  onParticipationAction,
   focusComposerOnOpen = false,
   onOpenChange,
   onActiveEntryChange,
@@ -694,6 +703,10 @@ export function DiscussionThreadPanel({
                   currentUserId={currentUserId}
                   userRole={userRole}
                   currentUser={currentUser}
+                  canParticipate={canParticipate}
+                  participationState={participationState}
+                  participationActionLabel={participationActionLabel}
+                  onParticipationAction={onParticipationAction}
                   focusRequest={
                     String(composerFocusRequest.entryId) ===
                     getClientEntityId(entry)
@@ -745,6 +758,10 @@ interface ThreadSlideProps {
     name: string;
     avatar: string;
   };
+  canParticipate?: boolean;
+  participationState?: LessonParticipationState;
+  participationActionLabel?: string;
+  onParticipationAction?: () => void;
   focusRequest: number;
   onFocusComposer: (entryId: string | number) => void;
   onComposerFocusHandled: (entryId: string | number, requestId: number) => void;
@@ -798,6 +815,10 @@ function ThreadSlide({
   currentUserId,
   userRole,
   currentUser,
+  canParticipate = true,
+  participationState = "granted",
+  participationActionLabel,
+  onParticipationAction,
   focusRequest,
   onFocusComposer,
   onComposerFocusHandled,
@@ -822,8 +843,9 @@ function ThreadSlide({
   const isQuestion =
     entry.entryKind === "question" || Boolean(entry.isQuestion);
   const isModerator = userRole === "Instructor" || userRole === "Admin";
-  const canLock = Boolean(entry.isOwn || isModerator);
-  const canAcceptAnswer = isQuestion && Boolean(entry.isOwn || isModerator);
+  const canLock = canParticipate && Boolean(entry.isOwn || isModerator);
+  const canAcceptAnswer =
+    canParticipate && isQuestion && Boolean(entry.isOwn || isModerator);
 
   const clientId = getClientEntityId(entry);
   const serverId = getServerEntityId(entry);
@@ -1063,10 +1085,11 @@ function ThreadSlide({
         <ThreadRootEntry
           entry={entry}
           isBackendMode={isBackendMode}
+          canParticipate={canParticipate}
           canLock={canLock}
           onToggleLock={() => onToggleLockThread?.(entry.id, !entry.isLocked)}
-          onToggleBookmark={onToggleBookmark}
-          onToggleFollow={onToggleFollow}
+          onToggleBookmark={canParticipate ? onToggleBookmark : undefined}
+          onToggleFollow={canParticipate ? onToggleFollow : undefined}
           onSeekToTimestamp={onSeekToTimestamp}
           onCopyTextNotice={onCopyTextNotice}
           onLike={onLike}
@@ -1136,6 +1159,7 @@ function ThreadSlide({
                 onSeekToTimestamp={onSeekToTimestamp}
                 onCopyTextNotice={onCopyTextNotice}
                 courseId={courseId}
+                canParticipate={canParticipate}
               />
             ))
           ) : (
@@ -1187,7 +1211,7 @@ function ThreadSlide({
             <Lock size={16} weight="bold" />
             <span>This conversation is locked. Replies are disabled.</span>
           </div>
-        ) : (
+        ) : canParticipate ? (
           <ThreadReplyComposer
             entry={entry}
             currentUser={currentUser}
@@ -1196,6 +1220,28 @@ function ThreadSlide({
             onSubmit={handleAddReply}
             courseId={courseId}
           />
+        ) : (
+          <div
+            className="-mx-4 -mb-4 mt-0 flex flex-col items-center justify-center gap-2 rounded-t-xl border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] px-4 py-4 text-center sm:mx-0 sm:mb-0 sm:rounded-xl"
+            data-testid="learning-thread-login-prompt"
+          >
+            <p className="text-sm font-medium text-(--muted)">
+            {participationState === "pending"
+              ? "Checking participation access…"
+              : participationActionLabel === "Get access"
+                ? "Get access to participate in this lesson's discussions."
+                : "Log in to participate in this lesson's discussions."}
+            </p>
+            {participationState !== "pending" && onParticipationAction ? (
+              <button
+                type="button"
+                onClick={onParticipationAction}
+                className="inline-flex min-h-9 items-center rounded-lg bg-(--accent) px-3 py-1.5 text-xs font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+              >
+                {participationActionLabel ?? "Log in"}
+              </button>
+            ) : null}
+          </div>
         ))}
     </div>
   );
@@ -1204,6 +1250,7 @@ function ThreadSlide({
 function ThreadRootEntry({
   entry,
   isBackendMode = false,
+  canParticipate = true,
   canLock = false,
   onToggleLock,
   onToggleBookmark,
@@ -1218,6 +1265,7 @@ function ThreadRootEntry({
 }: {
   entry: Comment;
   isBackendMode?: boolean;
+  canParticipate?: boolean;
   canLock?: boolean;
   onToggleLock?: () => void;
   onToggleBookmark?: (
@@ -1247,7 +1295,7 @@ function ThreadRootEntry({
   return (
     <article className="mx-auto mb-1 max-w-4xl pt-3 pb-4">
       <div className="flex gap-3 sm:gap-3.5">
-      <DiscussionAvatar src={entry.avatar} className="size-10 sm:size-11" />
+        <DiscussionAvatar src={entry.avatar} className="size-10 sm:size-11" />
         <div className="min-w-0 flex-1">
           <div className="relative flex items-start gap-2 pr-9">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
@@ -1312,8 +1360,14 @@ function ThreadRootEntry({
               textToCopy={entry.content?.markdown ?? entry.text}
               onCopyTextNotice={onCopyTextNotice}
               isOwn={Boolean(entry.isOwn)}
-              canEdit={!isBackendMode || (Boolean(serverId) && !isEditing)}
-              canDelete={!isBackendMode || (Boolean(serverId) && !isEditing)}
+              canEdit={
+                canParticipate &&
+                (!isBackendMode || (Boolean(serverId) && !isEditing))
+              }
+              canDelete={
+                canParticipate &&
+                (!isBackendMode || (Boolean(serverId) && !isEditing))
+              }
               canLock={canLock}
               isLocked={Boolean(entry.isLocked)}
               onToggleLock={onToggleLock}
@@ -1373,19 +1427,24 @@ function ThreadRootEntry({
             </div>
           ) : null}
           <div className="mt-2 flex min-h-9 items-center gap-3 text-xs text-(--muted) sm:text-sm">
-            <button
-              type="button"
-              aria-pressed={isEntryLiked}
-              aria-label={isEntryLiked ? "Unlike" : "Like"}
-              onClick={() => {
-                onLike(entry.id, !isEntryLiked);
-              }}
-              className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isEntryLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
-            >
-              <ThumbsUp size={19} weight={isEntryLiked ? "fill" : "regular"} />
-              {entry.likes}
-            </button>
-            {!entry.isLocked && (
+            {canParticipate && (
+              <button
+                type="button"
+                aria-pressed={isEntryLiked}
+                aria-label={isEntryLiked ? "Unlike" : "Like"}
+                onClick={() => {
+                  onLike(entry.id, !isEntryLiked);
+                }}
+                className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isEntryLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
+              >
+                <ThumbsUp
+                  size={19}
+                  weight={isEntryLiked ? "fill" : "regular"}
+                />
+                {entry.likes}
+              </button>
+            )}
+            {canParticipate && !entry.isLocked && (
               <button
                 type="button"
                 data-reply-action
@@ -1417,6 +1476,7 @@ function ThreadReplyEntry({
   parentId,
   reply,
   isBackendMode = false,
+  canParticipate = true,
   isQuestion = false,
   canAcceptAnswer = false,
   onToggleAcceptReply,
@@ -1432,6 +1492,7 @@ function ThreadReplyEntry({
   parentId: string | number;
   reply: CommentReply;
   isBackendMode?: boolean;
+  canParticipate?: boolean;
   isQuestion?: boolean;
   canAcceptAnswer?: boolean;
   onToggleAcceptReply?: (
@@ -1548,10 +1609,12 @@ function ThreadReplyEntry({
                   onCopyTextNotice={onCopyTextNotice}
                   isOwn={Boolean(reply.isOwn)}
                   canEdit={
-                    !isBackendMode || (Boolean(replyServerId) && !isEditing)
+                    canParticipate &&
+                    (!isBackendMode || (Boolean(replyServerId) && !isEditing))
                   }
                   canDelete={
-                    !isBackendMode || (Boolean(replyServerId) && !isEditing)
+                    canParticipate &&
+                    (!isBackendMode || (Boolean(replyServerId) && !isEditing))
                   }
                   canAcceptAnswer={
                     isQuestion && canAcceptAnswer && canAcceptReply
@@ -1597,7 +1660,7 @@ function ThreadReplyEntry({
                   className="absolute -top-1 right-0 z-20 shrink-0"
                 />
               </div>
-              {editing ? (
+              {editing && canParticipate ? (
                 <div>
                   <InlineEditForm
                     documentId={`thread-reply-edit-${reply.id}`}
@@ -1636,19 +1699,21 @@ function ThreadReplyEntry({
                 <DiscussionAttachmentsList attachments={reply.attachments} />
               )}
               <div className="mt-1.5 flex min-h-9 items-center gap-4 text-xs text-(--muted) sm:text-sm">
-                <button
-                  type="button"
-                  aria-pressed={Boolean(reply.liked)}
-                  aria-label={reply.liked ? "Unlike reply" : "Like reply"}
-                  onClick={() => onLikeReply(reply.id)}
-                  className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${reply.liked ? "text-(--accent-ink,var(--accent))" : ""}`}
-                >
-                  <ThumbsUp
-                    size={18}
-                    weight={reply.liked ? "fill" : "regular"}
-                  />
-                  <span>{reply.likes}</span>
-                </button>
+                {canParticipate && (
+                  <button
+                    type="button"
+                    aria-pressed={Boolean(reply.liked)}
+                    aria-label={reply.liked ? "Unlike reply" : "Like reply"}
+                    onClick={() => onLikeReply(reply.id)}
+                    className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${reply.liked ? "text-(--accent-ink,var(--accent))" : ""}`}
+                  >
+                    <ThumbsUp
+                      size={18}
+                      weight={reply.liked ? "fill" : "regular"}
+                    />
+                    <span>{reply.likes}</span>
+                  </button>
+                )}
                 {isQuestion && canAcceptAnswer && onToggleAcceptReply && (
                   <button
                     type="button"
@@ -1681,22 +1746,24 @@ function ThreadReplyEntry({
                     <span>{reply.isAccepted ? "Accepted" : "Accept"}</span>
                   </button>
                 )}
-                <button
-                  type="button"
-                  aria-label="Reply"
-                  title="Reply"
-                  data-reply-action
-                  onClick={onReply}
-                  className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
-                >
-                  <ArrowBendUpLeft
-                    data-reply-icon
-                    size={20}
-                    weight="bold"
-                    className="origin-center scale-x-[1.16]"
-                    aria-hidden="true"
-                  />
-                </button>
+                {canParticipate && (
+                  <button
+                    type="button"
+                    aria-label="Reply"
+                    title="Reply"
+                    data-reply-action
+                    onClick={onReply}
+                    className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
+                  >
+                    <ArrowBendUpLeft
+                      data-reply-icon
+                      size={20}
+                      weight="bold"
+                      className="origin-center scale-x-[1.16]"
+                      aria-hidden="true"
+                    />
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1783,10 +1850,7 @@ function ThreadReplyComposer({
     setIsSubmitting(true);
     setSubmitError("");
     try {
-      const success = await onSubmit(
-        draft,
-        replyAttachments,
-      );
+      const success = await onSubmit(draft, replyAttachments);
       if (success) {
         setDraft(createEmptyDiscussionDraft());
         setReplyAttachments([]);
@@ -1848,10 +1912,7 @@ function ThreadReplyComposer({
         </p>
       )}
       <div className="flex min-h-14 min-w-0 items-center gap-1.5 overflow-hidden bg-[color-mix(in_srgb,var(--surface)_66%,transparent)] px-2.5 py-2 sm:gap-2 sm:px-3">
-        <DiscussionAvatar
-          src={composerAvatar}
-          className="size-9 sm:size-10"
-        />
+        <DiscussionAvatar src={composerAvatar} className="size-9 sm:size-10" />
         {editorController && (
           <CommentFormattingToolbar
             editor={editorController}
