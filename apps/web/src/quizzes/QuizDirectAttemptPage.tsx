@@ -24,7 +24,7 @@ export function QuizDirectAttemptPage({ assignmentId, onNavigatePage }: Props) {
 
   if (!assignmentId || assignments.isLoading) {
     return (
-      <main data-quiz-surface="" className="mx-auto w-full max-w-6xl px-0 py-0.5 sm:p-8">
+      <main data-quiz-surface="" className="mx-auto w-full max-w-[1800px]">
         <section
           className="rounded-[14px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-7 text-sm text-(--muted)"
           style={{ boxShadow: "var(--card-shadow)" }}
@@ -40,7 +40,7 @@ export function QuizDirectAttemptPage({ assignmentId, onNavigatePage }: Props) {
 
   if (!assignment) {
     return (
-      <main data-quiz-surface="" className="mx-auto w-full max-w-6xl px-0 py-0.5 sm:p-8">
+      <main data-quiz-surface="" className="mx-auto w-full max-w-[1800px]">
         <section
           className="rounded-[14px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-7 text-(--text)"
           style={{ boxShadow: "var(--card-shadow)" }}

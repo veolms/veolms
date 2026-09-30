@@ -166,12 +166,11 @@ export function QuizAnalyticsPage({ role, onNavigatePage }: Props) {
 }
 
 function QuizPageHeader({
-  eyebrow,
   title,
   description,
   action,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   description: string;
   action?: React.ReactNode;
@@ -179,17 +178,10 @@ function QuizPageHeader({
   return (
     <header className="pt-2 sm:pt-0 flex flex-col gap-3.5 sm:gap-5 border-b border-(--border) pb-4.5 sm:pb-7 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <p className="flex items-center gap-2 text-[0.68rem] font-bold uppercase tracking-[0.2em] text-(--accent)">
-          <span
-            className="size-1.5 rounded-full bg-(--accent)"
-            aria-hidden="true"
-          />
-          {eyebrow}
-        </p>
-        <h1 className="mt-2.5 sm:mt-2 text-[clamp(1.75rem,3vw,2.55rem)] font-semibold tracking-[-0.04em] text-(--text)">
+        <h1 className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
           {title}
         </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-(--muted)">
+        <p className="mt-1.5 max-w-2xl text-[0.88rem] leading-6 text-(--muted)">
           {description}
         </p>
       </div>
@@ -247,11 +239,10 @@ function InstructorQuizHub({ onNavigatePage }: Pick<Props, "onNavigatePage">) {
   return (
     <main
       data-quiz-surface=""
-      className="mx-auto grid w-full max-w-[1320px] gap-3.5 sm:gap-6 px-0 py-0.5 sm:p-6 xl:p-8"
+      className="mx-auto grid w-full max-w-[1800px] gap-6"
       aria-labelledby="quiz-hub-title"
     >
       <QuizPageHeader
-        eyebrow="Assessment workspace"
         title="Quiz command centre"
         description="Build assessments, configure course delivery, and understand exactly where learners are succeeding or getting stuck."
         action={
@@ -1233,11 +1224,10 @@ function LearnerQuizDashboard({
   return (
     <main
       data-quiz-surface=""
-      className="mx-auto grid w-full max-w-[1320px] gap-3.5 sm:gap-6 px-0 py-0.5 sm:p-8 xl:p-10"
+      className="mx-auto grid w-full max-w-[1800px] gap-6"
       aria-labelledby="quiz-dashboard-title"
     >
       <QuizPageHeader
-        eyebrow="My learning"
         title="Quizzes and results"
         description="Keep your momentum, pick up unfinished assessments, and review the progress you have already earned."
       />

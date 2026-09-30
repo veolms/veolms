@@ -59,7 +59,7 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
   return (
     <main
       data-quiz-surface=""
-      className="mx-auto w-full max-w-[1100px] px-3 py-4 sm:px-6 sm:py-8"
+      className="mx-auto w-full max-w-[1800px]"
     >
       {/* Back button & Page header */}
       <div className="mb-6 flex flex-col gap-3">
@@ -73,17 +73,10 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
         </button>
 
         <div className="flex flex-col gap-1">
-          <p className="flex items-center gap-2 text-[0.68rem] font-bold uppercase tracking-[0.2em] text-(--accent)">
-            <span
-              className="size-1.5 rounded-full bg-(--accent)"
-              aria-hidden="true"
-            />
-            Assessment Workspace
-          </p>
-          <h1 className="text-[clamp(1.5rem,2.5vw,2.2rem)] font-bold tracking-tight text-(--text)">
+          <h1 className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
             Create New Quiz
           </h1>
-          <p className="max-w-2xl text-xs sm:text-sm text-(--muted)">
+          <p className="max-w-2xl text-[0.88rem] leading-6 text-(--muted)">
             Select a course to create or manage quizzes directly inside its curriculum.
           </p>
         </div>

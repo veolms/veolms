@@ -144,7 +144,7 @@ export function StudentDetailsPage({
                   <div className="flex flex-wrap items-center gap-2.5">
                     <h1
                       id="student-details-title"
-                      className="text-2xl sm:text-3xl font-[800] text-(--text) tracking-tight leading-tight"
+                      className="text-2xl sm:text-3xl font-bold text-(--text) tracking-tight leading-tight"
                     >
                       {student.displayName}
                     </h1>

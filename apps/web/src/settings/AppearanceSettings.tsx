@@ -59,6 +59,12 @@ export function AppearanceSettings({
 
   return (
     <div className="settings-content settings-content--appearance">
+      <header className="settings-detail__header">
+        <div>
+          <h2>Appearance</h2>
+          <p>Customize your workspace theme and display mode.</p>
+        </div>
+      </header>
       <section className="settings-section">
         <h2>Display mode</h2>
         <RadioGroup

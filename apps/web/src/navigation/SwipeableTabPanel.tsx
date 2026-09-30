@@ -17,15 +17,23 @@ const TAB_VISIBILITY_INSET = 12;
 const TAB_SWIPE_MAX_COMPLETION_DISTANCE = 116;
 const TAB_SWIPE_MAX_COMPLETION_RATIO = 0.24;
 const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
+const COARSE_POINTER_QUERY = "(any-pointer: coarse)";
 
 const subscribeToFinePointer = (listener: () => void) => {
-  const query = window.matchMedia(FINE_POINTER_QUERY);
-  query.addEventListener("change", listener);
-  return () => query.removeEventListener("change", listener);
+  const queries = [
+    window.matchMedia(FINE_POINTER_QUERY),
+    window.matchMedia(COARSE_POINTER_QUERY),
+  ];
+  for (const query of queries) query.addEventListener("change", listener);
+  return () => {
+    for (const query of queries) query.removeEventListener("change", listener);
+  };
 };
 
 const getFinePointerSnapshot = () =>
-  window.matchMedia(FINE_POINTER_QUERY).matches;
+  navigator.maxTouchPoints === 0 &&
+  window.matchMedia(FINE_POINTER_QUERY).matches &&
+  !window.matchMedia(COARSE_POINTER_QUERY).matches;
 const getFinePointerServerSnapshot = () => true;
 
 const TAB_SWIPE_NO_SWIPING_SELECTOR = [
@@ -315,21 +323,8 @@ export function SwipeableTabPanel<T extends string>({
       }
       onTabChangeRef.current(destination);
 
-      // Defensive snap-back: if onTabChange is rejected or fails to commit,
-      // restore Swiper position and indicator back to activeTab.
-      window.requestAnimationFrame(() => {
-        if (swiperRef.current) {
-          const expectedIndex = tabs.indexOf(activeTabRef.current);
-          if (
-            expectedIndex >= 0 &&
-            swiperRef.current.activeIndex !== expectedIndex
-          ) {
-            swiperRef.current.slideTo(expectedIndex, 0);
-            updateIndicatorForTab(activeTabRef.current);
-            revealTab(activeTabRef.current, "auto");
-          }
-        }
-      });
+      // Defensive snap-back was here, but it triggers too eagerly when
+      // routing is asynchronous, preventing users from swiping between screens.
     },
     [revealTab, tabs, updateIndicatorForTab],
   );

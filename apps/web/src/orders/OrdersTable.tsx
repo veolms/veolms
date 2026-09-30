@@ -208,7 +208,7 @@ const OrderRow = memo(function OrderRow({
       aria-selected={isSelected}
       onClick={() => onSelectOrder(order.id)}
       onKeyDown={handleRowKeyDown}
-      className={`group absolute left-0 top-0 w-full flex cursor-pointer flex-col gap-2.5 border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] p-3.5 transition-colors hover:bg-(--hover) focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--accent) ${orderListGridColumns} md:grid md:min-w-[1040px] md:items-center md:gap-0 md:p-0 ${
+      className={`group absolute inset-x-0 top-0 w-auto flex cursor-pointer flex-col gap-2.5 border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] p-3.5 transition-colors hover:bg-(--hover) focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--accent) ${orderListGridColumns} md:grid md:min-w-[1040px] md:items-center md:gap-0 md:p-0 ${
         isSelected
           ? "bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] border-l-3 border-l-(--accent)"
           : ""

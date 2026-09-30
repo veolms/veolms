@@ -93,18 +93,13 @@ export function NotificationsPage({
       {/* Top Header Row with Title, Badge, Subtitle, and Mark All as Read Button */}
       <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1
-              id="notifications-page-title"
-              className="text-[clamp(1.9rem,3.4vw,2.7rem)] font-[740] tracking-[-0.055em] leading-[1.02] text-(--text)"
-            >
-              Notifications
-            </h1>
-            <span className="rounded-full bg-[color-mix(in_srgb,var(--surface-strong)_85%,var(--canvas))] px-2.5 py-0.5 text-xs font-bold text-(--text-secondary) shadow-sm">
-              {tabCounts.all}
-            </span>
-          </div>
-          <p className="mt-2 text-[0.92rem] text-(--muted) leading-normal">
+          <h1
+            id="notifications-page-title"
+            className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)"
+          >
+            Notifications
+          </h1>
+          <p className="mt-1.5 text-[0.88rem] leading-6 text-(--muted)">
             Stay updated with course activity, replies, reminders, and
             announcements.
           </p>

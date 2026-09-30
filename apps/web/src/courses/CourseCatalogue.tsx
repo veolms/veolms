@@ -1,7 +1,7 @@
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
-import { useState } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
 import { ExpandableSearch } from "../ExpandableSearch";
 import { ThemedSelect } from "../ThemedSelect";
@@ -25,6 +25,25 @@ import type {
   CourseStatusFilter,
 } from "./catalogue";
 import { getCourseRouteKey } from "./catalogue";
+
+function useCourseCatalogueBreakpoint(query: string) {
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      if (typeof window === "undefined") return () => undefined;
+      const media = window.matchMedia(query);
+      media.addEventListener("change", onStoreChange);
+      return () => media.removeEventListener("change", onStoreChange);
+    },
+    [query],
+  );
+  const getSnapshot = useCallback(
+    () =>
+      typeof window !== "undefined" && window.matchMedia(query).matches,
+    [query],
+  );
+
+  return useSyncExternalStore(subscribe, getSnapshot, () => false);
+}
 
 export interface CourseCatalogueProps {
   activeSection: string;
@@ -102,6 +121,11 @@ export function CourseCatalogue({
     () => new Set(),
   );
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const mediumBreakpoint = useCourseCatalogueBreakpoint("(min-width: 640px)");
+  const wideControlsBreakpoint = useCourseCatalogueBreakpoint("(min-width: 821px)");
+  const desktopLayout = useCourseCatalogueBreakpoint("(min-width: 900px)");
+  const mediumLayout = mediumBreakpoint || desktopLayout;
+  const wideControlsLayout = wideControlsBreakpoint || desktopLayout;
 
   const isFiltered =
     Boolean(search.trim()) ||
@@ -234,7 +258,9 @@ export function CourseCatalogue({
           fetchPriority="high"
         />
       ) : null}
-      <header className="relative flex flex-col gap-4 border-b border-(--border) pb-0 min-[640px]:pb-4 min-[900px]:flex-row min-[900px]:items-center min-[900px]:gap-3">
+      <header
+        className={`relative flex ${desktopLayout ? "flex-row items-center gap-3" : "flex-col gap-4"} border-b border-(--border) ${mediumLayout ? "pb-4" : "pb-0"} min-[640px]:pb-4 min-[900px]:flex-row min-[900px]:items-center min-[900px]:gap-3`}
+      >
         <ExpandableSearch
           inputId="courses-search-input"
           fieldId="courses-search"
@@ -245,13 +271,18 @@ export function CourseCatalogue({
           open={mobileSearchOpen}
           onOpenChange={setMobileSearchOpen}
           persistentDesktop
+          forcePersistentDesktop={desktopLayout}
           clearOnBack
         >
-          <div className="min-w-0 min-[900px]:order-1 min-[900px]:flex-1">
+          <div
+            className={`min-w-0 ${desktopLayout ? "order-1 flex-1" : ""} min-[900px]:order-1 min-[900px]:flex-1`}
+          >
             <h1 className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
               {activeSection}
             </h1>
-            <p className="mt-1.5 hidden text-[0.88rem] leading-6 text-(--muted) min-[640px]:block">
+            <p
+              className={`mt-1.5 text-[0.88rem] leading-6 text-(--muted) ${mediumLayout ? "block" : "hidden"} min-[640px]:block`}
+            >
               {activeSection === "Wishlist"
                 ? `${wishlisted.size} saved ${wishlisted.size === 1 ? "course" : "courses"}.`
                 : role === "creator"
@@ -261,7 +292,7 @@ export function CourseCatalogue({
           </div>
 
           {role === "creator" && activeSection === "Courses" && (
-            <div className="order-3 flex shrink-0 items-center gap-2 min-[900px]:order-3">
+            <div className="order-3 flex shrink-0 items-center gap-2">
               <button
                 type="button"
                 aria-label="Create"
@@ -278,10 +309,21 @@ export function CourseCatalogue({
       </header>
 
       <div
-        className="mt-2 flex flex-col gap-3 min-[640px]:mt-5 min-[640px]:flex-row min-[640px]:items-center min-[640px]:justify-between"
+        className={`mt-2 flex flex-col gap-3 ${mediumLayout ? "mt-5 flex-row items-center justify-between" : ""} min-[640px]:mt-5 min-[640px]:flex-row min-[640px]:items-center min-[640px]:justify-between`}
         data-courses-toolbar
+        style={
+          mediumLayout
+            ? {
+                display: "grid",
+                gridTemplateColumns: wideControlsLayout
+                  ? "minmax(0, 1fr) auto"
+                  : "minmax(0, 1fr)",
+                alignItems: "center",
+              }
+            : undefined
+        }
       >
-        <div className="min-w-0">
+        <div className="min-w-0 text-left">
           <div
             className="inline-flex min-h-9 w-fit max-w-full gap-2 overflow-x-auto sm:min-h-10"
             role="tablist"
@@ -306,7 +348,9 @@ export function CourseCatalogue({
           </div>
         </div>
 
-        <div className="hidden min-[821px]:flex min-[821px]:shrink-0 min-[821px]:items-center min-[821px]:gap-2.5">
+        <div
+          className={`${wideControlsLayout ? "flex shrink-0 items-center gap-2.5" : "hidden"} min-[821px]:flex min-[821px]:shrink-0 min-[821px]:items-center min-[821px]:gap-2.5`}
+        >
           <ThemedSelect
             value={sort}
             onValueChange={onSortChange}

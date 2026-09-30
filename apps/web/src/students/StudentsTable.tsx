@@ -215,7 +215,7 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
       aria-label={`View profile of ${student.displayName}`}
       onClick={() => onNavigateStudent(student.username)}
       onKeyDown={handleKeyDown}
-      className={`group absolute left-0 top-0 w-full flex cursor-pointer flex-col gap-3 border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] p-4 transition-colors hover:bg-(--hover) focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--accent) ${studentListGridColumns} md:grid md:min-w-[1080px] md:items-center md:gap-0 md:p-0`}
+      className={`group absolute inset-x-0 top-0 w-auto flex cursor-pointer flex-col gap-3 border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] p-4 transition-colors hover:bg-(--hover) focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--accent) ${studentListGridColumns} md:grid md:min-w-[1080px] md:items-center md:gap-0 md:p-0`}
       style={{ transform }}
     >
       <div role="cell" className="min-w-0 md:px-5 md:py-3.5">
@@ -421,7 +421,7 @@ function VirtualizedStudentSurface({
       ref={feedRef}
       role="rowgroup"
       aria-busy={isLoading || isTransitioning || isFetchingNextPage}
-      className="relative min-w-0 w-full"
+      className="relative min-w-0 w-full md:min-w-[1080px]"
       style={{ height: `${virtualizer.getTotalSize()}px` }}
     >
       {virtualItems.map((virtualItem) => {
