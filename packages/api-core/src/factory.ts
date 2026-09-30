@@ -96,7 +96,7 @@ export async function createVeoLMSApi<
     plugins = [],
   } = options;
 
-  const app = Fastify({
+  const app: FastifyInstance = Fastify({
     logger,
     trustProxy: config.TRUST_PROXY,
     routerOptions: { maxParamLength: MAX_PARAM_LENGTH },
