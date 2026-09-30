@@ -8,10 +8,24 @@ type RuntimeProcess = typeof globalThis & {
 };
 
 function resolveApiUrl(requestUrl: string, path: string): URL {
-  const runtimeBase = (globalThis as RuntimeProcess).process?.env
-    ?.VEO_PUBLIC_API_BASE_URL;
+  const runtimeEnv = (globalThis as RuntimeProcess).process?.env;
+  const isStaticBuild = runtimeEnv?.VEO_REACT_ROUTER_BUILD === "true";
+  // Prerendered page data must come from the same API as the discovered paths.
+  const staticBuildBase = import.meta.env.STATIC_BUILD_API_URL;
+  const normalizedStaticBuildBase = staticBuildBase
+    ? staticBuildBase
+        .replace(/\/+$/u, "")
+        .replace(/\/api\/v1$/u, "/v1")
+    : undefined;
   const configuredBase =
-    runtimeBase || import.meta.env.VITE_API_BASE_URL || "/v1";
+    (isStaticBuild && normalizedStaticBuildBase
+      ? normalizedStaticBuildBase.endsWith("/v1")
+        ? normalizedStaticBuildBase
+        : `${normalizedStaticBuildBase}/v1`
+      : undefined) ||
+    runtimeEnv?.VEO_PUBLIC_API_BASE_URL ||
+    import.meta.env.VITE_API_BASE_URL ||
+    "/v1";
   const normalizedBase = configuredBase.endsWith("/")
     ? configuredBase
     : `${configuredBase}/`;
