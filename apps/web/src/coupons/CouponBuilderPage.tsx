@@ -351,7 +351,7 @@ export function CouponBuilderPage({
   return (
     <main
       data-coupon-surface=""
-      className="mx-auto grid w-full max-w-[1320px] gap-3.5 sm:gap-6"
+      className="mx-auto grid w-full max-w-[1800px] gap-6"
     >
       <header>
         <button
@@ -362,10 +362,10 @@ export function CouponBuilderPage({
         <ArrowLeft size={16} weight="bold" />
         {isSafeReturnPath(returnTo) ? "Back to course" : "Back to Coupons"}
         </button>
-        <h1 className="m-0 text-[1.75rem] font-semibold tracking-tight text-(--text) sm:text-[2rem]">
+        <h1 className="m-0 text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
           {isEditMode ? "Edit Coupon" : "Create Coupon"}
         </h1>
-        <p className="mt-1 mb-0 text-sm text-(--muted)">
+        <p className="mt-1.5 mb-0 text-[0.88rem] leading-6 text-(--muted)">
           Set up a new coupon and preview how it will look for your learners.
         </p>
       </header>

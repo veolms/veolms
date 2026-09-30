@@ -126,9 +126,6 @@ export function PlaceholderPage({
     >
       <header className="courses-placeholder-heading">
         <div>
-          <p className="courses-placeholder-eyebrow">
-            {`${getRoleDisplayName(role, userRoles)} workspace`}
-          </p>
           <h1 id="placeholder-page-title">{content.title}</h1>
           <p>{content.description}</p>
         </div>

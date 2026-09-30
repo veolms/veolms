@@ -84,7 +84,7 @@ export function OrderHistoryPage({
 
   return (
     <main
-      className="mx-auto flex w-full min-w-0 max-w-[1400px] flex-col gap-5 px-3 pb-8 sm:px-6 sm:pb-12 font-sans"
+      className="mx-auto flex w-full min-w-0 max-w-[1800px] flex-col gap-6 font-sans"
       aria-labelledby="order-history-page-title"
     >
       {/* Page Header */}
@@ -92,11 +92,11 @@ export function OrderHistoryPage({
         <div>
           <h1
             id="order-history-page-title"
-            className="text-[clamp(1.9rem,3.4vw,2.7rem)] font-[740] tracking-[-0.055em] leading-[1.02] text-(--text)"
+            className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)"
           >
             Purchase History
           </h1>
-          <p className="mt-2 text-[0.92rem] text-(--muted) leading-normal">
+          <p className="mt-1.5 text-[0.88rem] leading-6 text-(--muted)">
             View your purchases, invoices, and payment history.
           </p>
         </div>

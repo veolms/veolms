@@ -80,7 +80,7 @@ export default [
       id: "notifications",
       caseSensitive: true,
     }),
-    route("settings/:settingsTab?", marker, {
+    route("settings/:settingsTab?", "routes/settings-marker.tsx", {
       id: "settings",
       caseSensitive: true,
     }),

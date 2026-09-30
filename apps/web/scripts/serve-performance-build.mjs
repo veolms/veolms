@@ -17,6 +17,8 @@ const buildExitCode = await runPerformanceBuild(
     // never inherit a production STATIC_BUILD_API_URL from .env.production.
     STATIC_BUILD_API_URL:
       process.env.VEO_PREVIEW_API_TARGET || "http://127.0.0.1:4000/v1",
+    // Keep browser requests on the preview origin so proxied auth cookies work.
+    VITE_API_BASE_URL: "/v1",
   },
 );
 if (buildExitCode !== 0) process.exit(buildExitCode);

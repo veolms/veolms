@@ -12,7 +12,15 @@ export function CourseStaticPageRefreshNotice({
   const retryMutation = useRetryCourseStaticPageRefresh();
   const status = statusQuery.data;
 
-  if (!courseId || !status || status.status === "idle") return null;
+  if (
+    !courseId ||
+    !status ||
+    status.status === "idle" ||
+    (status.status === "failed" &&
+      status.message?.startsWith("Course page refresh is not configured."))
+  ) {
+    return null;
+  }
 
   const busy = status.status === "queued" || status.status === "running";
   const text =
