@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import fastifyAutoload from "@fastify/autoload";
 import fastifyCookie from "@fastify/cookie";
 import fastifyCors from "@fastify/cors";
@@ -197,10 +200,14 @@ export async function createVeoLMSApi<
       })
     : undefined;
 
-  // Auto-load every *.routes.ts file from the caller's modules directory.
-  if (modulesDir) {
+  // Auto-load every *.routes.ts file from the caller's modules directory (or default core modules).
+  const resolvedModulesDir =
+    modulesDir ??
+    fileURLToPath(new URL("../../../apps/api/src/modules", import.meta.url));
+
+  if (fs.existsSync(resolvedModulesDir)) {
     await app.register(fastifyAutoload, {
-      dir: modulesDir,
+      dir: resolvedModulesDir,
       matchFilter: /\.routes\.ts$/,
       // Disable index-file special-casing so barrel index.ts files next to
       // *.routes.ts files don't silently suppress route registration.
