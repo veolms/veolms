@@ -80,6 +80,8 @@ import {
 import { useAuthStore } from "../store/auth.store";
 import { QuizAttemptPanel } from "../quizzes/QuizAttemptPanel";
 import { useCourseOverview } from "../services/courses";
+import { useCurrentUser } from "../services/auth";
+import { useEnrolledCourses } from "../services/enrollments";
 import { useCourseQuizAssignments } from "../services/quizzes/quizzes.queries";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
@@ -96,6 +98,7 @@ import {
   Discussion,
   PrerenderedMobileCommentComposer,
   type InteractionCapabilities,
+  type LessonContentAccessState,
 } from "./Discussion";
 import {
   clampLearningCurriculumWidth,
@@ -354,6 +357,15 @@ export function LearningWorkspace({
   quizAssignmentLoading = false,
 }: LearningWorkspaceProps) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const storedAuthUser = useAuthStore((state) => state.user);
+  const { data: currentUser, isFetched: isCurrentUserFetched } =
+    useCurrentUser();
+  const resolvedAuthUser =
+    currentUser === undefined ? storedAuthUser : currentUser;
+  const isAuthResolutionPending = !isCurrentUserFetched && !storedAuthUser;
+  const enrolledCoursesQuery = useEnrolledCourses({
+    enabled: isAuthenticated,
+  });
   const isApiRoute = Boolean(courseSlug);
   const {
     data: courseOverview,
@@ -376,11 +388,7 @@ export function LearningWorkspace({
       allowNotes,
       allowQa,
     };
-  }, [
-    allowComments,
-    allowNotes,
-    allowQa,
-  ]);
+  }, [allowComments, allowNotes, allowQa]);
   const publicPreviewLessonNumbers = useMemo(
     () => getPublicPreviewLessonNumbers(courseOverview),
     [courseOverview],
@@ -402,10 +410,8 @@ export function LearningWorkspace({
   const lessonStorageKey = `veolms-last-lesson-${encodeURIComponent(courseSlug || "default")}`;
   const shortcutPlatform = useShortcutPlatform();
   const [selectedLesson, setSelectedLesson] = useState(lessonId);
-  const [
-    deepLinkInitializationPending,
-    setDeepLinkInitializationPending,
-  ] = useState(Boolean(deepLinkLessonUuid));
+  const [deepLinkInitializationPending, setDeepLinkInitializationPending] =
+    useState(Boolean(deepLinkLessonUuid));
   const pendingLessonSelectionRef = useRef<number | null>(null);
   const [localLessonProgress, setLocalLessonProgress] = useState<
     Record<number, number>
@@ -879,6 +885,7 @@ export function LearningWorkspace({
     [courseSlug, selectedLesson],
   );
   const protectedPlayback = Boolean(courseSlug && !publicPlaybackBootstrap);
+  const playbackRequestKey = `${courseSlug ?? ""}\u0000${selectedLesson}\u0000${isAuthenticated ? "authenticated" : "guest"}`;
   const [playbackBootstrap, setPlaybackBootstrap] =
     useState<VideoPlaybackBootstrap | null>(() => {
       if (!courseSlug || publicPlaybackBootstrap) return null;
@@ -929,9 +936,8 @@ export function LearningWorkspace({
       return;
     }
 
-    const requestKey = `${courseSlug}\u0000${selectedLesson}\u0000${isAuthenticated ? "authenticated" : "guest"}`;
-    if (playbackRequestKeyRef.current === requestKey) return;
-    playbackRequestKeyRef.current = requestKey;
+    if (playbackRequestKeyRef.current === playbackRequestKey) return;
+    playbackRequestKeyRef.current = playbackRequestKey;
 
     const cached = getCachedVideoPlaybackBootstrap({
       courseSlug,
@@ -961,7 +967,9 @@ export function LearningWorkspace({
       lessonNumber: selectedLesson,
     })
       .then((bootstrap) => {
-        if (active) setPlaybackBootstrap(bootstrap);
+        if (active) {
+          setPlaybackBootstrap(bootstrap);
+        }
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -983,11 +991,14 @@ export function LearningWorkspace({
   }, [
     courseSlug,
     isAuthenticated,
+    playbackRequestKey,
     playbackBootstrapRetryNonce,
     publicPlaybackBootstrap,
     selectedLesson,
   ]);
-  const playbackAccessError = useMemo<LessonVideoPlayerProps["playbackAccessError"]>(() => {
+  const playbackAccessError = useMemo<
+    LessonVideoPlayerProps["playbackAccessError"]
+  >(() => {
     if (!playbackBootstrapError) return null;
 
     if (
@@ -1024,6 +1035,56 @@ export function LearningWorkspace({
     playbackBootstrapError,
     retryPlaybackBootstrap,
   ]);
+  const lessonContentAccess = useMemo<LessonContentAccessState>(() => {
+    // A static public bootstrap is a content metadata signal, not a playback
+    // health signal. It remains sufficient to grant discussion reads even if
+    // the subsequent HLS request fails.
+    if (publicPlaybackBootstrap) return "granted";
+    if (isAuthResolutionPending || !courseOverview || !adaptedCurriculum) {
+      return "pending";
+    }
+
+    const lesson = adaptedCurriculum.lessonsByNumber.get(selectedLesson);
+    if (!lesson) return "pending";
+
+    const isPublicLesson =
+      courseOverview.course.status === "published" &&
+      lesson.isPublished &&
+      (lesson.isPreview || courseOverview.pricing?.pricingType === "free");
+    if (isPublicLesson) return "granted";
+    if (!isAuthenticated) return "denied";
+
+    const isCourseOwner =
+      resolvedAuthUser?.id === courseOverview.course.creatorId;
+    const isAdmin = resolvedAuthUser?.roles?.some(
+      (role) => role.trim().toLowerCase() === "admin",
+    );
+    if (isCourseOwner || isAdmin) return "granted";
+    if (!enrolledCoursesQuery.isFetched) return "pending";
+
+    return enrolledCoursesQuery.data?.courses.some(
+      (course) => course.courseId === courseOverview.course.id,
+    )
+      ? "granted"
+      : "denied";
+  }, [
+    adaptedCurriculum,
+    courseOverview,
+    enrolledCoursesQuery.data?.courses,
+    enrolledCoursesQuery.isFetched,
+    isAuthResolutionPending,
+    isAuthenticated,
+    publicPlaybackBootstrap,
+    resolvedAuthUser?.id,
+    resolvedAuthUser?.roles,
+    selectedLesson,
+  ]);
+  const lessonContentAccessReason =
+    lessonContentAccess === "denied"
+      ? isAuthenticated
+        ? "access"
+        : "login"
+      : null;
   const lessonSequence = useMemo(
     () =>
       curriculumSections.flatMap(({ lessons }) => lessons.map(([id]) => id)),
@@ -1076,9 +1137,10 @@ export function LearningWorkspace({
     }
     return isApiRoute ? undefined : getCourseThumbnail(courseSlug);
   }, [courseOverview, courseSlug, isApiRoute, isCourseOverviewError]);
-  const courseThumbnailSrcSet = courseOverview?.course.thumbnailSrcSet
-    ?.map(({ url, width }) => `${url} ${width}w`)
-    .join(", ") ||
+  const courseThumbnailSrcSet =
+    courseOverview?.course.thumbnailSrcSet
+      ?.map(({ url, width }) => `${url} ${width}w`)
+      .join(", ") ||
     (!isApiRoute && !isCourseOverviewError
       ? getCourseThumbnailSrcSet(courseSlug)
       : undefined);
@@ -2397,9 +2459,7 @@ export function LearningWorkspace({
       selectedLesson,
     ],
   );
-  const lessonPlayerSeekRef = useRef<((seconds: number) => void) | null>(
-    null,
-  );
+  const lessonPlayerSeekRef = useRef<((seconds: number) => void) | null>(null);
   const registerLessonPlayerSeek = useCallback(
     (seekToTimestamp: (seconds: number) => void) => {
       lessonPlayerSeekRef.current = seekToTimestamp;
@@ -2606,9 +2666,7 @@ export function LearningWorkspace({
           }
         >
           <Exam size={12} weight="bold" className="text-(--accent)" />
-          <span>
-            {activeLessonView === "quiz" ? "Back to video" : "Quiz"}
-          </span>
+          <span>{activeLessonView === "quiz" ? "Back to video" : "Quiz"}</span>
         </button>
       ) : null}
     </header>
@@ -2704,9 +2762,12 @@ export function LearningWorkspace({
                       }
                       className={`text-sm sm:text-base text-(--muted) ${quizAssignmentLoading || courseQuizAssignments.isLoading ? "grid min-h-12 place-items-center" : ""}`}
                     >
-                      {quizAssignmentLoading || courseQuizAssignments.isLoading
-                        ? <LoadingSpinnerIcon size={20} />
-                        : "This Quiz is not currently assigned to your course access."}
+                      {quizAssignmentLoading ||
+                      courseQuizAssignments.isLoading ? (
+                        <LoadingSpinnerIcon size={20} />
+                      ) : (
+                        "This Quiz is not currently assigned to your course access."
+                      )}
                     </p>
                   </section>
                 )}
@@ -2786,9 +2847,9 @@ export function LearningWorkspace({
                     isLearningBootstrapLoading
                   }
                   interactionCapabilities={interactionCapabilities}
-                  isInteractionCapabilitiesLoading={
-                    isLearningBootstrapLoading
-                  }
+                  isInteractionCapabilitiesLoading={isLearningBootstrapLoading}
+                  lessonContentAccess={lessonContentAccess}
+                  lessonContentAccessReason={lessonContentAccessReason}
                   onSeekToTimestamp={seekCurrentLessonToTimestamp}
                 />
               ) : isLearningDeepLinkError ? (
@@ -2803,7 +2864,8 @@ export function LearningWorkspace({
                       Failed to load discussion
                     </p>
                     <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
-                      There was a problem loading the course for this discussion.
+                      There was a problem loading the course for this
+                      discussion.
                     </p>
                     <button
                       type="button"

@@ -2,12 +2,13 @@ import { sql } from "kysely";
 
 export function discussionVisibilityPredicate(
   alias: "t" | "n",
-  userId: string,
+  userId: string | null | undefined,
   mine: boolean,
 ) {
   const userColumn = sql.ref(`${alias}.user_id`);
   const visibilityColumn = sql.ref(`${alias}.visibility`);
-  if (mine) return sql`${userColumn} = ${userId}`;
+  if (mine && userId) return sql`${userColumn} = ${userId}`;
+  if (!userId) return sql`${visibilityColumn} = 'public'`;
   return sql`(
     ${visibilityColumn} = 'public'
     or (

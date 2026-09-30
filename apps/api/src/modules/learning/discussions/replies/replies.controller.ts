@@ -78,7 +78,7 @@ export function createRepliesController({
     },
 
     async listReplies(request, reply) {
-      const user = request.user!;
+      const user = request.user;
       const { threadId } = request.params;
       const query = request.query;
 
@@ -86,7 +86,7 @@ export function createRepliesController({
         database,
         threadId,
         query,
-        discussionActor(user),
+        user ? discussionActor(user) : null,
       );
       reply.status(200).send(result);
     },

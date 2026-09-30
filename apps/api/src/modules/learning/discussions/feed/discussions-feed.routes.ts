@@ -16,7 +16,7 @@ import {
 } from "./discussions-feed.service.ts";
 
 export interface DiscussionsFeedRouteDependencies {
-  permissions?: Pick<DiscussionPermissionsContext, "requireAuthenticated">;
+  permissions?: Pick<DiscussionPermissionsContext, "authenticate">;
   service?: LearningDiscussionsFeedService;
 }
 
@@ -32,7 +32,7 @@ export function createDiscussionsFeedRoutes(
     app.get(
       "/courses/:courseId/lessons/:lessonId/discussions",
       {
-        preHandler: permissions.requireAuthenticated,
+        preHandler: permissions.authenticate,
         schema: {
           operationId: "listLessonDiscussions",
           tags: ["Learning Discussions"],
@@ -54,11 +54,11 @@ export function createDiscussionsFeedRoutes(
         },
       },
       async (request, reply) => {
-        const user = request.user!;
+        const user = request.user;
         const result = await service.list(options.database, {
           courseId: request.params.courseId,
           lessonId: request.params.lessonId,
-          actor: { userId: user.id, roles: user.roles },
+          actor: user ? { userId: user.id, roles: user.roles } : null,
           query: request.query,
         });
         return reply.send(result);

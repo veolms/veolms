@@ -91,8 +91,6 @@ export function createThreadsController({
       return reply.status(201).send(thread);
     },
 
-
-
     async listLessonThreads(request, reply) {
       const user = request.user!;
       const { courseId, lessonId } = request.params;
@@ -123,13 +121,13 @@ export function createThreadsController({
     },
 
     async getThread(request, reply) {
-      const user = request.user!;
+      const user = request.user;
       const { threadId } = request.params;
 
       const thread = await service.getThread(
         database,
         threadId,
-        discussionActor(user),
+        user ? discussionActor(user) : null,
       );
       return reply.status(200).send(thread);
     },
@@ -157,10 +155,6 @@ export function createThreadsController({
         .status(200)
         .send({ message: "Discussion thread deleted successfully." });
     },
-
-
-
-
 
     async getDiscussionsWorkspace(request, reply) {
       const user = request.user!;

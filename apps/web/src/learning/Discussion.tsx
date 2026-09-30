@@ -346,10 +346,14 @@ export interface DiscussionProps {
   isLessonDescriptionLoading?: boolean;
   interactionCapabilities?: InteractionCapabilities;
   isInteractionCapabilitiesLoading?: boolean;
+  lessonContentAccess: LessonContentAccessState;
+  lessonContentAccessReason?: "login" | "access" | null;
   isThreadDeepLinkReady?: boolean;
   noteDeepLinkId?: string | null;
   onSeekToTimestamp?: (seconds: number) => void;
 }
+
+export type LessonContentAccessState = "pending" | "granted" | "denied";
 
 const DEFAULT_CAPABILITIES: InteractionCapabilities = {
   allowComments: true,
@@ -446,6 +450,8 @@ function DiscussionInner({
   isLessonDescriptionLoading = false,
   interactionCapabilities,
   isInteractionCapabilitiesLoading = false,
+  lessonContentAccess,
+  lessonContentAccessReason = null,
   isThreadDeepLinkReady = true,
   noteDeepLinkId = null,
   onSeekToTimestamp,
@@ -537,7 +543,10 @@ function DiscussionInner({
     courseId,
     lessonId,
     {
-      enabled: !isInteractionCapabilitiesLoading && enabledKinds.length > 0,
+      enabled:
+        lessonContentAccess === "granted" &&
+        !isInteractionCapabilitiesLoading &&
+        enabledKinds.length > 0,
     },
   );
   const discussionCount = interactionCounts
@@ -549,7 +558,7 @@ function DiscussionInner({
       kind:
         entryFilter === "comment" || entryFilter === "question"
           ? entryFilter
-          : "all" as const,
+          : ("all" as const),
       status: "all" as const,
       sort: feedSort === "top" ? ("popular" as const) : ("latest" as const),
       limit: 20,
@@ -565,17 +574,13 @@ function DiscussionInner({
     [courseId, lessonId],
   );
 
-  const {
-    data: notesData,
-  } = useUserNotes(
-    notesQuery,
-    {
+  const { data: notesData } =
+    useUserNotes(notesQuery, {
       // The unified lesson-discussions query is the only remote feed source.
       // This query remains mounted as a cache observer for existing optimistic
       // interaction projections.
       enabled: false,
-    },
-  ) ?? {};
+    }) ?? {};
 
   const {
     data: directNoteData,
@@ -584,9 +589,10 @@ function DiscussionInner({
   } = useNoteDetails(noteDeepLinkId ?? undefined, {
     enabled: Boolean(
       isValidNoteDeepLink &&
-        isThreadDeepLinkReady &&
-        courseId &&
-        lessonId,
+      isThreadDeepLinkReady &&
+      lessonContentAccess === "granted" &&
+      courseId &&
+      lessonId,
     ),
   });
 
@@ -596,18 +602,12 @@ function DiscussionInner({
     (capabilities.allowComments || capabilities.allowQa),
   );
 
-  const {
-    data: threadsData,
-  } = useLessonThreads(
-    courseId ?? "",
-    lessonId ?? "",
-    threadQuery,
-    {
+  const { data: threadsData } =
+    useLessonThreads(courseId ?? "", lessonId ?? "", threadQuery, {
       // See the notes observer above. Keeping this cache observer active lets
       // existing creation/edit/like/delete projections stay reactive.
       enabled: false,
-    },
-  ) ?? {};
+    }) ?? {};
 
   const unifiedDiscussionQuery = useMemo(
     () => ({
@@ -628,15 +628,15 @@ function DiscussionInner({
     {
       enabled: Boolean(
         courseId &&
-          lessonId &&
-          !isInteractionCapabilitiesLoading &&
-          (enabledKinds.length > 0 || hasNoteDeepLink),
+        lessonId &&
+        lessonContentAccess === "granted" &&
+        !isInteractionCapabilitiesLoading &&
+        (enabledKinds.length > 0 || hasNoteDeepLink),
       ),
     },
   );
   const unifiedDiscussionItems = useMemo<LessonDiscussionItem[]>(
-    () =>
-      unifiedDiscussions.data?.pages.flatMap((page) => page.items) ?? [],
+    () => unifiedDiscussions.data?.pages.flatMap((page) => page.items) ?? [],
     [unifiedDiscussions.data],
   );
   const unifiedRemoteBaseRef = useRef<
@@ -664,8 +664,7 @@ function DiscussionInner({
   const isNotesError =
     unifiedDiscussions.isError &&
     (entryFilter === "all" || entryFilter === "note");
-  const isThreadsError =
-    unifiedDiscussions.isError && entryFilter !== "note";
+  const isThreadsError = unifiedDiscussions.isError && entryFilter !== "note";
   const refetchNotes = unifiedDiscussions.refetch;
   const refetchThreads = unifiedDiscussions.refetch;
 
@@ -886,9 +885,9 @@ function DiscussionInner({
       }
       unifiedRemoteBaseRef.current.set(
         item.identity,
-        (item.sourceType === "thread" ? item.thread : item.note) as unknown as Readonly<
-          Record<string, unknown>
-        >,
+        (item.sourceType === "thread"
+          ? item.thread
+          : item.note) as unknown as Readonly<Record<string, unknown>>,
       );
     }
 
@@ -931,7 +930,8 @@ function DiscussionInner({
       .filter((note) => {
         const serverId = getServerEntityId(note);
         return (
-          (!serverId || isClientEntityId(getClientEntityId(note))) ||
+          !serverId ||
+          isClientEntityId(getClientEntityId(note)) ||
           unifiedNoteIdentities.has(`note:${serverId}`)
         );
       })
@@ -951,9 +951,7 @@ function DiscussionInner({
       .filter((item) => item.sourceType === "note")
       .filter(
         (item) =>
-          !notes.some(
-            (note) => getServerEntityId(note) === item.entityId,
-          ),
+          !notes.some((note) => getServerEntityId(note) === item.entityId),
       )
       .map((item) =>
         adaptUnifiedDiscussionItem(
@@ -1024,6 +1022,7 @@ function DiscussionInner({
       threadIdFromUrl &&
       isBackendMode &&
       isThreadDeepLinkReady &&
+      lessonContentAccess === "granted" &&
       courseId &&
       lessonId,
     ),
@@ -1101,10 +1100,11 @@ function DiscussionInner({
 
   const backendOrderedEntries = useMemo(
     () =>
-      orderUnifiedDiscussionEntries(visibleUnifiedDiscussionItems, [
-        ...backendNotes,
-        ...backendThreads,
-      ], feedSort),
+      orderUnifiedDiscussionEntries(
+        visibleUnifiedDiscussionItems,
+        [...backendNotes, ...backendThreads],
+        feedSort,
+      ),
     [backendNotes, backendThreads, feedSort, visibleUnifiedDiscussionItems],
   );
 
@@ -1202,21 +1202,11 @@ function DiscussionInner({
   ]);
 
   useEffect(() => {
-    if (
-      !hasNoteDeepLink ||
-      !isThreadDeepLinkReady ||
-      !courseId ||
-      !lessonId
-    ) {
+    if (!hasNoteDeepLink || !isThreadDeepLinkReady || !courseId || !lessonId) {
       return;
     }
     setEntryFilter("note");
-  }, [
-    courseId,
-    hasNoteDeepLink,
-    isThreadDeepLinkReady,
-    lessonId,
-  ]);
+  }, [courseId, hasNoteDeepLink, isThreadDeepLinkReady, lessonId]);
 
   useEffect(() => {
     if (enabledKinds.length === 0) return;
@@ -1297,9 +1287,9 @@ function DiscussionInner({
   const noteDeepLinkTargetEntry = useMemo(
     () =>
       noteDeepLinkId
-        ? backendNotes.find(
+        ? (backendNotes.find(
             (entry) => getServerEntityId(entry) === noteDeepLinkId,
-          ) ?? null
+          ) ?? null)
         : null,
     [backendNotes, noteDeepLinkId],
   );
@@ -1312,9 +1302,7 @@ function DiscussionInner({
     handledNoteDeepLinkRef.current = null;
     setNoteDeepLinkHandled(false);
   }, [noteDeepLinkId]);
-  const isNoteDeepLinkPending = Boolean(
-    noteDeepLinkId && !noteDeepLinkHandled,
-  );
+  const isNoteDeepLinkPending = Boolean(noteDeepLinkId && !noteDeepLinkHandled);
   const displayEntries = isNoteDeepLinkPending
     ? visibleEntries.filter(
         (entry) => getServerEntityId(entry) === noteDeepLinkId,
@@ -1322,10 +1310,10 @@ function DiscussionInner({
     : visibleEntries;
   const noteDeepLinkReadyForFocus = Boolean(
     noteDeepLinkId &&
-      !noteDeepLinkHandled &&
-      entryFilter === "note" &&
-      !isDirectNoteLoading &&
-      noteDeepLinkTargetEntry,
+    !noteDeepLinkHandled &&
+    entryFilter === "note" &&
+    !isDirectNoteLoading &&
+    noteDeepLinkTargetEntry,
   );
 
   const consumeNoteDeepLink = useCallback(
@@ -1340,10 +1328,7 @@ function DiscussionInner({
       setNoteDeepLinkHandled(true);
       setSearchParams(
         (prev) => {
-          if (
-            prev.get("noteId") !== handledNoteId ||
-            !prev.has("thread")
-          ) {
+          if (prev.get("noteId") !== handledNoteId || !prev.has("thread")) {
             return prev;
           }
           const next = new URLSearchParams(prev);
@@ -1428,11 +1413,7 @@ function DiscussionInner({
       allFeedPageSnapshotRef.current = null;
       setIsAllFeedPagePending(false);
     }
-  }, [
-    entryFilter,
-    filteredEntries,
-    unifiedDiscussions,
-  ]);
+  }, [entryFilter, filteredEntries, unifiedDiscussions]);
 
   useEffect(() => {
     if (entryFilter === "all" || !allFeedPagePendingRef.current) return;
@@ -1471,25 +1452,24 @@ function DiscussionInner({
     return nextList;
   }, [combinedEntries, directThreadComment]);
   const isInitialThreadDeepLink = Boolean(
-    initialThreadDeepLinkId &&
-      threadIdFromUrl === initialThreadDeepLinkId,
+    initialThreadDeepLinkId && threadIdFromUrl === initialThreadDeepLinkId,
   );
   const isInitialThreadListPending = Boolean(
     isInitialThreadDeepLink &&
-      isThreadDeepLinkReady &&
-      (isInteractionCapabilitiesLoading ||
-        (shouldFetchThreads && entryFilter !== "note" && isThreadsLoading)),
+    isThreadDeepLinkReady &&
+    (isInteractionCapabilitiesLoading ||
+      (shouldFetchThreads && entryFilter !== "note" && isThreadsLoading)),
   );
   const isThreadDeepLinkPending = Boolean(
     isInitialThreadListPending ||
-      (threadIdFromUrl &&
-        isThreadDeepLinkReady &&
-        !threadEntries.some(
-          (entry) => getServerEntityId(entry) === threadIdFromUrl,
-        ) &&
-        (isDirectThreadLoading ||
-          isThreadsLoading ||
-          isInteractionCapabilitiesLoading)),
+    (threadIdFromUrl &&
+      isThreadDeepLinkReady &&
+      !threadEntries.some(
+        (entry) => getServerEntityId(entry) === threadIdFromUrl,
+      ) &&
+      (isDirectThreadLoading ||
+        isThreadsLoading ||
+        isInteractionCapabilitiesLoading)),
   );
   const lastHandledErrorThreadRef = useRef<string | null>(null);
   const suppressThreadUrlSyncRef = useRef(false);
@@ -2030,14 +2010,13 @@ function DiscussionInner({
     }
     const clientId = entry ? getClientEntityId(entry) : String(id);
     const deletionKind = isBackendNote ? "note" : "thread";
-    const interactionCountKind: LessonInteractionCountKind | undefined =
-      entry
-        ? isBackendNote
-          ? "note"
-          : entry.entryKind === "question" || entry.isQuestion
-            ? "question"
-            : "comment"
-        : undefined;
+    const interactionCountKind: LessonInteractionCountKind | undefined = entry
+      ? isBackendNote
+        ? "note"
+        : entry.entryKind === "question" || entry.isQuestion
+          ? "question"
+          : "comment"
+      : undefined;
     let countsChange: LessonInteractionCountChange | undefined;
     if (
       isBackendMode &&
@@ -2068,8 +2047,7 @@ function DiscussionInner({
           });
         },
         onRollback: () => {
-          if (!queryClient || !courseId || !lessonId || !countsChange)
-            return;
+          if (!queryClient || !courseId || !lessonId || !countsChange) return;
           restoreLessonInteractionCounts(
             queryClient,
             courseId,
@@ -2455,9 +2433,7 @@ function DiscussionInner({
         entryFilter={entryFilter}
         feedSort={feedSort}
         entries={displayEntries}
-        noteDeepLinkTargetId={
-          noteDeepLinkReadyForFocus ? noteDeepLinkId : null
-        }
+        noteDeepLinkTargetId={noteDeepLinkReadyForFocus ? noteDeepLinkId : null}
         onNoteDeepLinkHandled={consumeNoteDeepLink}
         discussionCount={discussionCount}
         draftIsTooLong={draftIsTooLong}
@@ -2469,9 +2445,9 @@ function DiscussionInner({
           isNotesLoading ||
           Boolean(
             isNoteDeepLinkPending &&
-              isValidNoteDeepLink &&
-              isDirectNoteLoading &&
-              !noteDeepLinkTargetEntry,
+            isValidNoteDeepLink &&
+            isDirectNoteLoading &&
+            !noteDeepLinkTargetEntry,
           )
         }
         isNotesError={isNotesError}
@@ -2499,6 +2475,8 @@ function DiscussionInner({
         enabledKinds={enabledKinds}
         promptText={promptText}
         authorAvatar={authorAvatar}
+        lessonContentAccess={lessonContentAccess}
+        lessonContentAccessReason={lessonContentAccessReason}
         onDraftChange={(value) => {
           if (editingEntry) {
             setEditingEntry((current) =>
@@ -2578,77 +2556,77 @@ function DiscussionInner({
       threadEntries.some(
         (entry) => getClientEntityId(entry) === String(openThread.id),
       ) ? (
-      <Suspense fallback={null}>
-      <DiscussionThreadPanel
-        open={true}
-        activeEntryId={openThread?.id ?? null}
-        entries={threadEntries}
-        isBackendMode={isBackendMode}
-        currentUserId={currentUser?.id}
-        userRole={currentUserRole}
-        currentUser={{ name: authorName, avatar: authorAvatar }}
-        courseId={courseId}
-        focusComposerOnOpen={Boolean(openThread?.focusComposer)}
-        onOpenChange={(open) => {
-          if (!open) {
-            suppressThreadUrlSyncRef.current = true;
-            setOpenThread(null);
-            setSearchParams(
-              (prev) => {
-                if (!prev.has("thread")) return prev;
-                const next = new URLSearchParams(prev);
-                next.delete("thread");
-                return next;
-              },
-              { replace: true },
-            );
-          }
-        }}
-        onActiveEntryChange={(id) => {
-          setOpenThread((current) =>
-            current ? { id, focusComposer: false } : current,
-          );
-          setSearchParams(
-            (prev) => {
-              const next = new URLSearchParams(prev);
-              const entry = threadEntries.find(
-                (candidate) => getClientEntityId(candidate) === String(id),
+        <Suspense fallback={null}>
+          <DiscussionThreadPanel
+            open={true}
+            activeEntryId={openThread?.id ?? null}
+            entries={threadEntries}
+            isBackendMode={isBackendMode}
+            currentUserId={currentUser?.id}
+            userRole={currentUserRole}
+            currentUser={{ name: authorName, avatar: authorAvatar }}
+            courseId={courseId}
+            focusComposerOnOpen={Boolean(openThread?.focusComposer)}
+            onOpenChange={(open) => {
+              if (!open) {
+                suppressThreadUrlSyncRef.current = true;
+                setOpenThread(null);
+                setSearchParams(
+                  (prev) => {
+                    if (!prev.has("thread")) return prev;
+                    const next = new URLSearchParams(prev);
+                    next.delete("thread");
+                    return next;
+                  },
+                  { replace: true },
+                );
+              }
+            }}
+            onActiveEntryChange={(id) => {
+              setOpenThread((current) =>
+                current ? { id, focusComposer: false } : current,
               );
-              const serverId = entry ? getServerEntityId(entry) : undefined;
-              if (serverId) next.set("thread", serverId);
-              else next.delete("thread");
-              return next;
-            },
-            { replace: true },
-          );
-        }}
-        onLike={onLike}
-        onAddReply={addReply}
-        onEditEntry={beginEditingEntry}
-        onDeleteEntry={deleteEntry}
-        onEditReply={editReply}
-        onDeleteReply={deleteReply}
-        onReport={handleOpenReport}
-        onToggleAcceptReply={handleToggleAcceptReply}
-        onToggleLockThread={handleToggleLockThread}
-        onToggleBookmark={handleToggleBookmark}
-        onToggleFollow={handleToggleFollow}
-        onSeekToTimestamp={onSeekToTimestamp}
-        onCopyTextNotice={setNotice}
-        onReplyCreateError={() =>
-          setCreationToast({
-            message: "Couldn't post your reply. Please try again.",
-            type: "error",
-          })
-        }
-        onReplyEditError={() =>
-          setNotice("Failed to update reply. Please try again.")
-        }
-        onReplyDeleteError={() =>
-          setNotice("Couldn't delete this reply. Please try again.")
-        }
-      />
-      </Suspense>
+              setSearchParams(
+                (prev) => {
+                  const next = new URLSearchParams(prev);
+                  const entry = threadEntries.find(
+                    (candidate) => getClientEntityId(candidate) === String(id),
+                  );
+                  const serverId = entry ? getServerEntityId(entry) : undefined;
+                  if (serverId) next.set("thread", serverId);
+                  else next.delete("thread");
+                  return next;
+                },
+                { replace: true },
+              );
+            }}
+            onLike={onLike}
+            onAddReply={addReply}
+            onEditEntry={beginEditingEntry}
+            onDeleteEntry={deleteEntry}
+            onEditReply={editReply}
+            onDeleteReply={deleteReply}
+            onReport={handleOpenReport}
+            onToggleAcceptReply={handleToggleAcceptReply}
+            onToggleLockThread={handleToggleLockThread}
+            onToggleBookmark={handleToggleBookmark}
+            onToggleFollow={handleToggleFollow}
+            onSeekToTimestamp={onSeekToTimestamp}
+            onCopyTextNotice={setNotice}
+            onReplyCreateError={() =>
+              setCreationToast({
+                message: "Couldn't post your reply. Please try again.",
+                type: "error",
+              })
+            }
+            onReplyEditError={() =>
+              setNotice("Failed to update reply. Please try again.")
+            }
+            onReplyDeleteError={() =>
+              setNotice("Couldn't delete this reply. Please try again.")
+            }
+          />
+        </Suspense>
       ) : null}
       <DiscussionReportDialog
         open={reportDialogOpen}
@@ -2736,6 +2714,8 @@ interface ThreadSurfaceProps {
   mobileBottomNavigationHidden: boolean;
   capabilities: InteractionCapabilities;
   isInteractionCapabilitiesLoading?: boolean;
+  lessonContentAccess: LessonContentAccessState;
+  lessonContentAccessReason?: "login" | "access" | null;
   isAllDisabled: boolean;
   availableFilters: readonly (readonly [DiscussionEntryFilter, string])[];
   enabledKinds: DiscussionEntryKind[];
@@ -2805,12 +2785,7 @@ export function shouldShowDiscussionEnd({
   isNotesLoading: boolean;
   isThreadsLoading: boolean;
 }): boolean {
-  if (
-    !isBackendMode ||
-    entryCount === 0 ||
-    hasNextPage ||
-    isNextPageError
-  ) {
+  if (!isBackendMode || entryCount === 0 || hasNextPage || isNextPageError) {
     return false;
   }
   if (entryFilter === "all") {
@@ -2886,9 +2861,7 @@ function DiscussionVirtualFeedRows({
             data-index={virtualItem.index}
             data-client-id={getClientEntityId(entry)}
             ref={virtualizer.measureElement}
-            className={
-              virtualItem.index < entries.length - 1 ? "pb-1" : ""
-            }
+            className={virtualItem.index < entries.length - 1 ? "pb-1" : ""}
             style={{
               position: "absolute",
               top: 0,
@@ -2939,8 +2912,7 @@ function DiscussionViewportVirtualFeed({
         feedRef={feedRef}
         virtualizer={{
           ...virtualizer,
-          measureElement: (element) =>
-            virtualizer.measureElement(element),
+          measureElement: (element) => virtualizer.measureElement(element),
         }}
         scrollMargin={phoneScrollMargin}
       />
@@ -3142,7 +3114,9 @@ function DiscussionVirtualFeed({
   isPhone: boolean;
 }) {
   if (isPhone) {
-    return <DiscussionViewportVirtualFeed viewportRef={viewportRef} {...props} />;
+    return (
+      <DiscussionViewportVirtualFeed viewportRef={viewportRef} {...props} />
+    );
   }
 
   return <DiscussionDesktopVirtualFeed {...props} />;
@@ -3218,6 +3192,8 @@ function ThreadSurface({
   mobileBottomNavigationHidden,
   capabilities,
   isInteractionCapabilitiesLoading = false,
+  lessonContentAccess,
+  lessonContentAccessReason = null,
   isAllDisabled,
   availableFilters,
   enabledKinds,
@@ -3419,12 +3395,7 @@ function ThreadSurface({
 
   useEffect(() => {
     const sentinel = feedSentinelRef.current;
-    if (
-      !sentinel ||
-      !onLoadMore ||
-      !hasNextPage ||
-      isFetchingNextPage
-    ) {
+    if (!sentinel || !onLoadMore || !hasNextPage || isFetchingNextPage) {
       return undefined;
     }
     const observer = new IntersectionObserver(
@@ -3530,13 +3501,11 @@ function ThreadSurface({
         constrainToContainer
         canEdit={entry.entryKind !== "note" || capabilities.allowNotes}
         canDelete={entry.entryKind !== "note" || capabilities.allowNotes}
-        isDeepLinkTarget={
-          Boolean(
-            noteDeepLinkTargetId &&
-              entry.entryKind === "note" &&
-              getServerEntityId(entry) === noteDeepLinkTargetId,
-          )
-        }
+        isDeepLinkTarget={Boolean(
+          noteDeepLinkTargetId &&
+          entry.entryKind === "note" &&
+          getServerEntityId(entry) === noteDeepLinkTargetId,
+        )}
       />
     ),
     [
@@ -3567,7 +3536,9 @@ function ThreadSurface({
       description={lessonDescription}
       isLoading={isLessonDescriptionLoading}
       onSeekToTimestamp={onSeekToTimestamp}
-      onExpandedChange={() => setDescriptionLayoutRevision((revision) => revision + 1)}
+      onExpandedChange={() =>
+        setDescriptionLayoutRevision((revision) => revision + 1)
+      }
     />
   );
   const hasDescriptionSurface =
@@ -3583,6 +3554,67 @@ function ThreadSurface({
       </p>
     </div>
   );
+
+  const lessonAccessMessage =
+    lessonContentAccess === "denied"
+      ? lessonContentAccessReason === "login"
+        ? "Log in to read this lesson's discussions."
+        : lessonContentAccessReason === "access"
+          ? "Get access to this course to read this lesson's discussions."
+          : "This lesson's discussions are not available yet."
+      : "Checking lesson access before loading discussions.";
+
+  if (lessonContentAccess !== "granted") {
+    const accessStateMessage = (
+      <div
+        className="flex min-h-48 flex-col items-center justify-center py-12 text-center"
+        data-testid={
+          lessonContentAccess === "denied"
+            ? "learning-discussion-access-denied"
+            : "learning-discussion-access-pending"
+        }
+        role={lessonContentAccess === "pending" ? "status" : undefined}
+        aria-label={
+          lessonContentAccess === "pending" ? "Loading discussion" : undefined
+        }
+      >
+        {lessonContentAccess === "pending" ? (
+          <LoadingSpinnerIcon size={24} />
+        ) : null}
+        <p className="mt-3 text-sm font-medium text-(--muted)">
+          {lessonAccessMessage}
+        </p>
+      </div>
+    );
+
+    if (isPhone) {
+      return (
+        <div className="mt-2.5 flex min-h-0 min-w-0 flex-1 flex-col">
+          <div
+            ref={discussionViewportRef}
+            data-discussion-scroll-viewport
+            className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col touch-pan-y overflow-x-hidden overflow-y-auto"
+          >
+            <div
+              data-discussion-scroll-header
+              className="min-w-0 max-w-full shrink-0"
+            >
+              {mobileLessonHeader}
+              {discussionDescription}
+            </div>
+            {accessStateMessage}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        {discussionDescription}
+        {accessStateMessage}
+      </div>
+    );
+  }
 
   if (isAllDisabled) {
     if (isPhone) {
@@ -3627,25 +3659,26 @@ function ThreadSurface({
     );
   }
 
-  const discussionFilters = availableFilters.length > 0 ? (
-    <div
-      role="group"
-      aria-label="Filter discussion entries"
-      className="learning-discussion__filter-group mt-3 flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] sm:mt-5 [&::-webkit-scrollbar]:hidden"
-    >
-      {availableFilters.map(([value, label]) => (
-        <button
-          key={value}
-          type="button"
-          aria-pressed={entryFilter === value}
-          onClick={() => onEntryFilterChange(value)}
-          className={`learning-discussion__filter-button h-8 shrink-0 rounded-lg px-2.5 font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:px-3 ${entryFilter === value ? "bg-(--text) text-(--canvas) shadow-[0_6px_18px_color-mix(in_srgb,var(--canvas)_28%,transparent)]" : "bg-[color-mix(in_srgb,var(--surface)_54%,transparent)] text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover) hover:text-(--text)"}`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  ) : null;
+  const discussionFilters =
+    availableFilters.length > 0 ? (
+      <div
+        role="group"
+        aria-label="Filter discussion entries"
+        className="learning-discussion__filter-group mt-3 flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] sm:mt-5 [&::-webkit-scrollbar]:hidden"
+      >
+        {availableFilters.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={entryFilter === value}
+            onClick={() => onEntryFilterChange(value)}
+            className={`learning-discussion__filter-button h-8 shrink-0 rounded-lg px-2.5 font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:px-3 ${entryFilter === value ? "bg-(--text) text-(--canvas) shadow-[0_6px_18px_color-mix(in_srgb,var(--canvas)_28%,transparent)]" : "bg-[color-mix(in_srgb,var(--surface)_54%,transparent)] text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover) hover:text-(--text)"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    ) : null;
   const discussionToolbar = (
     <div
       className="mt-3.5 flex min-w-0 items-end max-[640px]:mt-2.5"
@@ -3822,7 +3855,8 @@ function ThreadSurface({
       {entries.length === 0 && (
         <div className="py-12 text-center">
           <p className="font-semibold text-(--text)">
-            No {entryFilter === "all" ? "entries" : getFilterName(entryFilter)} yet
+            No {entryFilter === "all" ? "entries" : getFilterName(entryFilter)}{" "}
+            yet
           </p>
           {availableFilters.some(([val]) => val === "all") && (
             <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-(--muted)">
@@ -3842,9 +3876,7 @@ function ThreadSurface({
           ref={composerHostRef}
           data-comment-composer-container
           className={
-            hasDescriptionSurface
-              ? "mt-3 scroll-mt-4 sm:mt-4"
-              : "scroll-mt-4"
+            hasDescriptionSurface ? "mt-3 scroll-mt-4 sm:mt-4" : "scroll-mt-4"
           }
         >
           {composerMode === "desktop" ? (
@@ -4155,10 +4187,7 @@ function CompactComposer({
       }}
       className={`flex w-full cursor-pointer items-center gap-2 p-1.5 text-left ${COMPACT_COMPOSER_SURFACE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)${disabled ? " pointer-events-none opacity-60" : ""}`}
     >
-      <DiscussionAvatar
-        src={avatar}
-        className="pointer-events-none size-9"
-      />
+      <DiscussionAvatar src={avatar} className="pointer-events-none size-9" />
       <span className="learning-discussion__composer-prompt min-w-0 flex-1 truncate px-2 py-1.5 text-(--muted)">
         {preview || (attachmentCount > 0 ? attachmentPreview : promptText)}
       </span>

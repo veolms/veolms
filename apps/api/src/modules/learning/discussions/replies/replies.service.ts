@@ -31,6 +31,10 @@ import {
   createDiscussionAccess,
   type DiscussionActor,
 } from "../shared/discussion.access.ts";
+import {
+  createLessonDiscussionAccess,
+  type LessonDiscussionAccess,
+} from "../shared/lesson-discussion-access.ts";
 import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import type { ThreadsRepository } from "../threads/threads.repository.ts";
 import type {
@@ -59,7 +63,7 @@ export interface RepliesService {
     db: DatabaseExecutor,
     threadId: string,
     query: ListLearningRepliesQuery,
-    actor: DiscussionActor,
+    actor: DiscussionActor | null,
   ): Promise<LearningRepliesListResponse>;
 
   updateReply(
@@ -86,9 +90,11 @@ export interface RepliesService {
 export function createRepliesService({
   threadsRepo,
   repliesRepo,
+  lessonAccess = createLessonDiscussionAccess(),
 }: {
   threadsRepo: ThreadsRepository;
   repliesRepo: RepliesRepository;
+  lessonAccess?: LessonDiscussionAccess;
 }): RepliesService {
   const outbox = createDiscussionOutbox();
   const courseAccess = createDiscussionAccess();
@@ -306,7 +312,30 @@ export function createRepliesService({
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
       }
 
-      await courseAccess.assertCanAccessThread(db, actor, thread);
+      const lessonReadAccess = thread.lessonId
+        ? await lessonAccess.assertCanReadLesson(db, {
+            courseId: thread.courseId,
+            lessonId: thread.lessonId,
+            actor,
+          })
+        : null;
+      if (lessonReadAccess?.canReadPrivateState) {
+        await courseAccess.assertCanAccessThread(db, actor!, thread);
+      } else if (lessonReadAccess) {
+        courseAccess.assertThreadIsActive(thread);
+        if (thread.visibility !== "public") {
+          throw httpError(
+            404,
+            "THREAD_NOT_FOUND",
+            "Discussion thread not found",
+          );
+        }
+      } else {
+        await courseAccess.assertCanAccessThread(db, actor!, thread);
+      }
+      const canReadPrivateState = lessonReadAccess
+        ? lessonReadAccess.canReadPrivateState
+        : Boolean(actor);
 
       const pageCursor = decodeDiscussionCursor(query.cursor);
       const [rows, totalCount] = await Promise.all([
@@ -322,22 +351,34 @@ export function createRepliesService({
       let attachmentsByReplyId = new Map<string, LearningAttachmentRow[]>();
       if (page.length > 0) {
         const replyIds = page.map((r) => r.id);
-        const [likes, attachmentRows] = await Promise.all([
-          db
-            .selectFrom("learning_likes")
-            .select("target_id")
-            .where("user_id", "=", actor.userId)
-            .where("target_type", "=", "reply")
-            .where("target_id", "in", replyIds)
-            .execute(),
-          db
-            .selectFrom("learning_attachments")
-            .selectAll()
-            .where("target_type", "=", "reply")
-            .where("target_id", "in", replyIds)
-            .where("status", "=", "ready")
-            .execute(),
-        ]);
+        const [likes, attachmentRows] =
+          actor && canReadPrivateState
+            ? await Promise.all([
+                db
+                  .selectFrom("learning_likes")
+                  .select("target_id")
+                  .where("user_id", "=", actor.userId)
+                  .where("target_type", "=", "reply")
+                  .where("target_id", "in", replyIds)
+                  .execute(),
+                db
+                  .selectFrom("learning_attachments")
+                  .selectAll()
+                  .where("target_type", "=", "reply")
+                  .where("target_id", "in", replyIds)
+                  .where("status", "=", "ready")
+                  .execute(),
+              ])
+            : [
+                [],
+                await db
+                  .selectFrom("learning_attachments")
+                  .selectAll()
+                  .where("target_type", "=", "reply")
+                  .where("target_id", "in", replyIds)
+                  .where("status", "=", "ready")
+                  .execute(),
+              ];
 
         likedReplyIds = new Set(likes.map((l) => l.target_id));
         for (const attachment of attachmentRows) {
@@ -352,7 +393,7 @@ export function createRepliesService({
       const replies = page.map((r) =>
         mapReplyRow(
           r,
-          actor.userId,
+          actor?.userId,
           attachmentsByReplyId.get(r.id) ?? [],
           likedReplyIds,
         ),
