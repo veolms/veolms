@@ -27,6 +27,7 @@
     "@fastify/swagger": "^9.8.1",
     "@fastify/swagger-ui": "^6.1.1",
     "@simplewebauthn/server": "^13.3.2",
+    "@veolms/api-core": "workspace:*",
     "@veolms/config": "workspace:*",
     "@veolms/contracts": "workspace:*",
     "@veolms/database": "workspace:*",

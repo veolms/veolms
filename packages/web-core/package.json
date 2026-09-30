@@ -1,0 +1,16 @@
+{
+  "name": "@veolms/web-core",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@veolms/plugin-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@react-router/dev": "8.3.0"
+  }
+}
