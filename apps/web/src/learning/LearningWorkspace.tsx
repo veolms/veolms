@@ -1035,6 +1035,9 @@ export function LearningWorkspace({
     playbackBootstrapError,
     retryPlaybackBootstrap,
   ]);
+  const playbackBootstrapPending = Boolean(
+    protectedPlayback && !playbackBootstrap && !playbackBootstrapError,
+  );
   const lessonContentAccess = useMemo<LessonContentAccessState>(() => {
     // A static public bootstrap is a content metadata signal, not a playback
     // health signal. It remains sufficient to grant discussion reads even if
@@ -2482,6 +2485,7 @@ export function LearningWorkspace({
       description: selectedLessonDescription,
       playbackBootstrap,
       playbackAccessError,
+      playbackBootstrapPending,
       refreshPlaybackToken,
       protectedPlayback,
       lessonTitle: currentLesson[1],
@@ -2547,6 +2551,7 @@ export function LearningWorkspace({
       onMinimizePlayer,
       playbackBootstrap,
       playbackAccessError,
+      playbackBootstrapPending,
       protectedPlayback,
       registerLessonPlayerSeek,
       refreshPlaybackToken,
