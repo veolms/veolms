@@ -91,7 +91,6 @@ import type {
   NavigationOptions,
 } from "../routing/navigation";
 import { AcademyRouteGuard } from "../routing/RouteGuards";
-import { buildLoginPath } from "../routing/routeAccess";
 import {
   getDefaultNavigationOrder,
   getDefaultNavigationVisibility,
@@ -684,10 +683,6 @@ export default function AcademyLayout() {
     (course: Course | LearningCourse, options?: CourseOpenOptions) => {
       const courseRouteKey = getCourseRouteKey(course);
       const playerPath = `/learn/${encodeURIComponent(courseRouteKey)}${options?.preview ? "/1" : ""}`;
-      if (!activeUser) {
-        navigateTo(buildLoginPath(playerPath), { exact: true });
-        return;
-      }
       const activePlayer = persistentPlayerRef.current;
       if (
         shouldRestoreMiniPlayerForMatchingCourse({
@@ -705,7 +700,7 @@ export default function AcademyLayout() {
       }
       navigateTo(playerPath);
     },
-    [activeUser, navigateTo],
+    [navigateTo],
   );
 
   const registerPersistentPlayer =
