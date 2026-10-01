@@ -2596,7 +2596,9 @@ function CreatorEnrollmentProgress({
 
   return (
     <span className="creator-progress-cell" data-mobile-label="Progress">
-      <span>{formatDashboardPercent(value)}</span>
+      <span className="creator-enrollment-progress-value">
+        {formatDashboardPercent(value)}
+      </span>
       <CreatorCourseProgress value={value} animated />
     </span>
   );
