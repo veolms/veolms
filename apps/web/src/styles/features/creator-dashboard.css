@@ -874,10 +874,6 @@
   );
 }
 
-.creator-courses-table .creator-table-head + .creator-table-row {
-  margin-top: -1px;
-}
-
 .creator-enrollment-table .creator-table-head,
 .creator-enrollment-table .creator-table-row {
   min-width: 0;
@@ -1174,6 +1170,11 @@
 
 .creator-course-students-label {
   display: none;
+}
+
+.creator-course-students-icon {
+  display: none;
+  flex: 0 0 auto;
 }
 
 .creator-progress-cell {
@@ -1519,6 +1520,11 @@
   .creator-dashboard {
     padding: 0 0 16px;
   }
+
+  .courses-app--dashboard > .courses-main-frame > .courses-main {
+    padding-bottom: calc(58px + var(--app-viewport-safe-area-max-bottom));
+  }
+
   .creator-dashboard-heading {
     align-items: stretch;
     flex-direction: column;
@@ -1603,39 +1609,58 @@
   }
   .creator-courses-table .creator-course-row,
   .creator-courses-table .creator-course-skeleton-row {
-    grid-template-columns: 32px minmax(0, 1fr) auto;
+    grid-template-columns: 42px minmax(0, 1fr) auto auto;
+    grid-template-rows: 28px auto;
     grid-template-areas:
-      "course course course"
-      ". status students"
-      ". progress progress";
+      "course course course course"
+      ". status progress students";
     column-gap: 6px;
-    row-gap: 3px;
-    min-height: 0;
-    padding: 7px 4px 8px;
+    row-gap: 2px;
+    min-height: 51px;
+    padding: 6px 4px 7px;
   }
   .creator-courses-table .creator-course-row > span:nth-child(1),
   .creator-courses-table .creator-course-skeleton-row > span:nth-child(1) {
-    grid-area: course;
+    grid-area: 1 / 1 / -1 / -1;
   }
   .creator-courses-table .creator-course-row > span:nth-child(2),
   .creator-courses-table .creator-course-skeleton-row > span:nth-child(2) {
-    grid-area: status;
+    grid-area: 2 / 2 / 3 / 3;
   }
   .creator-courses-table .creator-course-row > span:nth-child(3),
   .creator-courses-table .creator-course-skeleton-row > span:nth-child(3) {
-    grid-area: students;
+    grid-area: 2 / 4 / 3 / 5;
     justify-self: end;
   }
   .creator-courses-table .creator-course-row > span:nth-child(4),
   .creator-courses-table .creator-course-skeleton-row > span:nth-child(4) {
-    grid-area: progress;
+    grid-area: 2 / 3 / 3 / 4;
+    justify-self: end;
   }
   .creator-courses-table .creator-course-cell {
     width: 100%;
+    align-self: stretch;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .creator-courses-table .creator-course-thumbnail,
+  .creator-courses-table .creator-course-skeleton-thumbnail {
+    width: 42px;
+    height: 42px;
+    min-height: 42px;
+    flex-basis: 42px;
+    align-self: center;
+    aspect-ratio: auto;
+  }
+  .creator-courses-table .creator-course-thumbnail-placeholder {
+    min-width: 0;
+    min-height: 0;
   }
   .creator-courses-table .creator-course-cell strong {
     display: -webkit-box;
     flex: 1 1 auto;
+    align-self: flex-start;
+    height: 2.6em;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     overflow: hidden;
@@ -1647,30 +1672,31 @@
     align-items: center;
     gap: 3px;
   }
-  .creator-courses-table .creator-course-students::before {
-    content: "·";
-    margin-right: 2px;
+  .creator-courses-table .creator-course-students-icon {
+    display: block;
     color: var(--muted);
   }
   .creator-courses-table .creator-course-students-label {
-    display: inline;
-    color: var(--muted);
-    font-size: 0.64rem;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
   }
   .creator-courses-table .creator-progress-cell {
-    width: 100%;
+    width: auto;
+    justify-self: end;
   }
   .creator-courses-table .creator-course-row .creator-progress-cell i,
   .creator-courses-table .creator-course-skeleton-row .creator-progress-cell i {
-    width: auto;
-    flex: 1 1 auto;
+    display: none;
   }
-  .creator-courses-table .creator-progress-cell[data-progress-unavailable]::before {
-    flex: 0 0 auto;
-    content: "Progress";
-    color: var(--muted);
-    font-size: 0.64rem;
-    font-weight: 600;
+  .creator-courses-table
+    .creator-progress-cell[data-progress-unavailable]::before {
+    display: none;
   }
   .creator-courses-panel .creator-panel-link {
     white-space: nowrap;
@@ -1693,13 +1719,14 @@
     position: relative;
     min-width: 0;
     min-height: 0;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 42px minmax(0, 1fr);
+    grid-template-rows: 18px 2.5em 17px;
     grid-template-areas:
-      "student"
-      "course"
-      "meta";
-    column-gap: 0;
-    row-gap: 2px;
+      "avatar name"
+      "avatar course"
+      "avatar meta";
+    column-gap: 8px;
+    row-gap: 3px;
     padding: 7px 4px 8px;
     border-top: 0;
   }
@@ -1715,15 +1742,23 @@
   }
 
   .creator-enrollment-table .creator-table-row > span:nth-child(1) {
-    grid-area: student;
+    display: contents;
   }
 
   .creator-enrollment-table .creator-table-row > span:nth-child(2) {
     grid-area: course;
-    padding-inline-start: 34px;
+    display: -webkit-box;
+    min-width: 0;
+    align-self: start;
+    height: 2.5em;
+    overflow: hidden;
     color: var(--text-secondary);
     font-size: 0.67rem;
     line-height: 1.25;
+    text-overflow: ellipsis;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
   }
 
   .creator-enrollment-table .creator-table-row > span:nth-child(3) {
@@ -1736,15 +1771,16 @@
     grid-area: meta;
     min-width: 0;
     align-items: center;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 3px 8px;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    gap: 8px;
   }
 
   .creator-enrollment-table .creator-enrollment-progress-slot {
     display: flex;
     min-width: 0;
     align-items: center;
+    flex: 0 1 auto;
   }
 
   .creator-enrollment-table .creator-enrollment-mobile-meta > time {
@@ -1753,7 +1789,7 @@
     align-items: center;
     max-width: 100%;
     flex: 0 1 auto;
-    gap: 5px;
+    justify-content: flex-end;
     overflow: hidden;
     color: var(--text-secondary);
     font-size: 0.66rem;
@@ -1763,26 +1799,24 @@
   }
 
   .creator-enrollment-table .creator-enrollment-mobile-meta > time::before {
-    flex: 0 0 auto;
-    content: "· " attr(data-mobile-label);
-    color: var(--muted);
-    font-size: 0.64rem;
-    font-weight: 600;
+    display: none;
   }
 
-  .creator-enrollment-table .creator-student-cell {
-    width: 100%;
-    gap: 6px;
-  }
-
-  .creator-enrollment-table .creator-student-avatar,
+  .creator-enrollment-table .creator-student-cell .creator-student-avatar,
   .creator-enrollment-table .creator-enrollment-skeleton-avatar {
-    width: 28px;
-    height: 28px;
-    flex-basis: 28px;
+    grid-area: avatar;
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+    align-self: start;
   }
 
-  .creator-enrollment-table .creator-student-cell strong {
+  .creator-enrollment-table .creator-student-cell strong,
+  .creator-enrollment-table .creator-enrollment-skeleton-name {
+    grid-area: name;
+    min-width: 0;
+    align-self: start;
+    display: block;
     flex: 1 1 auto;
     overflow: hidden;
     color: var(--text);
@@ -1793,16 +1827,25 @@
   .creator-enrollment-table .creator-progress-cell {
     width: auto;
     align-items: center;
-    gap: 5px;
+    gap: 0;
+  }
+
+  .creator-enrollment-table .creator-enrollment-progress-value {
+    display: inline-flex;
+    min-height: 17px;
+    align-items: center;
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--success) 17%, var(--canvas));
+    color: var(--success);
+    font-size: 0.64rem;
+    font-weight: 700;
+    line-height: 1.1;
   }
 
   .creator-enrollment-table .creator-progress-cell::before,
   .creator-enrollment-table .creator-enrollment-progress-unavailable::before {
-    flex: 0 0 auto;
-    content: attr(data-mobile-label);
-    color: var(--muted);
-    font-size: 0.64rem;
-    font-weight: 600;
+    display: none;
   }
 
   .creator-enrollment-table .creator-progress-cell i,
@@ -1814,7 +1857,7 @@
     display: flex;
     width: auto;
     align-items: center;
-    gap: 5px;
+    gap: 0;
     color: var(--muted);
     font-size: 0.67rem;
     white-space: nowrap;
@@ -1822,7 +1865,7 @@
 
   .creator-enrollment-table .creator-enrollment-skeleton-row
     .creator-enrollment-skeleton-course {
-    margin-inline-start: 34px;
+    margin-inline-start: 0;
   }
 
   .creator-enrollment-table .creator-enrollment-skeleton-time {
@@ -1837,11 +1880,7 @@
   }
 
   .creator-enrollment-table .creator-enrollment-skeleton-time::before {
-    flex: 0 0 auto;
-    content: "· " attr(data-mobile-label);
-    color: var(--muted);
-    font-size: 0.64rem;
-    font-weight: 600;
+    display: none;
   }
 
   .creator-enrollment-table .creator-enrollment-skeleton-time::after {
@@ -1870,30 +1909,6 @@
   }
   .creator-action-label--compact {
     display: inline;
-  }
-
-  .creator-courses-table .creator-course-row,
-  .creator-courses-table .creator-course-skeleton-row {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas:
-      "course course course"
-      "status progress students";
-    row-gap: 2px;
-    padding-block: 6px 7px;
-  }
-
-  .creator-courses-table .creator-progress-cell {
-    width: auto;
-    justify-self: end;
-  }
-
-  .creator-courses-table .creator-course-row .creator-progress-cell i,
-  .creator-courses-table .creator-course-skeleton-row .creator-progress-cell i {
-    display: none;
-  }
-
-  .creator-courses-table .creator-progress-cell[data-progress-unavailable]::before {
-    display: none;
   }
 }
 

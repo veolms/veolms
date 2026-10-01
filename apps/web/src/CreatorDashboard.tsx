@@ -2222,7 +2222,7 @@ function CreatorCourseThumbnail({ course }: { course: DashboardYourCourse }) {
           onError={() => setImageFailed(true)}
         />
       ) : (
-        <CourseThumbnailPlaceholder />
+        <CourseThumbnailPlaceholder className="creator-course-thumbnail-placeholder" />
       )}
     </span>
   );
@@ -2451,6 +2451,12 @@ function CoursesPanel({
                 </em>
               </span>
               <span className="creator-course-students">
+                <Users
+                  className="creator-course-students-icon"
+                  size={14}
+                  weight="regular"
+                  aria-hidden="true"
+                />
                 <span className="creator-course-students-number">
                   {formatDashboardNumber(course.students)}
                 </span>
@@ -2590,7 +2596,9 @@ function CreatorEnrollmentProgress({
 
   return (
     <span className="creator-progress-cell" data-mobile-label="Progress">
-      <span>{formatDashboardPercent(value)}</span>
+      <span className="creator-enrollment-progress-value">
+        {formatDashboardPercent(value)}
+      </span>
       <CreatorCourseProgress value={value} animated />
     </span>
   );
