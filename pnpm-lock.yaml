@@ -460,7 +460,7 @@ importers:
         specifier: workspace:*
         version: link:../storage
       fastify:
-        specifier: ^5.11.0
+        specifier: 5.11.0
         version: 5.11.0
       fastify-type-provider-zod:
         specifier: ^7.0.0
@@ -618,7 +618,7 @@ importers:
         specifier: 8.3.0
         version: 8.3.0(react-router@8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(supports-color@10.2.2)(typescript@6.0.3)(vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(wrangler@4.131.2(@types/node@24.13.3))
       fastify:
-        specifier: ^5.11.0
+        specifier: 5.11.0
         version: 5.11.0
       kysely:
         specifier: 'catalog:'
