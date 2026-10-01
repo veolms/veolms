@@ -1,0 +1,31 @@
+{
+  "name": "@veolms/plugin-sdk",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@react-router/dev": "8.3.0",
+    "fastify": "5.11.0",
+    "kysely": "catalog:"
+  },
+  "peerDependencies": {
+    "@react-router/dev": ">=8.0.0",
+    "fastify": ">=5.0.0",
+    "kysely": ">=0.27.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-router/dev": {
+      "optional": true
+    },
+    "fastify": {
+      "optional": true
+    },
+    "kysely": {
+      "optional": false
+    }
+  }
+}

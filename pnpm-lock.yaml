@@ -89,6 +89,9 @@ importers:
       '@simplewebauthn/server':
         specifier: ^13.3.2
         version: 13.3.2
+      '@veolms/api-core':
+        specifier: workspace:*
+        version: link:../../packages/api-core
       '@veolms/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -326,6 +329,9 @@ importers:
       '@veolms/video-player':
         specifier: workspace:*
         version: link:../../packages/video-player
+      '@veolms/web-core':
+        specifier: workspace:*
+        version: link:../../packages/web-core
       axios:
         specifier: ^1.7.9
         version: 1.19.0(debug@4.4.3(supports-color@10.2.2))(supports-color@7.2.0)
@@ -417,6 +423,57 @@ importers:
       vite:
         specifier: 8.2.1
         version: 8.2.1(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
+
+  packages/api-core:
+    dependencies:
+      '@fastify/autoload':
+        specifier: ^6.5.0
+        version: 6.5.0
+      '@fastify/cookie':
+        specifier: ^11.1.2
+        version: 11.1.2
+      '@fastify/cors':
+        specifier: ^11.3.0
+        version: 11.3.0
+      '@fastify/rate-limit':
+        specifier: ^11.2.0
+        version: 11.2.0
+      '@fastify/swagger':
+        specifier: ^9.8.1
+        version: 9.8.1(supports-color@10.2.2)
+      '@fastify/swagger-ui':
+        specifier: ^6.1.1
+        version: 6.1.1
+      '@veolms/config':
+        specifier: workspace:*
+        version: link:../config
+      '@veolms/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@veolms/database':
+        specifier: workspace:*
+        version: link:../database
+      '@veolms/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+      '@veolms/storage':
+        specifier: workspace:*
+        version: link:../storage
+      fastify:
+        specifier: ^5.11.0
+        version: 5.11.0
+      fastify-type-provider-zod:
+        specifier: ^7.0.0
+        version: 7.0.0(@fastify/swagger@9.8.1(supports-color@10.2.2))(fastify@5.11.0)(openapi-types@12.1.3)(zod@4.4.3)
+      kysely:
+        specifier: 'catalog:'
+        version: 0.29.4
+      openapi-types:
+        specifier: ^12.1.3
+        version: 12.1.3
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
 
   packages/config:
     dependencies:
@@ -555,6 +612,18 @@ importers:
         specifier: ^24.10.13
         version: 24.13.3
 
+  packages/plugin-sdk:
+    devDependencies:
+      '@react-router/dev':
+        specifier: 8.3.0
+        version: 8.3.0(react-router@8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(supports-color@10.2.2)(typescript@6.0.3)(vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(wrangler@4.131.2(@types/node@24.13.3))
+      fastify:
+        specifier: ^5.11.0
+        version: 5.11.0
+      kysely:
+        specifier: 'catalog:'
+        version: 0.29.4
+
   packages/storage:
     dependencies:
       '@aws-sdk/client-s3':
@@ -613,6 +682,16 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/web-core:
+    dependencies:
+      '@veolms/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+    devDependencies:
+      '@react-router/dev':
+        specifier: 8.3.0
+        version: 8.3.0(react-router@8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(supports-color@10.2.2)(typescript@6.0.3)(vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(wrangler@4.131.2(@types/node@24.13.3))
 
 packages:
 
@@ -7152,6 +7231,16 @@ snapshots:
       rfdc: 1.4.1
       yaml: 2.9.0
 
+  '@fastify/swagger@9.8.1(supports-color@10.2.2)':
+    dependencies:
+      fastify-plugin: 6.0.0
+      json-schema-resolver: 3.0.0(supports-color@10.2.2)
+      openapi-types: 12.1.3
+      rfdc: 1.4.1
+      yaml: 2.9.0
+    transitivePeerDependencies:
+      - supports-color
+
   '@fastify/swagger@9.8.1(supports-color@7.2.0)':
     dependencies:
       fastify-plugin: 6.0.0
@@ -9292,6 +9381,14 @@ snapshots:
 
   fastify-plugin@6.0.0: {}
 
+  fastify-type-provider-zod@7.0.0(@fastify/swagger@9.8.1(supports-color@10.2.2))(fastify@5.11.0)(openapi-types@12.1.3)(zod@4.4.3):
+    dependencies:
+      '@fastify/error': 4.2.0
+      '@fastify/swagger': 9.8.1(supports-color@10.2.2)
+      fastify: 5.11.0
+      openapi-types: 12.1.3
+      zod: 4.4.3
+
   fastify-type-provider-zod@7.0.0(@fastify/swagger@9.8.1(supports-color@7.2.0))(fastify@5.11.0)(openapi-types@12.1.3)(zod@4.4.3):
     dependencies:
       '@fastify/error': 4.2.0
@@ -9870,6 +9967,14 @@ snapshots:
   json-schema-ref-resolver@3.0.0:
     dependencies:
       dequal: 2.0.3
+
+  json-schema-resolver@3.0.0(supports-color@10.2.2):
+    dependencies:
+      debug: 4.4.3(supports-color@10.2.2)
+      fast-uri: 3.1.5
+      rfdc: 1.4.1
+    transitivePeerDependencies:
+      - supports-color
 
   json-schema-resolver@3.0.0(supports-color@7.2.0):
     dependencies:

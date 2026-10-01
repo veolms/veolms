@@ -1,0 +1,28 @@
+{
+  "name": "@veolms/api-core",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/autoload": "^6.5.0",
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/swagger": "^9.8.1",
+    "@fastify/swagger-ui": "^6.1.1",
+    "@veolms/config": "workspace:*",
+    "@veolms/contracts": "workspace:*",
+    "@veolms/database": "workspace:*",
+    "@veolms/plugin-sdk": "workspace:*",
+    "@veolms/storage": "workspace:*",
+    "fastify": "5.11.0",
+    "fastify-type-provider-zod": "^7.0.0",
+    "kysely": "catalog:",
+    "openapi-types": "^12.1.3",
+    "zod": "catalog:"
+  }
+}

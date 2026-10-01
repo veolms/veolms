@@ -1,4 +1,4 @@
-ge# VeoLMS Monorepo Agent Instructions
+# VeoLMS Monorepo Agent Instructions
 
 This repository is a monorepo containing the following packages and applications:
 
@@ -22,3 +22,12 @@ For work under `apps/web`, do not create, restore, or update unit-test cases.
 Do not add unit-test runners, setup files, or unit-test-only dependencies. Keep
 browser-level E2E coverage separate and preserve existing Playwright E2E tests
 unless the task explicitly asks for changes to them.
+
+## Branch Protection Rule
+
+**Never commit directly to the `development` branch.**
+
+- All changes to this repo must go through a feature branch and a Pull Request.
+- Branch naming: `feat/`, `fix/`, `chore/` prefixes.
+- A `pre-push` git hook is installed locally to enforce this. If you are an AI assistant: do not attempt to push or commit to `development` under any circumstances.
+- Cloud-specific features (billing, tenancy, analytics) must NEVER be committed here — they belong in `veolms/veolms-cloud`.
