@@ -3183,6 +3183,39 @@ function DiscussionLoadingRow({
   );
 }
 
+interface ParticipationPromptContentProps {
+  participationState: LessonParticipationState;
+  participationActionLabel?: string;
+  onParticipationAction?: () => void;
+}
+
+function ParticipationPromptContent({
+  participationState,
+  participationActionLabel,
+  onParticipationAction,
+}: ParticipationPromptContentProps) {
+  return (
+    <>
+      <p className="text-sm font-medium text-(--muted)">
+        {participationState === "pending"
+          ? "Checking participation access…"
+          : participationActionLabel === "Get access"
+            ? "Get access to participate in this lesson's discussions."
+            : "Log in to participate in this lesson's discussions."}
+      </p>
+      {participationState !== "pending" && onParticipationAction ? (
+        <button
+          type="button"
+          onClick={onParticipationAction}
+          className="inline-flex min-h-9 items-center rounded-lg bg-(--accent) px-3 py-1.5 text-xs font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+        >
+          {participationActionLabel ?? "Log in"}
+        </button>
+      ) : null}
+    </>
+  );
+}
+
 function ThreadSurface({
   lessonDescription,
   isLessonDescriptionLoading = false,
@@ -3596,27 +3629,19 @@ function ThreadSurface({
 
   const participationPrompt = !canParticipate ? (
     <div
-      className="flex flex-col items-center justify-center gap-2 py-5 text-center"
+      className="flex flex-col items-center justify-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_52%,transparent)] px-4 py-4 text-center"
       data-testid="learning-discussion-login-prompt"
     >
-      <p className="text-sm font-medium text-(--muted)">
-        {participationState === "pending"
-          ? "Checking participation access…"
-          : participationActionLabel === "Get access"
-            ? "Get access to participate in this lesson's discussions."
-            : "Log in to participate in this lesson's discussions."}
-      </p>
-      {participationState !== "pending" && onParticipationAction ? (
-        <button
-          type="button"
-          onClick={onParticipationAction}
-          className="inline-flex min-h-9 items-center rounded-lg bg-(--accent) px-3 py-1.5 text-xs font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-        >
-          {participationActionLabel ?? "Log in"}
-        </button>
-      ) : null}
+      <ParticipationPromptContent
+        participationState={participationState}
+        participationActionLabel={participationActionLabel}
+        onParticipationAction={onParticipationAction}
+      />
     </div>
   ) : null;
+
+  const showMobileParticipationPrompt =
+    isPhone && enabledKinds.length > 0 && !canParticipate;
 
   const lessonAccessMessage =
     lessonContentAccess === "denied"
@@ -3792,23 +3817,9 @@ function ThreadSurface({
       <LoadingSpinnerIcon size={24} />
     </div>
   ) : isAllInitialLoading ? (
-    <div
-      className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
-      data-testid="learning-all-loading"
-      role="status"
-      aria-label="Loading discussions"
-    >
-      <LoadingSpinnerIcon size={24} />
-    </div>
+    discussionLoadingContent
   ) : entryFilter === "note" && isNotesLoading && entries.length === 0 ? (
-    <div
-      className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
-      data-testid="learning-notes-loading"
-      role="status"
-      aria-label="Loading notes"
-    >
-      <LoadingSpinnerIcon size={24} />
-    </div>
+    discussionLoadingContent
   ) : entryFilter === "note" && isNotesError && entries.length === 0 ? (
     <div
       className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
@@ -3829,14 +3840,7 @@ function ThreadSurface({
       )}
     </div>
   ) : entryFilter !== "note" && isThreadsLoading && entries.length === 0 ? (
-    <div
-      className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
-      data-testid="learning-threads-loading"
-      role="status"
-      aria-label="Loading discussions"
-    >
-      <LoadingSpinnerIcon size={24} />
-    </div>
+    discussionLoadingContent
   ) : entryFilter !== "note" && isThreadsError && entries.length === 0 ? (
     <div
       className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
@@ -4022,6 +4026,18 @@ function ThreadSurface({
               {discussionToolbar}
             </div>
             {discussionContent}
+            {showMobileParticipationPrompt && (
+              <div
+                aria-hidden="true"
+                className={`pointer-events-none invisible opacity-0 shrink-0 ${mobileBottomNavigation ? "pb-[calc(58px+var(--app-viewport-safe-area-bottom))]" : ""}`}
+              >
+                <MobileParticipationPromptSurface
+                  participationState={participationState}
+                  participationActionLabel={participationActionLabel}
+                  onParticipationAction={onParticipationAction}
+                />
+              </div>
+            )}
           </div>
         ) : (
           <div className="min-w-0 max-w-full">{discussionContent}</div>
@@ -4124,9 +4140,15 @@ function ThreadSurface({
           </DrawerContent>
         </Drawer>
       )}
-      {isPhone && enabledKinds.length > 0 && !canParticipate
-        ? participationPrompt
-        : null}
+      {showMobileParticipationPrompt ? (
+        <MobileParticipationPromptPortal
+          mobileBottomNavigation={mobileBottomNavigation}
+          scrollHidden={mobileBottomNavigationHidden}
+          participationState={participationState}
+          participationActionLabel={participationActionLabel}
+          onParticipationAction={onParticipationAction}
+        />
+      ) : null}
     </div>
   );
 }
@@ -4144,6 +4166,76 @@ const COMPACT_COMPOSER_SURFACE = `${DESCRIPTION_SURFACE_BASE} rounded-md transit
 
 const MOBILE_COMPOSER_SURFACE_BASE =
   "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-transparent backdrop-blur-xl px-3 pt-2 pb-[max(8px,var(--app-safe-area-bottom))]";
+const MOBILE_BOTTOM_ACTION_OFFSET_CLASS =
+  "bottom-[calc(58px+var(--app-viewport-safe-area-bottom))]";
+
+interface MobileParticipationPromptSurfaceProps
+  extends ParticipationPromptContentProps {
+  testId?: string;
+  scrollHidden?: boolean;
+}
+
+function MobileParticipationPromptSurface({
+  participationState,
+  participationActionLabel,
+  onParticipationAction,
+  testId,
+  scrollHidden = false,
+}: MobileParticipationPromptSurfaceProps) {
+  return (
+    <div
+      data-learning-mobile-participation-surface
+      data-testid={testId}
+      data-scroll-hidden={scrollHidden}
+      aria-hidden={scrollHidden}
+      className={`${MOBILE_COMPOSER_SURFACE_BASE} w-full min-w-0 max-w-full transition-[transform,opacity,visibility] will-change-transform motion-reduce:transition-none ${scrollHidden ? "pointer-events-none invisible translate-y-[calc(100%+58px+var(--app-viewport-safe-area-bottom)+4px)] opacity-0 duration-180 ease-[cubic-bezier(0.4,0,1,1)]" : "visible translate-y-0 opacity-100 duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)]"}`}
+    >
+      <div className="flex min-w-0 flex-col items-center gap-1.5 px-1 py-1 text-center">
+        <ParticipationPromptContent
+          participationState={participationState}
+          participationActionLabel={participationActionLabel}
+          onParticipationAction={onParticipationAction}
+        />
+      </div>
+    </div>
+  );
+}
+
+interface MobileParticipationPromptPortalProps
+  extends ParticipationPromptContentProps {
+  mobileBottomNavigation: boolean;
+  scrollHidden: boolean;
+}
+
+function MobileParticipationPromptPortal({
+  mobileBottomNavigation,
+  scrollHidden,
+  participationState,
+  participationActionLabel,
+  onParticipationAction,
+}: MobileParticipationPromptPortalProps) {
+  const layerTarget = document.querySelector<HTMLElement>(
+    "[data-learning-motion-stage]",
+  );
+
+  return createPortal(
+    <div
+      data-learning-mobile-participation-layer
+      className={`pointer-events-none fixed inset-x-0 z-130 box-border min-w-0 max-w-full overflow-x-clip ${mobileBottomNavigation ? MOBILE_BOTTOM_ACTION_OFFSET_CLASS : "bottom-0"}`}
+    >
+      <div className="pointer-events-auto min-w-0 max-w-full">
+        <MobileParticipationPromptSurface
+          testId="learning-discussion-login-prompt"
+          participationState={participationState}
+          participationActionLabel={participationActionLabel}
+          onParticipationAction={onParticipationAction}
+          scrollHidden={scrollHidden}
+        />
+      </div>
+    </div>,
+    layerTarget ?? document.body,
+  );
+}
 
 interface MobileCompactComposerPortalProps {
   draft: DiscussionDraft;
@@ -4173,7 +4265,7 @@ function MobileCompactComposerPortal({
       data-learning-mobile-composer-layer
       className={`pointer-events-none fixed inset-x-0 z-130 box-border min-w-0 max-w-full overflow-x-clip transition-[transform,opacity] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${
         mobileBottomNavigation
-          ? "bottom-[calc(58px+var(--app-viewport-safe-area-bottom))]"
+          ? MOBILE_BOTTOM_ACTION_OFFSET_CLASS
           : "bottom-0"
       }`}
       style={{
