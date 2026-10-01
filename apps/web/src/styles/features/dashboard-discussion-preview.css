@@ -254,6 +254,12 @@
   }
 }
 
+@media (max-width: 520px) {
+  .creator-discussion-list[data-dashboard-discussion-preview] {
+    padding-inline: 6px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .creator-dashboard-state-retry,
   .creator-dashboard-state-retry-icon,
