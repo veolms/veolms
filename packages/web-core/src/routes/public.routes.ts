@@ -1,5 +1,5 @@
-import type { RouteConfigEntry } from "@react-router/dev/routes";
-import { route } from "@react-router/dev/routes";
+import { route, type RouteConfigEntry } from "@veolms/plugin-sdk";
+
 
 export function getPublicRoutes(): RouteConfigEntry[] {
   const publicCoursesRoute =

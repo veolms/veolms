@@ -231,7 +231,10 @@ export default defineConfig(({ command, mode }) => {
         {
           find: /^use-sync-external-store\/shim(?:\/with-selector)?$/,
           replacement: fileURLToPath(
-            new URL("./src/compat/useSyncExternalStoreShim.ts", import.meta.url),
+            new URL(
+              "./src/compat/useSyncExternalStoreShim.ts",
+              import.meta.url,
+            ),
           ),
         },
         // Axios' package ESM entry currently resolves its Node platform in
@@ -280,6 +283,9 @@ export default defineConfig(({ command, mode }) => {
     server: {
       port: config.WEB_PORT,
       strictPort: true,
+      fs: {
+        allow: [workspaceRoot, path.resolve(workspaceRoot, "..")],
+      },
       warmup: {
         clientFiles: [
           "./src/entry.client.tsx",

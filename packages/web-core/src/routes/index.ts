@@ -1,4 +1,4 @@
-import type { RouteConfigEntry } from "@react-router/dev/routes";
+import type { RouteConfigEntry } from "@veolms/plugin-sdk";
 
 import { getAcademyRoutes } from "./academy.routes.ts";
 import { getAuthRoutes } from "./auth.routes.ts";
