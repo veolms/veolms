@@ -70,6 +70,16 @@ export interface CreateVeoLMSApiOptions<
     paymentEventQueue: TPaymentEventQueue,
     services: TServices,
   ) => Record<string, unknown>;
+  /**
+   * Module folder names to skip during autoloading.
+   * Each name matches the folder immediately containing the `*.routes.ts` file.
+   *
+   * @example Disable the payments and webhooks modules:
+   * ```ts
+   * createVeoLMSApi({ excludeModules: ["payments", "webhooks"], ... })
+   * ```
+   */
+  excludeModules?: string[];
   /** Cloud-only ApiPlugins to register after all core setup. */
   plugins?: ApiPlugin<TDatabase>[];
 }

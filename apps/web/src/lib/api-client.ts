@@ -14,6 +14,7 @@ import {
   shouldRedirectToMfaChallenge,
 } from "../routing/routeAccess";
 import { isReactRouterBuildRequest } from "./react-router-build";
+import { setApiClient } from "@veolms/web-core";
 
 export { getApiError, type ApiError };
 
@@ -85,6 +86,7 @@ function redirectToMfaSetup(apiError: ApiError): void {
   const returnTo = `${currentPath}${window.location.search}`;
   window.location.replace(buildMfaChallengePath(returnTo));
 }
+
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: BACKEND_URL,
   withCredentials: true,
@@ -92,6 +94,8 @@ const axiosInstance: AxiosInstance = axios.create({
     "Content-Type": "application/json",
   },
 });
+
+setApiClient(axiosInstance);
 
 axiosInstance.interceptors.request.use(
   (config) => {
@@ -173,12 +177,7 @@ function isHtmlDocumentResponse(response: AxiosResponse): boolean {
 }
 
 function unwrapApiResponseData(data: unknown) {
-  if (
-    data &&
-    typeof data === "object" &&
-    "data" in data &&
-    "success" in data
-  ) {
+  if (data && typeof data === "object" && "data" in data && "success" in data) {
     return data.data;
   }
   return data;

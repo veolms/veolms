@@ -1,5 +1,10 @@
-import type { RouteConfigEntry } from "@react-router/dev/routes";
-import { index, layout, route } from "@react-router/dev/routes";
+import {
+  index,
+  layout,
+  route,
+  type RouteConfigEntry,
+} from "@veolms/plugin-sdk";
+
 
 const marker = "routes/academy-marker.tsx";
 const homeMarker = "routes/home-marker.tsx";

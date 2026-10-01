@@ -1,3 +1,7 @@
 import { createVeoLMSWeb } from "@veolms/web-core";
 
-export default createVeoLMSWeb();
+const customRoutesFile = process.env["VEO_ROUTES_FILE"];
+
+export default customRoutesFile
+  ? (await import(/* @vite-ignore */ customRoutesFile)).default
+  : createVeoLMSWeb();

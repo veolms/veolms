@@ -96,6 +96,7 @@ export async function createVeoLMSApi<
     config,
     registerJobs,
     routePluginOptions,
+    excludeModules = [],
     plugins = [],
   } = options;
 
@@ -206,9 +207,23 @@ export async function createVeoLMSApi<
     fileURLToPath(new URL("../../../apps/api/src/modules", import.meta.url));
 
   if (fs.existsSync(resolvedModulesDir)) {
+    const excludeSet = new Set(excludeModules);
+
+    // When excludeModules is provided, filter by the folder name that directly
+    // contains each *.routes.ts file (e.g. "payments" for payments/payments.routes.ts).
+    const routeMatchFilter: (path: string) => boolean =
+      excludeSet.size === 0
+        ? (path) => path.endsWith(".routes.ts")
+        : (path) => {
+            if (!path.endsWith(".routes.ts")) return false;
+            const moduleFolder =
+              path.replaceAll("\\", "/").split("/").at(-2) ?? "";
+            return !excludeSet.has(moduleFolder);
+          };
+
     await app.register(fastifyAutoload, {
       dir: resolvedModulesDir,
-      matchFilter: /\.routes\.ts$/,
+      matchFilter: routeMatchFilter,
       // Disable index-file special-casing so barrel index.ts files next to
       // *.routes.ts files don't silently suppress route registration.
       indexPattern: /^$/,
@@ -224,6 +239,7 @@ export async function createVeoLMSApi<
   }
 
   // Release pooled SMTP connections when the server shuts down.
+
   if (appServices?.email?.close) {
     app.addHook("onClose", async () => {
       await appServices.email.close();
