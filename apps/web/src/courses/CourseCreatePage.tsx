@@ -1940,7 +1940,7 @@ export function CourseWizardSkeleton({
     >
       <div className="swipeable-tab-panel__native-slide w-full min-w-0">
         {activeStep === "basics" ? (
-          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
+          <div className="relative z-10 grid grid-cols-1 md:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
             {/* Left Column: Basic Information Form */}
             <div className="flex flex-col gap-5">
               <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
@@ -2022,7 +2022,7 @@ export function CourseWizardSkeleton({
             </div>
 
             {/* Right Column: Live Course Preview */}
-            <div className="hidden lg:flex max-lg:hidden flex-col gap-5 sticky top-0 self-start">
+            <div className="flex min-w-0 flex-col gap-5 md:sticky md:top-0 md:self-start">
               <section className="rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow)">
                 <h2 className="m-0 text-(--text) text-[1.1rem] font-[650]">
                   Course Preview
@@ -3965,6 +3965,7 @@ export function CourseCreatePage({
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
   const sectionHeaderElementsRef = useRef(new Map<string, HTMLDivElement>());
+  const pendingAddedSectionScrollRef = useRef<string | null>(null);
   const lastSectionScrollRequestRef = useRef<string | null>(null);
   const sectionScrollDelayRef = useRef(300);
   const lessonTitleDraftsRef = useRef<Map<string, string>>(new Map());
@@ -4012,6 +4013,24 @@ export function CourseCreatePage({
     root.style.scrollBehavior = previousBehavior;
     return true;
   }, []);
+
+  useEffect(() => {
+    const sectionId = pendingAddedSectionScrollRef.current;
+    if (!sectionId || !sections.some((section) => section.id === sectionId)) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      if (
+        pendingAddedSectionScrollRef.current === sectionId &&
+        scrollSectionHeaderIntoView(sectionId)
+      ) {
+        pendingAddedSectionScrollRef.current = null;
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [sections, scrollSectionHeaderIntoView]);
 
   useEffect(() => {
     if (activeStep !== "curriculum" || !requestedSectionId) {
@@ -6489,11 +6508,13 @@ export function CourseCreatePage({
     };
 
     // Show temporary section immediately
+    pendingAddedSectionScrollRef.current = tempSectionId;
     setSections((prev) => [...prev, optimisticSection]);
     setIsCreatingSection(true);
 
     let targetCourseId = currentCourseId;
     if (!targetCourseId) {
+      pendingAddedSectionScrollRef.current = null;
       setSections((prev) => prev.filter((s) => s.id !== tempSectionId));
       setToastMessage("Please enter a course title on the Basics tab first.");
       setIsCreatingSection(false);
@@ -6509,6 +6530,9 @@ export function CourseCreatePage({
       });
 
       // Replace temporary ID with real backend UUID
+      if (pendingAddedSectionScrollRef.current === tempSectionId) {
+        pendingAddedSectionScrollRef.current = createdSection.id;
+      }
       setSections((prev) => {
         const hasServerSection = prev.some((s) => s.id === createdSection.id);
         if (hasServerSection) {
@@ -6533,6 +6557,9 @@ export function CourseCreatePage({
       });
     } catch (err: unknown) {
       // Rollback temporary section on failure
+      if (pendingAddedSectionScrollRef.current === tempSectionId) {
+        pendingAddedSectionScrollRef.current = null;
+      }
       setSections((prev) => prev.filter((s) => s.id !== tempSectionId));
       const errorMsg =
         (err as { message?: string })?.message || "Failed to create section.";
@@ -9873,7 +9900,7 @@ export function CourseCreatePage({
           >
         {(panelStep) =>
           !mountedTabs.has(panelStep) ? null : panelStep === "basics" ? (
-            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
+            <div className="relative z-10 grid grid-cols-1 md:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
               {/* Left Column: Form Sections */}
               <div className="flex flex-col gap-5">
                 {/* Basic Information Section */}
@@ -10405,7 +10432,7 @@ export function CourseCreatePage({
               </div>
 
               {/* Right Column: Live Course Preview */}
-              <div className="hidden lg:flex max-lg:hidden flex-col gap-5 sticky top-0 self-start">
+              <div className="flex min-w-0 flex-col gap-5 md:sticky md:top-0 md:self-start">
                 <section className="rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow)">
                   <h2 className="m-0 text-(--text) text-[1.1rem] font-[650]">
                     Course Preview

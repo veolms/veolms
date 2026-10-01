@@ -937,7 +937,7 @@ function CourseHeroSection({
           {/* Title & Metadata Group */}
           <div className="flex flex-col min-w-0 shrink-0 max-[1200px]:order-1 max-[1200px]:w-full gap-2.5">
             {/* 1. Title */}
-            <h1 className="m-0 text-(--text) text-[2.15rem] font-extrabold leading-[1.16] tracking-[-0.025em] max-[900px]:text-[1.85rem] max-[640px]:text-[1.65rem]">
+            <h1 className="m-0 text-(--text) text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em]">
               {title}
             </h1>
 

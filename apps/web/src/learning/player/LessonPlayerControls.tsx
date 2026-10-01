@@ -146,6 +146,31 @@ export interface LessonPlayerControlsProps {
   onMobileLandscapeFullscreenChange?: (active: boolean) => void;
 }
 
+export function LessonPlayerMinimizeControl({
+  icon,
+  mobileFullscreen = false,
+  onMinimize,
+}: {
+  icon: ReactNode;
+  mobileFullscreen?: boolean;
+  onMinimize: () => void;
+}) {
+  return (
+    <div
+      className={`pointer-events-auto absolute left-2 top-2 ${mobileFullscreen ? "!left-3 sm:!left-3" : ""}`}
+    >
+      <PlayerIconButton
+        label={LEARNING_PLAYER_MINIMIZE_LABEL}
+        title={LEARNING_PLAYER_MINIMIZE_TITLE}
+        aria-keyshortcuts={LEARNING_PLAYER_MINIMIZE_SHORTCUT}
+        className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} !size-9 !rounded-full !bg-transparent !shadow-none drop-shadow-none`}
+        icon={icon}
+        onClick={onMinimize}
+      />
+    </div>
+  );
+}
+
 function CourseLessonsButton({
   open,
   onToggle,
@@ -709,18 +734,11 @@ export function LessonPlayerControls({
                 : "absolute inset-0"
             }
           >
-            <div
-              className={`pointer-events-auto absolute left-2 top-2 ${mobileFullscreen ? "!left-3 sm:!left-3" : ""}`}
-            >
-              <PlayerIconButton
-                label={LEARNING_PLAYER_MINIMIZE_LABEL}
-                title={LEARNING_PLAYER_MINIMIZE_TITLE}
-                aria-keyshortcuts={LEARNING_PLAYER_MINIMIZE_SHORTCUT}
-                className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} !size-9 !rounded-full !bg-transparent !shadow-none drop-shadow-none`}
-                icon={<MinimizeIcon size={22} />}
-                onClick={onMinimize}
-              />
-            </div>
+            <LessonPlayerMinimizeControl
+              icon={<MinimizeIcon size={22} />}
+              mobileFullscreen={mobileFullscreen}
+              onMinimize={onMinimize}
+            />
           </div>
         </div>
       ) : null}

@@ -111,11 +111,11 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
         <div>
           <h1
             id="reviews-page-title"
-            className="text-[clamp(1.9rem,3.4vw,2.7rem)] font-[740] tracking-[-0.055em] leading-[1.02] text-(--text)"
+            className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)"
           >
             Reviews
           </h1>
-          <p className="mt-2 text-[0.92rem] text-(--muted) leading-normal">
+          <p className="mt-1.5 text-[0.88rem] leading-6 text-(--muted)">
             See what learners are saying about their learning experience.
           </p>
         </div>

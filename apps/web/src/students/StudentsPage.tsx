@@ -142,18 +142,13 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
       {/* Top Header Row with Title, Description, and Header Icon Badge */}
       <header className="flex items-start justify-between gap-5 mb-6">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-(--accent)">
-              Instructor Workspace
-            </span>
-          </div>
           <h1
             id="students-page-title"
-            className="text-[clamp(1.9rem,3.4vw,2.7rem)] font-[740] tracking-[-0.055em] leading-[1.02] text-(--text) mt-1"
+            className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)"
           >
             Students
           </h1>
-          <p className="mt-2 text-[0.92rem] text-(--muted) leading-normal">
+          <p className="mt-1.5 text-[0.88rem] leading-6 text-(--muted)">
             Review learners, access, and progress across your academy.
           </p>
         </div>

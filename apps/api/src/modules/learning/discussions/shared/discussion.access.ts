@@ -66,6 +66,11 @@ export interface DiscussionAccess {
     actor: DiscussionActor,
     courseId: string,
   ): Promise<void>;
+  assertCanParticipateInCourse(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+    courseId: string,
+  ): Promise<void>;
   assertNotesEnabled(
     db: DatabaseExecutor,
     courseId: string,
@@ -202,6 +207,13 @@ export function createDiscussionAccess(): DiscussionAccess {
       if (!allowed) {
         throw DiscussionErrors.courseAccessDenied();
       }
+    },
+
+    async assertCanParticipateInCourse(db, actor, courseId) {
+      if (isAdmin(actor)) return;
+      if (await isCourseCreator(db, actor.userId, courseId)) return;
+      if (await access.hasActiveAccess(db, actor.userId, courseId)) return;
+      throw DiscussionErrors.courseAccessDenied();
     },
 
     async assertNotesEnabled(db, courseId) {

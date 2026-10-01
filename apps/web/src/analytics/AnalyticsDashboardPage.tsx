@@ -70,12 +70,11 @@ function DateRangeTabs({
 }
 
 function PageHeader({
-  eyebrow,
   title,
   description,
   action,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   description: string;
   action?: ReactNode;
@@ -83,14 +82,10 @@ function PageHeader({
   return (
     <header className="pt-2 sm:pt-0 flex flex-col gap-3.5 sm:gap-5 border-b border-(--border) pb-4.5 sm:pb-7 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <p className="flex items-center gap-2 text-[0.68rem] font-bold uppercase tracking-[0.2em] text-(--accent)">
-          <span className="size-1.5 rounded-full bg-(--accent)" aria-hidden="true" />
-          {eyebrow}
-        </p>
-        <h1 className="mt-2.5 sm:mt-2 text-[clamp(1.75rem,3vw,2.55rem)] font-semibold tracking-[-0.04em] text-(--text)">
+        <h1 className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
           {title}
         </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-(--muted)">{description}</p>
+        <p className="mt-1.5 max-w-2xl text-[0.88rem] leading-6 text-(--muted)">{description}</p>
       </div>
       {action ? (
         <div className="flex shrink-0 flex-wrap items-center gap-2 pt-2 pb-0.5 sm:py-0">
@@ -123,9 +118,8 @@ function AnalyticsContent({ isAdmin }: { isAdmin: boolean }) {
   ];
 
   return (
-    <main className="mx-auto grid w-full max-w-[1320px] gap-3.5 sm:gap-6 px-0 py-0.5 sm:p-6 xl:p-8">
+    <main className="mx-auto grid w-full max-w-[1800px] gap-6">
       <PageHeader
-        eyebrow={isAdmin ? "Academy insights" : "Instructor insights"}
         title="Analytics"
         description={
           isAdmin

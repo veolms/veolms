@@ -1067,7 +1067,7 @@ export function ProfileSettings({
     >
       <section
         className="settings-profile"
-        aria-labelledby="profile-settings-title"
+        aria-label="Profile settings"
       >
         <div className="settings-profile__layout">
           <div className="settings-profile__preview-column">

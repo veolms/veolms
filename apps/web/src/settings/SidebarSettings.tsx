@@ -466,16 +466,6 @@ export function SidebarSettings({
 
   return (
     <div className="settings-content settings-sidebar-settings">
-      <div className="settings-sidebar-category-heading">
-        <span aria-hidden="true">
-          <SidebarSimple size={21} weight="duotone" />
-        </span>
-        <div>
-          <h2>Sidebar header</h2>
-          <p>Control how the brand and collapse action share the header.</p>
-        </div>
-      </div>
-
       <section className="settings-section settings-sidebar-header-section">
         <div className="settings-section__heading-row">
           <div>

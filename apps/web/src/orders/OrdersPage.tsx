@@ -118,7 +118,7 @@ export function OrdersPage({
   return (
     <main
       data-orders-surface=""
-      className="mx-auto flex w-full max-w-[1360px] flex-col gap-4 sm:gap-6 px-3 pb-8 sm:px-6 sm:pb-12 font-sans"
+      className="mx-auto flex w-full max-w-[1800px] flex-col gap-6 font-sans"
       aria-labelledby="orders-page-title"
     >
       {/* Top Header Row with Title, Description, and Header Icon Badge */}
@@ -126,11 +126,11 @@ export function OrdersPage({
         <div>
           <h1
             id="orders-page-title"
-            className="text-[clamp(1.9rem,3.4vw,2.7rem)] font-[740] tracking-[-0.055em] leading-[1.02] text-(--text)"
+            className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)"
           >
             Orders
           </h1>
-          <p className="mt-2 text-[0.92rem] text-(--muted) leading-normal">
+          <p className="mt-1.5 text-[0.88rem] leading-6 text-(--muted)">
             Manage purchases, transactions, and refunds across your academy.
           </p>
         </div>

@@ -155,12 +155,12 @@ export function OrderHistoryTable({
 
   return (
     <div
-      className="min-w-0 overflow-hidden rounded-[18px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) shadow-(--card-shadow)"
+      className="@container/history min-w-0 overflow-hidden rounded-[18px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) shadow-(--card-shadow)"
       style={{ boxShadow: "var(--card-shadow)" }}
       aria-label="Purchase history"
     >
       {/* Desktop / Tablet Table View */}
-      <div className="hidden overflow-x-auto md:block">
+      <div className="hidden overflow-x-auto @3xl/history:block">
         <table className="w-full min-w-[860px] border-collapse text-left">
           <thead className="border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_45%,transparent)] text-[11px] font-bold uppercase tracking-wider text-(--muted) select-none">
             <tr>
@@ -258,7 +258,7 @@ export function OrderHistoryTable({
       </div>
 
       {/* Mobile Card Feed View */}
-      <div className="divide-y divide-[color-mix(in_srgb,var(--text)_6%,transparent)] md:hidden">
+      <div className="divide-y divide-[color-mix(in_srgb,var(--text)_6%,transparent)] @3xl/history:hidden">
         {orders.map((order) => {
           const brand = getCourseBrandBadge(order.courseTitle);
           return (

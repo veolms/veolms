@@ -7,6 +7,89 @@
   color: var(--text);
 }
 
+.settings-page__topbar {
+  --settings-tab-nav-bleed: clamp(16px, 2.25vw, 25px);
+  position: sticky;
+  top: var(--settings-page-sticky-top, 0px);
+  z-index: 25;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin-inline: calc(-1 * var(--settings-tab-nav-bleed));
+  padding-inline: var(--settings-tab-nav-bleed);
+  background: var(--main-surface);
+}
+
+.settings-page__heading {
+  display: flex;
+  min-height: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  color: var(--text);
+}
+
+.settings-page__heading-copy {
+  min-width: 0;
+}
+
+.settings-page__heading-copy h1 {
+  margin: 0;
+}
+
+.settings-page__heading-copy p {
+  max-width: min(100%, 42rem);
+  margin-bottom: 0;
+}
+
+.settings-page__icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 14px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 17%, var(--surface-strong));
+  box-shadow: 0 8px 20px
+    color-mix(in srgb, var(--accent-shadow) 42%, transparent);
+}
+
+.settings-page__icon > svg {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+}
+
+.settings-page__topbar > .settings-tabs button {
+  min-height: 46px;
+}
+
+@media (max-width: 640px) {
+  .settings-page__topbar {
+    gap: 8px;
+  }
+
+  .settings-page__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 13px;
+  }
+
+  .settings-page__topbar > .settings-tabs button {
+    min-height: 43px;
+  }
+}
+
+@media (min-width: 641px) {
+  :root[data-content-layout="framed"] .courses-main--settings {
+    --settings-page-sticky-top: calc(
+      -1 * var(--application-page-block-start, 22px)
+    );
+  }
+}
+
 /* Page/content tabs share one semantic color contract. Monochrome remains the
    safe base; multicolor is enabled explicitly or inherited from the sidebar. */
 .page-tabs [role="tab"] {
@@ -109,21 +192,22 @@
 }
 
 .settings-tabs {
-  --settings-tab-nav-bleed: clamp(16px, 2.25vw, 25px);
-  position: sticky;
-  top: var(--page-tabs-sticky-top, 0px);
-  z-index: 25;
   display: flex;
+  flex-wrap: nowrap;
   min-width: 0;
-  margin: 26px calc(-1 * var(--settings-tab-nav-bleed)) 0;
-  padding: 6px var(--settings-tab-nav-bleed) 0;
-  gap: 8px;
+  margin: 0;
+  padding: 0;
+  gap: 4px 8px;
   overflow-x: auto;
-  background: color-mix(in srgb, var(--main-surface) 94%, transparent);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
   border-bottom: 1px solid
     color-mix(in srgb, var(--surface-strong) 72%, transparent);
+}
+
+.settings-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .settings-tabs button {
@@ -153,7 +237,7 @@
   color: var(--text);
   background: color-mix(in srgb, var(--surface) 48%, transparent);
 }
-.settings-page > .settings-tabs button:hover {
+.settings-page .settings-tabs button:hover {
   background: transparent;
 }
 .settings-tabs button:focus-visible {
@@ -170,7 +254,7 @@
   --swipeable-tab-panel-inline-start: var(--settings-tab-swipe-bleed);
   --swipeable-tab-panel-inline-end: var(--settings-tab-swipe-bleed);
   min-width: 0;
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 .settings-content {

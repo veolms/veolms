@@ -32,6 +32,51 @@ export interface MiniPlayerControlsProps {
   onRestore: () => void;
 }
 
+export function MiniPlayerRestoreControl({
+  mobile = false,
+  onRestore,
+}: {
+  mobile?: boolean;
+  onRestore: () => void;
+}) {
+  if (mobile) {
+    return (
+      <button
+        type="button"
+        className="absolute inset-0 z-10 cursor-pointer rounded-xl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white"
+        aria-label={LEARNING_PLAYER_EXPAND_LABEL}
+        title={LEARNING_PLAYER_EXPAND_TITLE}
+        aria-keyshortcuts={LEARNING_PLAYER_MINIMIZE_SHORTCUT}
+        data-learning-mini-player-restore=""
+        onClick={onRestore}
+      />
+    );
+  }
+
+  return (
+    <div className="relative z-50 group/expand pointer-events-auto">
+      <PlayerIconButton
+        label="Expand [I]"
+        title=""
+        aria-keyshortcuts={LEARNING_PLAYER_MINIMIZE_SHORTCUT}
+        data-learning-mini-player-restore=""
+        className="!size-9 !rounded-none !bg-transparent hover:!bg-transparent text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
+        icon={<AppIcon name="miniPlayerExpand" className="size-5" />}
+        onClick={(event) => {
+          event.stopPropagation();
+          onRestore();
+        }}
+      />
+      <div className="pointer-events-none absolute left-0 top-full z-50 mt-1.5 hidden group-hover/expand:flex items-center gap-1.5 px-2 py-1 rounded bg-black/90 text-xs text-white shadow-lg whitespace-nowrap font-medium">
+        <span>Expand</span>
+        <kbd className="px-1 py-0.2 rounded bg-white/20 text-[10px] font-semibold">
+          I
+        </kbd>
+      </div>
+    </div>
+  );
+}
+
 export function MiniPlayerControls({
   lessonTitle,
   courseTitle: _courseTitle,
@@ -59,15 +104,7 @@ export function MiniPlayerControls({
     >
       {/* Mobile Controls (<= 640px) */}
       <div className="min-[641px]:hidden absolute inset-0">
-        <button
-          type="button"
-          className="absolute inset-0 z-10 cursor-pointer rounded-xl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white"
-          aria-label={LEARNING_PLAYER_EXPAND_LABEL}
-          title={LEARNING_PLAYER_EXPAND_TITLE}
-          aria-keyshortcuts={LEARNING_PLAYER_MINIMIZE_SHORTCUT}
-          data-learning-mini-player-restore=""
-          onClick={onRestore}
-        />
+        <MiniPlayerRestoreControl mobile onRestore={onRestore} />
         <div
           className={cn(
             "pointer-events-none absolute inset-0 z-20 bg-linear-to-t from-black/34 via-transparent to-black/30",
@@ -190,26 +227,7 @@ export function MiniPlayerControls({
           className="pointer-events-none absolute inset-x-2 top-2 z-50 flex items-center justify-between"
           data-learning-mini-player-gesture-ignore=""
         >
-          <div className="relative z-50 group/expand pointer-events-auto">
-            <PlayerIconButton
-              label="Expand [I]"
-              title=""
-              aria-keyshortcuts={LEARNING_PLAYER_MINIMIZE_SHORTCUT}
-              data-learning-mini-player-restore=""
-              className="!size-9 !rounded-none !bg-transparent hover:!bg-transparent text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
-              icon={
-                <AppIcon name="miniPlayerExpand" className="size-5" />
-              }
-              onClick={(event) => {
-                event.stopPropagation();
-                onRestore();
-              }}
-            />
-            <div className="pointer-events-none absolute left-0 top-full z-50 mt-1.5 hidden group-hover/expand:flex items-center gap-1.5 px-2 py-1 rounded bg-black/90 text-xs text-white shadow-lg whitespace-nowrap font-medium">
-              <span>Expand</span>
-              <kbd className="px-1 py-0.2 rounded bg-white/20 text-[10px] font-semibold">I</kbd>
-            </div>
-          </div>
+          <MiniPlayerRestoreControl onRestore={onRestore} />
 
           <div className="relative z-50 group/close pointer-events-auto">
             <PlayerIconButton

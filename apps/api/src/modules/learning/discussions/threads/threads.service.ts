@@ -16,6 +16,7 @@ import type {
   WorkspaceDiscussionItem,
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
+import { DiscussionErrors } from "../shared/discussion.errors.ts";
 import {
   createDiscussionOutbox,
   syncMentionsAndNotify,
@@ -39,6 +40,10 @@ import {
   type DiscussionAccess,
   type DiscussionActor,
 } from "../shared/discussion.access.ts";
+import {
+  createLessonDiscussionAccess,
+  type LessonDiscussionAccess,
+} from "../shared/lesson-discussion-access.ts";
 import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import type {
   MentionWorkspaceRow,
@@ -64,6 +69,8 @@ export type ThreadsListQuery = ListLearningThreadsQuery & {
   currentUserId?: string;
   roles?: readonly string[];
   ids?: readonly string[];
+  /** Internal lesson-feed call after lesson-level read authorization. */
+  skipCourseAccessCheck?: boolean;
 };
 
 function assertVisibilityAllowed(
@@ -104,7 +111,7 @@ export interface ThreadsService {
   getThread(
     db: DatabaseExecutor,
     threadId: string,
-    actor: DiscussionActor,
+    actor: DiscussionActor | null,
   ): Promise<LearningThread>;
 
   listThreads(
@@ -139,6 +146,7 @@ export function createThreadsService(
   attachmentsRepo: AttachmentsRepository,
   courseAccess: DiscussionAccess = createDiscussionAccess(),
   bookmarksRepo: BookmarksRepository = createBookmarksRepository(),
+  lessonAccess: LessonDiscussionAccess = createLessonDiscussionAccess(),
 ): ThreadsService {
   const outbox = createDiscussionOutbox();
 
@@ -320,7 +328,7 @@ export function createThreadsService(
         throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
       }
 
-      await courseAccess.assertCanAccessCourse(
+      await courseAccess.assertCanParticipateInCourse(
         db,
         {
           userId: input.userId,
@@ -445,7 +453,33 @@ export function createThreadsService(
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
       }
 
-      await courseAccess.assertCanAccessThread(db, actor, row);
+      const lessonReadAccess = row.lessonId
+        ? await lessonAccess.assertCanReadLesson(db, {
+            courseId: row.courseId,
+            lessonId: row.lessonId,
+            actor,
+          })
+        : null;
+      if (lessonReadAccess?.canReadPrivateState) {
+        await courseAccess.assertCanAccessThread(db, actor!, row);
+      } else if (lessonReadAccess) {
+        courseAccess.assertThreadIsActive(row);
+        if (row.visibility !== "public") {
+          throw httpError(
+            404,
+            "THREAD_NOT_FOUND",
+            "Discussion thread not found",
+          );
+        }
+      } else {
+        if (!actor) {
+          throw DiscussionErrors.unauthorized();
+        }
+        await courseAccess.assertCanAccessThread(db, actor!, row);
+      }
+      const canReadPrivateState = lessonReadAccess
+        ? lessonReadAccess.canReadPrivateState
+        : Boolean(actor);
 
       const attachments = await db
         .selectFrom("learning_attachments")
@@ -460,49 +494,51 @@ export function createThreadsService(
       let isMentioned = false;
 
       const [like, bookmark, follow, threadMention, replyMention] =
-        await Promise.all([
-          db
-            .selectFrom("learning_likes")
-            .select("id")
-            .where("user_id", "=", actor.userId)
-            .where("target_type", "=", "thread")
-            .where("target_id", "=", threadId)
-            .executeTakeFirst(),
-          db
-            .selectFrom("learning_bookmarks")
-            .select("id")
-            .where("user_id", "=", actor.userId)
-            .where("thread_id", "=", threadId)
-            .executeTakeFirst(),
-          db
-            .selectFrom("learning_follows")
-            .select("id")
-            .where("user_id", "=", actor.userId)
-            .where("thread_id", "=", threadId)
-            .executeTakeFirst(),
-          db
-            .selectFrom("learning_mentions")
-            .select("id")
-            .where("mentioned_user_id", "=", actor.userId)
-            .where("source_type", "=", "thread")
-            .where("source_id", "=", threadId)
-            .executeTakeFirst(),
-          db
-            .selectFrom("learning_mentions as m")
-            .innerJoin("learning_replies as lr", "lr.id", "m.source_id")
-            .select("m.id")
-            .where("m.mentioned_user_id", "=", actor.userId)
-            .where("m.source_type", "=", "reply")
-            .where("lr.thread_id", "=", threadId)
-            .executeTakeFirst(),
-        ]);
+        actor && canReadPrivateState
+          ? await Promise.all([
+              db
+                .selectFrom("learning_likes")
+                .select("id")
+                .where("user_id", "=", actor.userId)
+                .where("target_type", "=", "thread")
+                .where("target_id", "=", threadId)
+                .executeTakeFirst(),
+              db
+                .selectFrom("learning_bookmarks")
+                .select("id")
+                .where("user_id", "=", actor.userId)
+                .where("thread_id", "=", threadId)
+                .executeTakeFirst(),
+              db
+                .selectFrom("learning_follows")
+                .select("id")
+                .where("user_id", "=", actor.userId)
+                .where("thread_id", "=", threadId)
+                .executeTakeFirst(),
+              db
+                .selectFrom("learning_mentions")
+                .select("id")
+                .where("mentioned_user_id", "=", actor.userId)
+                .where("source_type", "=", "thread")
+                .where("source_id", "=", threadId)
+                .executeTakeFirst(),
+              db
+                .selectFrom("learning_mentions as m")
+                .innerJoin("learning_replies as lr", "lr.id", "m.source_id")
+                .select("m.id")
+                .where("m.mentioned_user_id", "=", actor.userId)
+                .where("m.source_type", "=", "reply")
+                .where("lr.thread_id", "=", threadId)
+                .executeTakeFirst(),
+            ])
+          : [undefined, undefined, undefined, undefined, undefined];
 
       isLiked = Boolean(like);
       isBookmarked = Boolean(bookmark);
       isFollowing = Boolean(follow);
       isMentioned = Boolean(threadMention || replyMention);
 
-      const mapped = mapThreadRow(row, actor.userId, attachments);
+      const mapped = mapThreadRow(row, actor?.userId, attachments);
       mapped.isLiked = isLiked;
       mapped.isBookmarked = isBookmarked;
       mapped.isFollowing = isFollowing;
@@ -516,7 +552,7 @@ export function createThreadsService(
         userId: query.currentUserId || "",
         roles: query.roles || [],
       };
-      if (query.courseId) {
+      if (query.courseId && !query.skipCourseAccessCheck) {
         const course = await db
           .selectFrom("courses")
           .select("id")
@@ -689,6 +725,11 @@ export function createThreadsService(
           );
         }
 
+        await courseAccess.assertCanParticipateInCourse(
+          trx,
+          actor,
+          row.courseId,
+        );
         await courseAccess.assertCanAccessThread(trx, actor, row);
         courseAccess.assertThreadIsActive(row);
 
@@ -758,6 +799,11 @@ export function createThreadsService(
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
       }
 
+      await courseAccess.assertCanParticipateInCourse(
+        db,
+        actor,
+        row.courseId,
+      );
       await courseAccess.assertCanAccessThread(db, actor, row);
       courseAccess.assertThreadIsActive(row);
 

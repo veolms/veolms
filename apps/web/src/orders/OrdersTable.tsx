@@ -208,7 +208,7 @@ const OrderRow = memo(function OrderRow({
       aria-selected={isSelected}
       onClick={() => onSelectOrder(order.id)}
       onKeyDown={handleRowKeyDown}
-      className={`group absolute left-0 top-0 w-full flex cursor-pointer flex-col gap-2.5 border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] p-3.5 transition-colors hover:bg-(--hover) focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--accent) ${orderListGridColumns} md:grid md:min-w-[1040px] md:items-center md:gap-0 md:p-0 ${
+      className={`group absolute inset-x-0 top-0 w-auto flex cursor-pointer flex-col gap-2.5 border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] p-3.5 transition-colors hover:bg-(--hover) focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--accent) ${orderListGridColumns} @3xl/orders:grid @3xl/orders:min-w-[1040px] @3xl/orders:items-center @3xl/orders:gap-0 @3xl/orders:p-0 ${
         isSelected
           ? "bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] border-l-3 border-l-(--accent)"
           : ""
@@ -216,7 +216,7 @@ const OrderRow = memo(function OrderRow({
       style={{ transform }}
     >
       {/* Learner Cell */}
-      <div role="cell" className="min-w-0 pr-10 md:pr-0 md:px-5 md:py-3.5">
+      <div role="cell" className="min-w-0 pr-10 @3xl/orders:pr-0 @3xl/orders:px-5 @3xl/orders:py-3.5">
         <div className="flex items-center gap-3">
           <StudentAvatar
             name={studentName}
@@ -235,7 +235,7 @@ const OrderRow = memo(function OrderRow({
       </div>
 
       {/* Course Cell */}
-      <div role="cell" className="flex items-center justify-between gap-2.5 min-w-0 md:px-4 md:py-3.5">
+      <div role="cell" className="flex items-center justify-between gap-2.5 min-w-0 @3xl/orders:px-4 @3xl/orders:py-3.5">
         <div className="flex items-center gap-2.5 min-w-0">
           <span
             className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg text-[11px] font-extrabold tracking-tight shadow-xs"
@@ -253,7 +253,7 @@ const OrderRow = memo(function OrderRow({
         </div>
         {/* Amount on mobile only */}
         <span
-          className="shrink-0 font-mono text-sm font-bold text-(--text) md:hidden"
+          className="shrink-0 font-mono text-sm font-bold text-(--text) @3xl/orders:hidden"
           title={earningsTooltip}
         >
           {formattedPrice}
@@ -263,14 +263,14 @@ const OrderRow = memo(function OrderRow({
       {/* Amount Cell (Desktop Grid) */}
       <div
         role="cell"
-        className="hidden md:block px-4 py-3.5 font-mono text-sm font-bold text-(--text) whitespace-nowrap"
+        className="hidden @3xl/orders:block px-4 py-3.5 font-mono text-sm font-bold text-(--text) whitespace-nowrap"
         title={earningsTooltip}
       >
         {formattedPrice}
       </div>
 
       {/* Coupon Cell (Desktop Grid) */}
-      <div role="cell" className="hidden md:flex px-4 py-3.5 items-center gap-1.5 min-w-0">
+      <div role="cell" className="hidden @3xl/orders:flex px-4 py-3.5 items-center gap-1.5 min-w-0">
         {coupon ? (
           <>
             <span className="inline-flex items-center rounded-md bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-2 py-0.5 text-[11px] font-bold text-(--accent) border border-[color-mix(in_srgb,var(--accent)_30%,transparent)]">
@@ -288,7 +288,7 @@ const OrderRow = memo(function OrderRow({
       </div>
 
       {/* Date Cell (Desktop Grid) */}
-      <div role="cell" className="hidden md:block px-4 py-3.5 whitespace-nowrap min-w-0">
+      <div role="cell" className="hidden @3xl/orders:block px-4 py-3.5 whitespace-nowrap min-w-0">
         <span className="block text-xs font-semibold text-(--text)">
           {dateStr}
         </span>
@@ -298,7 +298,7 @@ const OrderRow = memo(function OrderRow({
       </div>
 
       {/* Status Cell (Desktop Grid) */}
-      <div role="cell" className="hidden md:block px-4 py-3.5 whitespace-nowrap">
+      <div role="cell" className="hidden @3xl/orders:block px-4 py-3.5 whitespace-nowrap">
         <span
           className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.75 text-[11px] font-semibold ${statusStyle.pillClass}`}
         >
@@ -310,7 +310,7 @@ const OrderRow = memo(function OrderRow({
       {/* Actions Cell */}
       <div
         role="cell"
-        className="absolute right-3.5 top-3.5 md:static md:flex md:items-center md:justify-end md:px-5 md:py-3.5 md:text-right"
+        className="absolute right-3.5 top-3.5 @3xl/orders:static @3xl/orders:flex @3xl/orders:items-center @3xl/orders:justify-end @3xl/orders:px-5 @3xl/orders:py-3.5 @3xl/orders:text-right"
         onClick={(e) => e.stopPropagation()}
       >
         <CourseActionMenu
@@ -412,7 +412,7 @@ const OrderRow = memo(function OrderRow({
       </div>
 
       {/* Mobile Card Footer: Date + Coupon on left, Status Pill on right */}
-      <div className="flex min-w-0 items-center justify-between gap-2 pt-2 border-t border-[color-mix(in_srgb,var(--text)_5%,transparent)] text-xs md:hidden">
+      <div className="flex min-w-0 items-center justify-between gap-2 pt-2 border-t border-[color-mix(in_srgb,var(--text)_5%,transparent)] text-xs @3xl/orders:hidden">
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-mono text-[11.5px] text-(--muted)">
             {dateStr}
@@ -553,7 +553,7 @@ export const OrdersTable = memo(function OrdersTable({
         className="overflow-hidden rounded-[18px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface))"
         style={{ boxShadow: "var(--card-shadow)" }}
       >
-        <div className="overflow-x-auto">
+        <div className="@container/orders overflow-x-auto">
           <div
             role="table"
             aria-label="Orders list"
@@ -562,7 +562,7 @@ export const OrdersTable = memo(function OrdersTable({
             {/* Table Header */}
             <div
               role="row"
-              className={`hidden md:grid min-w-[1040px] items-center border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_45%,transparent)] text-[11px] font-bold uppercase tracking-wider text-(--muted) select-none ${orderListGridColumns}`}
+              className={`hidden @3xl/orders:grid min-w-[1040px] items-center border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_45%,transparent)] text-[11px] font-bold uppercase tracking-wider text-(--muted) select-none ${orderListGridColumns}`}
             >
               <div role="columnheader" className="px-5 py-3.5">
                 Learner
@@ -604,7 +604,7 @@ export const OrdersTable = memo(function OrdersTable({
               ref={feedRef}
               role="rowgroup"
               aria-busy={isLoading || isFetchingNextPage}
-              className="relative min-w-0 w-full md:min-w-[1040px]"
+              className="relative min-w-0 w-full @3xl/orders:min-w-[1040px]"
               style={{
                 height: `${virtualizer.getTotalSize()}px`,
               }}
