@@ -24,7 +24,7 @@ const STUDENT_ROW_OVERSCAN = 8;
 const STUDENT_LOAD_AHEAD = 12;
 
 const studentListGridColumns =
-  "md:grid-cols-[minmax(220px,1.35fr)_minmax(180px,1.2fr)_minmax(190px,1.15fr)_minmax(160px,1fr)_minmax(110px,0.75fr)_minmax(105px,0.7fr)_minmax(60px,0.35fr)]";
+  "@3xl/students:grid-cols-[minmax(220px,1.35fr)_minmax(180px,1.2fr)_minmax(190px,1.15fr)_minmax(160px,1fr)_minmax(110px,0.75fr)_minmax(105px,0.7fr)_minmax(60px,0.35fr)]";
 
 const joinedDateFormatter = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -215,10 +215,10 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
       aria-label={`View profile of ${student.displayName}`}
       onClick={() => onNavigateStudent(student.username)}
       onKeyDown={handleKeyDown}
-      className={`group absolute inset-x-0 top-0 w-auto flex cursor-pointer flex-col gap-3 border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] p-4 transition-colors hover:bg-(--hover) focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--accent) ${studentListGridColumns} md:grid md:min-w-[1080px] md:items-center md:gap-0 md:p-0`}
+      className={`group absolute inset-x-0 top-0 w-auto flex cursor-pointer flex-col gap-3 border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] p-4 transition-colors hover:bg-(--hover) focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--accent) ${studentListGridColumns} @3xl/students:grid @3xl/students:min-w-[1080px] @3xl/students:items-center @3xl/students:gap-0 @3xl/students:p-0`}
       style={{ transform }}
     >
-      <div role="cell" className="min-w-0 md:px-5 md:py-3.5">
+      <div role="cell" className="min-w-0 @3xl/students:px-5 @3xl/students:py-3.5">
         <div className="flex items-center gap-3">
           <StudentAvatar student={student} />
           <div className="min-w-0">
@@ -232,7 +232,7 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
         </div>
       </div>
 
-      <div role="cell" className="hidden min-w-0 md:block md:px-4 md:py-3.5">
+      <div role="cell" className="hidden min-w-0 @3xl/students:block @3xl/students:px-4 @3xl/students:py-3.5">
         {student.email ? (
           <button
             type="button"
@@ -255,9 +255,9 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
 
       <div
         role="cell"
-        className="flex items-center justify-between gap-2 md:px-4 md:py-3.5"
+        className="flex items-center justify-between gap-2 @3xl/students:px-4 @3xl/students:py-3.5"
       >
-        <span className="text-xs text-(--muted) md:hidden">Courses</span>
+        <span className="text-xs text-(--muted) @3xl/students:hidden">Courses</span>
         <div className="inline-flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-lg border border-(--border) bg-(--card-surface) px-2.5 py-1 text-xs font-semibold text-(--text)">
             <BookOpen size={13} className="shrink-0 text-(--accent)" />
@@ -275,9 +275,9 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
         </div>
       </div>
 
-      <div role="cell" className="flex items-center gap-2.5 md:px-4 md:py-3.5">
-        <span className="text-xs text-(--muted) md:hidden">Progress</span>
-        <div className="flex min-w-0 flex-1 items-center gap-2.5 md:min-w-[120px] md:max-w-[140px]">
+      <div role="cell" className="flex items-center gap-2.5 @3xl/students:px-4 @3xl/students:py-3.5">
+        <span className="text-xs text-(--muted) @3xl/students:hidden">Progress</span>
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 @3xl/students:min-w-[120px] @3xl/students:max-w-[140px]">
           <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_90%,transparent)]">
             <div
               className="h-full rounded-full"
@@ -293,7 +293,7 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
         </div>
       </div>
 
-      <div role="cell" className="hidden md:block md:px-4 md:py-3.5">
+      <div role="cell" className="hidden @3xl/students:block @3xl/students:px-4 @3xl/students:py-3.5">
         <span
           className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.75 text-[11px] font-semibold ${
             isActive
@@ -312,14 +312,14 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
 
       <div
         role="cell"
-        className="hidden text-xs font-medium text-(--muted) md:block md:whitespace-nowrap md:px-4 md:py-3.5"
+        className="hidden text-xs font-medium text-(--muted) @3xl/students:block @3xl/students:whitespace-nowrap @3xl/students:px-4 @3xl/students:py-3.5"
       >
         {formatJoinedDate(student.joinedAt)}
       </div>
 
       <div
         role="cell"
-        className="absolute right-4 top-4 md:static md:px-5 md:py-3.5 md:text-right"
+        className="absolute right-4 top-4 @3xl/students:static @3xl/students:px-5 @3xl/students:py-3.5 @3xl/students:text-right"
       >
         <button
           type="button"
@@ -334,7 +334,7 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
         </button>
       </div>
 
-      <div className="flex min-w-0 items-center justify-between gap-2 pr-10 text-xs text-(--muted) md:hidden">
+      <div className="flex min-w-0 items-center justify-between gap-2 pr-10 text-xs text-(--muted) @3xl/students:hidden">
         <button
           type="button"
           onClick={(event) => {
@@ -421,7 +421,7 @@ function VirtualizedStudentSurface({
       ref={feedRef}
       role="rowgroup"
       aria-busy={isLoading || isTransitioning || isFetchingNextPage}
-      className="relative min-w-0 w-full md:min-w-[1080px]"
+      className="relative min-w-0 w-full @3xl/students:min-w-[1080px]"
       style={{ height: `${virtualizer.getTotalSize()}px` }}
     >
       {virtualItems.map((virtualItem) => {
@@ -551,7 +551,7 @@ export function StudentsTable({
         className="overflow-hidden rounded-[18px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface))"
         style={{ boxShadow: "var(--card-shadow)" }}
       >
-        <div className="overflow-x-auto">
+        <div className="@container/students overflow-x-auto">
           <div
             role="table"
             aria-label="Students list"
@@ -560,7 +560,7 @@ export function StudentsTable({
           >
             <div
               role="row"
-              className={`hidden min-w-[1080px] border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_45%,transparent)] text-[11px] font-bold uppercase tracking-wider text-(--muted) select-none md:grid ${studentListGridColumns}`}
+              className={`hidden min-w-[1080px] border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_45%,transparent)] text-[11px] font-bold uppercase tracking-wider text-(--muted) select-none @3xl/students:grid ${studentListGridColumns}`}
             >
               <div role="columnheader" className="px-5 py-3.5">
                 Learner
