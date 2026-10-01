@@ -160,7 +160,9 @@ export function registerErrorHandler(app: FastifyInstance): void {
           .send(
             httpError(
               appError.statusCode,
-              appError.code,
+              error instanceof AppError
+                ? appError.code
+                : "INTERNAL_SERVER_ERROR",
               "An unexpected error occurred.",
             ).toJSON(),
           );
