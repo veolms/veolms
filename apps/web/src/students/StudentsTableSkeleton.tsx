@@ -1,7 +1,7 @@
 export function StudentsTableSkeleton() {
   return (
     <div
-      className="rounded-[18px] border border-(--border) bg-(--card-surface-raised,var(--surface)) overflow-hidden animate-pulse"
+      className="@container/students rounded-[18px] border border-(--border) bg-(--card-surface-raised,var(--surface)) overflow-hidden animate-pulse"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       <div className="h-11 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_45%,transparent)]" />
@@ -15,8 +15,8 @@ export function StudentsTableSkeleton() {
                 <div className="h-2.5 w-20 rounded bg-(--hover)" />
               </div>
             </div>
-            <div className="h-3 w-40 rounded bg-(--hover) hidden md:block" />
-            <div className="h-3 w-24 rounded bg-(--hover) hidden md:block" />
+            <div className="h-3 w-40 rounded bg-(--hover) hidden @3xl/students:block" />
+            <div className="h-3 w-24 rounded bg-(--hover) hidden @3xl/students:block" />
             <div className="h-7 w-20 rounded-xl bg-(--hover)" />
           </div>
         ))}
