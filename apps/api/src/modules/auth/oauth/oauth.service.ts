@@ -11,6 +11,7 @@ import type { SessionUser } from "../shared/auth.types.ts";
 import { generatePkce, generateRandomToken } from "../shared/auth.utils.ts";
 import {
   fetchOauthProfile,
+  verifyGoogleIdToken,
   verifyOauthState,
   type OauthProfile,
   type OauthProviderName,
@@ -135,6 +136,20 @@ export function createOauthService({
     });
 
     return profile;
+  }
+
+  async function loginWithGoogleCredential(
+    credential: string,
+    request: {
+      ip: string;
+      userAgent: string | null;
+      existingSessionToken?: string | null;
+    },
+    verify: (credential: string) => Promise<OauthProfile> = (value) =>
+      verifyGoogleIdToken(value, config.GOOGLE_CLIENT_ID || ""),
+  ) {
+    const profile = await verify(credential);
+    return login("google", profile, request);
   }
 
   async function login(
@@ -280,6 +295,7 @@ export function createOauthService({
     getPublicConfig,
     createAuthorizationUrl,
     resolveCallbackProfile,
+    loginWithGoogleCredential,
     login,
     register,
     oauthStateCookieName: OAUTH_STATE_COOKIE,

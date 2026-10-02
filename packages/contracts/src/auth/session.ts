@@ -56,6 +56,12 @@ export const oauthCallbackRequestSchema = z.object({
 
 export const oauthLoginRequestSchema = oauthCallbackRequestSchema;
 
+export const googleOneTapLoginRequestSchema = z.object({
+  credential: z.string().min(1).meta({
+    description: "Google Identity Services ID token from One Tap.",
+  }),
+});
+
 export const oauthRegisterRequestSchema = oauthCallbackRequestSchema.extend({
   username: z
     .string()
@@ -252,6 +258,9 @@ export const passkeyOptionsResponseSchema = z.union([
 
 export type LoginRequest = z.input<typeof loginRequestSchema>;
 export type OauthLoginRequest = z.input<typeof oauthLoginRequestSchema>;
+export type GoogleOneTapLoginRequest = z.input<
+  typeof googleOneTapLoginRequestSchema
+>;
 export type OauthRegisterRequest = z.input<typeof oauthRegisterRequestSchema>;
 export type OauthProvider = z.output<typeof oauthProviderSchema>;
 export type OauthUrlRequest = z.input<typeof oauthUrlRequestSchema>;
