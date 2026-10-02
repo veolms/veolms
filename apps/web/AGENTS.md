@@ -175,7 +175,7 @@ When an exception is necessary:
 - Keep state and side effects as close as possible to the feature that owns them; extract focused hooks when logic becomes independently reusable or maintainable.
 - Use semantic names based on product behavior, not visual accidents or temporary implementation details.
 - Avoid hidden coupling between features, broad selectors, and imports that cause one module's styling or behavior to leak into another.
-- Do not create, restore, or update unit-test cases for frontend work. Validate changes with the relevant typecheck, lint, build, and existing Playwright E2E checks when applicable.
+- Do not create, restore, or update unit or E2E test cases for frontend work. Validate changes with the relevant typecheck, lint, and build checks.
 
 ---
 
