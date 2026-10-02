@@ -125,8 +125,7 @@ export const ElasticScroller = forwardRef<
       style={
         {
           "--elastic-scroller-spring": spring,
-          "--elastic-scroller-bottom-clearance":
-            normalizedBottomClearance,
+          "--elastic-scroller-bottom-clearance": normalizedBottomClearance,
           transition: control.visible
             ? "visibility 0s linear 0s, opacity 280ms ease, transform 280ms cubic-bezier(0.16, 1, 0.3, 1)"
             : "visibility 0s linear 280ms, opacity 280ms ease, transform 280ms cubic-bezier(0.16, 1, 0.3, 1)",

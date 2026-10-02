@@ -37,7 +37,7 @@ export function createConfigurationService({
     const durationType = updates.durationType;
     const durationDays =
       updates.durationType === "fixed_duration"
-        ? updates.durationDays ?? null
+        ? (updates.durationDays ?? null)
         : null;
 
     const id = await configRepo.upsertAccessRule(database, {
@@ -72,7 +72,7 @@ export function createConfigurationService({
     const price = updates.pricingType === "free" ? 0 : updates.price;
     const currency = updates.currency ?? "INR";
     const salePrice =
-      updates.pricingType === "free" ? null : updates.salePrice ?? null;
+      updates.pricingType === "free" ? null : (updates.salePrice ?? null);
 
     const id = await configRepo.upsertPricing(database, {
       id: crypto.randomUUID(),
@@ -105,7 +105,10 @@ export function createConfigurationService({
 
     const now = new Date();
 
-    const existing = await configRepo.findSettingsByCourseId(database, courseId);
+    const existing = await configRepo.findSettingsByCourseId(
+      database,
+      courseId,
+    );
 
     const allowQa =
       updates.allowQa !== undefined
@@ -194,4 +197,6 @@ export function createConfigurationService({
   };
 }
 
-export type ConfigurationService = ReturnType<typeof createConfigurationService>;
+export type ConfigurationService = ReturnType<
+  typeof createConfigurationService
+>;

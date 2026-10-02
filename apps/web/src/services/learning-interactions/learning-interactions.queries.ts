@@ -50,10 +50,7 @@ import type {
 } from "./interaction-creation-coordinator";
 import { isInfiniteCacheData } from "./paginated-cache";
 import type { InfiniteData } from "@tanstack/react-query";
-import {
-  flattenReplyPages,
-  getReplyTotalCount,
-} from "./reply-pagination";
+import { flattenReplyPages, getReplyTotalCount } from "./reply-pagination";
 
 export { flattenReplyPages, getReplyTotalCount } from "./reply-pagination";
 
@@ -109,7 +106,9 @@ export function useLessonInteractionCounts(
     ),
     queryFn: () => {
       if (!courseId || !lessonId) {
-        throw new Error("Course and lesson IDs are required for interaction counts.");
+        throw new Error(
+          "Course and lesson IDs are required for interaction counts.",
+        );
       }
       return fetchLessonInteractionCounts(courseId, lessonId);
     },
@@ -452,7 +451,10 @@ function threadMatchesQuery(
   if (query.courseId && query.courseId !== thread.courseId) return false;
   if (query.lessonId && query.lessonId !== thread.lessonId) return false;
   if (query.visibility && query.visibility !== thread.visibility) return false;
-  if (query.mine !== undefined && Boolean(query.mine) !== Boolean(thread.isOwn)) {
+  if (
+    query.mine !== undefined &&
+    Boolean(query.mine) !== Boolean(thread.isOwn)
+  ) {
     return false;
   }
   if (query.search) {
@@ -483,8 +485,8 @@ export function mergeThreadsWithCreationRecords(
   query: LessonThreadsQuery | undefined,
   records: readonly ThreadCreationRecord[],
 ): LearningThreadCacheResponse {
-  const threads: LearningThreadEntity[] = response.threads.map(
-    (thread) => toLearningThreadEntity(thread),
+  const threads: LearningThreadEntity[] = response.threads.map((thread) =>
+    toLearningThreadEntity(thread),
   );
   let addedLocalThreads = 0;
 
@@ -596,7 +598,11 @@ export function useLessonThreads(
   options?: { enabled?: boolean },
 ) {
   const queryClient = useQueryClient();
-  const queryKey = learningInteractionKeys.lessonThreads(courseId, lessonId, query);
+  const queryKey = learningInteractionKeys.lessonThreads(
+    courseId,
+    lessonId,
+    query,
+  );
   normalizeExistingInfiniteCache(queryClient, queryKey, ["threads"]);
   const result = useInfiniteQuery({
     queryKey,
@@ -893,8 +899,9 @@ export function useThreadReplies(
   }));
   const hiddenCount = projectedPages
     .flatMap((page) => page.replies)
-    .filter((reply) => optimisticDeletionCoordinator.isTombstoned("reply", reply))
-    .length;
+    .filter((reply) =>
+      optimisticDeletionCoordinator.isTombstoned("reply", reply),
+    ).length;
   return {
     ...result,
     data: {
@@ -928,9 +935,7 @@ export function useUserNotes(
       if (pageParam !== null) {
         return {
           ...response,
-          notes: response.notes.map((note) =>
-            projectNoteLocalState(note),
-          ),
+          notes: response.notes.map((note) => projectNoteLocalState(note)),
         };
       }
       return mergeNotesWithCreationRecords(

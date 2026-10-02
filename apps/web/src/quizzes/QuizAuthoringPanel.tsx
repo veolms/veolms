@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type {
-  AssignQuizRequest,
-  QuizQuestionType,
-} from "@veolms/contracts";
+import type { AssignQuizRequest, QuizQuestionType } from "@veolms/contracts";
 import { Button } from "../components/Button";
 import {
   CenteredLoadingSpinner,
@@ -2388,7 +2385,8 @@ export function QuizAuthoringPanel({
                       Free Preview & Access
                     </span>
                     <p className="text-[0.7rem] sm:text-xs text-(--muted) m-0">
-                      Configure whether prospective learners can preview and take this quiz before purchasing.
+                      Configure whether prospective learners can preview and
+                      take this quiz before purchasing.
                     </p>
                   </div>
 
@@ -2398,7 +2396,8 @@ export function QuizAuthoringPanel({
                         Free Preview
                       </strong>
                       <p className="m-0 text-(--muted) text-[0.78rem]">
-                        Allow prospective students to view and attempt this quiz before enrolling or purchasing.
+                        Allow prospective students to view and attempt this quiz
+                        before enrolling or purchasing.
                       </p>
                     </div>
                     <SettingsToggle
@@ -2417,9 +2416,14 @@ export function QuizAuthoringPanel({
                   </div>
 
                   <div className="flex items-center gap-2 rounded-[8px] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] p-2.5 border border-[color-mix(in_srgb,var(--accent)_20%,transparent)] text-xs text-(--text-secondary)">
-                    <Info size={16} weight="bold" className="text-(--accent) shrink-0" />
+                    <Info
+                      size={16}
+                      weight="bold"
+                      className="text-(--accent) shrink-0"
+                    />
                     <span>
-                      Standalone pricing for this quiz is configured in the course <strong>Pricing</strong> tab.
+                      Standalone pricing for this quiz is configured in the
+                      course <strong>Pricing</strong> tab.
                     </span>
                   </div>
                 </div>

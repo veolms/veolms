@@ -15,9 +15,7 @@ import { usePlayerController } from "./context";
 import { useDuration, usePlayerState } from "./usePlayerState";
 
 export type StoryboardSource =
-  | string
-  | readonly StoryboardFrame[]
-  | StoryboardTrack;
+  string | readonly StoryboardFrame[] | StoryboardTrack;
 
 export interface StoryboardLoaderContext {
   signal: AbortSignal;

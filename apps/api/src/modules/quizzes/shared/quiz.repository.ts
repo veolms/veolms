@@ -551,10 +551,7 @@ export async function expireAbandonedAttempts(
     .where("status", "=", "in_progress")
     .where((eb) =>
       eb.or([
-        eb.and([
-          eb("expires_at", "is not", null),
-          eb("expires_at", "<=", now),
-        ]),
+        eb.and([eb("expires_at", "is not", null), eb("expires_at", "<=", now)]),
         eb(
           "assignment_id",
           "in",

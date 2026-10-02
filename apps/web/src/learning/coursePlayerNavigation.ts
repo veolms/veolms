@@ -491,10 +491,8 @@ export function migrateCoursePlayerSessionKey(
   );
   if (!previousSession) return;
 
-  const previousSearch = new URL(
-    previousSession.path,
-    INTERNAL_URL_ORIGIN,
-  ).search;
+  const previousSearch = new URL(previousSession.path, INTERNAL_URL_ORIGIN)
+    .search;
   const migratedSession: CoursePlayerSession = {
     ...previousSession,
     courseId: nextCourseId,

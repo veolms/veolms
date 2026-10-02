@@ -1,7 +1,10 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { Permission } from "@veolms/contracts";
 import { httpError } from "../../lib/errors.ts";
-import type { AuthorizationService, AuthorizationDecision } from "./authorization.service.ts";
+import type {
+  AuthorizationService,
+  AuthorizationDecision,
+} from "./authorization.service.ts";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -9,11 +12,7 @@ declare module "fastify" {
   }
 }
 
-export type ResourceType =
-  | "platform"
-  | "course"
-  | "lesson"
-  | "section";
+export type ResourceType = "platform" | "course" | "lesson" | "section";
 
 export interface AuthorizationGuard {
   authorize: (
@@ -121,7 +120,8 @@ export function createAuthorizationGuard(
               httpError(
                 403,
                 "FEATURE_DISABLED",
-                decision.reason ?? "This feature is not enabled on the platform",
+                decision.reason ??
+                  "This feature is not enabled on the platform",
               ),
             );
         }
@@ -132,7 +132,8 @@ export function createAuthorizationGuard(
             httpError(
               403,
               "PERMISSION_DENIED",
-              decision.reason ?? "You do not have permission to perform this action",
+              decision.reason ??
+                "You do not have permission to perform this action",
             ),
           );
       }

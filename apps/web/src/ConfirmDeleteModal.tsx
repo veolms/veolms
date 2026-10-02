@@ -32,10 +32,7 @@ export function ConfirmDeleteModal({
   const [isHolding, setIsHolding] = useState(false);
 
   const dismissThen = useBackDismiss({ open: isOpen, onDismiss: onClose });
-  const dismissModal = useCallback(
-    () => dismissThen(() => {}),
-    [dismissThen],
-  );
+  const dismissModal = useCallback(() => dismissThen(() => {}), [dismissThen]);
 
   const holdTimerRef = useRef<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
@@ -138,10 +135,7 @@ export function ConfirmDeleteModal({
       aria-labelledby="delete-modal-title"
       aria-describedby="delete-modal-description"
     >
-      <div
-        className="delete-modal-card"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="delete-modal-card" onClick={(e) => e.stopPropagation()}>
         {/* Close Button */}
         <button
           ref={closeBtnRef}
@@ -225,14 +219,18 @@ export function ConfirmDeleteModal({
               <span className="grid [grid-template-areas:'stack'] items-center text-center">
                 <span
                   className={`[grid-area:stack] whitespace-nowrap transition-opacity duration-150 ${
-                    isHolding ? "opacity-0 invisible pointer-events-none" : "opacity-100 visible"
+                    isHolding
+                      ? "opacity-0 invisible pointer-events-none"
+                      : "opacity-100 visible"
                   }`}
                 >
                   Hold to {confirmLabel}
                 </span>
                 <span
                   className={`[grid-area:stack] whitespace-nowrap transition-opacity duration-150 ${
-                    isHolding ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"
+                    isHolding
+                      ? "opacity-100 visible"
+                      : "opacity-0 invisible pointer-events-none"
                   }`}
                 >
                   Hold to Delete...

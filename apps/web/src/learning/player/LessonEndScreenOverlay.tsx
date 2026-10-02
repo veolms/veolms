@@ -70,21 +70,19 @@ export function LessonEndScreenOverlay({
       aria-label="Lecture completed"
       className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4 sm:p-6 backdrop-blur-[8px] transition-opacity duration-200 select-none pointer-events-auto"
     >
-      <div
-        className="relative flex w-full max-w-md sm:max-w-lg min-w-0 flex-col overflow-hidden rounded-[20px] sm:rounded-[24px] border-none bg-(--card-surface,var(--surface)) text-(--text) shadow-[var(--surface-frame-edge-shadow),var(--card-floating-shadow)] animate-in zoom-in-95 duration-150"
-      >
+      <div className="relative flex w-full max-w-md sm:max-w-lg min-w-0 flex-col overflow-hidden rounded-[20px] sm:rounded-[24px] border-none bg-(--card-surface,var(--surface)) text-(--text) shadow-[var(--surface-frame-edge-shadow),var(--card-floating-shadow)] animate-in zoom-in-95 duration-150">
         {hasNextLesson && nextLesson ? (
           <>
             {/* Header Section */}
             <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-3.5 sm:px-6 sm:pt-6 sm:pb-4 border-b border-[color-mix(in_srgb,var(--text)_7%,transparent)]">
               <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-                <span
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border-none bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-(--accent) shadow-[inset_0_1px_0_color-mix(in_srgb,white_15%,transparent)]"
-                >
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border-none bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-(--accent) shadow-[inset_0_1px_0_color-mix(in_srgb,white_15%,transparent)]">
                   Up Next
                 </span>
                 <span className="truncate text-xs font-semibold text-(--text-secondary)">
-                  {nextLesson.sectionTitle ? `${nextLesson.sectionTitle} • ` : ""}
+                  {nextLesson.sectionTitle
+                    ? `${nextLesson.sectionTitle} • `
+                    : ""}
                   {nextLesson.lectureNumber
                     ? `Lecture ${nextLesson.lectureNumber}${nextLesson.totalLessons ? ` of ${nextLesson.totalLessons}` : ""}`
                     : `Lecture ${nextLesson.id}`}
@@ -129,9 +127,7 @@ export function LessonEndScreenOverlay({
                     />
                   ) : (
                     <div className="flex size-full items-center justify-center">
-                      <div
-                        className="grid size-8 sm:size-9 place-items-center rounded-[10px] border-none bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_24%,var(--surface))_0%,color-mix(in_srgb,var(--accent)_12%,var(--canvas))_100%)] text-(--accent) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_12%,transparent))] transition-transform duration-150 group-hover:scale-110"
-                      >
+                      <div className="grid size-8 sm:size-9 place-items-center rounded-[10px] border-none bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_24%,var(--surface))_0%,color-mix(in_srgb,var(--accent)_12%,var(--canvas))_100%)] text-(--accent) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_12%,transparent))] transition-transform duration-150 group-hover:scale-110">
                         <Play size={15} weight="fill" />
                       </div>
                     </div>
@@ -248,12 +244,12 @@ export function LessonEndScreenOverlay({
 
             {/* Body Section for Course Completed */}
             <div className="flex flex-col items-center px-5 py-8 sm:px-6 sm:py-10 text-center">
-              <div
-                className="mb-4 flex size-15 sm:size-16 items-center justify-center rounded-[16px] border-none bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_24%,var(--surface))_0%,color-mix(in_srgb,var(--accent)_12%,var(--canvas))_100%)] text-(--accent) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_12%,transparent))]"
-              >
+              <div className="mb-4 flex size-15 sm:size-16 items-center justify-center rounded-[16px] border-none bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_24%,var(--surface))_0%,color-mix(in_srgb,var(--accent)_12%,var(--canvas))_100%)] text-(--accent) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_12%,transparent))]">
                 <CheckCircle size={34} weight="duotone" />
               </div>
-              <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-(--text)">Course Completed!</h3>
+              <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
+                Course Completed!
+              </h3>
               <p className="mt-2 text-sm sm:text-base text-(--text-secondary) max-w-sm leading-relaxed">
                 You've watched all available lectures in this course.
               </p>

@@ -144,7 +144,11 @@ describe("PopoverMenu", () => {
     fireEvent.click(trigger);
     const menu = screen.getByRole("menu", { name: "Options" });
     expect(menu).toHaveClass("z-200", "overflow-y-auto", "overscroll-contain");
-    expect(menu).toHaveStyle({ maxHeight: "292px", top: "60px", right: "16px" });
+    expect(menu).toHaveStyle({
+      maxHeight: "292px",
+      top: "60px",
+      right: "16px",
+    });
     expect(shell.contains(menu)).toBe(true);
     expect(menu).not.toHaveClass("top-full");
   });

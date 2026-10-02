@@ -66,16 +66,47 @@ export const ROLES = {
 } as const;
 
 export const STANDARD_FEATURES = [
-  { feature_key: "quizzes", description: "Quiz and assessment system", enabled: true },
-  { feature_key: "certificates", description: "Course completion certificates", enabled: true },
-  { feature_key: "payments", description: "Paid course enrollment and commerce", enabled: true },
-  { feature_key: "live_classes", description: "Live class integration", enabled: true },
-  { feature_key: "discussions", description: "Community discussions and Q&A", enabled: true },
-  { feature_key: "custom_branding", description: "Organization branding and custom domains", enabled: true },
-  { feature_key: "advanced_analytics", description: "Advanced reporting and analytics", enabled: true },
+  {
+    feature_key: "quizzes",
+    description: "Quiz and assessment system",
+    enabled: true,
+  },
+  {
+    feature_key: "certificates",
+    description: "Course completion certificates",
+    enabled: true,
+  },
+  {
+    feature_key: "payments",
+    description: "Paid course enrollment and commerce",
+    enabled: true,
+  },
+  {
+    feature_key: "live_classes",
+    description: "Live class integration",
+    enabled: true,
+  },
+  {
+    feature_key: "discussions",
+    description: "Community discussions and Q&A",
+    enabled: true,
+  },
+  {
+    feature_key: "custom_branding",
+    description: "Organization branding and custom domains",
+    enabled: true,
+  },
+  {
+    feature_key: "advanced_analytics",
+    description: "Advanced reporting and analytics",
+    enabled: true,
+  },
 ] as const;
 
-export const ROLE_CAPABILITY_MAPPINGS: Record<keyof typeof SYSTEM_ROLES, readonly Permission[]> = {
+export const ROLE_CAPABILITY_MAPPINGS: Record<
+  keyof typeof SYSTEM_ROLES,
+  readonly Permission[]
+> = {
   admin: permissions, // all platform capabilities
   course_manager: [
     "course.read",
@@ -374,60 +405,278 @@ export const ROLE_MENU_PERMISSIONS: Record<
     canDelete: true,
   })),
   instructor: [
-    { menuId: MENUS.dashboard.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
-    { menuId: MENUS.creatorCourses.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
-    { menuId: MENUS.students.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
-    { menuId: MENUS.discussions.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
-    { menuId: MENUS.quizzes.id, canCreate: true, canRead: true, canUpdate: true, canDelete: false },
-    { menuId: MENUS.analytics.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
-    { menuId: MENUS.orders.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
-    { menuId: MENUS.settings.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
+    {
+      menuId: MENUS.dashboard.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: false,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.creatorCourses.id,
+      canCreate: true,
+      canRead: true,
+      canUpdate: true,
+      canDelete: true,
+    },
+    {
+      menuId: MENUS.students.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: true,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.discussions.id,
+      canCreate: true,
+      canRead: true,
+      canUpdate: true,
+      canDelete: true,
+    },
+    {
+      menuId: MENUS.quizzes.id,
+      canCreate: true,
+      canRead: true,
+      canUpdate: true,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.analytics.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: false,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.orders.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: true,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.settings.id,
+      canCreate: true,
+      canRead: true,
+      canUpdate: true,
+      canDelete: true,
+    },
   ],
   student: [
-    { menuId: MENUS.home.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
-    { menuId: MENUS.studentCourses.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
-    { menuId: MENUS.myCourses.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
-    { menuId: MENUS.quizzes.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
-    { menuId: MENUS.wishlist.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
-    { menuId: MENUS.discussions.id, canCreate: true, canRead: true, canUpdate: true, canDelete: false },
-    { menuId: MENUS.notification.id, canCreate: false, canRead: true, canUpdate: true, canDelete: true },
-    { menuId: MENUS.orderHistory.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
-    { menuId: MENUS.settings.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
+    {
+      menuId: MENUS.home.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: false,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.studentCourses.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: false,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.myCourses.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: true,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.quizzes.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: false,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.wishlist.id,
+      canCreate: true,
+      canRead: true,
+      canUpdate: true,
+      canDelete: true,
+    },
+    {
+      menuId: MENUS.discussions.id,
+      canCreate: true,
+      canRead: true,
+      canUpdate: true,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.notification.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: true,
+      canDelete: true,
+    },
+    {
+      menuId: MENUS.orderHistory.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: false,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.settings.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: true,
+      canDelete: false,
+    },
   ],
   course_manager: [
-    { menuId: MENUS.dashboard.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
-    { menuId: MENUS.creatorCourses.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
-    { menuId: MENUS.students.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
-    { menuId: MENUS.discussions.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
-    { menuId: MENUS.quizzes.id, canCreate: true, canRead: true, canUpdate: true, canDelete: true },
-    { menuId: MENUS.analytics.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
-    { menuId: MENUS.settings.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
+    {
+      menuId: MENUS.dashboard.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: false,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.creatorCourses.id,
+      canCreate: true,
+      canRead: true,
+      canUpdate: true,
+      canDelete: true,
+    },
+    {
+      menuId: MENUS.students.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: true,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.discussions.id,
+      canCreate: true,
+      canRead: true,
+      canUpdate: true,
+      canDelete: true,
+    },
+    {
+      menuId: MENUS.quizzes.id,
+      canCreate: true,
+      canRead: true,
+      canUpdate: true,
+      canDelete: true,
+    },
+    {
+      menuId: MENUS.analytics.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: false,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.settings.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: true,
+      canDelete: false,
+    },
   ],
   content_editor: [
-    { menuId: MENUS.creatorCourses.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
-    { menuId: MENUS.quizzes.id, canCreate: true, canRead: true, canUpdate: true, canDelete: false },
-    { menuId: MENUS.discussions.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    {
+      menuId: MENUS.creatorCourses.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: true,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.quizzes.id,
+      canCreate: true,
+      canRead: true,
+      canUpdate: true,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.discussions.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: false,
+      canDelete: false,
+    },
   ],
   thumbnail_editor: [
-    { menuId: MENUS.creatorCourses.id, canCreate: false, canRead: true, canUpdate: true, canDelete: false },
+    {
+      menuId: MENUS.creatorCourses.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: true,
+      canDelete: false,
+    },
   ],
   teaching_assistant: [
-    { menuId: MENUS.creatorCourses.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
-    { menuId: MENUS.students.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
-    { menuId: MENUS.discussions.id, canCreate: true, canRead: true, canUpdate: true, canDelete: false },
-    { menuId: MENUS.quizzes.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    {
+      menuId: MENUS.creatorCourses.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: false,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.students.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: false,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.discussions.id,
+      canCreate: true,
+      canRead: true,
+      canUpdate: true,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.quizzes.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: false,
+      canDelete: false,
+    },
   ],
   reviewer: [
-    { menuId: MENUS.creatorCourses.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
-    { menuId: MENUS.quizzes.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    {
+      menuId: MENUS.creatorCourses.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: false,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.quizzes.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: false,
+      canDelete: false,
+    },
   ],
   analytics_viewer: [
-    { menuId: MENUS.analytics.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
-    { menuId: MENUS.creatorCourses.id, canCreate: false, canRead: true, canUpdate: false, canDelete: false },
+    {
+      menuId: MENUS.analytics.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: false,
+      canDelete: false,
+    },
+    {
+      menuId: MENUS.creatorCourses.id,
+      canCreate: false,
+      canRead: true,
+      canUpdate: false,
+      canDelete: false,
+    },
   ],
 };
 
-export async function seedRolesAndPermissions(database: Kysely<Database>): Promise<void> {
+export async function seedRolesAndPermissions(
+  database: Kysely<Database>,
+): Promise<void> {
   // 1. Seed Features
   for (const feature of STANDARD_FEATURES) {
     await database
@@ -494,7 +743,9 @@ export async function seedRolesAndPermissions(database: Kysely<Database>): Promi
   }
 
   // 4. Seed Role Permissions
-  for (const [roleKey, rolePermissions] of Object.entries(ROLE_CAPABILITY_MAPPINGS)) {
+  for (const [roleKey, rolePermissions] of Object.entries(
+    ROLE_CAPABILITY_MAPPINGS,
+  )) {
     const role = SYSTEM_ROLES[roleKey as keyof typeof SYSTEM_ROLES];
     for (const permKey of rolePermissions) {
       const permId = permissionEntries.get(permKey);

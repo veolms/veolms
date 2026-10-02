@@ -210,7 +210,9 @@ import {
 } from "@/components/ui/drawer";
 import type { ProfilePreferences } from "./settings/profileTypes";
 const OrdersPageRoute = lazy(() =>
-  import("./orders/OrdersPage").then((module) => ({ default: module.OrdersPage })),
+  import("./orders/OrdersPage").then((module) => ({
+    default: module.OrdersPage,
+  })),
 );
 const OrderHistoryPageRoute = lazy(() =>
   import("./order-history/OrderHistoryPage").then((module) => ({
@@ -988,7 +990,8 @@ export function CoursesPage({
     ? (completeCourseQuery.data?.courses ?? pagedPublishedCourses)
     : pagedPublishedCourses;
   const hasPublishedCourseData =
-    completeCourseQuery.data !== undefined || pagedCourseQuery.data !== undefined;
+    completeCourseQuery.data !== undefined ||
+    pagedCourseQuery.data !== undefined;
   const isPublishedFetching = needsCompleteCourseList
     ? completeCourseQuery.isFetching
     : pagedCourseQuery.isFetching;
@@ -997,8 +1000,7 @@ export function CoursesPage({
       isCourseCataloguePage &&
       shouldLoadCourseSurface &&
       effectiveRole === "student" &&
-      (isAuthenticated ||
-        (!authUserFetched && authStore.hasSessionHint())),
+      (isAuthenticated || (!authUserFetched && authStore.hasSessionHint())),
   });
   const myCoursesQuery = useMyCourses({
     enabled:
@@ -1264,11 +1266,7 @@ export function CoursesPage({
     );
     setRole(storedRole === "creator" ? "creator" : "student");
     setHydratedWorkspaceRoleKey(activeUser?.id ?? "guest");
-  }, [
-    activeUser,
-    authUserFetched,
-    storedPreferencesReady,
-  ]);
+  }, [activeUser, authUserFetched, storedPreferencesReady]);
 
   useEffect(() => {
     if (!storedPreferencesReady) return;
@@ -2033,7 +2031,10 @@ export function CoursesPage({
               );
               // Sparse session maps (often 1 lesson) must not replace server %.
               // Only trust local when it covers a meaningful share of the course.
-              if (vals.length > 0 && vals.length >= Math.min(10, total * 0.05)) {
+              if (
+                vals.length > 0 &&
+                vals.length >= Math.min(10, total * 0.05)
+              ) {
                 const sum = vals.reduce((a, b) => a + b, 0);
                 localEstimate = Math.min(100, Math.round(sum / total));
               }
@@ -3636,42 +3637,44 @@ export function CoursesPage({
       return (
         <Suspense fallback={null}>
           <SettingsPage
-          tab={surfaceSettingsTab}
-          role={role}
-          userRoles={userRoles}
-          isAuthenticated={isAuthenticated}
-          onNavigatePage={onNavigatePage}
-          onExitSettings={onExitSettings}
-          theme={theme}
-          onThemeChange={(next, origin) => {
-            if (next !== theme) themeRevealOriginRef.current = origin ?? null;
-            setTheme(next);
-          }}
-          academyTheme={appliedAcademyTheme}
-          onAcademyThemeChange={changePalette}
-          pageTabColors={pageTabColors}
-          onPageTabColorsChange={setPageTabColors}
-          sidebarPreferences={sidebarPreferences}
-          onSidebarPreferencesChange={setSidebarPreferences}
-          sidebarMode={renderedSidebarMode}
-          onSidebarModeChange={setSidebarMode}
-          navigationItems={roleFilteredNavigationItems}
-          navigationVisibleItems={
-            navigationPreferencesReady && !isPublicNavigation
-              ? navigationVisibility[effectiveRole]
-              : isPublicNavigation
-                ? getDefaultNavigationVisibility(roleFilteredNavigationItems)
-                : getSafeInitialNavigationVisibility(roleFilteredNavigationItems)
-          }
-          onNavigationVisibilityChange={(visibleItems) =>
-            setNavigationVisibility((current) => ({
-              ...current,
-              [effectiveRole]: ensureRequiredNavigationVisibility(
-                visibleItems,
-                roleFilteredNavigationItems,
-              ),
-            }))
-          }
+            tab={surfaceSettingsTab}
+            role={role}
+            userRoles={userRoles}
+            isAuthenticated={isAuthenticated}
+            onNavigatePage={onNavigatePage}
+            onExitSettings={onExitSettings}
+            theme={theme}
+            onThemeChange={(next, origin) => {
+              if (next !== theme) themeRevealOriginRef.current = origin ?? null;
+              setTheme(next);
+            }}
+            academyTheme={appliedAcademyTheme}
+            onAcademyThemeChange={changePalette}
+            pageTabColors={pageTabColors}
+            onPageTabColorsChange={setPageTabColors}
+            sidebarPreferences={sidebarPreferences}
+            onSidebarPreferencesChange={setSidebarPreferences}
+            sidebarMode={renderedSidebarMode}
+            onSidebarModeChange={setSidebarMode}
+            navigationItems={roleFilteredNavigationItems}
+            navigationVisibleItems={
+              navigationPreferencesReady && !isPublicNavigation
+                ? navigationVisibility[effectiveRole]
+                : isPublicNavigation
+                  ? getDefaultNavigationVisibility(roleFilteredNavigationItems)
+                  : getSafeInitialNavigationVisibility(
+                      roleFilteredNavigationItems,
+                    )
+            }
+            onNavigationVisibilityChange={(visibleItems) =>
+              setNavigationVisibility((current) => ({
+                ...current,
+                [effectiveRole]: ensureRequiredNavigationVisibility(
+                  visibleItems,
+                  roleFilteredNavigationItems,
+                ),
+              }))
+            }
           />
         </Suspense>
       );
@@ -3686,7 +3689,9 @@ export function CoursesPage({
             onNavigatePage={onNavigatePage}
             setNotice={setNotice}
             onSignOut={() => {
-              localStorage.removeItem(getWorkspaceRoleStorageKey(activeUser?.id));
+              localStorage.removeItem(
+                getWorkspaceRoleStorageKey(activeUser?.id),
+              );
               setRole("student");
             }}
           />
@@ -3765,12 +3770,18 @@ export function CoursesPage({
       return (
         <Suspense
           fallback={
-            <div className="grid min-h-52 place-items-center" aria-label="Loading orders">
+            <div
+              className="grid min-h-52 place-items-center"
+              aria-label="Loading orders"
+            >
               <CircleNotch size={26} className="animate-spin text-(--accent)" />
             </div>
           }
         >
-          <OrdersPageRoute onNavigatePage={onNavigatePage} setNotice={setNotice} />
+          <OrdersPageRoute
+            onNavigatePage={onNavigatePage}
+            setNotice={setNotice}
+          />
         </Suspense>
       );
     }
@@ -3781,7 +3792,10 @@ export function CoursesPage({
       return (
         <Suspense
           fallback={
-            <div className="grid min-h-52 place-items-center" aria-label="Loading order history">
+            <div
+              className="grid min-h-52 place-items-center"
+              aria-label="Loading order history"
+            >
               <CircleNotch size={26} className="animate-spin text-(--accent)" />
             </div>
           }
@@ -3812,7 +3826,11 @@ export function CoursesPage({
         return null;
       }
       return (
-        <Suspense fallback={<AcademyRouteSkeleton page="quiz-builder" quizId={quizId} />}>
+        <Suspense
+          fallback={
+            <AcademyRouteSkeleton page="quiz-builder" quizId={quizId} />
+          }
+        >
           <QuizBuilderPage quizId={quizId} onNavigatePage={onNavigatePage} />
         </Suspense>
       );
@@ -4736,7 +4754,9 @@ export function CoursesPage({
                   />
                   <span>
                     <strong>{shellProfileDisplayName}</strong>
-                    <small>{getRoleDisplayName(effectiveRole, userRoles)}</small>
+                    <small>
+                      {getRoleDisplayName(effectiveRole, userRoles)}
+                    </small>
                   </span>
                   <CaretDown size={17} aria-hidden="true" />
                 </button>

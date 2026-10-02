@@ -87,9 +87,7 @@ function useWorkspaceScrollMargin(
         useWindowScroll ? null : getApplicationScrollElement(),
       );
       setScrollMargin((current) =>
-        Math.abs(current - nextScrollMargin) > 1
-          ? nextScrollMargin
-          : current,
+        Math.abs(current - nextScrollMargin) > 1 ? nextScrollMargin : current,
       );
     };
 
@@ -227,8 +225,7 @@ interface DiscussionWorkspaceVirtualFeedProps {
   renderCard: (card: DiscussionWorkspaceCard) => ReactNode;
 }
 
-interface DiscussionWorkspaceVirtualFeedImplProps
-  extends DiscussionWorkspaceVirtualFeedProps {
+interface DiscussionWorkspaceVirtualFeedImplProps extends DiscussionWorkspaceVirtualFeedProps {
   estimateSize: number;
   feedRef: RefObject<HTMLDivElement | null>;
   renderCard: (card: DiscussionWorkspaceCard) => ReactNode;

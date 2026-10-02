@@ -10,8 +10,10 @@ export function createWebhookController({
     request: FastifyRequest,
     reply: FastifyReply,
   ) {
-    const signature = request.headers["x-razorpay-signature"] as string | undefined;
-    const eventId = request.headers["x-razorpay-event-id"] as string | undefined;
+    const signature = request.headers["x-razorpay-signature"] as
+      string | undefined;
+    const eventId = request.headers["x-razorpay-event-id"] as
+      string | undefined;
     const rawBody = request.rawBody;
 
     const result = await service.processGatewayWebhook(

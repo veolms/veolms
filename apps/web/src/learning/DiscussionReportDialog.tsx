@@ -188,10 +188,16 @@ export function DiscussionReportDialog({
         </button>
 
         <div className="min-w-0 pr-8 pt-0.5">
-          <h2 id="report-dialog-title" className="text-lg font-semibold tracking-[-0.01em] text-(--text)">
+          <h2
+            id="report-dialog-title"
+            className="text-lg font-semibold tracking-[-0.01em] text-(--text)"
+          >
             {title}
           </h2>
-          <p id="report-dialog-description" className="mt-0.5 text-sm leading-5 text-(--text-secondary)">
+          <p
+            id="report-dialog-description"
+            className="mt-0.5 text-sm leading-5 text-(--text-secondary)"
+          >
             {target.authorName
               ? `Reporting ${targetLabel} by ${target.authorName}`
               : `Help us understand the issue with this ${targetLabel}`}

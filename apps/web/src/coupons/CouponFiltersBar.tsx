@@ -5,7 +5,11 @@ import {
   SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
   SearchShortcutHint,
 } from "../searchShortcut";
-import { inputClass, type CouponSortOption, type CouponTabFilter } from "./couponHelpers";
+import {
+  inputClass,
+  type CouponSortOption,
+  type CouponTabFilter,
+} from "./couponHelpers";
 
 export interface CouponFiltersBarProps {
   activeTab: CouponTabFilter;
@@ -120,7 +124,9 @@ export function CouponFiltersBar({
           ) : null}
         </label>
 
-        <div className={`${inputClass} flex min-h-10 w-full items-center sm:w-44`}>
+        <div
+          className={`${inputClass} flex min-h-10 w-full items-center sm:w-44`}
+        >
           <ThemedSelect
             id="coupons-type-filter"
             value={discountTypeFilter}
@@ -135,7 +141,9 @@ export function CouponFiltersBar({
           />
         </div>
 
-        <div className={`${inputClass} flex min-h-10 w-full items-center sm:w-40`}>
+        <div
+          className={`${inputClass} flex min-h-10 w-full items-center sm:w-40`}
+        >
           <ThemedSelect
             id="coupons-sort-filter"
             value={sortBy}

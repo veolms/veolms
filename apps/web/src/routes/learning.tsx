@@ -146,7 +146,9 @@ export default function LearningRoute() {
     : null;
   const routeLessonId = hasExplicitLectureSlug
     ? (resolvedExplicitLessonId ?? 1)
-    : (courseSlug ? getStoredCourseLessonId(courseSlug) : 1);
+    : courseSlug
+      ? getStoredCourseLessonId(courseSlug)
+      : 1;
 
   const allApiLessons = useMemo<CourseLesson[]>(() => {
     if (!courseOverview?.sections) return [];
@@ -162,7 +164,9 @@ export default function LearningRoute() {
 
   const resolvedFromUuid = useMemo(() => {
     if (!targetLessonUuid || allApiLessons.length === 0) return null;
-    const idx = allApiLessons.findIndex((l: CourseLesson) => l.id === targetLessonUuid);
+    const idx = allApiLessons.findIndex(
+      (l: CourseLesson) => l.id === targetLessonUuid,
+    );
     return idx >= 0 ? idx + 1 : null;
   }, [targetLessonUuid, allApiLessons]);
 
@@ -312,10 +316,9 @@ export default function LearningRoute() {
     navigateTo(`/courses/${encodeURIComponent(courseSlug)}/overview`);
   }, [courseSlug, hasDiscussionReturnPath, navigateTo, routeReturnPath]);
   const openLogin = useCallback(() => {
-    navigateTo(
-      buildLoginPath(`${location.pathname}${location.search}`),
-      { exact: true },
-    );
+    navigateTo(buildLoginPath(`${location.pathname}${location.search}`), {
+      exact: true,
+    });
   }, [location.pathname, location.search, navigateTo]);
   const minimizePlayer = useCallback(
     (request: LearningMiniPlayerRequest) => {

@@ -234,7 +234,7 @@
     grid-template-columns: 1fr;
     gap: 10px;
   }
-.settings-sidebar-category-heading {
+  .settings-sidebar-category-heading {
     grid-template-columns: 34px minmax(0, 1fr);
     margin-inline: 1px;
   }

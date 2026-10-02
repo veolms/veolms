@@ -66,4 +66,6 @@ export function createConfigurationController({
   };
 }
 
-export type ConfigurationController = ReturnType<typeof createConfigurationController>;
+export type ConfigurationController = ReturnType<
+  typeof createConfigurationController
+>;

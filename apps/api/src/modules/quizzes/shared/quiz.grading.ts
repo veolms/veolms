@@ -42,7 +42,8 @@ export function hasQuizAnswer(
     | undefined,
 ) {
   if (!value) return false;
-  if (value.selectedOptionIds && value.selectedOptionIds.length > 0) return true;
+  if (value.selectedOptionIds && value.selectedOptionIds.length > 0)
+    return true;
   if (
     typeof value.textResponse === "string" &&
     value.textResponse.trim().length > 0

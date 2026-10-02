@@ -93,7 +93,12 @@ function updateCacheData(
     let changed = false;
     const next = data.map((item) => {
       if (!item || typeof item !== "object") return item;
-      const updated = updateEntity(item as CacheEntity, clientId, serverId, fields);
+      const updated = updateEntity(
+        item as CacheEntity,
+        clientId,
+        serverId,
+        fields,
+      );
       changed ||= updated !== item;
       return updated;
     });
@@ -106,7 +111,12 @@ function updateCacheData(
     const typed = record as unknown as LearningThreadCacheResponse;
     let changed = false;
     const threads = typed.threads.map((thread) => {
-      const updated = updateEntity(thread as unknown as CacheEntity, clientId, serverId, fields);
+      const updated = updateEntity(
+        thread as unknown as CacheEntity,
+        clientId,
+        serverId,
+        fields,
+      );
       changed ||= updated !== thread;
       return updated;
     });
@@ -121,7 +131,12 @@ function updateCacheData(
     const typed = record as unknown as LearningRepliesCacheResponse;
     let changed = false;
     const replies = typed.replies.map((reply) => {
-      const updated = updateEntity(reply as unknown as CacheEntity, clientId, serverId, fields);
+      const updated = updateEntity(
+        reply as unknown as CacheEntity,
+        clientId,
+        serverId,
+        fields,
+      );
       changed ||= updated !== reply;
       return updated;
     });
@@ -136,7 +151,12 @@ function updateCacheData(
     const typed = record as unknown as LearningNotesCacheResponse;
     let changed = false;
     const notes = typed.notes.map((note) => {
-      const updated = updateEntity(note as unknown as CacheEntity, clientId, serverId, fields);
+      const updated = updateEntity(
+        note as unknown as CacheEntity,
+        clientId,
+        serverId,
+        fields,
+      );
       changed ||= updated !== note;
       return updated;
     });
@@ -146,7 +166,10 @@ function updateCacheData(
       notes,
     };
   }
-  if ("id" in record && (typeof record.id === "string" || typeof record.id === "number")) {
+  if (
+    "id" in record &&
+    (typeof record.id === "string" || typeof record.id === "number")
+  ) {
     const collection = queryKey[1];
     if (
       (kind === "thread" && collection !== "thread") ||
@@ -170,7 +193,14 @@ export function updateOptimisticEditInCaches(
   for (const [queryKey, data] of queryClient.getQueriesData({
     queryKey: learningInteractionKeys.all,
   })) {
-    const next = updateCacheData(data, queryKey, kind, clientId, serverId, fields);
+    const next = updateCacheData(
+      data,
+      queryKey,
+      kind,
+      clientId,
+      serverId,
+      fields,
+    );
     if (next !== data) queryClient.setQueryData(queryKey, next);
   }
 }

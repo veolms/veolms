@@ -7,10 +7,17 @@ export interface CouponsAccessDeniedProps {
   onNavigatePage?: NavigateTo;
 }
 
-export function CouponsAccessDenied({ onNavigatePage }: CouponsAccessDeniedProps) {
+export function CouponsAccessDenied({
+  onNavigatePage,
+}: CouponsAccessDeniedProps) {
   return (
-    <main data-coupon-surface="" className="mx-auto grid w-full max-w-[1320px] gap-3.5 sm:gap-6">
-      <div className={`${surfaceClass} grid place-items-center p-10 text-center`}>
+    <main
+      data-coupon-surface=""
+      className="mx-auto grid w-full max-w-[1320px] gap-3.5 sm:gap-6"
+    >
+      <div
+        className={`${surfaceClass} grid place-items-center p-10 text-center`}
+      >
         <span className="flex size-11 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent)">
           <ShieldWarning size={24} weight="bold" />
         </span>

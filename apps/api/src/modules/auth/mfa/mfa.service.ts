@@ -115,10 +115,7 @@ export function createMfaService({
       { skipAdminMfa: config.SKIP_ADMIN_MFA },
     );
     if (isMandatory) {
-      const totpActive = await mfaRepository.isTotpEnabled(
-        database,
-        user.id,
-      );
+      const totpActive = await mfaRepository.isTotpEnabled(database, user.id);
       if (!totpActive) {
         throw new AppError(
           400,

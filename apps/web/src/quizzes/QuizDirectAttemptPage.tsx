@@ -64,7 +64,10 @@ export function QuizDirectAttemptPage({ assignmentId, onNavigatePage }: Props) {
   }
 
   return (
-    <main data-quiz-surface="" className="mx-auto grid w-full max-w-6xl gap-2.5 sm:gap-4 px-0 py-0.5 sm:p-8">
+    <main
+      data-quiz-surface=""
+      className="mx-auto grid w-full max-w-6xl gap-2.5 sm:gap-4 px-0 py-0.5 sm:p-8"
+    >
       <section
         className="rounded-[14px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-7 text-sm text-(--muted)"
         style={{ boxShadow: "var(--card-shadow)" }}

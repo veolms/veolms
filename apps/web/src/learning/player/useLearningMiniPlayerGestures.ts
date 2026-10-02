@@ -324,7 +324,10 @@ export function useLearningMiniPlayerGestures(
     };
 
     openPopover();
-    document.addEventListener("fullscreenchange", restackPopoverAboveFullscreen);
+    document.addEventListener(
+      "fullscreenchange",
+      restackPopoverAboveFullscreen,
+    );
     document.addEventListener(
       "webkitfullscreenchange",
       restackPopoverAboveFullscreen,

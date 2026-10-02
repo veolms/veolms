@@ -99,8 +99,7 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     enabled: access.isSessionReady,
   });
   const dashboardCapabilityPending =
-    access.isSessionReady &&
-    !dashboardCapabilities.isFetched;
+    access.isSessionReady && !dashboardCapabilities.isFetched;
   const dashboardCapabilitiesResolved = access.isSessionReady
     ? dashboardCapabilities.isFetched
     : !access.isAuthenticated && !pending;
@@ -171,11 +170,7 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
       dashboardCapabilitiesResolved,
       routeContentBlocked,
     }),
-    [
-      canAccessDashboard,
-      dashboardCapabilitiesResolved,
-      routeContentBlocked,
-    ],
+    [canAccessDashboard, dashboardCapabilitiesResolved, routeContentBlocked],
   );
 
   return (

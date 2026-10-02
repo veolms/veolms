@@ -57,7 +57,8 @@ export async function probeVideoSource(
   videoSourceUrlOrPath: string,
   options: { ffprobePath?: string; timeoutMs?: number } = {},
 ): Promise<ProbedVideoMetadata | null> {
-  const ffprobePath = options.ffprobePath || process.env["FFPROBE_PATH"] || "ffprobe";
+  const ffprobePath =
+    options.ffprobePath || process.env["FFPROBE_PATH"] || "ffprobe";
   const timeout = options.timeoutMs ?? 15_000;
 
   const args = [
@@ -87,7 +88,8 @@ export async function probeVideoSource(
     const format = parsed.format ?? {};
 
     const videoStream = streams.find(
-      (s) => s.codec_type === "video" || (Boolean(s.width) && Boolean(s.height)),
+      (s) =>
+        s.codec_type === "video" || (Boolean(s.width) && Boolean(s.height)),
     );
 
     const width = Number(videoStream?.width ?? 0);

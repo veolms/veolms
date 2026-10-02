@@ -27,7 +27,9 @@ export type EnrolledCourse = z.infer<typeof enrolledCourseSchema>;
 export const enrolledCoursesResponseSchema = z.strictObject({
   courses: z.array(enrolledCourseSchema),
 });
-export type EnrolledCoursesResponse = z.infer<typeof enrolledCoursesResponseSchema>;
+export type EnrolledCoursesResponse = z.infer<
+  typeof enrolledCoursesResponseSchema
+>;
 
 export const academyEnrollmentListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(10).default(10),

@@ -23,10 +23,7 @@ export class TwilioProvider implements ISmsProvider {
   private readonly config: TwilioProviderConfig;
   private readonly log?: FastifyBaseLogger | undefined;
 
-  constructor(
-    config: TwilioProviderConfig,
-    logger?: FastifyBaseLogger,
-  ) {
+  constructor(config: TwilioProviderConfig, logger?: FastifyBaseLogger) {
     this.config = config;
     this.log = logger?.child({ provider: "twilio" });
   }

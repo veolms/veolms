@@ -31,14 +31,21 @@ export interface AuthorizationService {
   ): Promise<{ courseId: string | null }>;
 }
 
-export function createAuthorizationService(database: Executor): AuthorizationService {
+export function createAuthorizationService(
+  database: Executor,
+): AuthorizationService {
   return {
-    async check(request: AuthorizationCheckRequest): Promise<AuthorizationDecision> {
+    async check(
+      request: AuthorizationCheckRequest,
+    ): Promise<AuthorizationDecision> {
       const { userId, permission, courseId, featureKey } = request;
 
       // 1. Check Feature Entitlement if a feature is bound to this action
       if (featureKey) {
-        const featureEnabled = await repo.isFeatureEnabled(database, featureKey);
+        const featureEnabled = await repo.isFeatureEnabled(
+          database,
+          featureKey,
+        );
         if (!featureEnabled) {
           return {
             allowed: false,
@@ -60,7 +67,9 @@ export function createAuthorizationService(database: Executor): AuthorizationSer
         return {
           allowed: false,
           code: "PERMISSION_DENIED",
-          reason: result.reason ?? "You do not have permission to perform this action",
+          reason:
+            result.reason ??
+            "You do not have permission to perform this action",
           scope: { courseId },
         };
       }

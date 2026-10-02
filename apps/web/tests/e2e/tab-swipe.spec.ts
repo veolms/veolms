@@ -1287,9 +1287,7 @@ test("discussion tab swipes restore per-tab positions and cancel vertically clea
   const finishQuestionSwipe = await startTouchSwipe(page, panel, -190);
   await finishQuestionSwipe();
   await expect(page).toHaveURL(/\/discussions\/comments$/);
-  await expect
-    .poll(() => page.evaluate(() => window.scrollY))
-    .toBeLessThan(50);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(50);
 
   await panel.locator(".discussion-thread").last().scrollIntoViewIfNeeded();
   const commentsPosition = await page.evaluate(() => window.scrollY);

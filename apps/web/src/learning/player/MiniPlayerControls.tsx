@@ -93,9 +93,7 @@ export function MiniPlayerControls({
   const theme = usePlayerTheme();
   const CloseIcon = theme.icons.close;
   const ready = usePlayerState(({ media }) => media.lifecycle === "ready");
-  const paused = usePlayerState(
-    ({ media }) => media.paused || media.ended,
-  );
+  const paused = usePlayerState(({ media }) => media.paused || media.ended);
 
   return (
     <div
@@ -242,7 +240,9 @@ export function MiniPlayerControls({
             />
             <div className="pointer-events-none absolute right-0 top-full z-50 mt-1.5 hidden group-hover/close:flex items-center gap-1.5 px-2 py-1 rounded bg-black/90 text-xs text-white shadow-lg whitespace-nowrap font-medium">
               <span>Close</span>
-              <kbd className="px-1 py-0.2 rounded bg-white/20 text-[10px] font-semibold">Esc</kbd>
+              <kbd className="px-1 py-0.2 rounded bg-white/20 text-[10px] font-semibold">
+                Esc
+              </kbd>
             </div>
           </div>
         </div>

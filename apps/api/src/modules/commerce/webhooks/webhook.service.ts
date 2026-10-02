@@ -51,7 +51,10 @@ export function createWebhookService({
     }
 
     // 2. Normalize provider payload to gateway-independent domain event (using header eventId if present)
-    const normalizedEvent = paymentGateway.normalizeWebhookEvent(parsedPayload, eventId);
+    const normalizedEvent = paymentGateway.normalizeWebhookEvent(
+      parsedPayload,
+      eventId,
+    );
 
     // 3. Idempotently deduplicate by event_id in database
     const existing = await webhookRepo.findWebhookEvent(

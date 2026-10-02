@@ -26,7 +26,7 @@ function isExcludedLongPressTarget(target: EventTarget | null): boolean {
   );
   return Boolean(
     interactive &&
-      !interactive.classList.contains("discussion-thread__navigation-link"),
+    !interactive.classList.contains("discussion-thread__navigation-link"),
   );
 }
 

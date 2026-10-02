@@ -40,10 +40,7 @@ export type DynamicNavigationItem = readonly [
 
 export type NavigationItemWithMetadata = NavigationItem;
 
-const requiredNavigationLabels = new Set([
-  "Courses",
-  "Settings",
-]);
+const requiredNavigationLabels = new Set(["Courses", "Settings"]);
 
 const publicNavigation: readonly NavigationItem[] = [
   [
@@ -173,7 +170,15 @@ export function resolveShellNavigation(
 
   const serverItems = getNavigationItemsFromMenus(menus);
   const hasStaffMenus = serverItems.some(([label]) =>
-    ["Dashboard", "Courses", "Students", "Analytics", "Orders", "Quizzes", "Reviews"].includes(label),
+    [
+      "Dashboard",
+      "Courses",
+      "Students",
+      "Analytics",
+      "Orders",
+      "Quizzes",
+      "Reviews",
+    ].includes(label),
   );
   const hasCoupons = serverItems.some(([label]) => label === "Coupons");
   if (hasStaffMenus && !hasCoupons) {
@@ -188,7 +193,8 @@ export function resolveShellNavigation(
       },
     ];
     const insertIdx = serverItems.findIndex(
-      ([label]) => label === "Orders" || label === "Courses" || label === "Analytics",
+      ([label]) =>
+        label === "Orders" || label === "Courses" || label === "Analytics",
     );
     if (insertIdx !== -1) {
       serverItems.splice(insertIdx + 1, 0, couponsItem);
@@ -326,7 +332,10 @@ export function getInitialNavigationVisibility(
         normalizedVisibility.indexOf(label) === index,
     );
     if (!menuSetChanged) {
-      return ensureRequiredNavigationVisibility(savedVisibility, navigationItems);
+      return ensureRequiredNavigationVisibility(
+        savedVisibility,
+        navigationItems,
+      );
     }
 
     const newlyAvailableLabels = navigationItems

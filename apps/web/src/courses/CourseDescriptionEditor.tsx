@@ -1,10 +1,5 @@
 import { EditorView } from "@codemirror/view";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CommentFormattingToolbar } from "../learning/CommentFormattingToolbar";
 import {
   DiscussionEditor,
@@ -140,8 +135,10 @@ export function CourseDescriptionEditor({
   );
 }
 
-export interface LessonDescriptionEditorProps
-  extends Omit<CourseDescriptionEditorProps, "id"> {
+export interface LessonDescriptionEditorProps extends Omit<
+  CourseDescriptionEditorProps,
+  "id"
+> {
   id: string;
 }
 

@@ -20,7 +20,8 @@ import {
   useLinkPreview,
 } from "../../services/learning-interactions";
 
-const MENTION_PATTERN = /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,30})(?=[^A-Za-z0-9_]|$)/g;
+const MENTION_PATTERN =
+  /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,30})(?=[^A-Za-z0-9_]|$)/g;
 
 export function renderContentWithMentions(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
@@ -63,7 +64,9 @@ export function renderContentWithMentions(text: string): React.ReactNode {
   return parts;
 }
 
-export function highlightMentionsInNode(node: React.ReactNode): React.ReactNode {
+export function highlightMentionsInNode(
+  node: React.ReactNode,
+): React.ReactNode {
   if (typeof node === "string") {
     return renderContentWithMentions(node);
   }
@@ -363,11 +366,11 @@ export function DiscussionMarkdown({
   ) =>
     Boolean(
       url &&
-        label &&
-        linkedAttachments?.some(
-          (attachment) =>
-            attachment.fileUrl === url && attachment.fileName === label,
-        ),
+      label &&
+      linkedAttachments?.some(
+        (attachment) =>
+          attachment.fileUrl === url && attachment.fileName === label,
+      ),
     );
 
   const rawText =

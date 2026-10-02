@@ -147,8 +147,7 @@ function createMentionLoadingTooltip(to: number): Tooltip {
     above: false,
     create: () => {
       const dom = document.createElement("div");
-      dom.className =
-        "cm-tooltip-autocomplete cm-mention-loading-panel";
+      dom.className = "cm-tooltip-autocomplete cm-mention-loading-panel";
       dom.setAttribute("role", "status");
       dom.setAttribute("aria-live", "polite");
 

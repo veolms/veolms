@@ -82,11 +82,20 @@ export function createBundleService({
     return await hydrateBundle(bundle);
   }
 
-  async function createBundle(request: CreateBundleRequest): Promise<CourseBundle> {
+  async function createBundle(
+    request: CreateBundleRequest,
+  ): Promise<CourseBundle> {
     const normalizedSlug = request.slug.toLowerCase().trim();
-    const existing = await bundleRepo.findBundleBySlug(database, normalizedSlug);
+    const existing = await bundleRepo.findBundleBySlug(
+      database,
+      normalizedSlug,
+    );
     if (existing) {
-      throw new AppError(409, "BUNDLE_SLUG_EXISTS", `A bundle with slug "${request.slug}" already exists.`);
+      throw new AppError(
+        409,
+        "BUNDLE_SLUG_EXISTS",
+        `A bundle with slug "${request.slug}" already exists.`,
+      );
     }
 
     // Verify all courses exist
@@ -141,9 +150,16 @@ export function createBundleService({
     if (request.slug) {
       const normalizedSlug = request.slug.toLowerCase().trim();
       if (normalizedSlug !== existing.slug) {
-        const slugMatch = await bundleRepo.findBundleBySlug(database, normalizedSlug);
+        const slugMatch = await bundleRepo.findBundleBySlug(
+          database,
+          normalizedSlug,
+        );
         if (slugMatch && slugMatch.id !== id) {
-          throw new AppError(409, "BUNDLE_SLUG_EXISTS", `A bundle with slug "${request.slug}" already exists.`);
+          throw new AppError(
+            409,
+            "BUNDLE_SLUG_EXISTS",
+            `A bundle with slug "${request.slug}" already exists.`,
+          );
         }
       }
     }

@@ -437,7 +437,10 @@ export function SettingsPage({
               }}
             >
               <span className="settings-tab__press-content inline-flex origin-bottom items-center gap-2 transition-transform duration-150 ease-out group-active:scale-[0.985] motion-reduce:duration-[0.01ms]">
-                <Icon size={17} weight={activeTab === id ? "fill" : "regular"} />
+                <Icon
+                  size={17}
+                  weight={activeTab === id ? "fill" : "regular"}
+                />
                 <span>{label}</span>
               </span>
             </button>

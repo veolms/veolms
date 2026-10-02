@@ -865,9 +865,8 @@ export function LearningWorkspace({
         lessonNumber: selectedLesson,
       });
     });
-  const [playbackBootstrapError, setPlaybackBootstrapError] = useState<
-    VideoPlaybackBootstrapError | null
-  >(null);
+  const [playbackBootstrapError, setPlaybackBootstrapError] =
+    useState<VideoPlaybackBootstrapError | null>(null);
   const [playbackBootstrapAttempt, setPlaybackBootstrapAttempt] = useState(0);
   const playbackRequestKeyRef = useRef<string | null>(null);
   const refreshPlaybackToken = useCallback(async () => {
@@ -1063,8 +1062,7 @@ export function LearningWorkspace({
     resolvedAuthUser?.roles,
   ]);
   const canParticipateInLessonDiscussion =
-    lessonContentAccess === "granted" &&
-    lessonParticipationState === "granted";
+    lessonContentAccess === "granted" && lessonParticipationState === "granted";
   const lessonSequence = useMemo(
     () =>
       curriculumSections.flatMap(({ lessons }) => lessons.map(([id]) => id)),

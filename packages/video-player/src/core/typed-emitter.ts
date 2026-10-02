@@ -48,9 +48,7 @@ export class TypedEventEmitter<Events extends object> {
       return;
     }
 
-    listeners.delete(
-      listener as TypedEventListener<Events[keyof Events]>,
-    );
+    listeners.delete(listener as TypedEventListener<Events[keyof Events]>);
 
     if (listeners.size === 0) {
       this.#listeners.delete(type);

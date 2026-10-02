@@ -207,7 +207,9 @@ export function createModerationRepository(): ModerationRepository {
       let filtered = db.selectFrom("learning_reports as rep");
       filtered = applyReportFilters(filtered, options);
       if (options.pageCursor) {
-        filtered = filtered.where(createdAtIdDescSql("rep", options.pageCursor));
+        filtered = filtered.where(
+          createdAtIdDescSql("rep", options.pageCursor),
+        );
       }
 
       const rows = await filtered

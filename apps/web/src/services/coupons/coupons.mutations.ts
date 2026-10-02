@@ -27,8 +27,7 @@ export function useUpdateCoupon() {
     ApiError,
     { id: string; payload: UpdateCouponRequest }
   >({
-    mutationFn: ({ id, payload }) =>
-      couponsService.updateCoupon(id, payload),
+    mutationFn: ({ id, payload }) => couponsService.updateCoupon(id, payload),
     onSuccess: (updatedCoupon) => {
       queryClient.invalidateQueries({ queryKey: couponKeys.lists() });
       if (updatedCoupon?.id) {

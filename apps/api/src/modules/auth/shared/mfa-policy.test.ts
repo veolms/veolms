@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { ADMIN_ROLE, INSTRUCTOR_ROLE, STUDENT_ROLE } from "./auth.constants.ts";
-import { isMfaMandatoryAccount, sessionNeedsMfaChallenge } from "./mfa-policy.ts";
+import {
+  isMfaMandatoryAccount,
+  sessionNeedsMfaChallenge,
+} from "./mfa-policy.ts";
 
 describe("MFA Policy", () => {
   describe("isMfaMandatoryAccount", () => {

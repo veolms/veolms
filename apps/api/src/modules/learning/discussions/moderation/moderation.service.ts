@@ -349,7 +349,11 @@ export function createModerationService({
       return withWriteTransaction(db, async (trx) => {
         const thread = await threadsRepo.findThreadById(trx, threadId);
         if (!thread) {
-          throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
+          throw httpError(
+            404,
+            "THREAD_NOT_FOUND",
+            "Discussion thread not found",
+          );
         }
 
         if (courseId && thread.courseId !== courseId) {
@@ -383,7 +387,9 @@ export function createModerationService({
 
         // Transition pending reports on this thread to actioned or reviewed
         const targetReportStatus =
-          input.action === "hide" || input.action === "lock" || input.action === "delete"
+          input.action === "hide" ||
+          input.action === "lock" ||
+          input.action === "delete"
             ? "actioned"
             : "reviewed";
         await trx
@@ -415,7 +421,9 @@ export function createModerationService({
         // Notify thread author of moderation action
         if (
           thread.userId !== actor.userId &&
-          (input.action === "hide" || input.action === "delete" || input.action === "lock")
+          (input.action === "hide" ||
+            input.action === "delete" ||
+            input.action === "lock")
         ) {
           await outbox.publish(trx, {
             type: "moderation.content_moderated",

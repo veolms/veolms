@@ -215,9 +215,7 @@ export async function listPublishedCourses(
   return await query.execute();
 }
 
-export async function listPublishedCourseOptions(
-  database: Kysely<Database>,
-) {
+export async function listPublishedCourseOptions(database: Kysely<Database>) {
   return await database
     .selectFrom("courses")
     .select(["id", "title"])

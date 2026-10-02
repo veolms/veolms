@@ -72,14 +72,18 @@ export function OrderHistoryPage({
 
   const handleDownloadReceipt = (order: OrderHistoryItem) => {
     setNotice?.(`Opening invoice for order ${order.orderNumber}...`);
-    window.open(ordersService.getInvoiceDownloadUrl(order.id, "student"), "_blank", "noopener,noreferrer");
+    window.open(
+      ordersService.getInvoiceDownloadUrl(order.id, "student"),
+      "_blank",
+      "noopener,noreferrer",
+    );
   };
 
   const hasFilters = Boolean(
     searchQuery ||
-      statusFilter !== "all" ||
-      dateRangeFilter !== "all" ||
-      paymentMethodFilter !== "all",
+    statusFilter !== "all" ||
+    dateRangeFilter !== "all" ||
+    paymentMethodFilter !== "all",
   );
 
   return (
@@ -130,7 +134,11 @@ export function OrderHistoryPage({
             className="grid min-h-72 place-items-center rounded-2xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface) shadow-(--card-shadow)"
             style={{ boxShadow: "var(--card-shadow)" }}
           >
-            <CircleNotch size={32} className="animate-spin text-(--accent)" aria-label="Loading" />
+            <CircleNotch
+              size={32}
+              className="animate-spin text-(--accent)"
+              aria-label="Loading"
+            />
           </div>
         ) : isError ? (
           <div
@@ -138,7 +146,9 @@ export function OrderHistoryPage({
             style={{ boxShadow: "var(--card-shadow)" }}
           >
             <WarningCircle size={30} className="mb-3 text-rose-400" />
-            <h2 className="font-semibold text-(--text)">Unable to load purchase history</h2>
+            <h2 className="font-semibold text-(--text)">
+              Unable to load purchase history
+            </h2>
             <button
               type="button"
               onClick={() => void refetch()}
@@ -164,14 +174,20 @@ export function OrderHistoryPage({
                   type="button"
                   onClick={() => void fetchNextPage()}
                   aria-busy={isFetchingNextPage}
-                  aria-label={isFetchingNextPage ? "Loading more orders" : undefined}
+                  aria-label={
+                    isFetchingNextPage ? "Loading more orders" : undefined
+                  }
                   disabled={isFetchingNextPage}
                   className="rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs md:text-sm font-semibold text-(--text) hover:bg-(--hover) transition-colors cursor-pointer disabled:cursor-wait disabled:opacity-60"
                   style={{ boxShadow: "var(--card-shadow)" }}
                 >
                   {isFetchingNextPage ? (
                     <span className="inline-flex items-center">
-                      <CircleNotch size={15} className="animate-spin text-(--accent)" aria-hidden="true" />
+                      <CircleNotch
+                        size={15}
+                        className="animate-spin text-(--accent)"
+                        aria-hidden="true"
+                      />
                     </span>
                   ) : (
                     "Load more orders"
@@ -189,7 +205,8 @@ export function OrderHistoryPage({
               />
             )}
             <p className="mt-3 text-center text-xs text-(--muted)">
-              Showing {paginatedOrders.length} of {totalFilteredCount} loaded orders
+              Showing {paginatedOrders.length} of {totalFilteredCount} loaded
+              orders
               {hasNextPage ? ` · ${totalLoadedCount} loaded` : ""}
             </p>
           </>
@@ -209,7 +226,9 @@ export function OrderHistoryPage({
               <Receipt size={30} weight="duotone" />
             </div>
             <h2 className="text-base sm:text-lg font-bold tracking-tight text-(--text)">
-              {hasFilters ? "No purchases match these filters" : "No purchases yet"}
+              {hasFilters
+                ? "No purchases match these filters"
+                : "No purchases yet"}
             </h2>
             <p className="mt-1.5 max-w-sm text-xs sm:text-sm text-(--muted) leading-relaxed">
               {hasFilters

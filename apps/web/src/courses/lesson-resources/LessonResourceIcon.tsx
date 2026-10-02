@@ -49,15 +49,24 @@ function getResourceIconMeta(
   const normalizedType = normalizeType(type || getFileExtension(name));
   const normalizedMimeType = mimeType?.toLowerCase().trim() || "";
 
-  if (normalizedMimeType.startsWith("image/") || IMAGE_TYPES.has(normalizedType)) {
+  if (
+    normalizedMimeType.startsWith("image/") ||
+    IMAGE_TYPES.has(normalizedType)
+  ) {
     return { Icon: FileImage, colorClass: "text-emerald-400" };
   }
 
-  if (normalizedMimeType.startsWith("audio/") || AUDIO_TYPES.has(normalizedType)) {
+  if (
+    normalizedMimeType.startsWith("audio/") ||
+    AUDIO_TYPES.has(normalizedType)
+  ) {
     return { Icon: FileAudio, colorClass: "text-violet-400" };
   }
 
-  if (normalizedMimeType.startsWith("video/") || VIDEO_TYPES.has(normalizedType)) {
+  if (
+    normalizedMimeType.startsWith("video/") ||
+    VIDEO_TYPES.has(normalizedType)
+  ) {
     return { Icon: FileVideo, colorClass: "text-sky-400" };
   }
 

@@ -121,9 +121,7 @@ test("discussion tabs use canonical routes and per-tab browser history", async (
   expect(
     await comments.evaluate((tab) => getComputedStyle(tab).color),
   ).not.toBe(questionStyle.color);
-  await expect
-    .poll(() => getApplicationScrollTop(page))
-    .toBeLessThan(50);
+  await expect.poll(() => getApplicationScrollTop(page)).toBeLessThan(50);
 
   await setApplicationScrollTop(page, 180);
   const commentsScrollPosition = await getApplicationScrollTop(page);
@@ -277,16 +275,18 @@ test("comments workspace uses mine-only body cards", async ({ page }) => {
   await expect(
     commentsPanel.locator('[aria-label="Filter discussions by status"]'),
   ).toHaveCount(0);
-  await expect(commentsPanel.locator(".discussion-thread--comment")).toHaveCount(
-    1,
-  );
+  await expect(
+    commentsPanel.locator(".discussion-thread--comment"),
+  ).toHaveCount(1);
   await expect(commentsPanel.locator(".discussion-thread__title")).toHaveCount(
     0,
   );
   await expect(commentsPanel.locator(".discussion-thread__status")).toHaveCount(
     0,
   );
-  await expect(commentsPanel.locator(".discussion-thread__more")).toHaveCount(0);
+  await expect(commentsPanel.locator(".discussion-thread__more")).toHaveCount(
+    0,
+  );
   await expect(
     commentsPanel.locator(".discussion-thread__engagement"),
   ).toContainText("2 likes");

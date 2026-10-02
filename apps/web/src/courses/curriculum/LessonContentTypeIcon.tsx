@@ -6,11 +6,7 @@ import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import type { ComponentType } from "react";
 
 export type LessonListContentType =
-  | "video"
-  | "audio"
-  | "image"
-  | "document"
-  | "quiz";
+  "video" | "audio" | "image" | "document" | "quiz";
 
 interface ContentTypeIconMeta {
   Icon: ComponentType<{

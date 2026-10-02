@@ -14,7 +14,10 @@ export class NativeVideoEngine extends MediaElementEngineBase {
   readonly name = "native";
   readonly #managedTracks = new Set<HTMLTrackElement>();
 
-  async load(source: VideoSource, options: VideoLoadOptions = {}): Promise<void> {
+  async load(
+    source: VideoSource,
+    options: VideoLoadOptions = {},
+  ): Promise<void> {
     const media = this.requireMedia();
     if (source.drm) {
       throw new VideoEngineError({
@@ -40,7 +43,11 @@ export class NativeVideoEngine extends MediaElementEngineBase {
       }
 
       const startTime = options.startTime ?? source.startTime;
-      if (startTime !== undefined && Number.isFinite(startTime) && startTime >= 0) {
+      if (
+        startTime !== undefined &&
+        Number.isFinite(startTime) &&
+        startTime >= 0
+      ) {
         this.seek(startTime);
       }
 
@@ -100,7 +107,9 @@ export class NativeVideoEngine extends MediaElementEngineBase {
       };
       const onError = (): void => {
         cleanup();
-        reject(media.error ?? new Error("The browser failed to load the media."));
+        reject(
+          media.error ?? new Error("The browser failed to load the media."),
+        );
       };
       const onAbort = (): void => {
         cleanup();
@@ -115,7 +124,9 @@ export class NativeVideoEngine extends MediaElementEngineBase {
         );
       };
 
-      media.addEventListener("loadedmetadata", onLoadedMetadata, { once: true });
+      media.addEventListener("loadedmetadata", onLoadedMetadata, {
+        once: true,
+      });
       media.addEventListener("error", onError, { once: true });
       media.addEventListener("abort", onAbort, { once: true });
     });

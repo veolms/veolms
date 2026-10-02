@@ -1,5 +1,9 @@
 import type { PaymentStatus } from "@veolms/database";
-import type { Payment, PaymentMethodDetails, PaymentProvider } from "@veolms/contracts";
+import type {
+  Payment,
+  PaymentMethodDetails,
+  PaymentProvider,
+} from "@veolms/contracts";
 
 /**
  * Minimal shape needed to map a persisted payment row to the `Payment` API

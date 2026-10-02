@@ -9,11 +9,14 @@ export interface IdentifierMethodSwitchProps {
   onMethodChange: (method: IdentifierMethod) => void;
 }
 
-const ALL_METHOD_TABS: readonly (readonly [IdentifierMethod, string, IconName])[] =
-  [
-    ["mobile", "Mobile", "mobile"],
-    ["email", "Email", "email"],
-  ];
+const ALL_METHOD_TABS: readonly (readonly [
+  IdentifierMethod,
+  string,
+  IconName,
+])[] = [
+  ["mobile", "Mobile", "mobile"],
+  ["email", "Email", "email"],
+];
 
 export function IdentifierMethodSwitch({
   method,

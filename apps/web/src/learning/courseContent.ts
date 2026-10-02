@@ -58,8 +58,9 @@ export const createLessonsById = (courseSections: readonly CourseSection[]) =>
     ),
   );
 
-export const createLessonSequence = (courseSections: readonly CourseSection[]) =>
-  courseSections.flatMap(({ lessons }) => lessons.map(([id]) => id));
+export const createLessonSequence = (
+  courseSections: readonly CourseSection[],
+) => courseSections.flatMap(({ lessons }) => lessons.map(([id]) => id));
 
 export function getLessonSlug(lessonId: number): string {
   const normalizedId =

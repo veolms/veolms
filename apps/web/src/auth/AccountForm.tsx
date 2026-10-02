@@ -126,7 +126,10 @@ export function AccountForm({
             </label>
 
             <div className="auth-account-form__identity-row">
-              <span className="auth-account-form__avatar-circle" aria-hidden="true">
+              <span
+                className="auth-account-form__avatar-circle"
+                aria-hidden="true"
+              >
                 {hasName && avatarPreviewName ? (
                   <img
                     alt=""
@@ -190,7 +193,14 @@ export function AccountForm({
             <Icon aria-hidden emphasis="bold" name="arrowRight" size={18} />
           </button>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.75rem" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.5rem",
+              marginTop: "0.75rem",
+            }}
+          >
             {onBackToOtp ? (
               <button
                 className="auth-otp-form__change"

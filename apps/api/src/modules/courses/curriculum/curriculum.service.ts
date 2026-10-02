@@ -139,7 +139,11 @@ export function createCurriculumService({
     version: number,
     userRoles?: readonly string[],
   ) {
-    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+    );
     if (course.version !== version) {
       throw new AppError(
         409,
@@ -363,7 +367,11 @@ export function createCurriculumService({
     version: number,
     userRoles?: readonly string[],
   ) {
-    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+    );
     if (course.version !== version) {
       throw new AppError(
         409,

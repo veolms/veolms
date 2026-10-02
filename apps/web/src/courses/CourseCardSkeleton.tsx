@@ -4,7 +4,9 @@ export interface CourseCardSkeletonProps {
   role?: CourseRole;
 }
 
-export function CourseCardSkeleton({ role = "student" }: CourseCardSkeletonProps) {
+export function CourseCardSkeleton({
+  role = "student",
+}: CourseCardSkeletonProps) {
   return (
     <article
       className="group relative min-w-0 overflow-visible rounded-xl border border-(--border) bg-(--card-surface,var(--surface)) shadow-(--card-shadow) animate-pulse"

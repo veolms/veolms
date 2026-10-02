@@ -56,9 +56,7 @@ export function LinkPreviewCard({
         {preview.imageUrl && (
           <div
             className={`relative overflow-hidden bg-black/5 dark:bg-white/5 ${
-              compact
-                ? "h-16 w-20 shrink-0 rounded-md"
-                : "h-36 w-full sm:h-44"
+              compact ? "h-16 w-20 shrink-0 rounded-md" : "h-36 w-full sm:h-44"
             }`}
           >
             <img
@@ -74,7 +72,10 @@ export function LinkPreviewCard({
           <div className="flex items-center gap-1.5 text-[11px] font-medium text-(--muted)">
             <Globe size={13} className="shrink-0 text-(--accent)" />
             <span className="truncate">{hostname}</span>
-            <ArrowSquareOut size={12} className="ml-auto shrink-0 opacity-60 group-hover:opacity-100" />
+            <ArrowSquareOut
+              size={12}
+              className="ml-auto shrink-0 opacity-60 group-hover:opacity-100"
+            />
           </div>
 
           {preview.title && (

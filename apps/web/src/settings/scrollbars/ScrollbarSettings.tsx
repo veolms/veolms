@@ -306,9 +306,8 @@ export function ScrollbarSettings() {
       ({ id }) => id === elasticScrollPreferences.appearance,
     )?.label ?? "2D";
   const selectedElasticIconLabel =
-    ELASTIC_SCROLL_ICONS.find(
-      ({ id }) => id === elasticScrollPreferences.icon,
-    )?.label ?? "Classic arrow";
+    ELASTIC_SCROLL_ICONS.find(({ id }) => id === elasticScrollPreferences.icon)
+      ?.label ?? "Classic arrow";
 
   return (
     <>
@@ -527,10 +526,7 @@ export function ScrollbarSettings() {
                     label={label}
                     note={`Drag ${id} to unlock`}
                     preview={
-                      <ElasticScrollGesturePreview
-                        side={id}
-                        action="unlock"
-                      />
+                      <ElasticScrollGesturePreview side={id} action="unlock" />
                     }
                     className="min-h-30"
                   />

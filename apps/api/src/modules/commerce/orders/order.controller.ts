@@ -94,11 +94,7 @@ export function createOrderController({
   async function getOrderStats(
     request: FastifyRequest<{ Querystring: OrderStatsQuery }>,
   ) {
-    await requireBillingPermission(
-      request,
-      "billing.read",
-      "view order stats",
-    );
+    await requireBillingPermission(request, "billing.read", "view order stats");
     const scope = await service.getAcademyScope();
     return await service.getOrderStats(scope, request.query);
   }

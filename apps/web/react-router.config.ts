@@ -36,16 +36,16 @@ const isDevelopment = process.env.VEO_REACT_ROUTER_BUILD !== "true";
 const developmentPrerenderCourseSlugs = ["tailwind-css"] as const;
 
 const staticLearningPages = createLearningPrerenderPaths({
-  courseSlugs: isDevelopment
-    ? developmentPrerenderCourseSlugs
-    : undefined,
+  courseSlugs: isDevelopment ? developmentPrerenderCourseSlugs : undefined,
   scope: learningPrerenderScope,
 });
 
 function getStaticApiBaseUrl() {
   const configured =
     process.env.STATIC_BUILD_API_URL || "http://127.0.0.1:4000/v1";
-  const normalized = configured.replace(/\/+$/u, "").replace(/\/api\/v1$/u, "/v1");
+  const normalized = configured
+    .replace(/\/+$/u, "")
+    .replace(/\/api\/v1$/u, "/v1");
   return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`;
 }
 
@@ -66,7 +66,9 @@ async function getStaticCataloguePaths() {
       : body;
   const result = courseListResponseSchema.safeParse(payload);
   if (!result.success) {
-    throw new Error("The build API returned an invalid published course catalogue.");
+    throw new Error(
+      "The build API returned an invalid published course catalogue.",
+    );
   }
   return result.data.courses.map(
     ({ slug }) => `/explore-courses/${encodeURIComponent(slug)}`,

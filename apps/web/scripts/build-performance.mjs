@@ -22,10 +22,16 @@ for (const environmentFile of [".env.production", ".env"]) {
 }
 
 if (process.env.STATIC_BUILD_API_URL) {
-  process.env.STATIC_BUILD_API_URL = process.env.STATIC_BUILD_API_URL.replace("localhost", "127.0.0.1");
+  process.env.STATIC_BUILD_API_URL = process.env.STATIC_BUILD_API_URL.replace(
+    "localhost",
+    "127.0.0.1",
+  );
 }
 if (process.env.VITE_API_BASE_URL) {
-  process.env.VITE_API_BASE_URL = process.env.VITE_API_BASE_URL.replace("localhost", "127.0.0.1");
+  process.env.VITE_API_BASE_URL = process.env.VITE_API_BASE_URL.replace(
+    "localhost",
+    "127.0.0.1",
+  );
 }
 
 export const runPerformanceBuild = async (

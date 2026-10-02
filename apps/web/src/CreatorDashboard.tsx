@@ -288,7 +288,9 @@ function formatDashboardCurrency(value: number, currency: string) {
 }
 
 function formatDashboardNumber(value: number) {
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(
+    value,
+  );
 }
 
 function formatDashboardPercent(value: number) {
@@ -334,8 +336,7 @@ function DashboardInfoPopover({
   } | null>(null);
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInfoOpen =
-    !isInfoDismissed &&
-    (isInfoPinned || isInfoHovered || isInfoFocused);
+    !isInfoDismissed && (isInfoPinned || isInfoHovered || isInfoFocused);
 
   const clearCloseTimeout = () => {
     if (closeTimeoutRef.current !== null) {
@@ -398,18 +399,13 @@ function DashboardInfoPopover({
           sectionBounds.height - popoverBounds.height - sectionPadding,
         );
         const preferredLeft =
-          buttonBounds.right -
-          popoverBounds.width -
-          sectionBounds.left;
+          buttonBounds.right - popoverBounds.width - sectionBounds.left;
         const preferredTop =
           buttonBounds.bottom + sideOffset - sectionBounds.top;
 
         setInfoPopoverPlacement("bottom");
         setPopoverPosition({
-          top: Math.min(
-            Math.max(preferredTop, sectionPadding),
-            maxSectionTop,
-          ),
+          top: Math.min(Math.max(preferredTop, sectionPadding), maxSectionTop),
           left: Math.min(
             Math.max(preferredLeft, sectionPadding),
             maxSectionLeft,
@@ -511,8 +507,8 @@ function DashboardInfoPopover({
 
   const portalTarget =
     portal && typeof document !== "undefined"
-      ? infoControlRef.current?.closest(".creator-dashboard-panel") ??
-        document.body
+      ? (infoControlRef.current?.closest(".creator-dashboard-panel") ??
+        document.body)
       : null;
 
   return (
@@ -707,7 +703,10 @@ function drawHorizontalChartGrid({
   context.restore();
 }
 
-function getRevenuePlotBounds(width: number, height: number): RevenuePlotBounds {
+function getRevenuePlotBounds(
+  width: number,
+  height: number,
+): RevenuePlotBounds {
   const isNarrowRevenueChart = width <= 640;
   const left = isNarrowRevenueChart
     ? width < 360
@@ -718,18 +717,15 @@ function getRevenuePlotBounds(width: number, height: number): RevenuePlotBounds 
       : 42;
   const right =
     width -
-    (isNarrowRevenueChart
-      ? width < 360
-        ? 12
-        : 14
-      : width < 360
-        ? 14
-        : 16);
+    (isNarrowRevenueChart ? (width < 360 ? 12 : 14) : width < 360 ? 14 : 16);
 
   return { left, right, top: 22, bottom: height - 33 };
 }
 
-function getActivityPlotBounds(width: number, height: number): RevenuePlotBounds {
+function getActivityPlotBounds(
+  width: number,
+  height: number,
+): RevenuePlotBounds {
   return {
     left: width < 360 ? 26 : 30,
     right: width - 10,
@@ -794,9 +790,10 @@ function getRevenueTooltipPosition(
   const tooltipWidth = Math.min(150, Math.max(112, point.width * 0.42));
   const tooltipHeight = 46;
   const gap = 8;
-  const left = point.x > point.width - tooltipWidth - 24
-    ? point.x - tooltipWidth - gap
-    : point.x + gap;
+  const left =
+    point.x > point.width - tooltipWidth - 24
+      ? point.x - tooltipWidth - gap
+      : point.x + gap;
   const top = point.y - tooltipHeight - gap;
 
   return {
@@ -817,9 +814,10 @@ function getActivityTooltipPosition(
   const tooltipWidth = Math.min(164, Math.max(136, point.width * 0.48));
   const tooltipHeight = 62;
   const gap = 8;
-  const left = point.x > point.width - tooltipWidth - 24
-    ? point.x - tooltipWidth - gap
-    : point.x + gap;
+  const left =
+    point.x > point.width - tooltipWidth - 24
+      ? point.x - tooltipWidth - gap
+      : point.x + gap;
   const top = point.y - tooltipHeight - gap;
 
   return {
@@ -921,9 +919,7 @@ function selectActivityDayLabels(
       { length: labelCount },
       (_, labelIndex) =>
         labels[
-          Math.round(
-            (labelIndex * (labels.length - 1)) / (labelCount - 1),
-          )
+          Math.round((labelIndex * (labels.length - 1)) / (labelCount - 1))
         ]!,
     );
     if (activityDayLabelsFit(candidate, left, right)) {
@@ -980,8 +976,7 @@ function drawRevenueChart({
       skeletonValues.length === 1
         ? (left + right) / 2
         : left + (index / (skeletonValues.length - 1)) * (right - left);
-    const skeletonY = (value: number) =>
-      bottom - value * (bottom - top);
+    const skeletonY = (value: number) => bottom - value * (bottom - top);
 
     drawHorizontalChartGrid({
       context,
@@ -1048,10 +1043,8 @@ function drawRevenueChart({
     values.length === 1
       ? (left + right) / 2
       : left + (index / (values.length - 1)) * (right - left);
-  const y = (value: number) =>
-    bottom - (value / scaleMax) * (bottom - top);
-  const animatedY = (value: number) =>
-    bottom - (bottom - y(value)) * progress;
+  const y = (value: number) => bottom - (value / scaleMax) * (bottom - top);
+  const animatedY = (value: number) => bottom - (bottom - y(value)) * progress;
 
   drawHorizontalChartGrid({
     context,
@@ -1088,7 +1081,11 @@ function drawRevenueChart({
   context.lineWidth = 2.25;
   context.stroke();
 
-  if (activeIndex !== null && activeIndex < values.length && progress >= 0.999) {
+  if (
+    activeIndex !== null &&
+    activeIndex < values.length &&
+    progress >= 0.999
+  ) {
     context.save();
     context.strokeStyle = accent;
     context.globalAlpha = 0.26;
@@ -1115,10 +1112,10 @@ function drawRevenueChart({
   [1, 0.8, 0.6, 0.4, 0.2, 0].forEach((ratio) => {
     const mark = scaleMax * ratio;
     context.fillText(
-      new Intl.NumberFormat(
-        revenueCurrency === "INR" ? "en-IN" : "en-US",
-        { notation: "compact", maximumFractionDigits: 1 },
-      ).format(mark),
+      new Intl.NumberFormat(revenueCurrency === "INR" ? "en-IN" : "en-US", {
+        notation: "compact",
+        maximumFractionDigits: 1,
+      }).format(mark),
       left - 6,
       y(mark) + 3,
     );
@@ -1140,7 +1137,10 @@ function drawRevenueChart({
         : Math.round(
             (labelIndex * (revenueTrend.length - 1)) / (labelCount - 1),
           );
-    return [index, formatRevenueTooltipDate(revenueTrend[index]!.date)] as const;
+    return [
+      index,
+      formatRevenueTooltipDate(revenueTrend[index]!.date),
+    ] as const;
   });
   context.globalAlpha = 0.84;
   dateLabels.forEach(([index, dateLabel], labelIndex) => {
@@ -1168,7 +1168,11 @@ function drawRevenueChart({
   context.fill();
   context.restore();
 
-  if (activeIndex !== null && activeIndex < values.length && progress >= 0.999) {
+  if (
+    activeIndex !== null &&
+    activeIndex < values.length &&
+    progress >= 0.999
+  ) {
     context.save();
     context.shadowColor = accent;
     context.shadowBlur = 10;
@@ -1352,9 +1356,9 @@ function DataCanvas({
   activityStatus,
 }: DataCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const previousRevenueTrendRef = useRef<DashboardRevenueOverview["trend"] | null>(
-    null,
-  );
+  const previousRevenueTrendRef = useRef<
+    DashboardRevenueOverview["trend"] | null
+  >(null);
   const previousActivityBucketsRef = useRef<ActivityBuckets | null>(null);
   const activeRevenueIndexRef = useRef<number | null>(null);
   const activeActivityIndexRef = useRef<number | null>(null);
@@ -1449,10 +1453,7 @@ function DataCanvas({
     const gap = (right - left) / activityBuckets.length;
     const index = Math.max(
       0,
-      Math.min(
-        activityBuckets.length - 1,
-        Math.floor((pointerX - left) / gap),
-      ),
+      Math.min(activityBuckets.length - 1, Math.floor((pointerX - left) / gap)),
     );
     const values = activityBuckets.map((bucket) => bucket.value);
     const maxValue = Math.max(...values, 0);
@@ -1515,10 +1516,7 @@ function DataCanvas({
         animationFrameRef.current = null;
         animationRunningRef.current = false;
       }
-      if (
-        kind === "activity" &&
-        activityAnimationFrameRef.current !== null
-      ) {
+      if (kind === "activity" && activityAnimationFrameRef.current !== null) {
         cancelAnimationFrame(activityAnimationFrameRef.current);
         activityAnimationFrameRef.current = null;
         activityAnimationRunningRef.current = false;
@@ -1533,7 +1531,8 @@ function DataCanvas({
       const accent =
         rootStyles.getPropertyValue("--accent").trim() || "#8b68ff";
       const muted = rootStyles.getPropertyValue("--muted").trim() || "#919592";
-      const danger = rootStyles.getPropertyValue("--danger").trim() || "#fb7185";
+      const danger =
+        rootStyles.getPropertyValue("--danger").trim() || "#fb7185";
       const track = rootStyles.getPropertyValue("--track").trim() || "#202324";
       const isDarkTheme = document.documentElement.dataset.theme !== "light";
       const gridColor = isDarkTheme ? muted : track;
@@ -1577,8 +1576,14 @@ function DataCanvas({
         renderRevenueRef.current = () => {
           const currentBounds = canvas.getBoundingClientRect();
           const currentRatio = window.devicePixelRatio || 1;
-          canvas.width = Math.max(1, Math.floor(currentBounds.width * currentRatio));
-          canvas.height = Math.max(1, Math.floor(currentBounds.height * currentRatio));
+          canvas.width = Math.max(
+            1,
+            Math.floor(currentBounds.width * currentRatio),
+          );
+          canvas.height = Math.max(
+            1,
+            Math.floor(currentBounds.height * currentRatio),
+          );
           const currentContext = resizeCanvas(canvas, currentRatio);
           drawRevenueChart({
             context: currentContext,
@@ -1632,7 +1637,11 @@ function DataCanvas({
           const animate = (now: number) => {
             const elapsed = now - start;
             if (hasPreviousData && elapsed < downDuration) {
-              drawFrame(previousTrend!, undefined, 1 - ease(elapsed / downDuration));
+              drawFrame(
+                previousTrend!,
+                undefined,
+                1 - ease(elapsed / downDuration),
+              );
             } else if (!hasNextData) {
               drawFrame(revenueTrend, revenueStatus, 1);
             } else {
@@ -1684,8 +1693,14 @@ function DataCanvas({
         renderActivityRef.current = () => {
           const currentBounds = canvas.getBoundingClientRect();
           const currentRatio = window.devicePixelRatio || 1;
-          canvas.width = Math.max(1, Math.floor(currentBounds.width * currentRatio));
-          canvas.height = Math.max(1, Math.floor(currentBounds.height * currentRatio));
+          canvas.width = Math.max(
+            1,
+            Math.floor(currentBounds.width * currentRatio),
+          );
+          canvas.height = Math.max(
+            1,
+            Math.floor(currentBounds.height * currentRatio),
+          );
           const currentContext = resizeCanvas(canvas, currentRatio);
           drawActivityChart({
             context: currentContext,
@@ -1736,7 +1751,8 @@ function DataCanvas({
               activityAnimationFrameRef.current = null;
               renderActivityRef.current?.();
             } else {
-              activityAnimationFrameRef.current = requestAnimationFrame(animate);
+              activityAnimationFrameRef.current =
+                requestAnimationFrame(animate);
             }
           };
 
@@ -1884,9 +1900,8 @@ function DataCanvas({
             <span>{activityTooltipDate.date}</span>
             <span>{activityTooltipDate.range}</span>
             <strong>
-              {activityTooltipData.value} {activityTooltipData.value === 1
-                ? "enrollment"
-                : "enrollments"}
+              {activityTooltipData.value}{" "}
+              {activityTooltipData.value === 1 ? "enrollment" : "enrollments"}
             </strong>
           </div>
         )}
@@ -1956,8 +1971,8 @@ function RevenuePanel({
               refunded or refunded; this is not a refund amount.
             </li>
             <li>
-              <strong>Comparison</strong> — compares the selected range with
-              the immediately preceding range of the same length when a prior
+              <strong>Comparison</strong> — compares the selected range with the
+              immediately preceding range of the same length when a prior
               baseline is available.
             </li>
           </ul>
@@ -1977,10 +1992,7 @@ function RevenuePanel({
           role="tablist"
           aria-label="Revenue range"
         >
-          <span
-            className="creator-range-tabs-indicator"
-            aria-hidden="true"
-          />
+          <span className="creator-range-tabs-indicator" aria-hidden="true" />
           {(
             [
               ["7d", "7D"],
@@ -2020,7 +2032,10 @@ function RevenuePanel({
           <strong>
             {summaryUnavailable
               ? "—"
-              : formatDashboardCurrency(revenueOverview?.grossSales.value ?? 0, currency)}
+              : formatDashboardCurrency(
+                  revenueOverview?.grossSales.value ?? 0,
+                  currency,
+                )}
           </strong>
           <RevenueMetricTrend
             changePercent={revenueOverview?.grossSales.changePercent ?? null}
@@ -2032,7 +2047,10 @@ function RevenuePanel({
           <strong>
             {summaryUnavailable
               ? "—"
-              : formatDashboardCurrency(revenueOverview?.netRevenue.value ?? 0, currency)}
+              : formatDashboardCurrency(
+                  revenueOverview?.netRevenue.value ?? 0,
+                  currency,
+                )}
           </strong>
           <RevenueMetricTrend
             changePercent={revenueOverview?.netRevenue.changePercent ?? null}
@@ -2135,7 +2153,9 @@ function LearningActivityPanel({
       infoTitle="Learning Activity"
       infoDescription={
         <>
-          <p>Summarizes how learners are progressing and engaging with courses.</p>
+          <p>
+            Summarizes how learners are progressing and engaging with courses.
+          </p>
           <ul>
             <li>
               <strong>Avg. Course Progress</strong> — average stored progress
@@ -2154,9 +2174,9 @@ function LearningActivityPanel({
               creation events across the last 7 days in 8-hour buckets.
             </li>
             <li>
-              <strong>Previous 7 days comparison</strong> — compares the
-              current activity window with the immediately preceding 7-day
-              window when comparison data exists.
+              <strong>Previous 7 days comparison</strong> — compares the current
+              activity window with the immediately preceding 7-day window when
+              comparison data exists.
             </li>
           </ul>
           <p className="creator-panel-info-note">
@@ -2195,7 +2215,9 @@ function LearningActivityPanel({
           activityStatus={activityStatus}
         />
       </div>
-      <p className="creator-activity-meta">Last 7 days · 8h buckets · Local time</p>
+      <p className="creator-activity-meta">
+        Last 7 days · 8h buckets · Local time
+      </p>
     </DashboardPanel>
   );
 }
@@ -2267,8 +2289,9 @@ function DashboardRetryContent({
           size={14}
           aria-hidden="true"
           className={
-            isRetrying ? "creator-dashboard-state-retry-icon is-retrying" :
-              "creator-dashboard-state-retry-icon"
+            isRetrying
+              ? "creator-dashboard-state-retry-icon is-retrying"
+              : "creator-dashboard-state-retry-icon"
           }
         />
         {isRetrying ? "Retrying…" : "Retry"}
@@ -2310,7 +2333,9 @@ function CreatorCourseProgress({
   return (
     <i>
       <b
-        className={animated ? "creator-progress-fill" : "creator-progress-fill--static"}
+        className={
+          animated ? "creator-progress-fill" : "creator-progress-fill--static"
+        }
         style={{ width: `${displayedProgress}%` }}
       />
     </i>
@@ -2396,7 +2421,11 @@ function CoursesPanel({
           </div>
         </div>
         {showInitialLoading ? (
-          <div className="creator-course-skeleton" role="status" aria-label="Loading courses">
+          <div
+            className="creator-course-skeleton"
+            role="status"
+            aria-label="Loading courses"
+          >
             <CourseTableSkeletonRows />
           </div>
         ) : showInitialError ? (
@@ -2413,7 +2442,8 @@ function CoursesPanel({
             <span>
               <strong>No courses yet</strong>
               <small>
-                Create your first course to start tracking students and progress.
+                Create your first course to start tracking students and
+                progress.
               </small>
               <button
                 type="button"
@@ -2430,9 +2460,7 @@ function CoursesPanel({
               type="button"
               className="creator-table-row creator-course-row"
               key={course.id}
-              onClick={() =>
-                onNavigatePage?.(getCourseRowDestination(course))
-              }
+              onClick={() => onNavigatePage?.(getCourseRowDestination(course))}
               title={
                 course.status === "draft"
                   ? `Continue editing ${course.title}`
@@ -2506,8 +2534,9 @@ function DiscussionsPanel({
     isManualRefresh || (isLoading && !hasDiscussionData);
   const showInitialError = isError && !hasDiscussionData;
   const discussionCards =
-    discussionsResponse?.items.map((item) => adaptDiscussionWorkspaceItem(item)) ??
-    [];
+    discussionsResponse?.items.map((item) =>
+      adaptDiscussionWorkspaceItem(item),
+    ) ?? [];
 
   return (
     <DashboardPanel
@@ -2578,11 +2607,7 @@ function CreatorStudentAvatar({ src }: { src?: string | null }) {
   );
 }
 
-function CreatorEnrollmentProgress({
-  value,
-}: {
-  value: number | null;
-}) {
+function CreatorEnrollmentProgress({ value }: { value: number | null }) {
   if (value === null) {
     return (
       <span
@@ -2689,8 +2714,8 @@ function EnrollmentsPanel({
               infoDescription={
                 <p>
                   Average of the stored progress percentages for this learner
-                  and course. Not started means no matching progress records
-                  are available.
+                  and course. Not started means no matching progress records are
+                  available.
                 </p>
               }
             />
@@ -2787,10 +2812,12 @@ export const CreatorDashboard = memo(function CreatorDashboard({
     isError: isDashboardError,
     isFetching: isDashboardFetching,
     refetch: refetchDashboard,
-  } =
-    useDashboard(range);
+  } = useDashboard(range);
   const dashboardUnavailable =
-    isRefreshing || isDashboardLoading || isDashboardError || !dashboardResponse;
+    isRefreshing ||
+    isDashboardLoading ||
+    isDashboardError ||
+    !dashboardResponse;
   const dashboardCurrency = dashboardResponse?.revenue.currency ?? "INR";
   const dashboardDisplayName =
     currentUser?.displayName?.trim() ||

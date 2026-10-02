@@ -39,12 +39,36 @@ const statusOptions: readonly ThemedSelectOption<string>[] = [
 ];
 
 const datePresetOptions: readonly ThemedSelectOption<DateRangePreset>[] = [
-  ["all_time", "All Time", { flag: <CalendarBlank size={15} className="text-(--muted)" /> }],
-  ["today", "Today", { flag: <CalendarBlank size={15} className="text-(--muted)" /> }],
-  ["last_7_days", "Last 7 days", { flag: <CalendarBlank size={15} className="text-(--muted)" /> }],
-  ["last_30_days", "Last 30 days", { flag: <CalendarBlank size={15} className="text-(--muted)" /> }],
-  ["this_month", "This Month", { flag: <CalendarBlank size={15} className="text-(--muted)" /> }],
-  ["last_month", "Last Month", { flag: <CalendarBlank size={15} className="text-(--muted)" /> }],
+  [
+    "all_time",
+    "All Time",
+    { flag: <CalendarBlank size={15} className="text-(--muted)" /> },
+  ],
+  [
+    "today",
+    "Today",
+    { flag: <CalendarBlank size={15} className="text-(--muted)" /> },
+  ],
+  [
+    "last_7_days",
+    "Last 7 days",
+    { flag: <CalendarBlank size={15} className="text-(--muted)" /> },
+  ],
+  [
+    "last_30_days",
+    "Last 30 days",
+    { flag: <CalendarBlank size={15} className="text-(--muted)" /> },
+  ],
+  [
+    "this_month",
+    "This Month",
+    { flag: <CalendarBlank size={15} className="text-(--muted)" /> },
+  ],
+  [
+    "last_month",
+    "Last Month",
+    { flag: <CalendarBlank size={15} className="text-(--muted)" /> },
+  ],
 ];
 
 const selectBoxContainerClass =
@@ -143,7 +167,9 @@ export const OrderFiltersBar = memo(function OrderFiltersBar({
             <ThemedSelect
               id="orders-date-filter"
               value={datePreset}
-              onValueChange={(val) => onDatePresetChange(val as DateRangePreset)}
+              onValueChange={(val) =>
+                onDatePresetChange(val as DateRangePreset)
+              }
               options={datePresetOptions}
               ariaLabel="Filter by date range"
               triggerClassName={selectTriggerClass}
@@ -194,7 +220,9 @@ export const OrderFiltersBar = memo(function OrderFiltersBar({
               id="orders-status-filter"
               value={statusFilter || "all"}
               onValueChange={(val) =>
-                onStatusFilterChange(val === "all" ? undefined : (val as OrderStatus))
+                onStatusFilterChange(
+                  val === "all" ? undefined : (val as OrderStatus),
+                )
               }
               options={statusOptions}
               ariaLabel="Filter by status"

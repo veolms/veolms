@@ -149,9 +149,7 @@ export function LessonResourceManager({
   };
 
   const handleDragLeave = (event: DragEvent<HTMLButtonElement>) => {
-    if (
-      !event.currentTarget.contains(event.relatedTarget as Node | null)
-    ) {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
       setIsDragActive(false);
     }
   };

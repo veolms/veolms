@@ -3,7 +3,10 @@ import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { createDatabase } from "@veolms/database";
 import { config } from "../config.ts";
-import { createEmailService, otpVerificationEmail } from "../services/email/index.ts";
+import {
+  createEmailService,
+  otpVerificationEmail,
+} from "../services/email/index.ts";
 import {
   ADMIN_ROLE,
   INSTRUCTOR_ROLE,
@@ -38,7 +41,8 @@ function isValidEmail(email: string): boolean {
 function parseRole(value?: string | null): TargetRole | null {
   if (!value) return null;
   const lower = value.trim().toLowerCase();
-  if (lower === "admin" || lower === "administrator" || lower === "2") return "admin";
+  if (lower === "admin" || lower === "administrator" || lower === "2")
+    return "admin";
   if (lower === "instructor" || lower === "1") return "instructor";
   return null;
 }
@@ -68,7 +72,11 @@ async function main() {
 
   if (!selectedRole && positionalArgs[2]) {
     selectedRole = parseRole(positionalArgs[2]);
-  } else if (!selectedRole && positionalArgs[1] && parseRole(positionalArgs[1])) {
+  } else if (
+    !selectedRole &&
+    positionalArgs[1] &&
+    parseRole(positionalArgs[1])
+  ) {
     selectedRole = parseRole(positionalArgs[1]);
     directCode = undefined;
   }
@@ -89,10 +97,16 @@ async function main() {
   // If role was not passed, prompt interactively with choices
   if (!selectedRole) {
     console.log(`\n${cyan("? ")}${bold("Select role to assign:")}`);
-    console.log(`  ${dim("1)")} Instructor     ${dim("(Course author and instructor)")}`);
-    console.log(`  ${dim("2)")} Administrator  ${dim("(Full platform access)")}`);
+    console.log(
+      `  ${dim("1)")} Instructor     ${dim("(Course author and instructor)")}`,
+    );
+    console.log(
+      `  ${dim("2)")} Administrator  ${dim("(Full platform access)")}`,
+    );
 
-    const roleChoice = await rl.question(`${cyan("➜ ")}${bold("Enter choice [1/2] (default 1): ")}`);
+    const roleChoice = await rl.question(
+      `${cyan("➜ ")}${bold("Enter choice [1/2] (default 1): ")}`,
+    );
     selectedRole = parseRole(roleChoice) || "instructor";
   }
 
@@ -157,7 +171,9 @@ async function main() {
         .executeTakeFirst();
 
       if (!targetRoleRecord) {
-        throw new Error(`Failed to initialize ${roleDisplayName} role in database.`);
+        throw new Error(
+          `Failed to initialize ${roleDisplayName} role in database.`,
+        );
       }
     }
 
@@ -207,13 +223,17 @@ async function main() {
 
     // If email was logged (e.g. console transport in development), show code for convenience
     if (emailResult.status === "logged" || config.NODE_ENV !== "production") {
-      console.log(`${dim(`[Dev] Generated OTP code: ${bold(code)} (expires in ${OTP_TTL_MINUTES}m)`)}`);
+      console.log(
+        `${dim(`[Dev] Generated OTP code: ${bold(code)} (expires in ${OTP_TTL_MINUTES}m)`)}`,
+      );
     }
 
     // 4. Prompt for OTP code if not provided via CLI argument
     let enteredCode = directCode;
     if (!enteredCode) {
-      enteredCode = await rl.question(`\n${cyan("? ")}${bold("Enter the 6-digit OTP: ")}`);
+      enteredCode = await rl.question(
+        `\n${cyan("? ")}${bold("Enter the 6-digit OTP: ")}`,
+      );
     }
 
     enteredCode = enteredCode.trim();
@@ -236,7 +256,9 @@ async function main() {
       .executeTakeFirst();
 
     if (!matchingOtp) {
-      console.error(`\n${red("✘ Verification failed:")} Code is invalid, expired, or already used.\n`);
+      console.error(
+        `\n${red("✘ Verification failed:")} Code is invalid, expired, or already used.\n`,
+      );
       process.exitCode = 1;
       return;
     }
@@ -268,7 +290,11 @@ async function main() {
       if (!existingUser.email_verified_at || existingUser.is_deleted) {
         await database
           .updateTable("users")
-          .set({ email_verified_at: new Date(), is_deleted: false, updated_at: new Date() })
+          .set({
+            email_verified_at: new Date(),
+            is_deleted: false,
+            updated_at: new Date(),
+          })
           .where("id", "=", userId)
           .execute();
       }
@@ -313,11 +339,12 @@ async function main() {
       userId = crypto.randomUUID();
 
       // Derive unique username from email
-      const baseUsername = email
-        .split("@")[0]!
-        .toLowerCase()
-        .replace(/[^a-z0-9_]/g, "_")
-        .slice(0, 30) || selectedRole;
+      const baseUsername =
+        email
+          .split("@")[0]!
+          .toLowerCase()
+          .replace(/[^a-z0-9_]/g, "_")
+          .slice(0, 30) || selectedRole;
 
       username = baseUsername;
       let suffix = 1;
@@ -383,9 +410,15 @@ async function main() {
     console.log(`  ${dim("•")} Username:     ${cyan(username)}`);
     console.log(`  ${dim("•")} Display Name: ${cyan(displayName)}`);
     console.log(`  ${dim("•")} Role:         ${cyan(targetRoleRecord.name)}`);
-    console.log(`\n${green("✓ You can now log in at:")} ${bold(cyan(loginUrl))}\n`);
+    console.log(
+      `\n${green("✓ You can now log in at:")} ${bold(cyan(loginUrl))}\n`,
+    );
   } catch (error) {
-    console.error(`\n${red("✘ Error:")}`, error instanceof Error ? error.message : error, "\n");
+    console.error(
+      `\n${red("✘ Error:")}`,
+      error instanceof Error ? error.message : error,
+      "\n",
+    );
     process.exitCode = 1;
   } finally {
     rl.close();

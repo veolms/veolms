@@ -16,7 +16,10 @@ export const PlayerMedia = forwardRef<HTMLVideoElement, PlayerMediaProps>(
   function PlayerMedia({ preload = "auto", ...props }, forwardedRef) {
     const controller = usePlayerController();
     const mediaRef = useRef<HTMLVideoElement | null>(null);
-    useImperativeHandle(forwardedRef, () => mediaRef.current as HTMLVideoElement);
+    useImperativeHandle(
+      forwardedRef,
+      () => mediaRef.current as HTMLVideoElement,
+    );
 
     const setMedia = useCallback(
       (media: HTMLVideoElement | null) => {

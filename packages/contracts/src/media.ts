@@ -147,7 +147,6 @@ export const QUALITY_PROFILES: Readonly<
   },
 };
 
-
 export const LAMBDA_ACTIONS = ["tick", "claim", "monitor", "queue"] as const;
 export type LambdaAction = (typeof LAMBDA_ACTIONS)[number];
 export const lambdaActionSchema = z.enum(LAMBDA_ACTIONS);
@@ -301,4 +300,3 @@ z.globalRegistry.add(videoMetadataSchema, {
 z.globalRegistry.add(videoJobEventSchema, {
   id: "VideoJobEvent",
 });
-

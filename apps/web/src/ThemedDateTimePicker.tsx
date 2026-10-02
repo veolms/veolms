@@ -29,13 +29,33 @@ export interface ThemedDateTimePickerProps {
 }
 
 const MONTH_NAMES = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ] as const;
 
 const FULL_MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ] as const;
 
 const DAY_HEADERS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
@@ -63,7 +83,8 @@ function parseDateTime(value: string) {
   const year = Number(yearStr);
   const month = Number(monthStr);
   const day = Number(dayStr);
-  if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) return null;
+  if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day))
+    return null;
 
   let hour = 12;
   let minute = 0;
@@ -121,7 +142,9 @@ export function ThemedDateTimePicker({
   }, []);
 
   const [viewYear, setViewYear] = useState<number>(parsed?.year ?? today.year);
-  const [viewMonth, setViewMonth] = useState<number>(parsed?.month ?? today.month);
+  const [viewMonth, setViewMonth] = useState<number>(
+    parsed?.month ?? today.month,
+  );
 
   useEffect(() => {
     if (parsed) {
@@ -183,9 +206,13 @@ export function ThemedDateTimePicker({
     setOpen(true);
 
     requestAnimationFrame(() => {
-      const selectedHourEl = hourListRef.current?.querySelector('[data-selected="true"]');
+      const selectedHourEl = hourListRef.current?.querySelector(
+        '[data-selected="true"]',
+      );
       selectedHourEl?.scrollIntoView({ block: "center", behavior: "auto" });
-      const selectedMinEl = minuteListRef.current?.querySelector('[data-selected="true"]');
+      const selectedMinEl = minuteListRef.current?.querySelector(
+        '[data-selected="true"]',
+      );
       selectedMinEl?.scrollIntoView({ block: "center", behavior: "auto" });
     });
   };
@@ -391,7 +418,11 @@ export function ThemedDateTimePicker({
         disabled={disabled}
         onClick={() => (open ? closePicker() : openPicker())}
         onKeyDown={handleTriggerKeyDown}
-        aria-label={ariaLabel ? `${ariaLabel}: ${displayLabel || placeholder}` : displayLabel || placeholder}
+        aria-label={
+          ariaLabel
+            ? `${ariaLabel}: ${displayLabel || placeholder}`
+            : displayLabel || placeholder
+        }
         aria-haspopup="dialog"
         aria-expanded={open}
         className={joinClasses(
@@ -514,15 +545,24 @@ export function ThemedDateTimePicker({
                   {/* Days grid */}
                   <div className="grid grid-cols-7 gap-1">
                     {calendarCells.map((cell, idx) => {
-                      const selected = isSelectedDate(cell.day, cell.monthOffset);
+                      const selected = isSelectedDate(
+                        cell.day,
+                        cell.monthOffset,
+                      );
                       const isToday = isTodayDate(cell.day, cell.monthOffset);
-                      const cellDate = new Date(viewYear, viewMonth + cell.monthOffset, cell.day);
+                      const cellDate = new Date(
+                        viewYear,
+                        viewMonth + cell.monthOffset,
+                        cell.day,
+                      );
                       const dateAriaLabel = `${cell.day} ${FULL_MONTH_NAMES[cellDate.getMonth()]} ${cellDate.getFullYear()}`;
                       return (
                         <button
                           type="button"
                           key={`${cell.monthOffset}-${cell.day}-${idx}`}
-                          onClick={() => handleSelectDay(cell.day, cell.monthOffset)}
+                          onClick={() =>
+                            handleSelectDay(cell.day, cell.monthOffset)
+                          }
                           aria-label={dateAriaLabel}
                           className={joinClasses(
                             "relative flex size-7 sm:size-7.5 items-center justify-center rounded-lg text-xs transition-all cursor-pointer",
@@ -548,7 +588,11 @@ export function ThemedDateTimePicker({
                 {/* Right: Time picker */}
                 <div className="flex flex-col w-[88px] shrink-0">
                   <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-(--text-secondary) mb-1.5">
-                    <Clock size={12} className="text-(--accent)" weight="bold" />
+                    <Clock
+                      size={12}
+                      className="text-(--accent)"
+                      weight="bold"
+                    />
                     <span>Time</span>
                   </div>
 
@@ -593,7 +637,9 @@ export function ThemedDateTimePicker({
                           <button
                             type="button"
                             key={m}
-                            data-selected={isMinuteSelected ? "true" : undefined}
+                            data-selected={
+                              isMinuteSelected ? "true" : undefined
+                            }
                             onClick={() => handleSelectMinute(m)}
                             aria-label={`Minute ${String(m).padStart(2, "0")}`}
                             className={joinClasses(

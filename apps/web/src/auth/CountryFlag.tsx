@@ -13,7 +13,14 @@ const FLAGS: Record<string, () => ReactElement> = {
       <rect width="36" height="8" fill="#FF9933" />
       <rect y="8" width="36" height="8" fill="#FFFFFF" />
       <rect y="16" width="36" height="8" fill="#138808" />
-      <circle cx="18" cy="12" r="3.2" fill="none" stroke="#000080" strokeWidth="0.8" />
+      <circle
+        cx="18"
+        cy="12"
+        r="3.2"
+        fill="none"
+        stroke="#000080"
+        strokeWidth="0.8"
+      />
       <circle cx="18" cy="12" r="0.8" fill="#000080" />
       {Array.from({ length: 24 }).map((_, i) => (
         <line
@@ -151,7 +158,12 @@ const FLAGS: Record<string, () => ReactElement> = {
       <rect width="36" height="24" fill="#009C3B" />
       <polygon points="18,3 32,12 18,21 4,12" fill="#FFDF00" />
       <circle cx="18" cy="12" r="5" fill="#002776" />
-      <path d="M13.5,12.5 Q18,10 22.5,13" stroke="#FFFFFF" strokeWidth="0.9" fill="none" />
+      <path
+        d="M13.5,12.5 Q18,10 22.5,13"
+        stroke="#FFFFFF"
+        strokeWidth="0.9"
+        fill="none"
+      />
     </svg>
   ),
   IT: () => (
@@ -201,10 +213,38 @@ const FLAGS: Record<string, () => ReactElement> = {
         <path d="M18,0 V24 M0,12 H36" stroke="#FFFFFF" strokeWidth="7" />
         <path d="M18,0 V24 M0,12 H36" stroke="#C8102E" strokeWidth="4.2" />
       </g>
-      <circle cx="28" cy="6" r="1.3" fill="#CC142B" stroke="#FFFFFF" strokeWidth="0.5" />
-      <circle cx="32" cy="11" r="1.3" fill="#CC142B" stroke="#FFFFFF" strokeWidth="0.5" />
-      <circle cx="28" cy="18" r="1.3" fill="#CC142B" stroke="#FFFFFF" strokeWidth="0.5" />
-      <circle cx="24" cy="12" r="1.3" fill="#CC142B" stroke="#FFFFFF" strokeWidth="0.5" />
+      <circle
+        cx="28"
+        cy="6"
+        r="1.3"
+        fill="#CC142B"
+        stroke="#FFFFFF"
+        strokeWidth="0.5"
+      />
+      <circle
+        cx="32"
+        cy="11"
+        r="1.3"
+        fill="#CC142B"
+        stroke="#FFFFFF"
+        strokeWidth="0.5"
+      />
+      <circle
+        cx="28"
+        cy="18"
+        r="1.3"
+        fill="#CC142B"
+        stroke="#FFFFFF"
+        strokeWidth="0.5"
+      />
+      <circle
+        cx="24"
+        cy="12"
+        r="1.3"
+        fill="#CC142B"
+        stroke="#FFFFFF"
+        strokeWidth="0.5"
+      />
     </svg>
   ),
   ZA: () => (
@@ -212,9 +252,24 @@ const FLAGS: Record<string, () => ReactElement> = {
       <rect width="36" height="12" fill="#E03C31" />
       <rect y="12" width="36" height="12" fill="#001489" />
       <polygon points="0,0 16,12 0,24" fill="#000000" />
-      <polygon points="0,0 18,12 0,24" stroke="#FFB81C" strokeWidth="1.8" fill="none" />
-      <path d="M0,0 L18,12 L36,12 M0,24 L18,12" stroke="#FFFFFF" strokeWidth="4.5" fill="none" />
-      <path d="M0,0 L18,12 L36,12 M0,24 L18,12" stroke="#007749" strokeWidth="3" fill="none" />
+      <polygon
+        points="0,0 18,12 0,24"
+        stroke="#FFB81C"
+        strokeWidth="1.8"
+        fill="none"
+      />
+      <path
+        d="M0,0 L18,12 L36,12 M0,24 L18,12"
+        stroke="#FFFFFF"
+        strokeWidth="4.5"
+        fill="none"
+      />
+      <path
+        d="M0,0 L18,12 L36,12 M0,24 L18,12"
+        stroke="#007749"
+        strokeWidth="3"
+        fill="none"
+      />
     </svg>
   ),
   MX: () => (
@@ -266,7 +321,10 @@ const FLAGS: Record<string, () => ReactElement> = {
       <rect width="36" height="24" fill="#E30A17" />
       <circle cx="15" cy="12" r="6" fill="#FFFFFF" />
       <circle cx="16.6" cy="12" r="4.8" fill="#E30A17" />
-      <polygon points="21,12 23.5,13.5 22.2,10.8 24.5,12 21.8,12" fill="#FFFFFF" />
+      <polygon
+        points="21,12 23.5,13.5 22.2,10.8 24.5,12 21.8,12"
+        fill="#FFFFFF"
+      />
     </svg>
   ),
   RU: () => (
@@ -280,7 +338,10 @@ const FLAGS: Record<string, () => ReactElement> = {
     <svg viewBox="0 0 36 24" width="100%" height="100%">
       <rect width="36" height="24" fill="#FFFFFF" />
       <circle cx="18" cy="12" r="5" fill="#CD2E3A" />
-      <path d="M13,12 A5,5 0 0,0 23,12 A2.5,2.5 0 0,1 18,12 A2.5,2.5 0 0,0 13,12 Z" fill="#0047A0" />
+      <path
+        d="M13,12 A5,5 0 0,0 23,12 A2.5,2.5 0 0,1 18,12 A2.5,2.5 0 0,0 13,12 Z"
+        fill="#0047A0"
+      />
       <circle cx="18" cy="9.5" r="2.5" fill="#CD2E3A" />
     </svg>
   ),
@@ -333,7 +394,14 @@ const FLAGS: Record<string, () => ReactElement> = {
       <rect width="14" height="24" fill="#006600" />
       <rect x="14" width="22" height="24" fill="#FF0000" />
       <circle cx="14" cy="12" r="4" fill="#FFCC00" />
-      <circle cx="14" cy="12" r="2.5" fill="#FFFFFF" stroke="#0000FF" strokeWidth="0.8" />
+      <circle
+        cx="14"
+        cy="12"
+        r="2.5"
+        fill="#FFFFFF"
+        stroke="#0000FF"
+        strokeWidth="0.8"
+      />
     </svg>
   ),
   GR: () => (
@@ -392,8 +460,18 @@ const FLAGS: Record<string, () => ReactElement> = {
       <rect width="36" height="24" fill="#FFFFFF" />
       <rect y="3" width="36" height="3" fill="#0038B8" />
       <rect y="18" width="36" height="3" fill="#0038B8" />
-      <polygon points="18,8.5 21,14 15,14" fill="none" stroke="#0038B8" strokeWidth="0.8" />
-      <polygon points="18,15.5 21,10 15,10" fill="none" stroke="#0038B8" strokeWidth="0.8" />
+      <polygon
+        points="18,8.5 21,14 15,14"
+        fill="none"
+        stroke="#0038B8"
+        strokeWidth="0.8"
+      />
+      <polygon
+        points="18,15.5 21,10 15,10"
+        fill="none"
+        stroke="#0038B8"
+        strokeWidth="0.8"
+      />
     </svg>
   ),
   RO: () => (
@@ -413,7 +491,10 @@ const FLAGS: Record<string, () => ReactElement> = {
   QA: () => (
     <svg viewBox="0 0 36 24" width="100%" height="100%">
       <rect width="36" height="24" fill="#8D1B3D" />
-      <polygon points="0,0 10,0 12,1.33 10,2.67 12,4 10,5.33 12,6.67 10,8 12,9.33 10,10.67 12,12 10,13.33 12,14.67 10,16 12,17.33 10,18.67 12,20 10,21.33 12,22.67 10,24 0,24" fill="#FFFFFF" />
+      <polygon
+        points="0,0 10,0 12,1.33 10,2.67 12,4 10,5.33 12,6.67 10,8 12,9.33 10,10.67 12,12 10,13.33 12,14.67 10,16 12,17.33 10,18.67 12,20 10,21.33 12,22.67 10,24 0,24"
+        fill="#FFFFFF"
+      />
     </svg>
   ),
   KW: () => (
@@ -436,7 +517,10 @@ const FLAGS: Record<string, () => ReactElement> = {
   BH: () => (
     <svg viewBox="0 0 36 24" width="100%" height="100%">
       <rect width="36" height="24" fill="#CE1126" />
-      <polygon points="0,0 10,0 13,2.4 10,4.8 13,7.2 10,9.6 13,12 10,14.4 13,16.8 10,19.2 13,21.6 10,24 0,24" fill="#FFFFFF" />
+      <polygon
+        points="0,0 10,0 13,2.4 10,4.8 13,7.2 10,9.6 13,12 10,14.4 13,16.8 10,19.2 13,21.6 10,24 0,24"
+        fill="#FFFFFF"
+      />
     </svg>
   ),
   LK: () => (
@@ -451,7 +535,12 @@ const FLAGS: Record<string, () => ReactElement> = {
   NP: () => (
     <svg viewBox="0 0 36 24" width="100%" height="100%">
       <rect width="36" height="24" fill="#FFFFFF" />
-      <polygon points="2,2 22,12 10,12 24,22 2,22" fill="#DC143C" stroke="#003893" strokeWidth="1.5" />
+      <polygon
+        points="2,2 22,12 10,12 24,22 2,22"
+        fill="#DC143C"
+        stroke="#003893"
+        strokeWidth="1.5"
+      />
       <circle cx="8" cy="8" r="2.2" fill="#FFFFFF" />
       <circle cx="8" cy="17" r="2.5" fill="#FFFFFF" />
     </svg>
@@ -461,13 +550,21 @@ const FLAGS: Record<string, () => ReactElement> = {
       <rect width="36" height="8" fill="#EF3340" />
       <rect y="8" width="36" height="8" fill="#FFD100" />
       <rect y="16" width="36" height="8" fill="#009739" />
-      <polygon points="18,9 19.5,13.5 15.5,10.5 20.5,10.5 16.5,13.5" fill="#000000" />
+      <polygon
+        points="18,9 19.5,13.5 15.5,10.5 20.5,10.5 16.5,13.5"
+        fill="#000000"
+      />
     </svg>
   ),
   MA: () => (
     <svg viewBox="0 0 36 24" width="100%" height="100%">
       <rect width="36" height="24" fill="#C1272D" />
-      <polygon points="18,6 20,13 14,9 22,9 16,13" fill="none" stroke="#006233" strokeWidth="1.2" />
+      <polygon
+        points="18,6 20,13 14,9 22,9 16,13"
+        fill="none"
+        stroke="#006233"
+        strokeWidth="1.2"
+      />
     </svg>
   ),
   DZ: () => (
@@ -556,7 +653,15 @@ const FLAGS: Record<string, () => ReactElement> = {
       <rect width="36" height="8" fill="#FF0000" />
       <rect y="8" width="36" height="8" fill="#FFFFFF" />
       <rect y="16" width="36" height="8" fill="#171796" />
-      <rect x="14.5" y="6" width="7" height="9" fill="#FF0000" stroke="#FFFFFF" strokeWidth="0.5" />
+      <rect
+        x="14.5"
+        y="6"
+        width="7"
+        height="9"
+        fill="#FF0000"
+        stroke="#FFFFFF"
+        strokeWidth="0.5"
+      />
     </svg>
   ),
   RS: () => (
@@ -564,7 +669,14 @@ const FLAGS: Record<string, () => ReactElement> = {
       <rect width="36" height="8" fill="#C6363C" />
       <rect y="8" width="36" height="8" fill="#0C4076" />
       <rect y="16" width="36" height="8" fill="#FFFFFF" />
-      <circle cx="13" cy="12" r="3.5" fill="#C6363C" stroke="#D2A442" strokeWidth="0.8" />
+      <circle
+        cx="13"
+        cy="12"
+        r="3.5"
+        fill="#C6363C"
+        stroke="#D2A442"
+        strokeWidth="0.8"
+      />
     </svg>
   ),
   SK: () => (
@@ -572,7 +684,16 @@ const FLAGS: Record<string, () => ReactElement> = {
       <rect width="36" height="8" fill="#FFFFFF" />
       <rect y="8" width="36" height="8" fill="#0B4EA2" />
       <rect y="16" width="36" height="8" fill="#EE1C25" />
-      <rect x="7" y="5" width="8" height="11" rx="2" fill="#EE1C25" stroke="#FFFFFF" strokeWidth="0.8" />
+      <rect
+        x="7"
+        y="5"
+        width="8"
+        height="11"
+        rx="2"
+        fill="#EE1C25"
+        stroke="#FFFFFF"
+        strokeWidth="0.8"
+      />
     </svg>
   ),
   SI: () => (
@@ -580,7 +701,15 @@ const FLAGS: Record<string, () => ReactElement> = {
       <rect width="36" height="8" fill="#FFFFFF" />
       <rect y="8" width="36" height="8" fill="#005CE6" />
       <rect y="16" width="36" height="8" fill="#ED1C24" />
-      <rect x="7" y="4" width="6" height="8" fill="#005CE6" stroke="#ED1C24" strokeWidth="0.5" />
+      <rect
+        x="7"
+        y="4"
+        width="6"
+        height="8"
+        fill="#005CE6"
+        stroke="#ED1C24"
+        strokeWidth="0.5"
+      />
     </svg>
   ),
   EE: () => (
@@ -608,14 +737,27 @@ const FLAGS: Record<string, () => ReactElement> = {
     <svg viewBox="0 0 36 24" width="100%" height="100%">
       <rect width="36" height="24" fill="#FFFFFF" />
       <path d="M11,10 L16,6 L25,9 L23,13 L17,14 Z" fill="#D57800" />
-      <path d="M12,17 Q18,19 24,17" stroke="#4E7037" strokeWidth="1.2" fill="none" />
+      <path
+        d="M12,17 Q18,19 24,17"
+        stroke="#4E7037"
+        strokeWidth="1.2"
+        fill="none"
+      />
     </svg>
   ),
   MT: () => (
     <svg viewBox="0 0 36 24" width="100%" height="100%">
       <rect width="18" height="24" fill="#FFFFFF" />
       <rect x="18" width="18" height="24" fill="#CF142B" />
-      <rect x="2" y="2" width="5" height="5" fill="#808080" stroke="#FFFFFF" strokeWidth="0.5" />
+      <rect
+        x="2"
+        y="2"
+        width="5"
+        height="5"
+        fill="#808080"
+        stroke="#FFFFFF"
+        strokeWidth="0.5"
+      />
     </svg>
   ),
 };
@@ -643,7 +785,8 @@ export function CountryFlag({
         borderRadius: 2,
         overflow: "hidden",
         flexShrink: 0,
-        boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.1)",
+        boxShadow:
+          "inset 0 0 0 1px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.1)",
         backgroundColor: "rgba(255,255,255,0.06)",
         position: "relative",
       }}

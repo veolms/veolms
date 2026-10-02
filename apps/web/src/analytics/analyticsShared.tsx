@@ -16,7 +16,8 @@ export const kpiGridClass =
  * vocabulary already used elsewhere in the app (emerald/amber/rose success
  * chips, etc.) so multi-metric rows read at a glance without inventing a new
  * palette. */
-export type KpiTone = "accent" | "violet" | "blue" | "emerald" | "amber" | "teal" | "rose";
+export type KpiTone =
+  "accent" | "violet" | "blue" | "emerald" | "amber" | "teal" | "rose";
 
 export const KPI_TONE_CLASSES: Record<KpiTone, string> = {
   accent: "bg-(--accent)/12 text-(--accent)",
@@ -28,7 +29,15 @@ export const KPI_TONE_CLASSES: Record<KpiTone, string> = {
   rose: "bg-rose-500/12 text-rose-500",
 };
 
-const TONE_CYCLE: readonly KpiTone[] = ["accent", "violet", "emerald", "amber", "blue", "teal", "rose"];
+const TONE_CYCLE: readonly KpiTone[] = [
+  "accent",
+  "violet",
+  "emerald",
+  "amber",
+  "blue",
+  "teal",
+  "rose",
+];
 
 export function toneForIndex(index: number): KpiTone {
   return TONE_CYCLE[index % TONE_CYCLE.length] ?? "accent";
@@ -43,7 +52,9 @@ export function formatCurrencyAmount(amount: number, currency = "INR"): string {
 }
 
 export function formatWholeNumber(value: number): string {
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(
+    value,
+  );
 }
 
 export function formatHours(value: number): string {
@@ -55,13 +66,17 @@ export function formatPercent(value: number): string {
 }
 
 export function formatTrendDate(date: string): string {
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(
-    new Date(date),
-  );
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(date));
 }
 
 export function toChartData(points: Array<{ date: string; value: number }>) {
-  return points.map((point) => ({ label: formatTrendDate(point.date), value: point.value }));
+  return points.map((point) => ({
+    label: formatTrendDate(point.date),
+    value: point.value,
+  }));
 }
 
 export function KpiCard({
@@ -105,10 +120,13 @@ export function KpiCard({
             isPositive ? "text-emerald-500" : "text-rose-500"
           }`}
         >
-          {isPositive ? "↗" : "↘"} {Math.abs(kpi.changePercent!).toFixed(1)}% vs previous
+          {isPositive ? "↗" : "↘"} {Math.abs(kpi.changePercent!).toFixed(1)}% vs
+          previous
         </p>
       ) : (
-        <p className="mt-0.5 sm:mt-1 text-[0.68rem] sm:text-xs text-(--muted)">New this period</p>
+        <p className="mt-0.5 sm:mt-1 text-[0.68rem] sm:text-xs text-(--muted)">
+          New this period
+        </p>
       )}
     </div>
   );
@@ -139,7 +157,10 @@ export function FunnelList({
       <EmptyState
         icon={<FunnelSimple size={20} weight="bold" />}
         title="Not enough data yet"
-        message={emptyMessage ?? "This will fill in once there's activity in the selected range."}
+        message={
+          emptyMessage ??
+          "This will fill in once there's activity in the selected range."
+        }
         compact
       />
     );
@@ -197,7 +218,9 @@ export function InsightsPanel({ insights }: { insights: string[] }) {
         <span className="flex size-7 sm:size-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/12 text-amber-500">
           <Lightbulb size={16} weight="bold" />
         </span>
-        <h3 className="text-sm sm:text-base font-bold tracking-tight text-(--text)">Insights</h3>
+        <h3 className="text-sm sm:text-base font-bold tracking-tight text-(--text)">
+          Insights
+        </h3>
       </div>
       <ul className="mt-3 sm:mt-4 grid gap-2 sm:gap-2.5">
         {insights.map((insight) => (
@@ -287,10 +310,14 @@ export function CoursePerformanceTable({
                   >
                     {courseInitials(row.title)}
                   </span>
-                  <span className="truncate font-medium text-(--text)">{row.title}</span>
+                  <span className="truncate font-medium text-(--text)">
+                    {row.title}
+                  </span>
                 </div>
               </td>
-              <td className="py-2.5 pr-3 text-(--muted) tabular-nums">{row.enrollments}</td>
+              <td className="py-2.5 pr-3 text-(--muted) tabular-nums">
+                {row.enrollments}
+              </td>
               <td className="py-2.5 pr-3 text-(--muted) tabular-nums">
                 {formatCurrencyAmount(row.netRevenue, currency)}
               </td>

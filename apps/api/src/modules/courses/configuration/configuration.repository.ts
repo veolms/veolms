@@ -101,7 +101,10 @@ export async function findPricingByCourseId(
  * calculatePricing, which runs on every GET /cart, checkout preview, and
  * order-creation call.
  */
-export async function findPricingByCourseIds(database: DatabaseExecutor, courseIds: string[]) {
+export async function findPricingByCourseIds(
+  database: DatabaseExecutor,
+  courseIds: string[],
+) {
   if (courseIds.length === 0) return [];
   return await database
     .selectFrom("course_pricing")

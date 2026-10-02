@@ -132,7 +132,9 @@ export function createOrderService({
         throw new AppError(
           400,
           "INVALID_CURSOR",
-          err instanceof Error ? err.message : "The pagination cursor is invalid.",
+          err instanceof Error
+            ? err.message
+            : "The pagination cursor is invalid.",
         );
       }
     }
@@ -160,29 +162,32 @@ export function createOrderService({
     const userIds = [...new Set(pageRows.map((o) => o.user_id))];
     const couponIds = [
       ...new Set(
-        pageRows.map((o) => o.coupon_id).filter((id): id is string => Boolean(id)),
+        pageRows
+          .map((o) => o.coupon_id)
+          .filter((id): id is string => Boolean(id)),
       ),
     ];
 
     // Batch load relations in parallel
-    const [allItems, users, coupons, payments, refunds, userPaymentSummaries] = await Promise.all([
-      orderRepo.listOrderItemsByOrderIds(database, orderIds),
-      scope.type === "academy"
-        ? orderRepo.listUsersByIds(database, userIds)
-        : Promise.resolve([]),
-      scope.type === "academy" && couponIds.length > 0
-        ? orderRepo.listCouponsByIds(database, couponIds)
-        : Promise.resolve([]),
-      scope.type === "academy"
-        ? orderRepo.listPaymentsByOrderIds(database, orderIds)
-        : Promise.resolve([]),
-      scope.type === "academy"
-        ? orderRepo.listRefundsByOrderIds(database, orderIds)
-        : Promise.resolve([]),
-      scope.type === "user"
-        ? orderRepo.listPaymentSummariesByOrderIds(database, orderIds)
-        : Promise.resolve([]),
-    ]);
+    const [allItems, users, coupons, payments, refunds, userPaymentSummaries] =
+      await Promise.all([
+        orderRepo.listOrderItemsByOrderIds(database, orderIds),
+        scope.type === "academy"
+          ? orderRepo.listUsersByIds(database, userIds)
+          : Promise.resolve([]),
+        scope.type === "academy" && couponIds.length > 0
+          ? orderRepo.listCouponsByIds(database, couponIds)
+          : Promise.resolve([]),
+        scope.type === "academy"
+          ? orderRepo.listPaymentsByOrderIds(database, orderIds)
+          : Promise.resolve([]),
+        scope.type === "academy"
+          ? orderRepo.listRefundsByOrderIds(database, orderIds)
+          : Promise.resolve([]),
+        scope.type === "user"
+          ? orderRepo.listPaymentSummariesByOrderIds(database, orderIds)
+          : Promise.resolve([]),
+      ]);
 
     // Index batch loaded relations
     const itemsByOrderId = new Map<string, typeof allItems>();
@@ -211,15 +216,24 @@ export function createOrderService({
       }
     }
 
-    const paymentSummariesByOrderId = new Map<string, ReturnType<typeof toOrderPaymentSummary>>();
+    const paymentSummariesByOrderId = new Map<
+      string,
+      ReturnType<typeof toOrderPaymentSummary>
+    >();
     for (const payment of payments) {
       if (!paymentSummariesByOrderId.has(payment.order_id)) {
-        paymentSummariesByOrderId.set(payment.order_id, toOrderPaymentSummary(payment));
+        paymentSummariesByOrderId.set(
+          payment.order_id,
+          toOrderPaymentSummary(payment),
+        );
       }
     }
     for (const payment of userPaymentSummaries) {
       if (!paymentSummariesByOrderId.has(payment.order_id)) {
-        paymentSummariesByOrderId.set(payment.order_id, toOrderPaymentSummary(payment));
+        paymentSummariesByOrderId.set(
+          payment.order_id,
+          toOrderPaymentSummary(payment),
+        );
       }
     }
 
@@ -238,7 +252,9 @@ export function createOrderService({
           ? toOrderAdminDetails({
               order,
               user: usersById.get(order.user_id),
-              coupon: order.coupon_id ? couponsById.get(order.coupon_id) : undefined,
+              coupon: order.coupon_id
+                ? couponsById.get(order.coupon_id)
+                : undefined,
               payment: paymentsByOrderId.get(order.id),
               refunds: refundsByOrderId.get(order.id) ?? [],
             })
@@ -322,7 +338,8 @@ export function createOrderService({
       ? rows.find((row) => row.currency === requestedCurrency)
       : [...rows].sort(
           (a, b) =>
-            b.totalOrders - a.totalOrders || a.currency.localeCompare(b.currency),
+            b.totalOrders - a.totalOrders ||
+            a.currency.localeCompare(b.currency),
         )[0];
 
     return {
@@ -372,7 +389,8 @@ export function createOrderService({
       ? rows.find((row) => row.currency === requestedCurrency)
       : [...rows].sort(
           (a, b) =>
-            b.totalOrders - a.totalOrders || a.currency.localeCompare(b.currency),
+            b.totalOrders - a.totalOrders ||
+            a.currency.localeCompare(b.currency),
         )[0];
     return (
       selected ?? {
@@ -409,7 +427,11 @@ export function createOrderService({
   async function getAcademyScope(): Promise<OrderScope> {
     const academy = await setupRepo.findAcademy(database);
     if (!academy) {
-      throw new AppError(500, "ACADEMY_NOT_FOUND", "Academy is not configured.");
+      throw new AppError(
+        500,
+        "ACADEMY_NOT_FOUND",
+        "Academy is not configured.",
+      );
     }
     return { type: "academy", id: academy.id };
   }

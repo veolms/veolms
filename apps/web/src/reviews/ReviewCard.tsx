@@ -71,9 +71,7 @@ export function ReviewCard({
                 </span>
               )}
             </div>
-            <p className="text-xs text-(--muted) mt-0.5">
-              {review.timestamp}
-            </p>
+            <p className="text-xs text-(--muted) mt-0.5">{review.timestamp}</p>
           </div>
         </div>
 

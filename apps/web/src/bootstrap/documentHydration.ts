@@ -36,8 +36,9 @@ const isDarkModeInjected = (element: Element) =>
   element.id.startsWith("dark-mode-");
 
 export function prepareDocumentForHydration(
-  documentNode: Document | null =
-    typeof document === "undefined" ? null : document,
+  documentNode: Document | null = typeof document === "undefined"
+    ? null
+    : document,
 ): () => void {
   const restorers: Array<() => void> = [];
   const html = documentNode?.documentElement ?? null;

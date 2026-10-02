@@ -40,7 +40,8 @@ const refundRoutes: RoutePlugin = async (app, options) => {
         operationId: "createRefund",
         tags: ["Commerce - Refunds"],
         summary: "Initiate full or partial refund",
-        description: "Initiates a refund via the payment gateway and records refund state.",
+        description:
+          "Initiates a refund via the payment gateway and records refund state.",
         body: createRefundRequestSchema,
         response: {
           200: jsonResponse("Refund initiated successfully", refundSchema),
@@ -94,7 +95,7 @@ const refundRoutes: RoutePlugin = async (app, options) => {
     controller.listOrderRefunds,
   );
 
-  // 4. POST /orders/:orderId/refund-requests - Submit student refund request 
+  // 4. POST /orders/:orderId/refund-requests - Submit student refund request
   app.post(
     "/orders/:orderId/refund-requests",
     {
@@ -103,7 +104,8 @@ const refundRoutes: RoutePlugin = async (app, options) => {
         operationId: "submitStudentRefundRequest",
         tags: ["Commerce - Refund Requests"],
         summary: "Submit a refund request for an order",
-        description: "Allows an enrolled student to request a refund for a paid order.",
+        description:
+          "Allows an enrolled student to request a refund for a paid order.",
         params: z.object({ orderId: z.uuid() }),
         body: createStudentRefundRequestSchema,
         response: {
@@ -149,7 +151,9 @@ const refundRoutes: RoutePlugin = async (app, options) => {
         tags: ["Commerce - Refund Requests"],
         summary: "List all refund requests for review",
         querystring: z.object({
-          status: z.enum(["pending", "approved", "rejected", "cancelled"]).optional(),
+          status: z
+            .enum(["pending", "approved", "rejected", "cancelled"])
+            .optional(),
         }),
         response: {
           200: jsonResponse(

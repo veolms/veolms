@@ -1,4 +1,5 @@
-import { LoginView } from "../auth/LoginView";import { getAuthRouteMeta, productName } from "../routing/routeDescriptors";
+import { LoginView } from "../auth/LoginView";
+import { getAuthRouteMeta, productName } from "../routing/routeDescriptors";
 
 export function meta() {
   return Object.entries(

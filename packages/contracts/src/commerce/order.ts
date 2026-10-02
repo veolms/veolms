@@ -83,9 +83,18 @@ export const cartItemInputSchema = z
   })
   .refine(
     (data) =>
-      (data.itemType === "course" && !!data.courseId && !data.bundleId && !data.quizPricingId) ||
-      (data.itemType === "bundle" && !!data.bundleId && !data.courseId && !data.quizPricingId) ||
-      (data.itemType === "quiz" && !!data.quizPricingId && !data.courseId && !data.bundleId),
+      (data.itemType === "course" &&
+        !!data.courseId &&
+        !data.bundleId &&
+        !data.quizPricingId) ||
+      (data.itemType === "bundle" &&
+        !!data.bundleId &&
+        !data.courseId &&
+        !data.quizPricingId) ||
+      (data.itemType === "quiz" &&
+        !!data.quizPricingId &&
+        !data.courseId &&
+        !data.bundleId),
     {
       message:
         "Either courseId, bundleId, or quizPricingId must be provided matching itemType",

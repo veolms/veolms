@@ -14,11 +14,7 @@ export interface OrderCardProps {
   setNotice?: (message: string) => void;
 }
 
-export function OrderCard({
-  order,
-  onViewReceipt,
-  setNotice,
-}: OrderCardProps) {
+export function OrderCard({ order, onViewReceipt, setNotice }: OrderCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   useBackDismiss({ open: menuOpen, onDismiss: () => setMenuOpen(false) });

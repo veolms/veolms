@@ -161,7 +161,9 @@ export function LearningMiniPlayer({
   } = useMiniPlayerCurriculumSections(curriculumSections, selectedLesson);
   const selectedLessonIndex = lessonSequence.indexOf(selectedLesson);
   const previousLessonId =
-    selectedLessonIndex > 0 ? lessonSequence[selectedLessonIndex - 1] : undefined;
+    selectedLessonIndex > 0
+      ? lessonSequence[selectedLessonIndex - 1]
+      : undefined;
   const nextLessonId =
     selectedLessonIndex >= 0 && selectedLessonIndex < lessonSequence.length - 1
       ? lessonSequence[selectedLessonIndex + 1]

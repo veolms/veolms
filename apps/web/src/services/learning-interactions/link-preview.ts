@@ -10,8 +10,8 @@ export function useLinkPreview(
   const normalizedUrl = url?.trim();
   const isValidUrl = Boolean(
     normalizedUrl &&
-      (normalizedUrl.startsWith("http://") ||
-        normalizedUrl.startsWith("https://")),
+    (normalizedUrl.startsWith("http://") ||
+      normalizedUrl.startsWith("https://")),
   );
 
   return useQuery<LinkPreviewResponse>({

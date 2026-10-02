@@ -50,7 +50,9 @@ export const OrderSummaryCards = memo(function OrderSummaryCards({
     {
       id: "refunded-amount",
       title: "Refunded Amount",
-      value: stats ? formatCurrency(stats.refundedAmount, stats.currency) : "₹0",
+      value: stats
+        ? formatCurrency(stats.refundedAmount, stats.currency)
+        : "₹0",
       icon: <ArrowCounterClockwise size={16} weight="bold" />,
       iconBg: "bg-rose-500/15 text-rose-400",
     },

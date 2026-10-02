@@ -91,8 +91,7 @@ const syncAdjacentSlideSpacing = (
     0,
     Number.parseFloat(style.paddingInlineEnd || style.paddingRight) || 0,
   );
-  const spaceBetween =
-    -Math.min(inlineStart, inlineEnd) + spaceBetweenOffset;
+  const spaceBetween = -Math.min(inlineStart, inlineEnd) + spaceBetweenOffset;
   const changed = swiper.params.spaceBetween !== spaceBetween;
 
   swiper.params.spaceBetween = spaceBetween;
@@ -495,8 +494,7 @@ export function SwipeableTabPanel<T extends string>({
 
   useEffect(() => {
     if (isUsableSwiper(swiperRef.current) && spaceBetween !== undefined) {
-      swiperRef.current.params.spaceBetween =
-        spaceBetween + spaceBetweenOffset;
+      swiperRef.current.params.spaceBetween = spaceBetween + spaceBetweenOffset;
       swiperRef.current.update();
     }
   }, [spaceBetween, spaceBetweenOffset]);
@@ -563,11 +561,7 @@ export function SwipeableTabPanel<T extends string>({
           threshold={0}
           initialSlide={initialSlide}
           onBeforeInit={(swiper) => {
-            syncAdjacentSlideSpacing(
-              swiper,
-              spaceBetween,
-              spaceBetweenOffset,
-            );
+            syncAdjacentSlideSpacing(swiper, spaceBetween, spaceBetweenOffset);
           }}
           onBeforeResize={(swiper) =>
             syncAdjacentSlideSpacing(swiper, spaceBetween, spaceBetweenOffset)

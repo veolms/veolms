@@ -3,10 +3,7 @@ export type QuizStatus = "draft" | "published" | "archived";
 export type QuizAttemptStatus =
   "in_progress" | "submitted" | "graded" | "expired";
 export type QuizQuestionType =
-  | "single_choice"
-  | "multiple_choice"
-  | "true_false"
-  | "short_answer";
+  "single_choice" | "multiple_choice" | "true_false" | "short_answer";
 export interface QuizTable {
   id: string;
   academy_id: string;

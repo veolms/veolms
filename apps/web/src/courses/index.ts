@@ -1,5 +1,1 @@
-export {
-  CourseActionMenu,
-  MenuAction,
-  MenuDivider,
-} from "./CourseActionMenu";
+export { CourseActionMenu, MenuAction, MenuDivider } from "./CourseActionMenu";

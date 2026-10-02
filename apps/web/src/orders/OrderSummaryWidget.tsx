@@ -112,7 +112,13 @@ export function OrderSummaryWidget({
         <div className="h-10 w-24 shrink-0" aria-hidden="true">
           <svg viewBox="0 0 100 40" className="h-full w-full overflow-visible">
             <defs>
-              <linearGradient id="orderSpentGradient" x1="0" y1="0" x2="1" y2="0">
+              <linearGradient
+                id="orderSpentGradient"
+                x1="0"
+                y1="0"
+                x2="1"
+                y2="0"
+              >
                 <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.4" />
                 <stop offset="100%" stopColor="var(--accent)" stopOpacity="1" />
               </linearGradient>

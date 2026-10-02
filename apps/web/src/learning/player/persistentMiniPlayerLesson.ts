@@ -1,8 +1,5 @@
 import { upsertCoursePlayerSessionFromRoute } from "../coursePlayerNavigation";
-import {
-  createLessonSequence,
-  createLessonVideo,
-} from "../courseContent";
+import { createLessonSequence, createLessonVideo } from "../courseContent";
 import {
   getCachedVideoPlaybackBootstrap,
   refreshVideoPlaybackToken,

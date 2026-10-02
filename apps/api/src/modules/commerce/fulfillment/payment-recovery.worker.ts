@@ -48,7 +48,10 @@ export function createPaymentRecoveryWorker({
   batchSize = 50,
   concurrency = 5,
 }: PaymentRecoveryWorkerOptions) {
-  const reconciliation = createPaymentReconciliationService({ database, accessService });
+  const reconciliation = createPaymentReconciliationService({
+    database,
+    accessService,
+  });
 
   async function recoverStalePayments(): Promise<{
     recovered: number;
@@ -58,7 +61,9 @@ export function createPaymentRecoveryWorker({
   }> {
     const log = logger?.child({ job: "payment-recovery-worker" });
 
-    const staleMinuteCutoff = new Date(Date.now() - staleAfterMinutes * 60 * 1000);
+    const staleMinuteCutoff = new Date(
+      Date.now() - staleAfterMinutes * 60 * 1000,
+    );
     const maxAgeCutoff = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000);
 
     // Find payments stuck in initiated/processing within our time window.
@@ -76,7 +81,10 @@ export function createPaymentRecoveryWorker({
       .limit(batchSize)
       .execute();
 
-    log?.info({ count: stalePayments.length }, "Found stale payments for recovery");
+    log?.info(
+      { count: stalePayments.length },
+      "Found stale payments for recovery",
+    );
 
     let recovered = 0;
     let failed = 0;
@@ -90,7 +98,9 @@ export function createPaymentRecoveryWorker({
     await mapWithConcurrency(stalePayments, concurrency, async (payment) => {
       try {
         // Query the gateway for current order status
-        const gatewayOrder = await paymentGateway.fetchOrder(payment.gateway_order_id);
+        const gatewayOrder = await paymentGateway.fetchOrder(
+          payment.gateway_order_id,
+        );
 
         if (gatewayOrder.status === "paid") {
           let targetPaymentId = payment.gateway_payment_id;
@@ -98,8 +108,12 @@ export function createPaymentRecoveryWorker({
 
           // If no gateway_payment_id locally, query Razorpay for payments on this order
           if (!targetPaymentId) {
-            const orderPayments = await paymentGateway.fetchOrderPayments(payment.gateway_order_id);
-            const capturedPayment = orderPayments.find((p) => p.status === "captured");
+            const orderPayments = await paymentGateway.fetchOrderPayments(
+              payment.gateway_order_id,
+            );
+            const capturedPayment = orderPayments.find(
+              (p) => p.status === "captured",
+            );
             if (capturedPayment) {
               targetPaymentId = capturedPayment.gatewayPaymentId;
               paymentMethod = capturedPayment.method
@@ -128,31 +142,46 @@ export function createPaymentRecoveryWorker({
               );
               recovered++;
             } else {
-              log?.info({ paymentId: payment.id }, "Payment already finalized by another path");
+              log?.info(
+                { paymentId: payment.id },
+                "Payment already finalized by another path",
+              );
               skipped++;
             }
           } else {
             log?.warn(
-              { paymentId: payment.id, gatewayOrderId: payment.gateway_order_id },
+              {
+                paymentId: payment.id,
+                gatewayOrderId: payment.gateway_order_id,
+              },
               "Gateway order is paid but no captured payment found via API; deferring to webhook",
             );
             skipped++;
           }
         } else if (gatewayOrder.status === "created") {
           // Gateway order exists but no payment attempt yet — truly stale/abandoned
-          log?.debug({ paymentId: payment.id }, "Gateway order not yet attempted, skipping");
+          log?.debug(
+            { paymentId: payment.id },
+            "Gateway order not yet attempted, skipping",
+          );
           skipped++;
         } else {
           // 'attempted' — payment was tried but not yet captured; still in-flight
           skipped++;
         }
       } catch (err: unknown) {
-        log?.error({ err, paymentId: payment.id }, "Error recovering stale payment");
+        log?.error(
+          { err, paymentId: payment.id },
+          "Error recovering stale payment",
+        );
         errors++;
       }
     });
 
-    log?.info({ recovered, failed, skipped, errors }, "Payment recovery run complete");
+    log?.info(
+      { recovered, failed, skipped, errors },
+      "Payment recovery run complete",
+    );
     return { recovered, failed, skipped, errors };
   }
 

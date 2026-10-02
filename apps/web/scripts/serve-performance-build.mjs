@@ -151,10 +151,7 @@ const proxyRequestToOrigin = (
 
 createServer(async (request, response) => {
   const requestUrl = new URL(request.url || "/", "http://localhost");
-  if (
-    requestUrl.pathname === "/v1" ||
-    requestUrl.pathname.startsWith("/v1/")
-  ) {
+  if (requestUrl.pathname === "/v1" || requestUrl.pathname.startsWith("/v1/")) {
     proxyRequestToOrigin(request, response, requestUrl, apiOrigin, {
       code: "API_UNAVAILABLE",
       message: "The preview server could not reach the API.",

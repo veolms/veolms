@@ -34,15 +34,27 @@
   margin: 0 calc(-1 * var(--wizard-tab-nav-bleed)) 0 !important;
   padding: 0 var(--wizard-tab-nav-bleed) !important;
   gap: 8px !important;
-  background: color-mix(in srgb, var(--main-surface) 78%, transparent) !important;
+  background: color-mix(
+    in srgb,
+    var(--main-surface) 78%,
+    transparent
+  ) !important;
   -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
   backdrop-filter: blur(16px) saturate(180%) !important;
   border-bottom: 1px solid color-mix(in srgb, var(--text) 12%, transparent) !important;
 }
 
 :root[data-theme="light"] .course-wizard-steps-nav {
-  border-bottom-color: color-mix(in srgb, var(--text) 14%, transparent) !important;
-  background: color-mix(in srgb, var(--main-surface) 84%, transparent) !important;
+  border-bottom-color: color-mix(
+    in srgb,
+    var(--text) 14%,
+    transparent
+  ) !important;
+  background: color-mix(
+    in srgb,
+    var(--main-surface) 84%,
+    transparent
+  ) !important;
 }
 
 .course-wizard-steps-nav [role="tab"] {
@@ -75,19 +87,25 @@
 :root[data-theme="light"] .course-wizard-steps-nav [data-page-tab-tone="blue"] {
   --page-tab-tone: #1769aa;
 }
-:root[data-theme="light"] .course-wizard-steps-nav [data-page-tab-tone="violet"] {
+:root[data-theme="light"]
+  .course-wizard-steps-nav
+  [data-page-tab-tone="violet"] {
   --page-tab-tone: #6741b8;
 }
 :root[data-theme="light"] .course-wizard-steps-nav [data-page-tab-tone="cyan"] {
   --page-tab-tone: #0b6d79;
 }
-:root[data-theme="light"] .course-wizard-steps-nav [data-page-tab-tone="green"] {
+:root[data-theme="light"]
+  .course-wizard-steps-nav
+  [data-page-tab-tone="green"] {
   --page-tab-tone: #14763f;
 }
 :root[data-theme="light"] .course-wizard-steps-nav [data-page-tab-tone="gold"] {
   --page-tab-tone: #7b5b00;
 }
-:root[data-theme="light"] .course-wizard-steps-nav [data-page-tab-tone="orange"] {
+:root[data-theme="light"]
+  .course-wizard-steps-nav
+  [data-page-tab-tone="orange"] {
   --page-tab-tone: #9a4d00;
 }
 :root[data-theme="light"] .course-wizard-steps-nav [data-page-tab-tone="rose"] {
@@ -280,7 +298,8 @@ body[data-modal-open="true"] .course-wizard-mobile-action-bar {
     overscroll-behavior: contain !important;
     padding-bottom: 24px !important;
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent) transparent;
+    scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent)
+      transparent;
   }
 
   [data-course-wizard] > .course-wizard-tab-content::-webkit-scrollbar {
@@ -312,18 +331,27 @@ body[data-modal-open="true"] .course-wizard-mobile-action-bar {
   box-sizing: border-box !important;
   margin: 16px calc(-1 * var(--wizard-tab-nav-bleed)) 0 !important;
   padding: 12px var(--wizard-tab-nav-bleed) 14px !important;
-  background: color-mix(in srgb, var(--main-surface) 96%, transparent) !important;
+  background: color-mix(
+    in srgb,
+    var(--main-surface) 96%,
+    transparent
+  ) !important;
   -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
   backdrop-filter: blur(16px) saturate(180%) !important;
   border-top: 1px solid color-mix(in srgb, var(--text) 12%, transparent) !important;
-  box-shadow: 0 -4px 20px color-mix(in srgb, var(--accent-shadow) 8%, transparent);
+  box-shadow: 0 -4px 20px
+    color-mix(in srgb, var(--accent-shadow) 8%, transparent);
   border-bottom-left-radius: 18px;
   border-bottom-right-radius: 18px;
 }
 
 :root[data-theme="light"] .course-wizard-sticky-bottom-bar {
   border-top-color: color-mix(in srgb, var(--text) 14%, transparent) !important;
-  background: color-mix(in srgb, var(--main-surface) 96%, transparent) !important;
+  background: color-mix(
+    in srgb,
+    var(--main-surface) 96%,
+    transparent
+  ) !important;
 }
 
 @media (max-width: 640px) {
@@ -411,9 +439,12 @@ body[data-modal-open="true"] .course-wizard-mobile-action-bar {
     overflow-x: hidden !important;
     overscroll-behavior: contain !important;
     -webkit-overflow-scrolling: touch !important;
-    padding-bottom: calc(130px + var(--app-viewport-safe-area-bottom, 0px)) !important;
+    padding-bottom: calc(
+      130px + var(--app-viewport-safe-area-bottom, 0px)
+    ) !important;
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent) transparent;
+    scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent)
+      transparent;
   }
 
   [data-course-wizard] > .course-wizard-tab-content::-webkit-scrollbar {
@@ -473,7 +504,9 @@ body[data-modal-open="true"] .course-wizard-mobile-action-bar {
   visibility: visible;
 }
 
-.course-wizard-tab-content .swipeable-tab-panel__swiper.swiper-touch .swiper-slide {
+.course-wizard-tab-content
+  .swipeable-tab-panel__swiper.swiper-touch
+  .swiper-slide {
   height: auto !important;
   max-height: none !important;
   overflow: visible !important;

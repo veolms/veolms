@@ -310,9 +310,7 @@ export function Curriculum({
   const toggleSection = (id: number, header: HTMLElement) => {
     setSearchOpen(false);
     setExpanded((current) =>
-      current.includes(id)
-        ? current.filter((item) => item !== id)
-        : [id],
+      current.includes(id) ? current.filter((item) => item !== id) : [id],
     );
     if (!expandedRef.current.includes(id)) {
       prepareSectionChange(

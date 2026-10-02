@@ -54,7 +54,10 @@ class PreviewVideoEngine implements VideoEngine {
 
   async attach(): Promise<void> {}
   async detach(): Promise<void> {}
-  async load(_source: VideoSource, _options?: VideoLoadOptions): Promise<void> {}
+  async load(
+    _source: VideoSource,
+    _options?: VideoLoadOptions,
+  ): Promise<void> {}
   async unload(): Promise<void> {}
   async destroy(): Promise<void> {
     this.#events.clear();
@@ -130,8 +133,7 @@ export function PlayerChromePreview({
     );
   }
   const controller = controllerRef.current;
-  const mobileInteraction =
-    useResolvedPlayerMobileInteraction(interactionMode);
+  const mobileInteraction = useResolvedPlayerMobileInteraction(interactionMode);
   const resolvedTheme = resolvePlayerTheme(theme);
 
   return (
@@ -139,7 +141,10 @@ export function PlayerChromePreview({
       <PlayerControllerContext.Provider value={controller}>
         <PlayerInteractionModeProvider mobile={mobileInteraction}>
           <div
-            className={classNames(resolvedTheme.className, "relative size-full")}
+            className={classNames(
+              resolvedTheme.className,
+              "relative size-full",
+            )}
             style={getPlayerThemeStyle(resolvedTheme)}
             data-player-theme={resolvedTheme.id}
             data-player-mobile-interaction={

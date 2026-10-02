@@ -15,23 +15,13 @@ export type OrderStatus =
   | "partially_refunded"
   | "refunded";
 export type PaymentStatus =
-  | "initiated"
-  | "processing"
-  | "captured"
-  | "failed"
-  | "refunded";
+  "initiated" | "processing" | "captured" | "failed" | "refunded";
 export type PaymentAttemptStatus =
-  | "initiated"
-  | "processing"
-  | "captured"
-  | "failed";
+  "initiated" | "processing" | "captured" | "failed";
 export type RefundStatus = "pending" | "processed" | "failed";
 export type EnrollmentStatus = "active" | "suspended" | "revoked" | "expired";
 export type EnrollmentSource =
-  | "direct_purchase"
-  | "bundle_purchase"
-  | "free_grant"
-  | "admin_grant";
+  "direct_purchase" | "bundle_purchase" | "free_grant" | "admin_grant";
 
 export interface CourseBundleTable {
   id: string;
@@ -225,7 +215,8 @@ export interface CreatorPaymentConfigTable {
   updated_at: Generated<Date>;
 }
 
-export type RefundRequestStatus = "pending" | "approved" | "rejected" | "cancelled";
+export type RefundRequestStatus =
+  "pending" | "approved" | "rejected" | "cancelled";
 
 export interface RefundRequestTable {
   id: string;

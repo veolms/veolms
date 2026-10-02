@@ -25,7 +25,9 @@ export async function up(database: Kysely<unknown>): Promise<void> {
 
 export async function down(database: Kysely<unknown>): Promise<void> {
   await sql`drop index if exists idx_orders_number_trgm`.execute(database);
-  await sql`drop index if exists idx_order_items_order_course`.execute(database);
+  await sql`drop index if exists idx_order_items_order_course`.execute(
+    database,
+  );
   await sql`drop index if exists idx_orders_created_id`.execute(database);
   await sql`drop index if exists idx_orders_user_created_id`.execute(database);
 }

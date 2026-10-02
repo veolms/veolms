@@ -2,12 +2,7 @@ export type CourseLevel = "Beginner" | "Intermediate";
 export type CourseCategory = "Design" | "Development" | "Database" | "Cloud";
 export type CourseRole = "student" | "creator";
 export type CourseEnrollmentFilter =
-  | "all"
-  | "enrolled"
-  | "not-enrolled"
-  | "published"
-  | "draft"
-  | "bin";
+  "all" | "enrolled" | "not-enrolled" | "published" | "draft" | "bin";
 export type CourseSort = "latest" | "title" | "progress";
 export type CourseStatusFilter =
   | "all"

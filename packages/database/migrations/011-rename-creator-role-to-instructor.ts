@@ -42,5 +42,3 @@ export async function down(database: Kysely<unknown>): Promise<void> {
 
   await sql`delete from roles where name = 'admin'`.execute(database);
 }
-
-

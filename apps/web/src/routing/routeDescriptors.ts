@@ -335,8 +335,7 @@ export const routeDescriptors = {
     page: "coupon-builder",
     section: "Coupons",
     title: "Create Coupon",
-    description:
-      "Create and publish a new discount coupon for your learners.",
+    description: "Create and publish a new discount coupon for your learners.",
   },
   "coupon-edit": {
     kind: "shell",
@@ -533,9 +532,7 @@ export const getEffectiveRouteId = (
   }
 
   if (routeId === "course-create") {
-    return normalizedPath === "/courses/create"
-      ? routeId
-      : "home-fallback";
+    return normalizedPath === "/courses/create" ? routeId : "home-fallback";
   }
 
   if (routeId === "course-create-tab") {
@@ -546,9 +543,7 @@ export const getEffectiveRouteId = (
   }
 
   if (routeId === "course-edit") {
-    return isCourseEditEditorPath(normalizedPath)
-      ? routeId
-      : "home-fallback";
+    return isCourseEditEditorPath(normalizedPath) ? routeId : "home-fallback";
   }
 
   const canonicalPath = hasOwn(canonicalPathsByRouteId, routeId)

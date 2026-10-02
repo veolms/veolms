@@ -110,7 +110,10 @@ function measurePopoverPanelLayout(
         popoverMaxHeightCapPx,
         Math.max(
           popoverMinHeightPx,
-          playerRect.bottom - triggerRect.bottom - popoverGapPx - popoverEdgePadPx,
+          playerRect.bottom -
+            triggerRect.bottom -
+            popoverGapPx -
+            popoverEdgePadPx,
         ),
       ),
     };

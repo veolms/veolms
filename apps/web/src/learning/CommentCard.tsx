@@ -1152,83 +1152,83 @@ function ReplyCard({
               >
                 {canParticipate && (
                   <button
-                  type="button"
-                  onClick={() => {
-                    if (!isBackendMode) {
-                      setLocalLiked((current) => !current);
-                    }
-                    onLike(reply.id);
-                  }}
-                  aria-pressed={isReplyLiked}
-                  aria-label={isReplyLiked ? "Unlike reply" : "Like reply"}
-                  className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isReplyLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
-                >
-                  <ThumbsUp
-                    size={18}
-                    weight={isReplyLiked ? "fill" : "regular"}
-                  />
-                  <span>{replyLikesCount}</span>
+                    type="button"
+                    onClick={() => {
+                      if (!isBackendMode) {
+                        setLocalLiked((current) => !current);
+                      }
+                      onLike(reply.id);
+                    }}
+                    aria-pressed={isReplyLiked}
+                    aria-label={isReplyLiked ? "Unlike reply" : "Like reply"}
+                    className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isReplyLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
+                  >
+                    <ThumbsUp
+                      size={18}
+                      weight={isReplyLiked ? "fill" : "regular"}
+                    />
+                    <span>{replyLikesCount}</span>
                   </button>
                 )}
                 {canParticipate &&
                   isQuestion &&
                   canAcceptAnswer &&
                   onToggleAccept && (
-                  <button
-                    type="button"
-                    data-testid={`accept-reply-btn-${reply.id}`}
-                    disabled={
-                      reply.creationStatus === "pending" ||
-                      !getServerEntityId(reply)
-                    }
-                    aria-label={
-                      reply.isAccepted ? "Unaccept answer" : "Accept answer"
-                    }
-                    title={
-                      reply.isAccepted ? "Unaccept answer" : "Accept answer"
-                    }
-                    onClick={() => {
-                      if (
+                    <button
+                      type="button"
+                      data-testid={`accept-reply-btn-${reply.id}`}
+                      disabled={
                         reply.creationStatus === "pending" ||
                         !getServerEntityId(reply)
-                      ) {
-                        return;
                       }
-                      onToggleAccept(
-                        reply.id,
-                        !reply.isAccepted,
-                        getServerEntityId(reply),
-                      );
-                    }}
-                    className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-(--accent) ${
-                      reply.isAccepted
-                        ? "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"
-                        : "text-(--muted) hover:bg-(--hover) hover:text-(--text)"
-                    }`}
-                  >
-                    <CheckCircle
-                      size={16}
-                      weight={reply.isAccepted ? "fill" : "bold"}
-                    />
-                    <span>{reply.isAccepted ? "Accepted" : "Accept"}</span>
-                  </button>
-                )}
+                      aria-label={
+                        reply.isAccepted ? "Unaccept answer" : "Accept answer"
+                      }
+                      title={
+                        reply.isAccepted ? "Unaccept answer" : "Accept answer"
+                      }
+                      onClick={() => {
+                        if (
+                          reply.creationStatus === "pending" ||
+                          !getServerEntityId(reply)
+                        ) {
+                          return;
+                        }
+                        onToggleAccept(
+                          reply.id,
+                          !reply.isAccepted,
+                          getServerEntityId(reply),
+                        );
+                      }}
+                      className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-(--accent) ${
+                        reply.isAccepted
+                          ? "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"
+                          : "text-(--muted) hover:bg-(--hover) hover:text-(--text)"
+                      }`}
+                    >
+                      <CheckCircle
+                        size={16}
+                        weight={reply.isAccepted ? "fill" : "bold"}
+                      />
+                      <span>{reply.isAccepted ? "Accepted" : "Accept"}</span>
+                    </button>
+                  )}
                 {canParticipate && (
                   <button
-                  type="button"
-                  aria-label="Reply"
-                  title="Reply"
-                  data-reply-action
-                  onClick={onReply}
-                  className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
-                >
-                  <ArrowBendUpLeft
-                    data-reply-icon
-                    size={20}
-                    weight="bold"
-                    className="origin-center scale-x-[1.16]"
-                    aria-hidden="true"
-                  />
+                    type="button"
+                    aria-label="Reply"
+                    title="Reply"
+                    data-reply-action
+                    onClick={onReply}
+                    className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
+                  >
+                    <ArrowBendUpLeft
+                      data-reply-icon
+                      size={20}
+                      weight="bold"
+                      className="origin-center scale-x-[1.16]"
+                      aria-hidden="true"
+                    />
                   </button>
                 )}
               </div>

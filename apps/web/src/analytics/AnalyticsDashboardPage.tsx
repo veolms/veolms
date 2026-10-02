@@ -18,7 +18,11 @@ interface Props {
 
 type RangeKey = "7d" | "30d" | "3m" | "1y";
 
-const RANGE_OPTIONS: ReadonlyArray<{ key: RangeKey; label: string; days: number }> = [
+const RANGE_OPTIONS: ReadonlyArray<{
+  key: RangeKey;
+  label: string;
+  days: number;
+}> = [
   { key: "7d", label: "7D", days: 7 },
   { key: "30d", label: "30D", days: 30 },
   { key: "3m", label: "3M", days: 90 },
@@ -27,7 +31,9 @@ const RANGE_OPTIONS: ReadonlyArray<{ key: RangeKey; label: string; days: number 
 
 function useDateRangeParams(rangeKey: RangeKey) {
   return useMemo(() => {
-    const option = RANGE_OPTIONS.find((candidate) => candidate.key === rangeKey)!;
+    const option = RANGE_OPTIONS.find(
+      (candidate) => candidate.key === rangeKey,
+    )!;
     const to = new Date();
     const from = new Date(to.getTime() - option.days * 24 * 60 * 60 * 1000);
     return { from: from.toISOString(), to: to.toISOString() };
@@ -85,7 +91,9 @@ function PageHeader({
         <h1 className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
           {title}
         </h1>
-        <p className="mt-1.5 max-w-2xl text-[0.88rem] leading-6 text-(--muted)">{description}</p>
+        <p className="mt-1.5 max-w-2xl text-[0.88rem] leading-6 text-(--muted)">
+          {description}
+        </p>
       </div>
       {action ? (
         <div className="flex shrink-0 flex-wrap items-center gap-2 pt-2 pb-0.5 sm:py-0">
@@ -107,11 +115,16 @@ function AnalyticsContent({ isAdmin }: { isAdmin: boolean }) {
     courseId: courseId === "all" ? undefined : courseId,
   };
   const adminQuery = useAdminAnalyticsOverview(params, { enabled: isAdmin });
-  const instructorQuery = useInstructorAnalyticsOverview(params, { enabled: !isAdmin });
+  const instructorQuery = useInstructorAnalyticsOverview(params, {
+    enabled: !isAdmin,
+  });
   const { data, isLoading } = isAdmin ? adminQuery : instructorQuery;
 
   const courseOptions: ThemedSelectOption<string>[] = [
-    ["all", isAdmin ? "All Courses" : "All my courses"] as ThemedSelectOption<string>,
+    [
+      "all",
+      isAdmin ? "All Courses" : "All my courses",
+    ] as ThemedSelectOption<string>,
     ...(myCourses.data?.courses ?? []).map(
       (course) => [course.id, course.title] as ThemedSelectOption<string>,
     ),

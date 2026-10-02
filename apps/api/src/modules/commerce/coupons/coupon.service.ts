@@ -247,10 +247,14 @@ export function createCouponService({
       );
     }
 
-    const effectiveDiscountType = request.discountType ?? existing.discount_type;
+    const effectiveDiscountType =
+      request.discountType ?? existing.discount_type;
     const effectiveDiscountValue =
       request.discountValue ?? existing.discount_value;
-    if (effectiveDiscountType === "percentage" && effectiveDiscountValue > 100) {
+    if (
+      effectiveDiscountType === "percentage" &&
+      effectiveDiscountValue > 100
+    ) {
       throw new AppError(
         400,
         "INVALID_COUPON_DISCOUNT",

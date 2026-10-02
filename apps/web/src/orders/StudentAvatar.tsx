@@ -68,4 +68,3 @@ export const StudentAvatar = memo(function StudentAvatar({
     </div>
   );
 });
-

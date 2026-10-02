@@ -139,7 +139,11 @@ export function createRefundRequestService({
       requestId,
     );
     if (!refundReq) {
-      throw new AppError(404, "REFUND_REQUEST_NOT_FOUND", "Refund request not found.");
+      throw new AppError(
+        404,
+        "REFUND_REQUEST_NOT_FOUND",
+        "Refund request not found.",
+      );
     }
 
     if (refundReq.status !== "pending") {

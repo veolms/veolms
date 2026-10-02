@@ -25,4 +25,3 @@ declare module "iso-639-1" {
     static getLanguages(codes: readonly string[]): LanguageData[];
   }
 }
-

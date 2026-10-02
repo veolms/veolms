@@ -4169,8 +4169,7 @@ const MOBILE_COMPOSER_SURFACE_BASE =
 const MOBILE_BOTTOM_ACTION_OFFSET_CLASS =
   "bottom-[calc(58px+var(--app-viewport-safe-area-bottom))]";
 
-interface MobileParticipationPromptSurfaceProps
-  extends ParticipationPromptContentProps {
+interface MobileParticipationPromptSurfaceProps extends ParticipationPromptContentProps {
   testId?: string;
   scrollHidden?: boolean;
 }
@@ -4201,8 +4200,7 @@ function MobileParticipationPromptSurface({
   );
 }
 
-interface MobileParticipationPromptPortalProps
-  extends ParticipationPromptContentProps {
+interface MobileParticipationPromptPortalProps extends ParticipationPromptContentProps {
   mobileBottomNavigation: boolean;
   scrollHidden: boolean;
 }
@@ -4264,9 +4262,7 @@ function MobileCompactComposerPortal({
     <div
       data-learning-mobile-composer-layer
       className={`pointer-events-none fixed inset-x-0 z-130 box-border min-w-0 max-w-full overflow-x-clip transition-[transform,opacity] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${
-        mobileBottomNavigation
-          ? MOBILE_BOTTOM_ACTION_OFFSET_CLASS
-          : "bottom-0"
+        mobileBottomNavigation ? MOBILE_BOTTOM_ACTION_OFFSET_CLASS : "bottom-0"
       }`}
       style={{
         opacity: "var(--learning-player-content-opacity, 1)",

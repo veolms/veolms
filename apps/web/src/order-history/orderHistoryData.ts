@@ -1,9 +1,5 @@
 export type OrderHistoryStatus =
-  | "completed"
-  | "processing"
-  | "refunded"
-  | "failed"
-  | "canceled";
+  "completed" | "processing" | "refunded" | "failed" | "canceled";
 
 export interface OrderHistoryPayment {
   type: "visa" | "mastercard" | "upi" | "paypal" | "other";
@@ -32,12 +28,7 @@ export interface OrderHistoryItem {
 }
 
 export type OrderHistoryTabId =
-  | "all"
-  | "completed"
-  | "processing"
-  | "refunded"
-  | "failed"
-  | "canceled";
+  "all" | "completed" | "processing" | "refunded" | "failed" | "canceled";
 /*
 // LEGACY MOCK DATA REFERENCE:
 export const initialOrderHistoryList: readonly OrderHistoryItem[] = [

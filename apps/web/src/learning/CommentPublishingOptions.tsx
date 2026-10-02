@@ -215,7 +215,11 @@ function PublishingRow<Value extends string>({
   return (
     <label
       aria-disabled={disabled || undefined}
-      title={disabled ? "Interaction type cannot be changed while editing." : undefined}
+      title={
+        disabled
+          ? "Interaction type cannot be changed while editing."
+          : undefined
+      }
       className={`group relative grid min-h-14 ${disabled ? "cursor-default opacity-80" : "cursor-pointer"} grid-cols-[auto_1fr_auto] items-center gap-3 px-3.5 py-2.5 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-(--accent) sm:px-4 ${separated ? "shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_8%,transparent)]" : ""} ${selected ? "bg-(--accent-soft)" : "hover:bg-(--hover)"}`}
     >
       <input

@@ -37,8 +37,7 @@ function useCourseCatalogueBreakpoint(query: string) {
     [query],
   );
   const getSnapshot = useCallback(
-    () =>
-      typeof window !== "undefined" && window.matchMedia(query).matches,
+    () => typeof window !== "undefined" && window.matchMedia(query).matches,
     [query],
   );
 
@@ -122,7 +121,8 @@ export function CourseCatalogue({
   );
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const mediumBreakpoint = useCourseCatalogueBreakpoint("(min-width: 640px)");
-  const wideControlsBreakpoint = useCourseCatalogueBreakpoint("(min-width: 821px)");
+  const wideControlsBreakpoint =
+    useCourseCatalogueBreakpoint("(min-width: 821px)");
   const desktopLayout = useCourseCatalogueBreakpoint("(min-width: 900px)");
   const mediumLayout = mediumBreakpoint || desktopLayout;
   const wideControlsLayout = wideControlsBreakpoint || desktopLayout;
@@ -184,7 +184,9 @@ export function CourseCatalogue({
   const priorityImageIndexes = new Set<number>();
   for (
     let index = firstImageIndex;
-    index >= 0 && index < visibleCourses.length && priorityImageIndexes.size < 2;
+    index >= 0 &&
+    index < visibleCourses.length &&
+    priorityImageIndexes.size < 2;
     index += 1
   ) {
     if (visibleCourses[index]?.thumbnail) priorityImageIndexes.add(index);
@@ -460,7 +462,11 @@ export function CourseCatalogue({
             disabled={isFetchingNextPage}
           >
             {isFetchingNextPage ? (
-              <CircleNotch size={16} className="animate-spin" aria-hidden="true" />
+              <CircleNotch
+                size={16}
+                className="animate-spin"
+                aria-hidden="true"
+              />
             ) : null}
             {isFetchingNextPage ? null : "Load more courses"}
           </button>

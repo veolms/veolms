@@ -80,8 +80,7 @@ export function BufferingIndicator({
   const [visible, setVisible] = useState(
     () =>
       waitingForMedia &&
-      (delay <= 0 ||
-        (immediatePlayWaits && (initialLoading || playInFlight))),
+      (delay <= 0 || (immediatePlayWaits && (initialLoading || playInFlight))),
   );
   const visibleRef = useRef(visible);
   const holdForFirstFrameRef = useRef(false);

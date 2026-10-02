@@ -1,7 +1,4 @@
-import type {
-  VideoEngineEvent,
-  VideoEngineEventMap,
-} from "../core/events";
+import type { VideoEngineEvent, VideoEngineEventMap } from "../core/events";
 
 export type PlayerPresentationEvent =
   | { type: "fullscreenchange"; detail: { active: boolean } }

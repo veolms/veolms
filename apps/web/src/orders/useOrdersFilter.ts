@@ -26,7 +26,11 @@ export interface DateRangeState {
   from?: Date;
   to?: Date;
 }
-function resolveDateRange(preset: DateRangePreset, customFrom?: Date, customTo?: Date): {
+function resolveDateRange(
+  preset: DateRangePreset,
+  customFrom?: Date,
+  customTo?: Date,
+): {
   from?: Date;
   to?: Date;
   label: string;
@@ -48,8 +52,15 @@ function resolveDateRange(preset: DateRangePreset, customFrom?: Date, customTo?:
     case "last_30_days": {
       const from = new Date(today);
       from.setDate(today.getDate() - 30);
-      const startStr = from.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      const endStr = now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      const startStr = from.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+      const endStr = now.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
       return { from, to: now, label: `${startStr} – ${endStr}` };
     }
     case "this_month": {
@@ -58,14 +69,33 @@ function resolveDateRange(preset: DateRangePreset, customFrom?: Date, customTo?:
     }
     case "last_month": {
       const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const to = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      const to = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        0,
+        23,
+        59,
+        59,
+        999,
+      );
       return { from, to, label: "Last Month" };
     }
     case "custom": {
       if (customFrom && customTo) {
-        const startStr = customFrom.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-        const endStr = customTo.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-        return { from: customFrom, to: customTo, label: `${startStr} – ${endStr}` };
+        const startStr = customFrom.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
+        const endStr = customTo.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+        return {
+          from: customFrom,
+          to: customTo,
+          label: `${startStr} – ${endStr}`,
+        };
       }
       return { label: "Custom Range" };
     }
@@ -139,31 +169,45 @@ export function useOrdersFilter(options?: {
   );
 
   // Filters
-  const [courseFilter, setCourseFilter] = useState<string | undefined>(undefined);
-  const [couponFilter, setCouponFilter] = useState<string | undefined>(undefined);
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | undefined>(undefined);
+  const [courseFilter, setCourseFilter] = useState<string | undefined>(
+    undefined,
+  );
+  const [couponFilter, setCouponFilter] = useState<string | undefined>(
+    undefined,
+  );
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | undefined>(
+    undefined,
+  );
   const [sortOrder, setSortOrder] = useState<OrderSortOrder>("desc");
 
   // Date Range (default: last_30_days matching the mockup e.g. "May 6 - Jun 4, 2025")
-  const [datePreset, setDatePresetState] = useState<DateRangePreset>("last_30_days");
+  const [datePreset, setDatePresetState] =
+    useState<DateRangePreset>("last_30_days");
   const [customFrom, setCustomFrom] = useState<Date | undefined>(undefined);
   const [customTo, setCustomTo] = useState<Date | undefined>(undefined);
 
-  const { from: filterFrom, to: filterTo, label: dateLabel } = useMemo(
+  const {
+    from: filterFrom,
+    to: filterTo,
+    label: dateLabel,
+  } = useMemo(
     () => resolveDateRange(datePreset, customFrom, customTo),
     [datePreset, customFrom, customTo],
   );
 
-  const setDatePreset = useCallback((preset: DateRangePreset, from?: Date, to?: Date) => {
-    setDatePresetState(preset);
-    if (preset === "custom") {
-      setCustomFrom(from);
-      setCustomTo(to);
-    } else {
-      setCustomFrom(undefined);
-      setCustomTo(undefined);
-    }
-  }, []);
+  const setDatePreset = useCallback(
+    (preset: DateRangePreset, from?: Date, to?: Date) => {
+      setDatePresetState(preset);
+      if (preset === "custom") {
+        setCustomFrom(from);
+        setCustomTo(to);
+      } else {
+        setCustomFrom(undefined);
+        setCustomTo(undefined);
+      }
+    },
+    [],
+  );
 
   const toggleSortOrder = useCallback(() => {
     setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"));
@@ -182,7 +226,15 @@ export function useOrdersFilter(options?: {
       sortOrder,
       limit: 30,
     };
-  }, [debouncedSearch, courseFilter, couponFilter, statusFilter, filterFrom, filterTo, sortOrder]);
+  }, [
+    debouncedSearch,
+    courseFilter,
+    couponFilter,
+    statusFilter,
+    filterFrom,
+    filterTo,
+    sortOrder,
+  ]);
 
   const {
     data,
@@ -205,7 +257,10 @@ export function useOrdersFilter(options?: {
     };
   }, [courseFilter, couponFilter, statusFilter, filterFrom, filterTo]);
 
-  const { data: stats, isLoading: isLoadingStats } = useOrderStats(statsParams, { enabled });
+  const { data: stats, isLoading: isLoadingStats } = useOrderStats(
+    statsParams,
+    { enabled },
+  );
 
   // Server-loaded orders
   const serverOrders = useMemo(() => {
@@ -252,7 +307,8 @@ export function useOrdersFilter(options?: {
   }, [orders, selectedOrderId]);
 
   const hasPrevOrder = selectedOrderIndex > 0;
-  const hasNextOrder = selectedOrderIndex !== -1 && selectedOrderIndex < orders.length - 1;
+  const hasNextOrder =
+    selectedOrderIndex !== -1 && selectedOrderIndex < orders.length - 1;
 
   const selectPrevOrder = useCallback(() => {
     if (hasPrevOrder) {
@@ -267,14 +323,16 @@ export function useOrdersFilter(options?: {
   }, [hasNextOrder, orders, selectedOrderIndex]);
 
   // Modal targets
-  const [refundTargetOrder, setRefundTargetOrder] = useState<Order | null>(null);
+  const [refundTargetOrder, setRefundTargetOrder] = useState<Order | null>(
+    null,
+  );
 
   const isFiltered = Boolean(
     searchQuery ||
     courseFilter ||
     couponFilter ||
     statusFilter ||
-    datePreset !== "last_30_days"
+    datePreset !== "last_30_days",
   );
 
   const resetFilters = useCallback(() => {

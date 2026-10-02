@@ -401,7 +401,7 @@ export type ServerConfig = Omit<
   RP_ID: string;
   WEBAUTHN_ORIGINS: string[];
   WEBAUTHN_RP_IDS: string[];
-    CORS_ORIGINS: string[];
+  CORS_ORIGINS: string[];
 };
 
 export function loadServerConfig(
@@ -435,7 +435,7 @@ export function loadServerConfig(
   const resolvedRpId = resolveWebAuthnRpId(parsed);
   const origins = resolveWebAuthnOrigins(parsed);
   const rpIds = resolveWebAuthnRpIds(resolvedRpId, origins);
-    const corsOrigins = resolveCorsOrigins(parsed);
+  const corsOrigins = resolveCorsOrigins(parsed);
 
   return {
     ...parsed,

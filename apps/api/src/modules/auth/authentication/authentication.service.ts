@@ -1044,12 +1044,7 @@ export function createAuthService({
 
         const avatarDataUrl =
           avatarStorage.getPublicObjectUrl(storageKey) ??
-          avatarCdnUrl(
-            avatarStorage,
-            userId,
-            160,
-            input.uploadId,
-          );
+          avatarCdnUrl(avatarStorage, userId, 160, input.uploadId);
         if (!avatarDataUrl) {
           throw new AppError(
             503,

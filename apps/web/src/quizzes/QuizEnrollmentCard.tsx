@@ -21,7 +21,9 @@ async function loadRazorpay(): Promise<void> {
   if (typeof window === "undefined") return;
   if (window.Razorpay) return;
   await new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+    const existing = document.querySelector(
+      'script[src="https://checkout.razorpay.com/v1/checkout.js"]',
+    );
     if (existing) {
       resolve();
       return;
@@ -29,7 +31,8 @@ async function loadRazorpay(): Promise<void> {
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load payment gateway SDK"));
+    script.onerror = () =>
+      reject(new Error("Failed to load payment gateway SDK"));
     document.body.appendChild(script);
   });
 }
@@ -117,7 +120,8 @@ export function QuizEnrollmentCard({
           </button>
         ) : null}
         <p className="text-sm text-red-400">
-          Unable to check quiz access. {pricingPreviewQuery.error?.message ?? "Please try again."}
+          Unable to check quiz access.{" "}
+          {pricingPreviewQuery.error?.message ?? "Please try again."}
         </p>
         <Button
           onClick={() => void pricingPreviewQuery.refetch()}
@@ -221,7 +225,9 @@ export function QuizEnrollmentCard({
     } catch (err: unknown) {
       setIsProcessing(false);
       setErrorMessage(
-        err instanceof Error ? err.message : "Failed to initiate quiz enrollment.",
+        err instanceof Error
+          ? err.message
+          : "Failed to initiate quiz enrollment.",
       );
     }
   };
@@ -257,7 +263,11 @@ export function QuizEnrollmentCard({
 
       <div className="flex items-center gap-2 mb-2">
         <div className="flex size-8 items-center justify-center rounded-lg bg-(--accent)/10 text-(--accent)">
-          {isFree ? <CheckCircle size={18} weight="bold" /> : <Lock size={18} weight="bold" />}
+          {isFree ? (
+            <CheckCircle size={18} weight="bold" />
+          ) : (
+            <Lock size={18} weight="bold" />
+          )}
         </div>
         <div>
           <p className="text-[0.65rem] sm:text-[0.7rem] font-bold uppercase tracking-[0.14em] text-(--accent)">
@@ -281,7 +291,13 @@ export function QuizEnrollmentCard({
           <div className="rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) p-3.5 sm:p-4.5 space-y-2.5">
             <div className="flex items-center justify-between text-xs sm:text-sm text-(--muted)">
               <span>Catalog Price</span>
-              <span className={salePrice !== null && salePrice < catalogPrice ? "line-through opacity-70" : "font-medium text-(--text)"}>
+              <span
+                className={
+                  salePrice !== null && salePrice < catalogPrice
+                    ? "line-through opacity-70"
+                    : "font-medium text-(--text)"
+                }
+              >
                 {formatPrice(catalogPrice, currency)}
               </span>
             </div>
@@ -292,12 +308,16 @@ export function QuizEnrollmentCard({
                   <Tag size={13} weight="bold" />
                   <span>Special Sale Price</span>
                 </span>
-                <span className="font-semibold">{formatPrice(salePrice, currency)}</span>
+                <span className="font-semibold">
+                  {formatPrice(salePrice, currency)}
+                </span>
               </div>
             ) : null}
 
             <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-2.5 flex items-center justify-between">
-              <span className="text-xs sm:text-sm font-bold text-(--text)">Total Payable</span>
+              <span className="text-xs sm:text-sm font-bold text-(--text)">
+                Total Payable
+              </span>
               <span className="text-base sm:text-xl font-bold text-(--text)">
                 {formatPrice(activePrice, currency)}
               </span>

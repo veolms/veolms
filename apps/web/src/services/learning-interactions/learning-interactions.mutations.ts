@@ -170,8 +170,7 @@ export function useCreateLessonThread(courseId: string, lessonId: string) {
       const countsChange = applyLessonInteractionCountDelta(queryClient, {
         courseId,
         lessonId,
-        kind:
-          threadPayload.kind === "qna" ? "question" : threadPayload.kind,
+        kind: threadPayload.kind === "qna" ? "question" : threadPayload.kind,
         delta: 1,
       });
       return { clientId: record.clientId, countsChange };
@@ -265,14 +264,12 @@ export function useDeleteThread(courseId?: string, lessonId?: string) {
 type CreateReplyMutationInput = CreateLearningReplyRequest & {
   /** Internal transport override; never included in the API payload. */
   __serverThreadId?: string;
-} &
-  LocalAttachmentCreateMeta;
+} & LocalAttachmentCreateMeta;
 
 type CreateNoteMutationInput = CreateLearningNoteRequest & {
   /** Legacy metadata accepted while older callers migrate to local Files. */
   __attachments?: LearningNote["attachments"];
-} &
-  LocalAttachmentCreateMeta;
+} & LocalAttachmentCreateMeta;
 
 export function useCreateReply(
   threadId?: string,
@@ -281,8 +278,12 @@ export function useCreateReply(
   const queryClient = useQueryClient();
   return useMutation<LearningReply, ApiError, CreateReplyMutationInput>({
     mutationFn: async (input) => {
-      const { __serverThreadId, __clientId, __localAttachments = [], ...payload } =
-        input;
+      const {
+        __serverThreadId,
+        __clientId,
+        __localAttachments = [],
+        ...payload
+      } = input;
       const transportThreadId = __serverThreadId ?? threadId;
       if (!transportThreadId)
         throw new Error("A confirmed server thread ID is required.");

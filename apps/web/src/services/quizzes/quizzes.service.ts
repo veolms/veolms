@@ -36,9 +36,7 @@ export const quizzesService = {
   create: async (payload: CreateQuizRequest) =>
     quizSchema.parse(await api.post<unknown>("/quizzes", payload)),
   createWithQuestions: async (payload: CreateQuizWithQuestionsRequest) =>
-    quizSchema.parse(
-      await api.post<unknown>("/quizzes/complete", payload),
-    ),
+    quizSchema.parse(await api.post<unknown>("/quizzes/complete", payload)),
   update: async (id: string, payload: UpdateQuizRequest) =>
     quizSchema.parse(
       await api.patch<unknown>(`/quizzes/${encodeURIComponent(id)}`, payload),
@@ -118,9 +116,7 @@ export const quizzesService = {
     ),
   deleteAssignment: async (id: string) =>
     quizDeleteResponseSchema.parse(
-      await api.delete<unknown>(
-        `/quiz-assignments/${encodeURIComponent(id)}`,
-      ),
+      await api.delete<unknown>(`/quiz-assignments/${encodeURIComponent(id)}`),
     ),
   listMineAssignments: async () =>
     myQuizAssignmentsResponseSchema.parse(

@@ -127,7 +127,9 @@ try {
       .execute();
   }
 
-  console.info(`Seeded ${courses.length} published courses with Admin role assignment.`);
+  console.info(
+    `Seeded ${courses.length} published courses with Admin role assignment.`,
+  );
 } finally {
   await database.destroy();
 }

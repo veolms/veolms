@@ -5,7 +5,11 @@ import { AUTH_CARD_HEADING_ID } from "../auth/authFlow";
 import { MfaEnrollmentSetup } from "../auth/MfaEnrollmentSetup";
 import { MfaStepUp } from "../auth/MfaStepUp";
 import { resolveMfaSetupView, type MfaSetupView } from "../auth/mfaGate";
-import { APP_HOME_PATH, resolveMfaBackPath, sanitizeReturnTo } from "../routing/routeAccess";
+import {
+  APP_HOME_PATH,
+  resolveMfaBackPath,
+  sanitizeReturnTo,
+} from "../routing/routeAccess";
 import { useCurrentUser } from "../services/auth";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 export default function MfaSetupRoute() {

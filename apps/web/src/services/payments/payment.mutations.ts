@@ -4,11 +4,17 @@ import { courseKeys } from "../courses/courses.keys";
 import { quizKeys } from "../quizzes/quizzes.keys";
 import { paymentService } from "./payment.service";
 
-export const useCheckoutPreview = () => useMutation({ mutationFn: paymentService.preview });
-export const useCreateCheckoutOrder = () => useMutation({ mutationFn: paymentService.createOrder });
+export const useCheckoutPreview = () =>
+  useMutation({ mutationFn: paymentService.preview });
+export const useCreateCheckoutOrder = () =>
+  useMutation({ mutationFn: paymentService.createOrder });
 export function useVerifyPayment() {
   const queryClient = useQueryClient();
-  return useMutation<Awaited<ReturnType<typeof paymentService.verify>>, ApiError, Parameters<typeof paymentService.verify>[0]>({
+  return useMutation<
+    Awaited<ReturnType<typeof paymentService.verify>>,
+    ApiError,
+    Parameters<typeof paymentService.verify>[0]
+  >({
     mutationFn: paymentService.verify,
     onSuccess: async () => {
       await Promise.all([
@@ -20,4 +26,3 @@ export function useVerifyPayment() {
     },
   });
 }
-

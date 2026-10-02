@@ -55,10 +55,7 @@ const ALLOWED_THUMBNAIL_MIME_TYPES = new Set([
   "image/avif",
 ]);
 
-function decodePublishedCourseCursor(
-  cursor: string,
-  sort: "latest" | "title",
-) {
+function decodePublishedCourseCursor(cursor: string, sort: "latest" | "title") {
   const separator = cursor.lastIndexOf("~");
   if (separator <= 0) {
     throw new AppError(400, "INVALID_COURSE_CURSOR", "Invalid course cursor.");
@@ -362,8 +359,7 @@ export function createCourseService({
       sort,
     });
     const pageLimit = filters?.limit;
-    const hasNextPage =
-      pageLimit !== undefined && rows.length > pageLimit;
+    const hasNextPage = pageLimit !== undefined && rows.length > pageLimit;
     const pageRows = hasNextPage ? rows.slice(0, pageLimit) : rows;
     const courses = await Promise.all(
       pageRows.map(async (row) => {
@@ -666,10 +662,7 @@ export function createCourseService({
       userRoles?.includes(ADMIN_ROLE) || userRoles?.includes("instructor");
     const rows = isAdminOrInstructor
       ? await courseRepo.listAllCourseScope(database)
-      : await courseRepo.listAvailableCourseScopeByCreator(
-          database,
-          creatorId,
-        );
+      : await courseRepo.listAvailableCourseScopeByCreator(database, creatorId);
 
     return {
       courses: rows.map((course) => ({
@@ -1314,7 +1307,9 @@ export function createCourseService({
       title: c.title,
       shortDescription: c.short_description ?? null,
       description: c.description ?? null,
-      difficulty: (c.difficulty as "beginner" | "intermediate" | "advanced" | null) ?? null,
+      difficulty:
+        (c.difficulty as "beginner" | "intermediate" | "advanced" | null) ??
+        null,
       status: c.status as "draft" | "published" | "archived",
       creatorId: c.creator_id as string,
       categoryId: c.category_id ?? null,
@@ -1324,9 +1319,15 @@ export function createCourseService({
       thumbnailSrcSet: thumbnail.thumbnailSrcSet,
       instructorAlias: c.instructor_alias ?? null,
       version: c.version,
-      createdAt: c.created_at ? new Date(c.created_at).toISOString() : new Date().toISOString(),
-      updatedAt: c.updated_at ? new Date(c.updated_at).toISOString() : new Date().toISOString(),
-      publishedAt: c.published_at ? new Date(c.published_at).toISOString() : null,
+      createdAt: c.created_at
+        ? new Date(c.created_at).toISOString()
+        : new Date().toISOString(),
+      updatedAt: c.updated_at
+        ? new Date(c.updated_at).toISOString()
+        : new Date().toISOString(),
+      publishedAt: c.published_at
+        ? new Date(c.published_at).toISOString()
+        : null,
     };
   }
 
@@ -1366,9 +1367,12 @@ export function createCourseService({
 
     const updates: Record<string, unknown> = {};
     if (payload.title !== undefined) updates.title = payload.title;
-    if (payload.subtitle !== undefined) updates.short_description = payload.subtitle;
-    if (payload.description !== undefined) updates.description = payload.description;
-    if (payload.categoryId !== undefined) updates.category_id = payload.categoryId;
+    if (payload.subtitle !== undefined)
+      updates.short_description = payload.subtitle;
+    if (payload.description !== undefined)
+      updates.description = payload.description;
+    if (payload.categoryId !== undefined)
+      updates.category_id = payload.categoryId;
     if (payload.level !== undefined && payload.level !== "all_levels") {
       updates.difficulty = payload.level;
     }

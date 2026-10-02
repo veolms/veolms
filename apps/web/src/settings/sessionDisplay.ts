@@ -16,7 +16,9 @@ export function formatSessionDevice(
 }
 
 export function isMobileSession(userAgent: string | null | undefined): boolean {
-  return Boolean(userAgent && /mobile|android|iphone|ipad|ipod/i.test(userAgent));
+  return Boolean(
+    userAgent && /mobile|android|iphone|ipad|ipod/i.test(userAgent),
+  );
 }
 
 export function formatRelativeDate(dateStr: string | undefined): string {

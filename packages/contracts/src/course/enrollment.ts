@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-export const accessGrantStatusSchema = z.enum(["active", "suspended", "revoked", "expired"]);
+export const accessGrantStatusSchema = z.enum([
+  "active",
+  "suspended",
+  "revoked",
+  "expired",
+]);
 export type AccessGrantStatus = z.infer<typeof accessGrantStatusSchema>;
 
 export const accessGrantSourceSchema = z.enum([

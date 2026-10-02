@@ -46,10 +46,7 @@ export function createMfaController(context: AuthContext) {
   }
 
   async function disableTotp(request: FastifyRequest) {
-    return mfaService.disableTotp(
-      request.user!,
-      request.session!.mfa_verified,
-    );
+    return mfaService.disableTotp(request.user!, request.session!.mfa_verified);
   }
 
   async function deletePasskeys(request: FastifyRequest) {

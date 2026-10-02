@@ -377,90 +377,95 @@ function CurriculumSectionItem({
                   overscan={14}
                   getItemKey={getOverviewLessonKey}
                   pinnedItemIds={NO_PINNED_LESSONS}
-                  renderItem={
-                    ([number, title, duration, status, isPreview, contentType]) => {
-                  const isDoc = contentType === "document";
-                  const isQuiz = contentType === "quiz";
-                  return (
-                    <button
-                      type="button"
-                      className={`group/lesson flex items-center gap-3 w-full min-h-11.5 border-0 bg-transparent px-4.5 py-1.5 text-(--text-secondary) text-[0.85rem] text-left transition-colors duration-140 ${
-                        isReadOnlyPreview
-                          ? "cursor-default opacity-85 hover:bg-transparent hover:text-(--text-secondary)"
-                          : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-inset"
-                      }`}
-                      key={number}
-                      disabled={isReadOnlyPreview}
-                      onClick={() => {
-                        if (isReadOnlyPreview) return;
-                        onSelectLesson?.(number);
-                      }}
-                      aria-label={`Lesson ${number}: ${title}${duration ? `, ${duration}` : ""}`}
-                    >
-                      {/* Content type icon */}
-                      <span
-                        className={`inline-flex w-5 shrink-0 items-center justify-center text-(--muted) transition-colors duration-140 ${
+                  renderItem={([
+                    number,
+                    title,
+                    duration,
+                    status,
+                    isPreview,
+                    contentType,
+                  ]) => {
+                    const isDoc = contentType === "document";
+                    const isQuiz = contentType === "quiz";
+                    return (
+                      <button
+                        type="button"
+                        className={`group/lesson flex items-center gap-3 w-full min-h-11.5 border-0 bg-transparent px-4.5 py-1.5 text-(--text-secondary) text-[0.85rem] text-left transition-colors duration-140 ${
                           isReadOnlyPreview
-                            ? ""
-                            : "group-hover/lesson:text-(--accent)"
+                            ? "cursor-default opacity-85 hover:bg-transparent hover:text-(--text-secondary)"
+                            : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-inset"
                         }`}
-                        aria-hidden="true"
+                        key={number}
+                        disabled={isReadOnlyPreview}
+                        onClick={() => {
+                          if (isReadOnlyPreview) return;
+                          onSelectLesson?.(number);
+                        }}
+                        aria-label={`Lesson ${number}: ${title}${duration ? `, ${duration}` : ""}`}
                       >
-                        {isDoc ? (
-                          <FileText size={16} weight="regular" />
-                        ) : isQuiz ? (
-                          <Question size={16} weight="regular" />
-                        ) : (
-                          <PlayCircle size={16} weight="regular" />
-                        )}
-                      </span>
-
-                      {/* Lesson title */}
-                      <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-(--text-secondary)">
-                        {title}
-                      </span>
-
-                      {/* Duration */}
-                      {duration ? (
-                        <span className="text-(--muted) text-[0.78rem] shrink-0 w-11.25 text-right">
-                          {duration}
-                        </span>
-                      ) : null}
-
-                      {/* Free preview badge: only displayed when course is paid and lesson is marked as free preview */}
-                      {isPaidCourse && isPreview ? (
+                        {/* Content type icon */}
                         <span
-                          className="shrink-0 inline-flex items-center rounded-[5px] px-[6px] py-[2px] text-[0.7rem] font-[700] leading-none bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent) border border-[color-mix(in_srgb,var(--accent)_30%,transparent)]"
-                          aria-label="Free preview"
-                        >
-                          Free
-                        </span>
-                      ) : null}
-
-                      {/* Progress status */}
-                      {status === "done" ? (
-                        <span
-                          className="inline-flex items-center justify-center shrink-0"
+                          className={`inline-flex w-5 shrink-0 items-center justify-center text-(--muted) transition-colors duration-140 ${
+                            isReadOnlyPreview
+                              ? ""
+                              : "group-hover/lesson:text-(--accent)"
+                          }`}
                           aria-hidden="true"
                         >
-                          <CheckCircle
-                            size={16}
-                            weight="fill"
-                            className="text-[#10b981]"
-                          />
+                          {isDoc ? (
+                            <FileText size={16} weight="regular" />
+                          ) : isQuiz ? (
+                            <Question size={16} weight="regular" />
+                          ) : (
+                            <PlayCircle size={16} weight="regular" />
+                          )}
                         </span>
-                      ) : status === "todo" ? (
-                        <span
-                          className="inline-flex items-center justify-center shrink-0"
-                          aria-hidden="true"
-                        >
-                          <Circle size={16} className="text-(--muted)" />
+
+                        {/* Lesson title */}
+                        <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-(--text-secondary)">
+                          {title}
                         </span>
-                      ) : null}
-                    </button>
-                  );
-                    }
-                  }
+
+                        {/* Duration */}
+                        {duration ? (
+                          <span className="text-(--muted) text-[0.78rem] shrink-0 w-11.25 text-right">
+                            {duration}
+                          </span>
+                        ) : null}
+
+                        {/* Free preview badge: only displayed when course is paid and lesson is marked as free preview */}
+                        {isPaidCourse && isPreview ? (
+                          <span
+                            className="shrink-0 inline-flex items-center rounded-[5px] px-[6px] py-[2px] text-[0.7rem] font-[700] leading-none bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent) border border-[color-mix(in_srgb,var(--accent)_30%,transparent)]"
+                            aria-label="Free preview"
+                          >
+                            Free
+                          </span>
+                        ) : null}
+
+                        {/* Progress status */}
+                        {status === "done" ? (
+                          <span
+                            className="inline-flex items-center justify-center shrink-0"
+                            aria-hidden="true"
+                          >
+                            <CheckCircle
+                              size={16}
+                              weight="fill"
+                              className="text-[#10b981]"
+                            />
+                          </span>
+                        ) : status === "todo" ? (
+                          <span
+                            className="inline-flex items-center justify-center shrink-0"
+                            aria-hidden="true"
+                          >
+                            <Circle size={16} className="text-(--muted)" />
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  }}
                 />
               ) : null
             ) : (
@@ -1465,8 +1470,7 @@ function CourseAboutCard({ description }: CourseAboutCardProps) {
   const [needsClamp, setNeedsClamp] = useState(() => {
     if (!description) return false;
     return (
-      description.split("\n").length > CLAMP_LINES ||
-      description.length > 250
+      description.split("\n").length > CLAMP_LINES || description.length > 250
     );
   });
   const contentRef = (node: HTMLDivElement | null) => {
@@ -1650,11 +1654,11 @@ function CourseCurriculumCard({
               key={section.id}
               section={section}
               index={index}
-                isOpen={openSections.has(index)}
-                onToggle={() => onToggleSection(index)}
-                onSelectLesson={onSelectLesson}
-                shouldVirtualizeLessons={course.lectures >= 80}
-                isReadOnlyPreview={isReadOnlyPreview}
+              isOpen={openSections.has(index)}
+              onToggle={() => onToggleSection(index)}
+              onSelectLesson={onSelectLesson}
+              shouldVirtualizeLessons={course.lectures >= 80}
+              isReadOnlyPreview={isReadOnlyPreview}
               isPaidCourse={isPaidCourse}
             />
           ))}

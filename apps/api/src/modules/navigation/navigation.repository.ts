@@ -2,7 +2,10 @@ import { sql } from "kysely";
 import type { SidenavMenuNode, SidenavResponse } from "@veolms/contracts";
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 
-async function getUserRoleIds(database: Executor, userId: string): Promise<string[]> {
+async function getUserRoleIds(
+  database: Executor,
+  userId: string,
+): Promise<string[]> {
   const [directRows, scopedRows] = await Promise.all([
     database
       .selectFrom("user_roles")
@@ -23,7 +26,10 @@ async function getUserRoleIds(database: Executor, userId: string): Promise<strin
   ]);
 
   return Array.from(
-    new Set([...directRows.map((r) => r.role_id), ...scopedRows.map((r) => r.role_id)]),
+    new Set([
+      ...directRows.map((r) => r.role_id),
+      ...scopedRows.map((r) => r.role_id),
+    ]),
   );
 }
 

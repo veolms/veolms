@@ -102,9 +102,7 @@ export function getPhoneLessonDrawerCollapsedSnapPoint(
   return Math.max(
     2,
     Math.round(
-      viewportHeight -
-        playerBottom +
-        PHONE_LESSON_DRAWER_TIMELINE_COVER_OFFSET,
+      viewportHeight - playerBottom + PHONE_LESSON_DRAWER_TIMELINE_COVER_OFFSET,
     ),
   );
 }

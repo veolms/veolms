@@ -10,7 +10,6 @@ export type {
 } from "@veolms/plugin-sdk";
 export { index, layout, prefix, route } from "@veolms/plugin-sdk";
 
-
 export interface CreateVeoLMSWebOptions {
   /** Cloud-only web extensions that add additional routes to the route tree. */
   extensions?: WebExtension[];
@@ -26,4 +25,3 @@ export interface CreateVeoLMSWebOptions {
    */
   excludeRouteIds?: string[];
 }
-

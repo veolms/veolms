@@ -228,4 +228,6 @@ export function createCurriculumController({
   };
 }
 
-export type CurriculumController = ReturnType<typeof createCurriculumController>;
+export type CurriculumController = ReturnType<
+  typeof createCurriculumController
+>;

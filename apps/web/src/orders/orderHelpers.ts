@@ -152,24 +152,53 @@ export function getCourseBrandBadge(title: string = ""): BrandBadge {
     return { label: "JS", bgColor: "#eab308", textColor: "#000000" };
   }
   if (lower.includes("node") || lower.includes("backend")) {
-    return { label: "node", bgColor: "#0d1b1e", textColor: "#4ade80", borderColor: "rgba(74, 222, 128, 0.2)" };
+    return {
+      label: "node",
+      bgColor: "#0d1b1e",
+      textColor: "#4ade80",
+      borderColor: "rgba(74, 222, 128, 0.2)",
+    };
   }
   if (lower.includes("next")) {
-    return { label: "N", bgColor: "#000000", textColor: "#ffffff", borderColor: "rgba(255, 255, 255, 0.25)" };
+    return {
+      label: "N",
+      bgColor: "#000000",
+      textColor: "#ffffff",
+      borderColor: "rgba(255, 255, 255, 0.25)",
+    };
   }
   if (lower.includes("react")) {
     return { label: "⚛", bgColor: "#087ea4", textColor: "#ffffff" };
   }
   if (lower.includes("python")) {
-    return { label: "🐍", bgColor: "#1e293b", textColor: "#ffd43b", borderColor: "rgba(255, 212, 59, 0.3)" };
+    return {
+      label: "🐍",
+      bgColor: "#1e293b",
+      textColor: "#ffd43b",
+      borderColor: "rgba(255, 212, 59, 0.3)",
+    };
   }
   if (lower.includes("data analysis") || lower.includes("analytics")) {
     return { label: "📊", bgColor: "#d97706", textColor: "#ffffff" };
   }
-  if (lower.includes("ui") || lower.includes("ux") || lower.includes("design") || lower.includes("figma")) {
-    return { label: "❖", bgColor: "#1e1e1e", textColor: "#f24e1e", borderColor: "rgba(242, 78, 30, 0.3)" };
+  if (
+    lower.includes("ui") ||
+    lower.includes("ux") ||
+    lower.includes("design") ||
+    lower.includes("figma")
+  ) {
+    return {
+      label: "❖",
+      bgColor: "#1e1e1e",
+      textColor: "#f24e1e",
+      borderColor: "rgba(242, 78, 30, 0.3)",
+    };
   }
-  if (lower.includes("sql") || lower.includes("postgres") || lower.includes("database")) {
+  if (
+    lower.includes("sql") ||
+    lower.includes("postgres") ||
+    lower.includes("database")
+  ) {
     return { label: "PG", bgColor: "#0284c7", textColor: "#ffffff" };
   }
 
@@ -189,7 +218,10 @@ export function getCourseBrandBadge(title: string = ""): BrandBadge {
   };
 }
 
-export function getStudentInitials(name?: string | null, username?: string | null): string {
+export function getStudentInitials(
+  name?: string | null,
+  username?: string | null,
+): string {
   const source = name || username || "S";
   return source
     .split(/\s+/)

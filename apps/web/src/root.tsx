@@ -278,9 +278,8 @@ export const meta = () => [
 export async function loader({ request, params }: Route.LoaderArgs) {
   if (process.env.VEO_REACT_ROUTER_BUILD !== "true") return null;
 
-  const { loadAcademyStaticPageData } = await import(
-    "./routes/academyStaticPageData"
-  );
+  const { loadAcademyStaticPageData } =
+    await import("./routes/academyStaticPageData");
   return loadAcademyStaticPageData(request, params.courseSlug);
 }
 

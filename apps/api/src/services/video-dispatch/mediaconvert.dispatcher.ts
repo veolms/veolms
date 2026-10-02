@@ -116,14 +116,21 @@ export function createMediaConvertDispatcher(options: {
     };
 
     if (payload.videoMetadata) {
-      if (payload.videoMetadata.width) userMetadata.width = String(payload.videoMetadata.width);
-      if (payload.videoMetadata.height) userMetadata.height = String(payload.videoMetadata.height);
+      if (payload.videoMetadata.width)
+        userMetadata.width = String(payload.videoMetadata.width);
+      if (payload.videoMetadata.height)
+        userMetadata.height = String(payload.videoMetadata.height);
       if (payload.videoMetadata.durationSeconds) {
-        userMetadata.durationSeconds = String(payload.videoMetadata.durationSeconds);
+        userMetadata.durationSeconds = String(
+          payload.videoMetadata.durationSeconds,
+        );
       }
-      if (payload.videoMetadata.bitrate) userMetadata.bitrate = String(payload.videoMetadata.bitrate);
-      if (payload.videoMetadata.codec) userMetadata.codec = String(payload.videoMetadata.codec);
-      if (payload.videoMetadata.fps) userMetadata.fps = String(payload.videoMetadata.fps);
+      if (payload.videoMetadata.bitrate)
+        userMetadata.bitrate = String(payload.videoMetadata.bitrate);
+      if (payload.videoMetadata.codec)
+        userMetadata.codec = String(payload.videoMetadata.codec);
+      if (payload.videoMetadata.fps)
+        userMetadata.fps = String(payload.videoMetadata.fps);
     }
 
     if (payload.thumbnailDestination) {

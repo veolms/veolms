@@ -305,7 +305,9 @@ export class OptimisticDeletionCoordinator {
 
   private finalizeInCaches(record: InternalDeletionRecord): void {
     if (record.kind === "thread") {
-      const removeThreadPage = (old: LearningThreadCacheResponse | undefined) => {
+      const removeThreadPage = (
+        old: LearningThreadCacheResponse | undefined,
+      ) => {
         if (!old) return old;
         const threads = withRemovedItem(old.threads, (thread) =>
           matchesEntity(thread, record),
@@ -321,26 +323,28 @@ export class OptimisticDeletionCoordinator {
         };
       };
       record.queryClient.setQueriesData<
-        LearningThreadCacheResponse | import("@tanstack/react-query").InfiniteData<LearningThreadCacheResponse>
+        | LearningThreadCacheResponse
+        | import("@tanstack/react-query").InfiniteData<LearningThreadCacheResponse>
       >(
         { queryKey: [...learningInteractionKeys.all, "lesson-threads"] },
         (old) =>
           old === undefined
             ? old
-            : mapPaginatedCache<LearningThreadCacheResponse>(old, (page) =>
-                removeThreadPage(page) ?? page,
+            : mapPaginatedCache<LearningThreadCacheResponse>(
+                old,
+                (page) => removeThreadPage(page) ?? page,
               ),
       );
       record.queryClient.setQueriesData<
-        LearningThreadCacheResponse | import("@tanstack/react-query").InfiniteData<LearningThreadCacheResponse>
-      >(
-        { queryKey: [...learningInteractionKeys.all, "hub-threads"] },
-        (old) =>
-          old === undefined
-            ? old
-            : mapPaginatedCache<LearningThreadCacheResponse>(old, (page) =>
-                removeThreadPage(page) ?? page,
-              ),
+        | LearningThreadCacheResponse
+        | import("@tanstack/react-query").InfiniteData<LearningThreadCacheResponse>
+      >({ queryKey: [...learningInteractionKeys.all, "hub-threads"] }, (old) =>
+        old === undefined
+          ? old
+          : mapPaginatedCache<LearningThreadCacheResponse>(
+              old,
+              (page) => removeThreadPage(page) ?? page,
+            ),
       );
       record.queryClient.removeQueries({
         queryKey: learningInteractionKeys.threadDetails(record.serverId),
@@ -352,64 +356,59 @@ export class OptimisticDeletionCoordinator {
       record.queryClient.setQueriesData<
         | LearningRepliesCacheResponse
         | import("@tanstack/react-query").InfiniteData<LearningRepliesCacheResponse>
-      >(
-        { queryKey: [...learningInteractionKeys.all, "replies"] },
-        (old) => {
-          if (!old) return old;
-          const removePage = (
-            page: LearningRepliesCacheResponse,
-            decrementTotalCount: boolean,
-          ) => {
-            const replies = withRemovedItem(page.replies, (reply) =>
-              matchesEntity(reply, record),
-            );
-            if (!replies) return page;
-            return {
-              ...page,
-              replies,
-              totalCount:
-                !decrementTotalCount || page.totalCount === undefined
-                  ? page.totalCount
-                  : Math.max(0, page.totalCount - 1),
-            };
+      >({ queryKey: [...learningInteractionKeys.all, "replies"] }, (old) => {
+        if (!old) return old;
+        const removePage = (
+          page: LearningRepliesCacheResponse,
+          decrementTotalCount: boolean,
+        ) => {
+          const replies = withRemovedItem(page.replies, (reply) =>
+            matchesEntity(reply, record),
+          );
+          if (!replies) return page;
+          return {
+            ...page,
+            replies,
+            totalCount:
+              !decrementTotalCount || page.totalCount === undefined
+                ? page.totalCount
+                : Math.max(0, page.totalCount - 1),
           };
-          if (isInfiniteCacheData<LearningRepliesCacheResponse>(old)) {
-            let changed = false;
-            const pages = old.pages.map((page, pageIndex) => {
-              const next = removePage(page, pageIndex === 0);
-              changed ||= next !== page;
-              return next;
-            });
-            return changed ? { ...old, pages } : old;
-          }
-          return removePage(old, true);
-        },
-      );
+        };
+        if (isInfiniteCacheData<LearningRepliesCacheResponse>(old)) {
+          let changed = false;
+          const pages = old.pages.map((page, pageIndex) => {
+            const next = removePage(page, pageIndex === 0);
+            changed ||= next !== page;
+            return next;
+          });
+          return changed ? { ...old, pages } : old;
+        }
+        return removePage(old, true);
+      });
       return;
     }
 
     record.queryClient.setQueriesData<
-      LearningNotesCacheResponse | import("@tanstack/react-query").InfiniteData<LearningNotesCacheResponse>
-    >(
-      { queryKey: learningInteractionKeys.notesRoot() },
-      (old) => {
-        if (old === undefined) return old;
-        return mapPaginatedCache<LearningNotesCacheResponse>(old, (page) => {
-          const notes = withRemovedItem(page.notes, (note) =>
-            matchesEntity(note, record),
-          );
-          if (!notes) return page;
-          return {
-            ...page,
-            notes,
-            totalCount:
-              page.totalCount === undefined
-                ? page.totalCount
-                : Math.max(0, page.totalCount - 1),
-          };
-        });
-      },
-    );
+      | LearningNotesCacheResponse
+      | import("@tanstack/react-query").InfiniteData<LearningNotesCacheResponse>
+    >({ queryKey: learningInteractionKeys.notesRoot() }, (old) => {
+      if (old === undefined) return old;
+      return mapPaginatedCache<LearningNotesCacheResponse>(old, (page) => {
+        const notes = withRemovedItem(page.notes, (note) =>
+          matchesEntity(note, record),
+        );
+        if (!notes) return page;
+        return {
+          ...page,
+          notes,
+          totalCount:
+            page.totalCount === undefined
+              ? page.totalCount
+              : Math.max(0, page.totalCount - 1),
+        };
+      });
+    });
     record.queryClient.removeQueries({
       queryKey: learningInteractionKeys.noteDetails(record.serverId),
     });

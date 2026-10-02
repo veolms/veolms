@@ -85,7 +85,7 @@ class AutosyncManager {
             entity: "all",
             entityId: "all",
             scope: "all",
-        },
+          },
         "offline",
         "Please reconnect and try again.",
       );

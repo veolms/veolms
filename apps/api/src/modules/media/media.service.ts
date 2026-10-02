@@ -1,10 +1,7 @@
 import crypto from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
-import type {
-  Database,
-  MediaAssetStatus,
-} from "@veolms/database";
+import type { Database, MediaAssetStatus } from "@veolms/database";
 import type {
   MediaImageVariantManifest,
   PresignMediaRequest,
@@ -266,7 +263,11 @@ export function createMediaService({
       );
     }
 
-    if (presignedSize <= 0 && metadata.contentLength !== undefined && metadata.contentLength > 0) {
+    if (
+      presignedSize <= 0 &&
+      metadata.contentLength !== undefined &&
+      metadata.contentLength > 0
+    ) {
       await mediaRepo.updateMediaAssetProbedDetails(database, mediaId, {
         size_bytes: metadata.contentLength,
       });
@@ -811,7 +812,11 @@ export function createMediaService({
       job.progress_percent = 100;
       await database
         .updateTable("video_jobs")
-        .set({ status: "completed", progress_percent: 100, updated_at: new Date() })
+        .set({
+          status: "completed",
+          progress_percent: 100,
+          updated_at: new Date(),
+        })
         .where("id", "=", job.id)
         .execute()
         .catch(() => {});
@@ -824,12 +829,7 @@ export function createMediaService({
       // assigned and after the worker is released.
       progressPercent: Math.max(
         0,
-        Math.min(
-          100,
-          Math.floor(
-            Number(job.progress_percent),
-          ),
-        ),
+        Math.min(100, Math.floor(Number(job.progress_percent))),
       ),
       error: job.error_message,
     };
@@ -1360,7 +1360,10 @@ export function createMediaService({
     const jobId =
       userMetadata.jobId || eventDetail?.jobId || body?.jobId || undefined;
     const videoId =
-      userMetadata.videoId || eventDetail?.videoId || body?.videoId || undefined;
+      userMetadata.videoId ||
+      eventDetail?.videoId ||
+      body?.videoId ||
+      undefined;
     const errorMessage =
       eventDetail?.errorMessage || body?.errorMessage || null;
 
@@ -1374,7 +1377,9 @@ export function createMediaService({
 
     const isUuid = (val?: string) =>
       typeof val === "string" &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        val,
+      );
 
     let job: Awaited<ReturnType<typeof mediaRepo.findVideoJobById>> | undefined;
     if (jobId && isUuid(jobId)) {
@@ -1417,7 +1422,8 @@ export function createMediaService({
         outputGroupDetails?.find((group) =>
           group.playlistFilePaths?.some(isHlsPlaylist),
         ) ?? outputGroupDetails?.[0];
-      const playlistPaths = firstOutput?.playlistFilePaths?.filter(isHlsPlaylist);
+      const playlistPaths =
+        firstOutput?.playlistFilePaths?.filter(isHlsPlaylist);
       const rawMasterPath =
         playlistPaths?.[0] ||
         body?.masterPlaylistPath ||

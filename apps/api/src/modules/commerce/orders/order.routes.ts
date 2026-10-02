@@ -49,7 +49,10 @@ const orderRoutes: RoutePlugin = async (app, options) => {
           "Returns orders for the authenticated user or entire academy when requested with view=admin.",
         querystring: ordersListQuerySchema,
         response: {
-          200: jsonResponse("Paginated list of orders", ordersListResponseSchema),
+          200: jsonResponse(
+            "Paginated list of orders",
+            ordersListResponseSchema,
+          ),
           400: errorResponse("Invalid query parameters or cursor"),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden"),
@@ -90,9 +93,12 @@ const orderRoutes: RoutePlugin = async (app, options) => {
         operationId: "getOrderById",
         tags: ["Commerce - Orders"],
         summary: "Get order by ID",
-        description: "Returns order details for an owned order or admin inspection.",
+        description:
+          "Returns order details for an owned order or admin inspection.",
         params: z.object({ orderId: z.string().uuid() }),
-        querystring: z.object({ view: z.enum(["admin", "student"]).optional() }),
+        querystring: z.object({
+          view: z.enum(["admin", "student"]).optional(),
+        }),
         response: {
           200: jsonResponse("Order details", orderSchema),
           401: errorResponse("Unauthorized"),
@@ -113,9 +119,12 @@ const orderRoutes: RoutePlugin = async (app, options) => {
         operationId: "getOrderInvoice",
         tags: ["Commerce - Orders"],
         summary: "Get order invoice details",
-        description: "Returns full invoice receipt data for an owned or admin-inspected order.",
+        description:
+          "Returns full invoice receipt data for an owned or admin-inspected order.",
         params: z.object({ orderId: z.string().uuid() }),
-        querystring: z.object({ view: z.enum(["admin", "student"]).optional() }),
+        querystring: z.object({
+          view: z.enum(["admin", "student"]).optional(),
+        }),
         response: {
           200: jsonResponse("Order invoice data", invoiceSchema),
           401: errorResponse("Unauthorized"),
@@ -138,7 +147,9 @@ const orderRoutes: RoutePlugin = async (app, options) => {
         summary: "Download printable order invoice receipt",
         description: "Returns downloadable HTML receipt file.",
         params: z.object({ orderId: z.string().uuid() }),
-        querystring: z.object({ view: z.enum(["admin", "student"]).optional() }),
+        querystring: z.object({
+          view: z.enum(["admin", "student"]).optional(),
+        }),
         response: {
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden"),
@@ -161,9 +172,11 @@ const orderRoutes: RoutePlugin = async (app, options) => {
         description: "Processes a full or partial refund for a paid order.",
         params: z.object({ orderId: z.string().uuid() }),
         body: orderDirectRefundRequestSchema,
-        headers: z.object({
-          "idempotency-key": z.string().min(1).max(255).optional(),
-        }).passthrough(),
+        headers: z
+          .object({
+            "idempotency-key": z.string().min(1).max(255).optional(),
+          })
+          .passthrough(),
         response: {
           200: jsonResponse(
             "Refund processed successfully, or the original refund when the idempotency key was already used",
@@ -173,7 +186,9 @@ const orderRoutes: RoutePlugin = async (app, options) => {
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - billing.manage required"),
           404: errorResponse("Order not found"),
-          409: errorResponse("Idempotency key already used for a different refund request"),
+          409: errorResponse(
+            "Idempotency key already used for a different refund request",
+          ),
         },
       },
     },

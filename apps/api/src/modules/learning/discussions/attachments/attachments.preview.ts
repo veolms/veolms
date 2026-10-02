@@ -146,7 +146,9 @@ export function validateSafeUrl(urlString: string): URL {
   return parsed;
 }
 
-export async function fetchSafeHtml(initialUrl: string): Promise<{ html: string; finalUrl: string }> {
+export async function fetchSafeHtml(
+  initialUrl: string,
+): Promise<{ html: string; finalUrl: string }> {
   let currentUrl = validateSafeUrl(initialUrl).toString();
   let redirectCount = 0;
 
@@ -166,11 +168,19 @@ export async function fetchSafeHtml(initialUrl: string): Promise<{ html: string;
       try {
         records = await dns.lookup(host, { all: true });
       } catch {
-        throw httpError(400, "DNS_LOOKUP_FAILED", `Could not resolve host "${host}"`);
+        throw httpError(
+          400,
+          "DNS_LOOKUP_FAILED",
+          `Could not resolve host "${host}"`,
+        );
       }
 
       if (!records || records.length === 0) {
-        throw httpError(400, "DNS_LOOKUP_FAILED", `Could not resolve host "${host}"`);
+        throw httpError(
+          400,
+          "DNS_LOOKUP_FAILED",
+          `Could not resolve host "${host}"`,
+        );
       }
 
       for (const record of records) {
@@ -214,7 +224,11 @@ export async function fetchSafeHtml(initialUrl: string): Promise<{ html: string;
       });
     } catch (err: unknown) {
       if (timedOut) {
-        throw httpError(408, "TIMEOUT", `Timed out fetching URL "${currentUrl}"`);
+        throw httpError(
+          408,
+          "TIMEOUT",
+          `Timed out fetching URL "${currentUrl}"`,
+        );
       }
       throw httpError(
         400,
@@ -232,7 +246,11 @@ export async function fetchSafeHtml(initialUrl: string): Promise<{ html: string;
     ) {
       const location = response.headers.get("location");
       if (!location) {
-        throw httpError(400, "INVALID_REDIRECT", `Redirect response received without Location header`);
+        throw httpError(
+          400,
+          "INVALID_REDIRECT",
+          `Redirect response received without Location header`,
+        );
       }
       const nextUrl = new URL(location, currentUrl).toString();
       currentUrl = validateSafeUrl(nextUrl).toString();
@@ -259,7 +277,10 @@ export async function fetchSafeHtml(initialUrl: string): Promise<{ html: string;
     }
 
     const declaredSize = Number(response.headers.get("content-length"));
-    if (Number.isFinite(declaredSize) && declaredSize > PREVIEW_CONSTANTS.MAX_RESPONSE_BYTES * 10) {
+    if (
+      Number.isFinite(declaredSize) &&
+      declaredSize > PREVIEW_CONSTANTS.MAX_RESPONSE_BYTES * 10
+    ) {
       throw httpError(
         413,
         "RESPONSE_TOO_LARGE",
@@ -327,7 +348,10 @@ export function decodeHtmlEntities(str: string): string {
     .trim();
 }
 
-export function extractLinkMetadata(html: string, pageUrl: string): LinkPreviewResponse {
+export function extractLinkMetadata(
+  html: string,
+  pageUrl: string,
+): LinkPreviewResponse {
   const parsedPageUrl = new URL(pageUrl);
   let title: string | null = null;
   let description: string | null = null;

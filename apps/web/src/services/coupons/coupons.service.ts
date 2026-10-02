@@ -22,10 +22,7 @@ export const couponsService = {
     return api.post<Coupon>("/coupons", payload);
   },
 
-  updateCoupon: (
-    id: string,
-    payload: UpdateCouponRequest,
-  ): Promise<Coupon> => {
+  updateCoupon: (id: string, payload: UpdateCouponRequest): Promise<Coupon> => {
     return api.patch<Coupon>(`/coupons/${id}`, payload);
   },
 

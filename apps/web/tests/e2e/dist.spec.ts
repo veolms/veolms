@@ -128,7 +128,9 @@ test("static mobile learning shell places navigation and composer before hydrati
     page.locator("[data-learning-player-initial-loader]"),
   ).toBeVisible();
   await expect(page.locator("[data-lesson-player-controls]")).toBeVisible();
-  await expect(page.locator("[data-learning-player-chrome-placeholder]")).toBeVisible();
+  await expect(
+    page.locator("[data-learning-player-chrome-placeholder]"),
+  ).toBeVisible();
   await expect(
     page.locator("[data-learning-mobile-composer-prerender]"),
   ).toBeVisible();

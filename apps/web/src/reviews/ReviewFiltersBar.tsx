@@ -160,9 +160,7 @@ export function ReviewFiltersBar({
       {/* Expandable Extra Filters Drawer if toggled */}
       {extraFiltersOpen && (
         <div className="flex flex-wrap items-center gap-2 rounded-[10px] bg-[color-mix(in_srgb,var(--surface-strong)_79%,var(--canvas))] p-2.5 text-xs text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_7%,transparent)] animate-in fade-in slide-in-from-top-1 duration-150">
-          <span className="font-semibold text-(--text)">
-            Quick filters:
-          </span>
+          <span className="font-semibold text-(--text)">Quick filters:</span>
           <button
             type="button"
             onClick={() => onRatingFilterChange("5")}

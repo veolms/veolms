@@ -549,12 +549,7 @@ function getAdjacentWizardSteps(
 }
 
 type ThumbnailUploadStatus =
-  | "idle"
-  | "uploading"
-  | "confirming"
-  | "processing"
-  | "saving"
-  | "error";
+  "idle" | "uploading" | "confirming" | "processing" | "saving" | "error";
 
 type ChecklistState = "idle" | "validating" | "valid" | "invalid";
 
@@ -1086,8 +1081,7 @@ export const normalizeAccessRulesState = (
     raw?.enableComments !== undefined ? Boolean(raw.enableComments) : true,
   enableDownloads:
     raw?.enableDownloads !== undefined ? Boolean(raw.enableDownloads) : false,
-  enableNotes:
-    raw?.enableNotes !== undefined ? Boolean(raw.enableNotes) : true,
+  enableNotes: raw?.enableNotes !== undefined ? Boolean(raw.enableNotes) : true,
 });
 
 export const isAccessRuleConfigEqual = (
@@ -1800,7 +1794,9 @@ export function buildLocalPreviewData({
     shortDescription: shortDescription.trim() || null,
     description: courseDescription.trim() || null,
     difficulty: difficultyLevel ? difficultyLevel : null,
-    status: isPublished ? "published" : editorDefaults?.course?.status || "draft",
+    status: isPublished
+      ? "published"
+      : editorDefaults?.course?.status || "draft",
     creatorId: editorDefaults?.course?.creatorId || null,
     categoryId: categoryId || null,
     thumbnailMediaId:
@@ -2837,15 +2833,15 @@ export function CourseCreatePage({
   );
   // Keep the active wizard panel and its immediate neighbors warm for smooth
   // tab navigation. Heavy lesson editors are mounted only when opened below.
-  const [mountedTabs, setMountedTabs] = useState<Set<CourseWizardStepId>>(
-    () => getAdjacentWizardSteps(initialStep),
+  const [mountedTabs, setMountedTabs] = useState<Set<CourseWizardStepId>>(() =>
+    getAdjacentWizardSteps(initialStep),
   );
 
   const tabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
   const stepsNavRef = useRef<HTMLElement | null>(null);
-  const [mountedLessonEditorIds, setMountedLessonEditorIds] = useState<string[]>(
-    [],
-  );
+  const [mountedLessonEditorIds, setMountedLessonEditorIds] = useState<
+    string[]
+  >([]);
   const [editingLessonTarget, setEditingLessonTarget] = useState<{
     sectionId: string;
     lessonId: string;
@@ -3278,7 +3274,9 @@ export function CourseCreatePage({
 
       if (!requestIsActive()) return;
       setThumbnailUploadStatus("confirming");
-      const confirmation = await mediaService.confirmUpload(presigned.mediaAssetId);
+      const confirmation = await mediaService.confirmUpload(
+        presigned.mediaAssetId,
+      );
 
       if (!requestIsActive()) return;
       setThumbnailUploadStatus("processing");
@@ -3286,7 +3284,6 @@ export function CourseCreatePage({
         presigned.mediaAssetId,
         { signal: uploadAbortController.signal },
       );
-
 
       if (!requestIsActive()) return;
       setThumbnailUploadStatus("saving");
@@ -5293,7 +5290,8 @@ export function CourseCreatePage({
                 const description =
                   isDirty && existingLesson
                     ? existingLesson.description || ""
-                    : (storedLessonDraft?.description ?? (les.description || ""));
+                    : (storedLessonDraft?.description ??
+                      (les.description || ""));
                 const contentType =
                   isDirty && existingLesson
                     ? existingLesson.contentType
@@ -5314,9 +5312,7 @@ export function CourseCreatePage({
                       ? existingLesson.isPublished
                       : true
                     : (storedLessonDraft?.isPublished ??
-                      (les.isPublished !== undefined
-                        ? les.isPublished
-                        : true));
+                      (les.isPublished !== undefined ? les.isPublished : true));
                 const isPrev =
                   isDirty && existingLesson
                     ? existingLesson.isPreview !== undefined
@@ -5347,7 +5343,8 @@ export function CourseCreatePage({
                     contentMediaId: les.contentMediaId ?? null,
                     isPublished:
                       les.isPublished !== undefined ? les.isPublished : true,
-                    isPreview: les.isPreview !== undefined ? les.isPreview : false,
+                    isPreview:
+                      les.isPreview !== undefined ? les.isPreview : false,
                   },
                   resources: (les.resources || []).map((res) =>
                     toLessonResourceItem(res),
@@ -7177,7 +7174,7 @@ export function CourseCreatePage({
           });
           sectionsRef.current = next;
           return next;
-          });
+        });
         clearLessonEditorDraft(targetCourseId, lessonId);
         return true;
       }
@@ -7229,19 +7226,14 @@ export function CourseCreatePage({
           : {
               ...section,
               lessons: section.lessons.map((item) =>
-                item.id === lessonId
-                  ? { ...item, isEditingTitle: true }
-                  : item,
+                item.id === lessonId ? { ...item, isEditingTitle: true } : item,
               ),
             },
       ),
     );
   };
 
-  const handleCancelEditLessonTitle = (
-    sectionId: string,
-    lessonId: string,
-  ) => {
+  const handleCancelEditLessonTitle = (sectionId: string, lessonId: string) => {
     const originalTitle = lessonTitleDraftsRef.current.get(lessonId);
     lessonTitleDraftsRef.current.delete(lessonId);
     setSections((prev) => {
@@ -7487,7 +7479,10 @@ export function CourseCreatePage({
 
     // 1. When the section is being EXPANDED:
     if (!sec.isExpanded) {
-      if (isCollapsingSectionRef.current || isSavingAllDirtyLessonsRef.current) {
+      if (
+        isCollapsingSectionRef.current ||
+        isSavingAllDirtyLessonsRef.current
+      ) {
         return;
       }
 
@@ -7504,7 +7499,9 @@ export function CourseCreatePage({
         : 0;
       const dirtyLessons = sectionsToCollapse.flatMap((section) =>
         section.lessons
-          .filter((lesson) => isLessonDirty(lesson) && !lesson.isPendingCreation)
+          .filter(
+            (lesson) => isLessonDirty(lesson) && !lesson.isPendingCreation,
+          )
           .map((lesson) => ({ sectionId: section.id, lesson })),
       );
 
@@ -7774,7 +7771,8 @@ export function CourseCreatePage({
     );
     if (sourceIndex < 0 || targetIndex < 0) return;
 
-    let insertionIndex = targetIndex + (dropTarget.position === "after" ? 1 : 0);
+    let insertionIndex =
+      targetIndex + (dropTarget.position === "after" ? 1 : 0);
     if (sourceIndex < insertionIndex) insertionIndex -= 1;
     if (sourceIndex === insertionIndex) return;
 
@@ -9652,7 +9650,8 @@ export function CourseCreatePage({
   };
 
   const handleConfirmUnpublishCourse = async () => {
-    if (!currentCourseId || actionLoading || saveActionInFlightRef.current) return;
+    if (!currentCourseId || actionLoading || saveActionInFlightRef.current)
+      return;
     saveActionInFlightRef.current = true;
     setActionLoading("unpublish");
     try {
@@ -9853,7 +9852,11 @@ export function CourseCreatePage({
               }}
               onKeyDown={handleRovingTabKeyDown}
             >
-              <Icon size={17} weight={isActive ? "fill" : "regular"} className="shrink-0" />
+              <Icon
+                size={17}
+                weight={isActive ? "fill" : "regular"}
+                className="shrink-0"
+              />
               <span className="inline-flex items-center gap-1.5">
                 <span>{step.label}</span>
                 {isDirty && (
@@ -9898,3260 +9901,2960 @@ export function CourseCreatePage({
             }
             spaceBetween={32}
           >
-        {(panelStep) =>
-          !mountedTabs.has(panelStep) ? null : panelStep === "basics" ? (
-            <div className="relative z-10 grid grid-cols-1 md:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
-              {/* Left Column: Form Sections */}
-              <div className="flex flex-col gap-5">
-                {/* Basic Information Section */}
-                <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
-                  <div className="mb-4.5 flex items-center justify-between">
-                    <div>
-                      <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
-                        Basic Information
-                      </h2>
-                      <p className="m-0 mt-1 mb-0 text-(--muted) text-[0.82rem]">
-                        {isEditing
-                          ? "Update the essential details of your course."
-                          : "Add the essential details of your course."}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="relative flex flex-col gap-2 mb-5">
-                    {showTitleTooltip &&
-                      !isDownstreamUnlocked &&
-                      !isInitialCourseCreationPending && (
-                        <div
-                          role="tooltip"
-                          id="course-title-tooltip"
-                          data-testid="basics-title-tooltip"
-                          onClick={() => titleInputRef.current?.focus()}
-                          className="absolute -top-9 left-0 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-(--surface-strong) text-(--text) text-[0.78rem] font-medium border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] shadow-[0_6px_20px_color-mix(in_srgb,var(--accent-shadow)_22%,transparent)] transition-all select-none cursor-pointer group"
-                        >
-                          <Info
-                            size={15}
-                            weight="fill"
-                            className="text-(--accent) shrink-0"
-                          />
-                          <span>
-                            Continue course creation by entering a course title
-                          </span>
-                          <button
-                            type="button"
-                            aria-label="Dismiss tooltip"
-                            className="ml-1 p-0.5 rounded hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) hover:text-(--text) transition-colors border-none bg-transparent cursor-pointer inline-flex items-center justify-center"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowTitleTooltip(false);
-                            }}
-                          >
-                            <X size={13} />
-                          </button>
-                          <div
-                            className="absolute -bottom-1.5 left-6 w-3 h-3 rotate-45 bg-(--surface-strong) border-r border-b border-[color-mix(in_srgb,var(--accent)_35%,var(--border))]"
-                            aria-hidden="true"
-                          />
-                        </div>
-                      )}
-                    <div className="flex items-center justify-between">
-                      <label
-                        htmlFor="course-title"
-                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                      >
-                        Course Title{" "}
-                        <span className="text-[#ff5252] ml-0.5">*</span>
-                      </label>
-                      <BasicsFieldStatusIndicator
-                        status={getBasicsFieldDisplayStatus("title")}
-                        testId="basics-field-status-title"
-                      />
-                    </div>
-                    <div className="relative flex items-center">
-                      <input
-                        id="course-title"
-                        ref={titleInputRef}
-                        autoFocus={!currentCourseId}
-                        type="text"
-                        maxLength={120}
-                        placeholder="e.g. Complete Backend with Node.js"
-                        disabled={isInitialCourseCreationPending}
-                        value={courseTitle}
-                        onChange={(e) => {
-                          if (isInitialCourseCreationPending) return;
-                          const val = e.target.value.slice(0, 120);
-                          setCourseTitle(val);
-                          clearBasicsFieldStatus("title");
-                          if (val.trim()) {
-                            setShowTitleTooltip(false);
-                          }
-
-                          // 1-second debounce for brand-new courses only
-                          if (
-                            !currentCourseIdRef.current &&
-                            !currentCourseId &&
-                            !isEditing
-                          ) {
-                            cancelTitleCreationDebounce();
-                            if (val.trim()) {
-                              titleCreationDebounceTimerRef.current =
-                                setTimeout(() => {
-                                  titleCreationDebounceTimerRef.current = null;
-                                  void persistBasicsField("title");
-                                }, 1000);
-                            }
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (isInitialCourseCreationPending) {
-                            e.preventDefault();
-                            return;
-                          }
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            // Pressing Enter triggers immediate creation, cancelling pending debounce
-                            if (
-                              !currentCourseIdRef.current &&
-                              !currentCourseId &&
-                              !isEditing
-                            ) {
-                              cancelTitleCreationDebounce();
-                              void persistBasicsField("title");
-                            }
-                          }
-                        }}
-                        onFocus={() => {
-                          setShowTitleTooltip(false);
-                        }}
-                        onBlur={() => {
-                          if (isInitialCourseCreationPending) return;
-                          cancelTitleCreationDebounce();
-                          void persistBasicsField("title");
-                          if (!currentCourseId && !courseTitle.trim()) {
-                            setShowTitleTooltip(true);
-                          }
-                        }}
-                        aria-describedby={
-                          showTitleTooltip && !isDownstreamUnlocked
-                            ? "course-title-tooltip"
-                            : !isDownstreamUnlocked
-                              ? "basics-title-helper"
-                              : undefined
-                        }
-                        className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
-                      />
-                      <span className="absolute right-3.5 text-(--muted) text-[0.76rem] pointer-events-none">
-                        {courseTitle.length} / 120
-                      </span>
-                    </div>
-                    {!isDownstreamUnlocked && (
-                      <p
-                        className="m-0 mt-0.5 text-(--muted) text-[0.78rem] flex items-center gap-1.5"
-                        role="status"
-                        data-testid="basics-title-helper"
-                      >
-                        {createCourseMutation.isPending ||
-                        isInitialCourseCreationPending ? (
-                          <>
-                            <CircleNotch
-                              size={13}
-                              className="animate-spin text-(--accent) shrink-0"
-                            />
-                            <span>Creating course…</span>
-                          </>
-                        ) : (
-                          "Add a course title to continue."
-                        )}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-2 mb-5">
-                    <div className="flex items-center justify-between">
-                      <label
-                        htmlFor="course-short-description"
-                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                      >
-                        Short Description
-                      </label>
-                      <BasicsFieldStatusIndicator
-                        status={getBasicsFieldDisplayStatus("shortDescription")}
-                        testId="basics-field-status-shortDescription"
-                      />
-                    </div>
-                    <div className="relative flex items-center">
-                      <textarea
-                        id="course-short-description"
-                        rows={2}
-                        maxLength={150}
-                        placeholder="A concise summary of your course (shown in course cards and search)..."
-                        disabled={!isDownstreamUnlocked}
-                        value={shortDescription}
-                        onChange={(e) => {
-                          setShortDescription(e.target.value.slice(0, 150));
-                          clearBasicsFieldStatus("shortDescription");
-                        }}
-                        onBlur={() => {
-                          void persistBasicsField("shortDescription");
-                        }}
-                        className="w-full min-h-[68px] max-h-[140px] resize-y border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-2.5 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed font-[inherit]"
-                      />
-                      <span className="absolute right-3.5 bottom-2.5 text-(--muted) text-[0.76rem] pointer-events-none">
-                        {shortDescription.length} / 150
-                      </span>
-                    </div>
-                  </div>
-
-                  <div
-                    className="flex flex-col gap-2 mb-5"
-                    onBlur={() => {
-                      void persistBasicsField("courseDescription");
-                    }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <label
-                        htmlFor="course-description"
-                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                      >
-                        Course Description{" "}
-                        <span className="text-[#ff5252] ml-0.5">*</span>
-                      </label>
-                      <BasicsFieldStatusIndicator
-                        status={getBasicsFieldDisplayStatus(
-                          "courseDescription",
-                        )}
-                        testId="basics-field-status-courseDescription"
-                      />
-                    </div>
-                    <CourseDescriptionEditor
-                      id="course-description"
-                      disabled={!isDownstreamUnlocked}
-                      value={courseDescription}
-                      onChange={(val) => {
-                        setCourseDescription(val);
-                        clearBasicsFieldStatus("courseDescription");
-                      }}
-                      placeholder="Describe what your course is about, what students will learn, and who this course is for..."
-                      maxLength={1500}
-                    />
-                  </div>
-
-                  {/* Instructor Alias & Visibility (Frontend Visual Demo) */}
-                  <div className="flex flex-col gap-2 mb-4.5">
-                    <div className="flex items-center justify-between">
-                      <label
-                        htmlFor="instructor-alias"
-                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                      >
-                        Instructor Alias
-                      </label>
-                      <BasicsFieldStatusIndicator
-                        status={getBasicsFieldDisplayStatus("instructorAlias")}
-                        testId="basics-field-status-instructorAlias"
-                      />
-                    </div>
-                    <input
-                      id="instructor-alias"
-                      type="text"
-                      maxLength={100}
-                      placeholder="e.g. Alex Rivera or Design Guild"
-                      disabled={!isDownstreamUnlocked}
-                      value={instructorAlias}
-                      onChange={(e) => {
-                        setInstructorAlias(e.target.value);
-                        clearBasicsFieldStatus("instructorAlias");
-                      }}
-                      onBlur={() => {
-                        void persistBasicsField("instructorAlias");
-                      }}
-                      className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
-                    />
-                    <p className="m-0 text-(--muted) text-[0.78rem]">
-                      Optional custom name shown to students instead of your
-                      account name.
-                    </p>
-                  </div>
-
-                  {/* Show Instructor Name Settings Row */}
-                  <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                    <div className="flex flex-col min-w-0 pr-3">
-                      <div className="flex items-center gap-2">
-                        <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
-                          Show Instructor Name
-                        </strong>
-                        <BasicsFieldStatusIndicator
-                          status={getBasicsFieldDisplayStatus(
-                            "showInstructorName",
-                          )}
-                          testId="basics-field-status-showInstructorName"
-                        />
-                      </div>
-                      <p className="m-0 text-(--muted) text-[0.8rem]">
-                        Control whether the instructor name is shown to
-                        students.
-                      </p>
-                    </div>
-                    <SettingsToggle
-                      checked={showInstructorName}
-                      disabled={
-                        !isDownstreamUnlocked ||
-                        isBasicsControlSaving("showInstructorName")
-                      }
-                      onChange={() =>
-                        void handleShowInstructorNameChange(!showInstructorName)
-                      }
-                      label="Toggle Show Instructor Name"
-                    />
-                  </div>
-                </section>
-
-                {/* Course Media Section */}
-                <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
-                  <div className="mb-4.5">
-                    <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
-                      Course Media
-                    </h2>
-                    <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
-                      Add media that best represents your course.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Hidden Thumbnail File Input */}
-                    <input
-                      type="file"
-                      ref={thumbnailInputRef}
-                      disabled={
-                        !isDownstreamUnlocked ||
-                        isBasicsSaving ||
-                        isThumbnailBusy
-                      }
-                      onChange={(event) => {
-                        void handleThumbnailFileSelect(event);
-                      }}
-                      accept="image/*"
-                      style={{ display: "none" }}
-                    />
-
-                    {/* Hidden Video Trailer File Input */}
-                    <input
-                      type="file"
-                      ref={videoTrailerInputRef}
-                      disabled={!isDownstreamUnlocked || isBasicsSaving}
-                      onChange={handleVideoTrailerFileSelect}
-                      accept="video/*"
-                      style={{ display: "none" }}
-                    />
-
-                    {/* Thumbnail Upload */}
-                    <div className="flex flex-col min-w-0">
-                      <h3 className="m-0 mb-1 text-(--text-secondary) text-[0.86rem] font-semibold">
-                        Thumbnail{" "}
-                        <span className="text-[#ff5252] ml-0.5">*</span>
-                      </h3>
-                      <p className="m-0 mb-3 text-(--muted) text-[0.78rem] min-h-[1.15rem]">
-                        Upload a thumbnail for your course.
-                      </p>
-                      {thumbnail ? (
-                        <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
-                          <img
-                            src={thumbnail}
-                            alt="Course thumbnail preview"
-                            className="w-full h-full object-cover block"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center gap-2 p-3 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[2px]">
-                            <button
-                              type="button"
-                              disabled={
-                                !isDownstreamUnlocked ||
-                                isBasicsSaving ||
-                                isThumbnailBusy
-                              }
-                              style={{
-                                fontSize: "0.80rem",
-                                fontWeight: 700,
-                                height: "34px",
-                                borderRadius: "8px",
-                                gap: "6px",
-                                paddingLeft: "16px",
-                                paddingRight: "16px",
-                              }}
-                              className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
-                              onClick={triggerThumbnailUpload}
-                            >
-                              <ImageIcon size={15} /> Change Image
-                            </button>
-                            <button
-                              type="button"
-                              disabled={
-                                !isDownstreamUnlocked ||
-                                isBasicsSaving ||
-                                isThumbnailBusy
-                              }
-                              style={{
-                                fontSize: "0.80rem",
-                                fontWeight: 500,
-                                height: "34px",
-                                borderRadius: "8px",
-                                gap: "6px",
-                                paddingLeft: "14px",
-                                paddingRight: "14px",
-                              }}
-                              className="inline-flex items-center border-none text-white bg-red-500 cursor-pointer transition-all duration-150 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                              onClick={handleRemoveThumbnail}
-                              title="Remove Thumbnail"
-                            >
-                              <Trash size={15} /> Remove
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden transition-[border-color,background-color] duration-180 ease-out">
-                          <div className="mb-2 text-(--muted)">
-                            <ImageIcon size={30} weight="light" />
-                          </div>
-                          <div className="flex items-center justify-center gap-2.5 flex-wrap">
-                            <button
-                              type="button"
-                              disabled={
-                                !isDownstreamUnlocked ||
-                                isBasicsSaving ||
-                                isThumbnailBusy
-                              }
-                              style={{
-                                fontSize: "0.80rem",
-                                fontWeight: 700,
-                                height: "34px",
-                                borderRadius: "8px",
-                                gap: "6px",
-                                paddingLeft: "16px",
-                                paddingRight: "16px",
-                              }}
-                              className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-50 disabled:cursor-not-allowed"
-                              onClick={triggerThumbnailUpload}
-                            >
-                              <UploadSimple size={15} /> Upload
-                            </button>
-                          </div>
-                          <p className="m-0 mt-2 text-(--muted) text-[0.74rem]">
-                            Recommended: 1280x720px (16:9)
+            {(panelStep) =>
+              !mountedTabs.has(panelStep) ? null : panelStep === "basics" ? (
+                <div className="relative z-10 grid grid-cols-1 md:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
+                  {/* Left Column: Form Sections */}
+                  <div className="flex flex-col gap-5">
+                    {/* Basic Information Section */}
+                    <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
+                      <div className="mb-4.5 flex items-center justify-between">
+                        <div>
+                          <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
+                            Basic Information
+                          </h2>
+                          <p className="m-0 mt-1 mb-0 text-(--muted) text-[0.82rem]">
+                            {isEditing
+                              ? "Update the essential details of your course."
+                              : "Add the essential details of your course."}
                           </p>
                         </div>
-                      )}
-                      {thumbnailUploadError ? (
-                        <p
-                          className="m-0 mt-2 text-red-400 text-[0.75rem]"
-                          role="alert"
-                        >
-                          {thumbnailUploadError}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    {/* Video Trailer Upload */}
-                    <div className="flex flex-col min-w-0">
-                      <h3 className="m-0 mb-1 text-(--text-secondary) text-[0.86rem] font-semibold">
-                        Video Trailer (Optional)
-                      </h3>
-                      <p className="m-0 mb-3 text-(--muted) text-[0.78rem] min-h-[1.15rem]">
-                        Add a trailer video to your course.
-                      </p>
-                      {videoTrailer ? (
-                        <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
-                          <video
-                            src={videoTrailer}
-                            className="w-full h-full object-cover block"
-                            controls
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center gap-2 p-3 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[2px]">
-                            <button
-                              type="button"
-                              disabled={!isDownstreamUnlocked || isBasicsSaving}
-                              style={{
-                                fontSize: "0.80rem",
-                                fontWeight: 700,
-                                height: "34px",
-                                borderRadius: "8px",
-                                gap: "6px",
-                                paddingLeft: "16px",
-                                paddingRight: "16px",
-                              }}
-                              className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
-                              onClick={triggerVideoTrailerUpload}
-                            >
-                              <PlayCircle size={15} /> Change Video
-                            </button>
-                            <button
-                              type="button"
-                              disabled={!isDownstreamUnlocked || isBasicsSaving}
-                              style={{
-                                fontSize: "0.80rem",
-                                fontWeight: 500,
-                                height: "34px",
-                                borderRadius: "8px",
-                                gap: "6px",
-                                paddingLeft: "14px",
-                                paddingRight: "14px",
-                              }}
-                              className="inline-flex items-center border-none text-white bg-red-500 cursor-pointer transition-all duration-150 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                              onClick={handleRemoveVideoTrailer}
-                              title="Remove Video Trailer"
-                            >
-                              <Trash size={15} /> Remove
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden transition-[border-color,background-color] duration-180 ease-out">
-                          <div className="mb-2 text-(--muted)">
-                            <PlayCircle size={30} weight="light" />
-                          </div>
-                          <div className="flex items-center justify-center gap-2.5 flex-wrap">
-                            <LessonVideoUpload
-                              disabled={!isDownstreamUnlocked || isBasicsSaving}
-                              mediaAssetId={editorData?.course?.trailerMediaId}
-                              visibility="public"
-                              hideUploadWhenAttached={Boolean(
-                                editorData?.course?.trailerMediaId,
-                              )}
-                              attachedActionLabel="Replace trailer"
-                              stackStatusBelow
-                              onMediaAttached={handleTrailerMediaAttached}
-                              onProcessingComplete={() => {
-                                void refetchEditor();
-                              }}
-                            />
-                          </div>
-                          <p className="m-0 mt-2 text-(--muted) text-[0.74rem]">
-                            Recommended: 16:9 video
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </section>
-              </div>
-
-              {/* Right Column: Live Course Preview */}
-              <div className="flex min-w-0 flex-col gap-5 md:sticky md:top-0 md:self-start">
-                <section className="rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow)">
-                  <h2 className="m-0 text-(--text) text-[1.1rem] font-[650]">
-                    Course Preview
-                  </h2>
-                  <p className="m-0 mt-1 mb-4 text-(--muted) text-[0.8rem]">
-                    This is how your course will appear to students.
-                  </p>
-
-                  <div
-                    className={`relative aspect-video border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-[10px] overflow-hidden bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] transition-[border-color,background-color] duration-180 ease-out ${
-                      !thumbnail
-                        ? "is-clickable cursor-pointer hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))]"
-                        : ""
-                    }`}
-                    onClick={!thumbnail ? triggerThumbnailUpload : undefined}
-                    title={!thumbnail ? "Click to upload thumbnail" : undefined}
-                    role={!thumbnail ? "button" : undefined}
-                    tabIndex={!thumbnail ? 0 : undefined}
-                    onKeyDown={
-                      !thumbnail
-                        ? (e) => {
-                            if (e.key === "Enter" || e.key === "") {
-                              triggerThumbnailUpload();
-                            }
-                          }
-                        : undefined
-                    }
-                  >
-                    {thumbnail ? (
-                      <div className="relative w-full h-full">
-                        <img
-                          src={thumbnail}
-                          alt="Course Thumbnail"
-                          className="w-full h-full object-cover block"
-                        />
                       </div>
-                    ) : (
-                      <div className="flex h-full flex-col items-center justify-center gap-2 text-(--muted) text-[0.8rem]">
-                        <div className="flex items-center justify-center text-(--muted) opacity-60">
-                          <ImageIcon size={32} weight="light" />
-                        </div>
-                        <span className="text-(--muted) opacity-70">
-                          Course thumbnail will appear here
-                        </span>
-                        <span className="inline-block mt-0.5 rounded-md px-2 py-0.5 text-[0.72rem] font-semibold text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors duration-150">
-                          Click to upload
-                        </span>
-                      </div>
-                    )}
-                  </div>
 
-                  <div className="mt-4">
-                    <h3 className="m-0 mb-3 text-(--text) text-[1.15rem] font-bold leading-[1.3]">
-                      {courseTitle.trim() ? courseTitle : "Course Title"}
-                    </h3>
-
-                    <div className="flex items-center gap-3.5 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] pb-3.5 text-(--muted) text-[0.8rem]">
-                      <span className="flex items-center gap-1.25">
-                        <BookOpen size={15} /> {totalSections} Sections
-                      </span>
-                      <span className="flex items-center gap-1.25">
-                        <BookOpen size={15} /> {totalLessons} Lessons
-                      </span>
-                      <span
-                        className="flex items-center gap-1.25"
-                        data-testid="course-preview-duration"
-                      >
-                        {computedDuration}
-                      </span>
-                    </div>
-
-                    <div className="mt-3.5 min-w-0 max-w-full overflow-hidden wrap-anywhere wrap-break-word">
-                      <h4 className="m-0 mb-1.5 text-(--text-secondary) text-[0.84rem] font-[650]">
-                        About this course
-                      </h4>
-                      {courseDescription.trim() ? (
-                        <DiscussionMarkdown
-                          content={createDiscussionDraft(
-                            courseDescription.trim(),
-                          )}
-                          label="Course description preview"
-                          className="[&>:first-child]:mt-0 max-w-none"
-                        />
-                      ) : (
-                        <p className="m-0 text-(--muted) text-[0.82rem] leading-normal wrap-anywhere wrap-break-word">
-                          This is a short description of your course. It will
-                          appear here on the course card.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </section>
-              </div>
-            </div>
-          ) : panelStep === "curriculum" ? (
-            editingLessonTarget &&
-            sections.some(
-              (s) =>
-                s.id === editingLessonTarget.sectionId &&
-                s.lessons.some((l) => l.id === editingLessonTarget.lessonId),
-            ) ? (
-              (() => {
-                const activeSection = sections.find(
-                  (s) => s.id === editingLessonTarget.sectionId,
-                )!;
-                const activeLesson = activeSection.lessons.find(
-                  (l) => l.id === editingLessonTarget.lessonId,
-                )!;
-                const secIdx = sections.findIndex((s) => s.id === activeSection.id);
-                const lesIdx = activeSection.lessons.findIndex(
-                  (l) => l.id === activeLesson.id,
-                );
-
-                return (
-                  <div className="course-wizard-curriculum-panel flex flex-col gap-4 w-full flex-1 min-h-0">
-                    <LessonStudioEditor
-                      sectionNumber={secIdx + 1}
-                      sectionTitle={activeSection.title}
-                      lessonNumber={lesIdx + 1}
-                      playbackLessonNumber={getCourseWideLessonNumber(
-                        sections,
-                        activeLesson.id,
-                      )}
-                      lessonTitle={activeLesson.title}
-                      courseSlug={editorData?.course?.slug}
-                      courseTitle={courseTitle || undefined}
-                      contentType={
-                        (activeLesson.contentType as StudioLessonContentType) ||
-                        "video"
-                      }
-                      isPublished={activeLesson.isPublished !== false}
-                      isPreview={activeLesson.isPreview === true}
-                      mediaInfo={getLessonMediaInfo(activeLesson)}
-                      resources={activeLesson.resources.map((r) => ({
-                        id: r.id,
-                        name: r.name,
-                        type: r.type,
-                        size: r.size,
-                        mediaAssetId: r.mediaAssetId,
-                      }))}
-                      isSaving={savingLessonId === activeLesson.id}
-                      onBack={() => setEditingLessonTarget(null)}
-                      onCancel={(draft) =>
-                        handleCancelLessonDraft(
-                          activeSection.id,
-                          activeLesson.id,
-                          draft,
-                        )
-                      }
-                      onSave={async (payload) => {
-                        handleUpdateLesson(activeSection.id, activeLesson.id, {
-                          title: payload.title,
-                          contentType: payload.contentType,
-                          isPublished: payload.isPublished,
-                          isPreview: payload.isPreview,
-                        });
-                        const saved = await persistLesson(
-                          activeSection.id,
-                          activeLesson.id,
-                          { collapseOnSuccess: false },
-                        );
-                        if (saved) {
-                          setToastMessage("Lesson changes saved successfully.");
-                          setEditingLessonTarget(null);
-                        }
-                      }}
-                      onContentTypeChange={(contentType) => {
-                        handleUpdateLesson(activeSection.id, activeLesson.id, {
-                          contentType,
-                        });
-                      }}
-                      onDeleteLesson={() => {
-                        handleDeleteLesson(activeSection.id, activeLesson.id);
-                        setEditingLessonTarget(null);
-                      }}
-                      onPreviewLesson={() => {
-                        if (currentCourseId) {
-                          window.open(`/courses/${currentCourseId}`, "_blank");
-                        }
-                      }}
-                      onMediaAttached={(mediaAssetId) =>
-                        handleLessonMediaAttached(
-                          activeSection.id,
-                          activeLesson.id,
-                          mediaAssetId,
-                        )
-                      }
-                      onProcessingComplete={() =>
-                        handleLessonProcessingComplete()
-                      }
-                      onUploadMedia={async (file) => {
-                        try {
-                          const presigned =
-                            await mediaService.presignMediaUpload({
-                              filename: file.name,
-                              contentType:
-                                file.type || "application/octet-stream",
-                              fileSize: file.size,
-                              type:
-                                activeLesson.contentType === "image"
-                                  ? "image"
-                                  : activeLesson.contentType === "document"
-                                    ? "document"
-                                    : "video",
-                              visibility: "protected",
-                            });
-                          await mediaService.uploadFileToPresignedUrl(
-                            presigned.uploadUrl,
-                            file,
-                          );
-                          await mediaService.confirmUpload(
-                            presigned.mediaAssetId,
-                          );
-                          const attached = await handleLessonMediaAttached(
-                            activeSection.id,
-                            activeLesson.id,
-                            presigned.mediaAssetId,
-                          );
-                          // A failed attach has already shown its own error.
-                          if (!attached) return;
-                          setToastMessage(
-                            "Media uploaded and attached successfully.",
-                          );
-                        } catch (err: unknown) {
-                          setToastMessage(
-                            err instanceof Error
-                              ? err.message
-                              : "Media upload failed.",
-                          );
-                        }
-                      }}
-                      onAddResourceFile={async (file) => {
-                        try {
-                          const presigned =
-                            await mediaService.presignMediaUpload({
-                              filename: file.name,
-                              contentType:
-                                file.type || "application/octet-stream",
-                              fileSize: file.size,
-                              type: "document",
-                              visibility: "protected",
-                            });
-                          await mediaService.uploadFileToPresignedUrl(
-                            presigned.uploadUrl,
-                            file,
-                          );
-                          await mediaService.confirmUpload(
-                            presigned.mediaAssetId,
-                          );
-                          const created = await handleCreateLessonResource(
-                            activeLesson.id,
-                            {
-                              title: file.name,
-                              mediaAssetId: presigned.mediaAssetId,
-                            },
-                          );
-                          handleLessonResourceAdded(
-                            activeSection.id,
-                            activeLesson.id,
-                            {
-                              id: created.id,
-                              name: created.title,
-                              type: "document",
-                              size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-                              mediaAssetId: created.mediaAssetId,
-                            },
-                          );
-                          setToastMessage("Resource attached successfully.");
-                        } catch (err: unknown) {
-                          setToastMessage(
-                            err instanceof Error
-                              ? err.message
-                              : "Resource upload failed.",
-                          );
-                        }
-                      }}
-                      onDeleteResource={async (resId) => {
-                        try {
-                          await handleDeleteLessonResource(resId);
-                          const resItem = activeLesson.resources.find(
-                            (r) => r.id === resId,
-                          );
-                          if (resItem) {
-                            handleLessonResourceRemoved(
-                              activeSection.id,
-                              activeLesson.id,
-                              resItem,
-                            );
-                          }
-                          setToastMessage("Resource removed.");
-                        } catch (err: unknown) {
-                          setToastMessage(
-                            err instanceof Error
-                              ? err.message
-                              : "Could not remove resource.",
-                          );
-                        }
-                      }}
-                      descriptionSection={
-                        <div className="flex flex-col gap-2">
-                          <LessonDescriptionEditor
-                            id={`lesson-description-${activeLesson.id}`}
-                            disabled={
-                              activeLesson.isPendingCreation ||
-                              savingLessonId === activeLesson.id
-                            }
-                            value={activeLesson.description}
-                            onChange={(val) =>
-                              handleUpdateLesson(
-                                activeSection.id,
-                                activeLesson.id,
-                                { description: val },
-                              )
-                            }
-                            placeholder="Add a detailed description of what students will learn in this lesson..."
-                            maxLength={10000}
-                          />
-                        </div>
-                      }
-                      quizSection={
-                        currentCourseId &&
-                        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-                          activeLesson.id,
-                        ) ? (
-                          <QuizAuthoringPanel
-                            courseId={currentCourseId}
-                            lessonId={activeLesson.id}
-                            lessonTitle={activeLesson.title}
-                            onQuizDeleted={() => {}}
-                          />
-                        ) : (
-                          <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
-                            Save the course and lesson before configuring an
-                            attached Quiz.
-                          </div>
-                        )
-                      }
-                    />
-
-                  </div>
-                );
-              })()
-            ) : (
-              <div className="course-wizard-curriculum-panel flex flex-col gap-4 w-full flex-1 min-h-0">
-              {/* Header row */}
-              <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3">
-                <div className="">
-                  <h2 className="m-0 text-(--text) text-[1.25rem] font-bold tracking-[-0.015em]">
-                    Course Curriculum
-                  </h2>
-                  <p className="m-0 mt-1 text-(--muted) text-[0.85rem]">
-                    Organize your course into sections and lessons. You can
-                    reorder them anytime.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  {(isReorderingSections ||
-                    reorderSectionsMutation.isPending) && (
-                    <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2.5 py-1 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                      <CircleNotch
-                        size={13}
-                        className="animate-spin text-(--accent)"
-                      />
-                      <span>Saving section order...</span>
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    disabled={
-                      isCreatingSection ||
-                      createSectionMutation.isPending ||
-                      createCourseMutation.isPending ||
-                      isReorderingSections ||
-                      reorderSectionsMutation.isPending
-                    }
-                    style={{
-                      fontSize: "0.80rem",
-                      fontWeight: 700,
-                      height: "34px",
-                      borderRadius: "8px",
-                      gap: "6px",
-                      paddingLeft: "16px",
-                      paddingRight: "16px",
-                    }}
-                    className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:whitespace-nowrap max-[768px]:self-start"
-                    onClick={handleAddSection}
-                  >
-                    {isCreatingSection ||
-                    createSectionMutation.isPending ||
-                    createCourseMutation.isPending ? (
-                      <>
-                        <CircleNotch size={15} className="animate-spin" />
-                        <span>Creating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Plus size={15} weight="bold" />
-                        <span>Add Section</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Sections list or Empty State */}
-              {sections.length === 0 ? (
-                <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-8 text-center">
-                  <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent) mb-3.5">
-                    <BookOpen size={24} weight="bold" />
-                  </div>
-                  <h3 className="m-0 text-(--text) text-[1.05rem] font-bold">
-                    No sections added yet
-                  </h3>
-                  <p className="m-0 mt-1.5 max-w-[320px] text-(--muted) text-[0.84rem]">
-                    Add your first section to start building your course
-                    curriculum.
-                  </p>
-                  <button
-                    type="button"
-                    disabled={
-                      isCreatingSection ||
-                      createSectionMutation.isPending ||
-                      createCourseMutation.isPending ||
-                      isReorderingSections ||
-                      reorderSectionsMutation.isPending
-                    }
-                    style={{
-                      fontSize: "0.80rem",
-                      fontWeight: 700,
-                      height: "34px",
-                      borderRadius: "8px",
-                      gap: "6px",
-                      paddingLeft: "16px",
-                      paddingRight: "16px",
-                      marginTop: "18px",
-                    }}
-                    className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed"
-                    onClick={handleAddSection}
-                  >
-                    {isCreatingSection ||
-                    createSectionMutation.isPending ||
-                    createCourseMutation.isPending ? (
-                      <>
-                        <CircleNotch size={15} className="animate-spin" />
-                        <span>Creating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Plus size={15} weight="bold" />
-                        <span>Add Section</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              ) : (
-                sections.map((sec, secIndex) => (
-                  <div
-                    key={sec.id}
-                    className={`border rounded-[14px] bg-(--surface) shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
-                      deletingSectionId === sec.id
-                        ? "opacity-45 pointer-events-none border-red-500/30"
-                        : draggedSectionIndex === secIndex
-                          ? "opacity-35 border-dashed border-(--accent)"
-                          : "border-[color-mix(in_srgb,var(--text)_8%,transparent)]"
-                    }`}
-                    draggable={
-                      dragEnabledSectionId === sec.id &&
-                      !sec.isPendingCreation &&
-                      !updatingSectionId &&
-                      !deletingSectionId &&
-                      !isReorderingSections &&
-                      !reorderSectionsMutation.isPending
-                    }
-                    onDragStart={(e) =>
-                      handleSectionDragStart(e, secIndex, sec)
-                    }
-                    onDragOver={(e) => handleSectionDragOver(e, secIndex)}
-                    onDragEnd={handleSectionDragEnd}
-                  >
-                    {/* Section Header */}
-                    <div
-                      ref={(element) => {
-                        if (element) {
-                          sectionHeaderElementsRef.current.set(sec.id, element);
-                        } else {
-                          sectionHeaderElementsRef.current.delete(sec.id);
-                        }
-                      }}
-                      className="flex items-center justify-between px-[18px] py-3.5 bg-[color-mix(in_srgb,var(--text)_2%,transparent)] select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]"
-                      onClick={() => handleToggleSectionExpand(sec.id)}
-                      title="Click to toggle section"
-                    >
-                      <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
-                        <span
-                          className={`flex items-center justify-center text-(--muted) transition-opacity duration-150 ${
-                            sec.isPendingCreation ||
-                            isReorderingSections ||
-                            reorderSectionsMutation.isPending
-                              ? "opacity-25 cursor-not-allowed pointer-events-none"
-                              : "cursor-grab opacity-60 hover:opacity-100"
-                          }`}
-                          title={
-                            sec.isPendingCreation
-                              ? "Creating section..."
-                              : isReorderingSections ||
-                                  reorderSectionsMutation.isPending
-                                ? "Reordering in progress..."
-                                : "Drag to reorder section"
-                          }
-                          onMouseEnter={() => {
-                            if (
-                              !sec.isPendingCreation &&
-                              !isReorderingSections &&
-                              !reorderSectionsMutation.isPending
-                            ) {
-                              setDragEnabledSectionId(sec.id);
-                            }
-                          }}
-                          onMouseLeave={() => {
-                            if (draggedSectionIndex === null)
-                              setDragEnabledSectionId(null);
-                          }}
-                          onMouseDown={() => {
-                            if (
-                              !sec.isPendingCreation &&
-                              !isReorderingSections &&
-                              !reorderSectionsMutation.isPending
-                            ) {
-                              setDragEnabledSectionId(sec.id);
-                            }
-                          }}
-                          onMouseUp={() => {
-                            if (draggedSectionIndex === null)
-                              setDragEnabledSectionId(null);
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <DotsSixVertical size={18} />
-                        </span>
-                        <div className="flex items-center gap-2.5 max-[768px]:flex-1 max-[768px]:min-w-0 max-[768px]:flex-wrap max-[768px]:gap-1.5">
-                          <span className="text-(--text) text-[0.92rem] font-bold max-[768px]:whitespace-nowrap max-[768px]:shrink-0">
-                            Section {secIndex + 1}
-                          </span>
-                          {sec.isEditingTitle ? (
+                      <div className="relative flex flex-col gap-2 mb-5">
+                        {showTitleTooltip &&
+                          !isDownstreamUnlocked &&
+                          !isInitialCourseCreationPending && (
                             <div
-                              className="flex items-center gap-2 max-[768px]:w-full"
-                              onClick={(e) => e.stopPropagation()}
+                              role="tooltip"
+                              id="course-title-tooltip"
+                              data-testid="basics-title-tooltip"
+                              onClick={() => titleInputRef.current?.focus()}
+                              className="absolute -top-9 left-0 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-(--surface-strong) text-(--text) text-[0.78rem] font-medium border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] shadow-[0_6px_20px_color-mix(in_srgb,var(--accent-shadow)_22%,transparent)] transition-all select-none cursor-pointer group"
                             >
-                              <input
-                                type="text"
-                                className="border border-(--accent) rounded-md px-2 py-0.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none disabled:opacity-60 disabled:cursor-not-allowed"
-                                defaultValue={sec.title}
-                                autoFocus
-                                disabled={
-                                  sec.isPendingCreation ||
-                                  updatingSectionId === sec.id
-                                }
-                                onClick={(e) => e.stopPropagation()}
-                                onBlur={(e) =>
-                                  handleSaveSectionTitle(sec.id, e.target.value)
-                                }
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    (e.target as HTMLInputElement).blur();
-                                  }
+                              <Info
+                                size={15}
+                                weight="fill"
+                                className="text-(--accent) shrink-0"
+                              />
+                              <span>
+                                Continue course creation by entering a course
+                                title
+                              </span>
+                              <button
+                                type="button"
+                                aria-label="Dismiss tooltip"
+                                className="ml-1 p-0.5 rounded hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) hover:text-(--text) transition-colors border-none bg-transparent cursor-pointer inline-flex items-center justify-center"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowTitleTooltip(false);
                                 }}
+                              >
+                                <X size={13} />
+                              </button>
+                              <div
+                                className="absolute -bottom-1.5 left-6 w-3 h-3 rotate-45 bg-(--surface-strong) border-r border-b border-[color-mix(in_srgb,var(--accent)_35%,var(--border))]"
+                                aria-hidden="true"
                               />
                             </div>
-                          ) : (
-                            <span
-                              className={`text-(--text) text-[0.92rem] font-semibold max-[768px]:break-words max-[768px]:min-w-0 ${
-                                sec.isPendingCreation ||
-                                updatingSectionId === sec.id ||
-                                deletingSectionId === sec.id
-                                  ? "opacity-60 pointer-events-none"
-                                  : ""
-                              }`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (
-                                  sec.isPendingCreation ||
-                                  updatingSectionId === sec.id ||
-                                  deletingSectionId === sec.id
-                                )
-                                  return;
-                                handleStartEditSectionTitle(sec.id);
-                              }}
-                              title={
-                                sec.isPendingCreation
-                                  ? "Creating section..."
-                                  : "Click to edit section title"
-                              }
-                            >
-                              {sec.title}
-                            </span>
                           )}
-                          <span className="ml-1 text-(--muted) text-[0.76rem] font-normal">
-                            {sec.lessons.length}{" "}
-                            {sec.lessons.length === 1 ? "Lesson" : "Lessons"}
+                        <div className="flex items-center justify-between">
+                          <label
+                            htmlFor="course-title"
+                            className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                          >
+                            Course Title{" "}
+                            <span className="text-[#ff5252] ml-0.5">*</span>
+                          </label>
+                          <BasicsFieldStatusIndicator
+                            status={getBasicsFieldDisplayStatus("title")}
+                            testId="basics-field-status-title"
+                          />
+                        </div>
+                        <div className="relative flex items-center">
+                          <input
+                            id="course-title"
+                            ref={titleInputRef}
+                            autoFocus={!currentCourseId}
+                            type="text"
+                            maxLength={120}
+                            placeholder="e.g. Complete Backend with Node.js"
+                            disabled={isInitialCourseCreationPending}
+                            value={courseTitle}
+                            onChange={(e) => {
+                              if (isInitialCourseCreationPending) return;
+                              const val = e.target.value.slice(0, 120);
+                              setCourseTitle(val);
+                              clearBasicsFieldStatus("title");
+                              if (val.trim()) {
+                                setShowTitleTooltip(false);
+                              }
+
+                              // 1-second debounce for brand-new courses only
+                              if (
+                                !currentCourseIdRef.current &&
+                                !currentCourseId &&
+                                !isEditing
+                              ) {
+                                cancelTitleCreationDebounce();
+                                if (val.trim()) {
+                                  titleCreationDebounceTimerRef.current =
+                                    setTimeout(() => {
+                                      titleCreationDebounceTimerRef.current =
+                                        null;
+                                      void persistBasicsField("title");
+                                    }, 1000);
+                                }
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (isInitialCourseCreationPending) {
+                                e.preventDefault();
+                                return;
+                              }
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                // Pressing Enter triggers immediate creation, cancelling pending debounce
+                                if (
+                                  !currentCourseIdRef.current &&
+                                  !currentCourseId &&
+                                  !isEditing
+                                ) {
+                                  cancelTitleCreationDebounce();
+                                  void persistBasicsField("title");
+                                }
+                              }
+                            }}
+                            onFocus={() => {
+                              setShowTitleTooltip(false);
+                            }}
+                            onBlur={() => {
+                              if (isInitialCourseCreationPending) return;
+                              cancelTitleCreationDebounce();
+                              void persistBasicsField("title");
+                              if (!currentCourseId && !courseTitle.trim()) {
+                                setShowTitleTooltip(true);
+                              }
+                            }}
+                            aria-describedby={
+                              showTitleTooltip && !isDownstreamUnlocked
+                                ? "course-title-tooltip"
+                                : !isDownstreamUnlocked
+                                  ? "basics-title-helper"
+                                  : undefined
+                            }
+                            className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
+                          />
+                          <span className="absolute right-3.5 text-(--muted) text-[0.76rem] pointer-events-none">
+                            {courseTitle.length} / 120
+                          </span>
+                        </div>
+                        {!isDownstreamUnlocked && (
+                          <p
+                            className="m-0 mt-0.5 text-(--muted) text-[0.78rem] flex items-center gap-1.5"
+                            role="status"
+                            data-testid="basics-title-helper"
+                          >
+                            {createCourseMutation.isPending ||
+                            isInitialCourseCreationPending ? (
+                              <>
+                                <CircleNotch
+                                  size={13}
+                                  className="animate-spin text-(--accent) shrink-0"
+                                />
+                                <span>Creating course…</span>
+                              </>
+                            ) : (
+                              "Add a course title to continue."
+                            )}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-2 mb-5">
+                        <div className="flex items-center justify-between">
+                          <label
+                            htmlFor="course-short-description"
+                            className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                          >
+                            Short Description
+                          </label>
+                          <BasicsFieldStatusIndicator
+                            status={getBasicsFieldDisplayStatus(
+                              "shortDescription",
+                            )}
+                            testId="basics-field-status-shortDescription"
+                          />
+                        </div>
+                        <div className="relative flex items-center">
+                          <textarea
+                            id="course-short-description"
+                            rows={2}
+                            maxLength={150}
+                            placeholder="A concise summary of your course (shown in course cards and search)..."
+                            disabled={!isDownstreamUnlocked}
+                            value={shortDescription}
+                            onChange={(e) => {
+                              setShortDescription(e.target.value.slice(0, 150));
+                              clearBasicsFieldStatus("shortDescription");
+                            }}
+                            onBlur={() => {
+                              void persistBasicsField("shortDescription");
+                            }}
+                            className="w-full min-h-[68px] max-h-[140px] resize-y border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-2.5 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed font-[inherit]"
+                          />
+                          <span className="absolute right-3.5 bottom-2.5 text-(--muted) text-[0.76rem] pointer-events-none">
+                            {shortDescription.length} / 150
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
-                        {sec.isPendingCreation ? (
-                          <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                            <CircleNotch
-                              size={12}
-                              className="animate-spin text-(--accent)"
-                            />
-                            <span>Creating...</span>
-                          </span>
-                        ) : deletingSectionId === sec.id ? (
-                          <span className="inline-flex items-center gap-1 text-red-400 text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/28">
-                            <CircleNotch
-                              size={12}
-                              className="animate-spin text-red-400"
-                            />
-                            <span>Deleting...</span>
-                          </span>
-                        ) : reorderingLessonsSectionId === sec.id ? (
-                          <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                            <CircleNotch
-                              size={12}
-                              className="animate-spin text-(--accent)"
-                            />
-                            <span>Saving order...</span>
-                          </span>
-                        ) : (
-                          <CurriculumItemStatusIndicator
-                            status={getCurriculumItemDisplayStatus(sec.id)}
-                            testId={`curriculum-status-section-${sec.id}`}
+
+                      <div
+                        className="flex flex-col gap-2 mb-5"
+                        onBlur={() => {
+                          void persistBasicsField("courseDescription");
+                        }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <label
+                            htmlFor="course-description"
+                            className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                          >
+                            Course Description{" "}
+                            <span className="text-[#ff5252] ml-0.5">*</span>
+                          </label>
+                          <BasicsFieldStatusIndicator
+                            status={getBasicsFieldDisplayStatus(
+                              "courseDescription",
+                            )}
+                            testId="basics-field-status-courseDescription"
                           />
+                        </div>
+                        <CourseDescriptionEditor
+                          id="course-description"
+                          disabled={!isDownstreamUnlocked}
+                          value={courseDescription}
+                          onChange={(val) => {
+                            setCourseDescription(val);
+                            clearBasicsFieldStatus("courseDescription");
+                          }}
+                          placeholder="Describe what your course is about, what students will learn, and who this course is for..."
+                          maxLength={1500}
+                        />
+                      </div>
+
+                      {/* Instructor Alias & Visibility (Frontend Visual Demo) */}
+                      <div className="flex flex-col gap-2 mb-4.5">
+                        <div className="flex items-center justify-between">
+                          <label
+                            htmlFor="instructor-alias"
+                            className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                          >
+                            Instructor Alias
+                          </label>
+                          <BasicsFieldStatusIndicator
+                            status={getBasicsFieldDisplayStatus(
+                              "instructorAlias",
+                            )}
+                            testId="basics-field-status-instructorAlias"
+                          />
+                        </div>
+                        <input
+                          id="instructor-alias"
+                          type="text"
+                          maxLength={100}
+                          placeholder="e.g. Alex Rivera or Design Guild"
+                          disabled={!isDownstreamUnlocked}
+                          value={instructorAlias}
+                          onChange={(e) => {
+                            setInstructorAlias(e.target.value);
+                            clearBasicsFieldStatus("instructorAlias");
+                          }}
+                          onBlur={() => {
+                            void persistBasicsField("instructorAlias");
+                          }}
+                          className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
+                        />
+                        <p className="m-0 text-(--muted) text-[0.78rem]">
+                          Optional custom name shown to students instead of your
+                          account name.
+                        </p>
+                      </div>
+
+                      {/* Show Instructor Name Settings Row */}
+                      <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                        <div className="flex flex-col min-w-0 pr-3">
+                          <div className="flex items-center gap-2">
+                            <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                              Show Instructor Name
+                            </strong>
+                            <BasicsFieldStatusIndicator
+                              status={getBasicsFieldDisplayStatus(
+                                "showInstructorName",
+                              )}
+                              testId="basics-field-status-showInstructorName"
+                            />
+                          </div>
+                          <p className="m-0 text-(--muted) text-[0.8rem]">
+                            Control whether the instructor name is shown to
+                            students.
+                          </p>
+                        </div>
+                        <SettingsToggle
+                          checked={showInstructorName}
+                          disabled={
+                            !isDownstreamUnlocked ||
+                            isBasicsControlSaving("showInstructorName")
+                          }
+                          onChange={() =>
+                            void handleShowInstructorNameChange(
+                              !showInstructorName,
+                            )
+                          }
+                          label="Toggle Show Instructor Name"
+                        />
+                      </div>
+                    </section>
+
+                    {/* Course Media Section */}
+                    <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
+                      <div className="mb-4.5">
+                        <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
+                          Course Media
+                        </h2>
+                        <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
+                          Add media that best represents your course.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Hidden Thumbnail File Input */}
+                        <input
+                          type="file"
+                          ref={thumbnailInputRef}
+                          disabled={
+                            !isDownstreamUnlocked ||
+                            isBasicsSaving ||
+                            isThumbnailBusy
+                          }
+                          onChange={(event) => {
+                            void handleThumbnailFileSelect(event);
+                          }}
+                          accept="image/*"
+                          style={{ display: "none" }}
+                        />
+
+                        {/* Hidden Video Trailer File Input */}
+                        <input
+                          type="file"
+                          ref={videoTrailerInputRef}
+                          disabled={!isDownstreamUnlocked || isBasicsSaving}
+                          onChange={handleVideoTrailerFileSelect}
+                          accept="video/*"
+                          style={{ display: "none" }}
+                        />
+
+                        {/* Thumbnail Upload */}
+                        <div className="flex flex-col min-w-0">
+                          <h3 className="m-0 mb-1 text-(--text-secondary) text-[0.86rem] font-semibold">
+                            Thumbnail{" "}
+                            <span className="text-[#ff5252] ml-0.5">*</span>
+                          </h3>
+                          <p className="m-0 mb-3 text-(--muted) text-[0.78rem] min-h-[1.15rem]">
+                            Upload a thumbnail for your course.
+                          </p>
+                          {thumbnail ? (
+                            <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
+                              <img
+                                src={thumbnail}
+                                alt="Course thumbnail preview"
+                                className="w-full h-full object-cover block"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center gap-2 p-3 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[2px]">
+                                <button
+                                  type="button"
+                                  disabled={
+                                    !isDownstreamUnlocked ||
+                                    isBasicsSaving ||
+                                    isThumbnailBusy
+                                  }
+                                  style={{
+                                    fontSize: "0.80rem",
+                                    fontWeight: 700,
+                                    height: "34px",
+                                    borderRadius: "8px",
+                                    gap: "6px",
+                                    paddingLeft: "16px",
+                                    paddingRight: "16px",
+                                  }}
+                                  className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  onClick={triggerThumbnailUpload}
+                                >
+                                  <ImageIcon size={15} /> Change Image
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={
+                                    !isDownstreamUnlocked ||
+                                    isBasicsSaving ||
+                                    isThumbnailBusy
+                                  }
+                                  style={{
+                                    fontSize: "0.80rem",
+                                    fontWeight: 500,
+                                    height: "34px",
+                                    borderRadius: "8px",
+                                    gap: "6px",
+                                    paddingLeft: "14px",
+                                    paddingRight: "14px",
+                                  }}
+                                  className="inline-flex items-center border-none text-white bg-red-500 cursor-pointer transition-all duration-150 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  onClick={handleRemoveThumbnail}
+                                  title="Remove Thumbnail"
+                                >
+                                  <Trash size={15} /> Remove
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden transition-[border-color,background-color] duration-180 ease-out">
+                              <div className="mb-2 text-(--muted)">
+                                <ImageIcon size={30} weight="light" />
+                              </div>
+                              <div className="flex items-center justify-center gap-2.5 flex-wrap">
+                                <button
+                                  type="button"
+                                  disabled={
+                                    !isDownstreamUnlocked ||
+                                    isBasicsSaving ||
+                                    isThumbnailBusy
+                                  }
+                                  style={{
+                                    fontSize: "0.80rem",
+                                    fontWeight: 700,
+                                    height: "34px",
+                                    borderRadius: "8px",
+                                    gap: "6px",
+                                    paddingLeft: "16px",
+                                    paddingRight: "16px",
+                                  }}
+                                  className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-50 disabled:cursor-not-allowed"
+                                  onClick={triggerThumbnailUpload}
+                                >
+                                  <UploadSimple size={15} /> Upload
+                                </button>
+                              </div>
+                              <p className="m-0 mt-2 text-(--muted) text-[0.74rem]">
+                                Recommended: 1280x720px (16:9)
+                              </p>
+                            </div>
+                          )}
+                          {thumbnailUploadError ? (
+                            <p
+                              className="m-0 mt-2 text-red-400 text-[0.75rem]"
+                              role="alert"
+                            >
+                              {thumbnailUploadError}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        {/* Video Trailer Upload */}
+                        <div className="flex flex-col min-w-0">
+                          <h3 className="m-0 mb-1 text-(--text-secondary) text-[0.86rem] font-semibold">
+                            Video Trailer (Optional)
+                          </h3>
+                          <p className="m-0 mb-3 text-(--muted) text-[0.78rem] min-h-[1.15rem]">
+                            Add a trailer video to your course.
+                          </p>
+                          {videoTrailer ? (
+                            <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
+                              <video
+                                src={videoTrailer}
+                                className="w-full h-full object-cover block"
+                                controls
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center gap-2 p-3 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[2px]">
+                                <button
+                                  type="button"
+                                  disabled={
+                                    !isDownstreamUnlocked || isBasicsSaving
+                                  }
+                                  style={{
+                                    fontSize: "0.80rem",
+                                    fontWeight: 700,
+                                    height: "34px",
+                                    borderRadius: "8px",
+                                    gap: "6px",
+                                    paddingLeft: "16px",
+                                    paddingRight: "16px",
+                                  }}
+                                  className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  onClick={triggerVideoTrailerUpload}
+                                >
+                                  <PlayCircle size={15} /> Change Video
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={
+                                    !isDownstreamUnlocked || isBasicsSaving
+                                  }
+                                  style={{
+                                    fontSize: "0.80rem",
+                                    fontWeight: 500,
+                                    height: "34px",
+                                    borderRadius: "8px",
+                                    gap: "6px",
+                                    paddingLeft: "14px",
+                                    paddingRight: "14px",
+                                  }}
+                                  className="inline-flex items-center border-none text-white bg-red-500 cursor-pointer transition-all duration-150 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  onClick={handleRemoveVideoTrailer}
+                                  title="Remove Video Trailer"
+                                >
+                                  <Trash size={15} /> Remove
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden transition-[border-color,background-color] duration-180 ease-out">
+                              <div className="mb-2 text-(--muted)">
+                                <PlayCircle size={30} weight="light" />
+                              </div>
+                              <div className="flex items-center justify-center gap-2.5 flex-wrap">
+                                <LessonVideoUpload
+                                  disabled={
+                                    !isDownstreamUnlocked || isBasicsSaving
+                                  }
+                                  mediaAssetId={
+                                    editorData?.course?.trailerMediaId
+                                  }
+                                  visibility="public"
+                                  hideUploadWhenAttached={Boolean(
+                                    editorData?.course?.trailerMediaId,
+                                  )}
+                                  attachedActionLabel="Replace trailer"
+                                  stackStatusBelow
+                                  onMediaAttached={handleTrailerMediaAttached}
+                                  onProcessingComplete={() => {
+                                    void refetchEditor();
+                                  }}
+                                />
+                              </div>
+                              <p className="m-0 mt-2 text-(--muted) text-[0.74rem]">
+                                Recommended: 16:9 video
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+
+                  {/* Right Column: Live Course Preview */}
+                  <div className="flex min-w-0 flex-col gap-5 md:sticky md:top-0 md:self-start">
+                    <section className="rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow)">
+                      <h2 className="m-0 text-(--text) text-[1.1rem] font-[650]">
+                        Course Preview
+                      </h2>
+                      <p className="m-0 mt-1 mb-4 text-(--muted) text-[0.8rem]">
+                        This is how your course will appear to students.
+                      </p>
+
+                      <div
+                        className={`relative aspect-video border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-[10px] overflow-hidden bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] transition-[border-color,background-color] duration-180 ease-out ${
+                          !thumbnail
+                            ? "is-clickable cursor-pointer hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))]"
+                            : ""
+                        }`}
+                        onClick={
+                          !thumbnail ? triggerThumbnailUpload : undefined
+                        }
+                        title={
+                          !thumbnail ? "Click to upload thumbnail" : undefined
+                        }
+                        role={!thumbnail ? "button" : undefined}
+                        tabIndex={!thumbnail ? 0 : undefined}
+                        onKeyDown={
+                          !thumbnail
+                            ? (e) => {
+                                if (e.key === "Enter" || e.key === "") {
+                                  triggerThumbnailUpload();
+                                }
+                              }
+                            : undefined
+                        }
+                      >
+                        {thumbnail ? (
+                          <div className="relative w-full h-full">
+                            <img
+                              src={thumbnail}
+                              alt="Course Thumbnail"
+                              className="w-full h-full object-cover block"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex h-full flex-col items-center justify-center gap-2 text-(--muted) text-[0.8rem]">
+                            <div className="flex items-center justify-center text-(--muted) opacity-60">
+                              <ImageIcon size={32} weight="light" />
+                            </div>
+                            <span className="text-(--muted) opacity-70">
+                              Course thumbnail will appear here
+                            </span>
+                            <span className="inline-block mt-0.5 rounded-md px-2 py-0.5 text-[0.72rem] font-semibold text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors duration-150">
+                              Click to upload
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-4">
+                        <h3 className="m-0 mb-3 text-(--text) text-[1.15rem] font-bold leading-[1.3]">
+                          {courseTitle.trim() ? courseTitle : "Course Title"}
+                        </h3>
+
+                        <div className="flex items-center gap-3.5 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] pb-3.5 text-(--muted) text-[0.8rem]">
+                          <span className="flex items-center gap-1.25">
+                            <BookOpen size={15} /> {totalSections} Sections
+                          </span>
+                          <span className="flex items-center gap-1.25">
+                            <BookOpen size={15} /> {totalLessons} Lessons
+                          </span>
+                          <span
+                            className="flex items-center gap-1.25"
+                            data-testid="course-preview-duration"
+                          >
+                            {computedDuration}
+                          </span>
+                        </div>
+
+                        <div className="mt-3.5 min-w-0 max-w-full overflow-hidden wrap-anywhere wrap-break-word">
+                          <h4 className="m-0 mb-1.5 text-(--text-secondary) text-[0.84rem] font-[650]">
+                            About this course
+                          </h4>
+                          {courseDescription.trim() ? (
+                            <DiscussionMarkdown
+                              content={createDiscussionDraft(
+                                courseDescription.trim(),
+                              )}
+                              label="Course description preview"
+                              className="[&>:first-child]:mt-0 max-w-none"
+                            />
+                          ) : (
+                            <p className="m-0 text-(--muted) text-[0.82rem] leading-normal wrap-anywhere wrap-break-word">
+                              This is a short description of your course. It
+                              will appear here on the course card.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              ) : panelStep === "curriculum" ? (
+                editingLessonTarget &&
+                sections.some(
+                  (s) =>
+                    s.id === editingLessonTarget.sectionId &&
+                    s.lessons.some(
+                      (l) => l.id === editingLessonTarget.lessonId,
+                    ),
+                ) ? (
+                  (() => {
+                    const activeSection = sections.find(
+                      (s) => s.id === editingLessonTarget.sectionId,
+                    )!;
+                    const activeLesson = activeSection.lessons.find(
+                      (l) => l.id === editingLessonTarget.lessonId,
+                    )!;
+                    const secIdx = sections.findIndex(
+                      (s) => s.id === activeSection.id,
+                    );
+                    const lesIdx = activeSection.lessons.findIndex(
+                      (l) => l.id === activeLesson.id,
+                    );
+
+                    return (
+                      <div className="course-wizard-curriculum-panel flex flex-col gap-4 w-full flex-1 min-h-0">
+                        <LessonStudioEditor
+                          sectionNumber={secIdx + 1}
+                          sectionTitle={activeSection.title}
+                          lessonNumber={lesIdx + 1}
+                          playbackLessonNumber={getCourseWideLessonNumber(
+                            sections,
+                            activeLesson.id,
+                          )}
+                          lessonTitle={activeLesson.title}
+                          courseSlug={editorData?.course?.slug}
+                          courseTitle={courseTitle || undefined}
+                          contentType={
+                            (activeLesson.contentType as StudioLessonContentType) ||
+                            "video"
+                          }
+                          isPublished={activeLesson.isPublished !== false}
+                          isPreview={activeLesson.isPreview === true}
+                          mediaInfo={getLessonMediaInfo(activeLesson)}
+                          resources={activeLesson.resources.map((r) => ({
+                            id: r.id,
+                            name: r.name,
+                            type: r.type,
+                            size: r.size,
+                            mediaAssetId: r.mediaAssetId,
+                          }))}
+                          isSaving={savingLessonId === activeLesson.id}
+                          onBack={() => setEditingLessonTarget(null)}
+                          onCancel={(draft) =>
+                            handleCancelLessonDraft(
+                              activeSection.id,
+                              activeLesson.id,
+                              draft,
+                            )
+                          }
+                          onSave={async (payload) => {
+                            handleUpdateLesson(
+                              activeSection.id,
+                              activeLesson.id,
+                              {
+                                title: payload.title,
+                                contentType: payload.contentType,
+                                isPublished: payload.isPublished,
+                                isPreview: payload.isPreview,
+                              },
+                            );
+                            const saved = await persistLesson(
+                              activeSection.id,
+                              activeLesson.id,
+                              { collapseOnSuccess: false },
+                            );
+                            if (saved) {
+                              setToastMessage(
+                                "Lesson changes saved successfully.",
+                              );
+                              setEditingLessonTarget(null);
+                            }
+                          }}
+                          onContentTypeChange={(contentType) => {
+                            handleUpdateLesson(
+                              activeSection.id,
+                              activeLesson.id,
+                              {
+                                contentType,
+                              },
+                            );
+                          }}
+                          onDeleteLesson={() => {
+                            handleDeleteLesson(
+                              activeSection.id,
+                              activeLesson.id,
+                            );
+                            setEditingLessonTarget(null);
+                          }}
+                          onPreviewLesson={() => {
+                            if (currentCourseId) {
+                              window.open(
+                                `/courses/${currentCourseId}`,
+                                "_blank",
+                              );
+                            }
+                          }}
+                          onMediaAttached={(mediaAssetId) =>
+                            handleLessonMediaAttached(
+                              activeSection.id,
+                              activeLesson.id,
+                              mediaAssetId,
+                            )
+                          }
+                          onProcessingComplete={() =>
+                            handleLessonProcessingComplete()
+                          }
+                          onUploadMedia={async (file) => {
+                            try {
+                              const presigned =
+                                await mediaService.presignMediaUpload({
+                                  filename: file.name,
+                                  contentType:
+                                    file.type || "application/octet-stream",
+                                  fileSize: file.size,
+                                  type:
+                                    activeLesson.contentType === "image"
+                                      ? "image"
+                                      : activeLesson.contentType === "document"
+                                        ? "document"
+                                        : "video",
+                                  visibility: "protected",
+                                });
+                              await mediaService.uploadFileToPresignedUrl(
+                                presigned.uploadUrl,
+                                file,
+                              );
+                              await mediaService.confirmUpload(
+                                presigned.mediaAssetId,
+                              );
+                              const attached = await handleLessonMediaAttached(
+                                activeSection.id,
+                                activeLesson.id,
+                                presigned.mediaAssetId,
+                              );
+                              // A failed attach has already shown its own error.
+                              if (!attached) return;
+                              setToastMessage(
+                                "Media uploaded and attached successfully.",
+                              );
+                            } catch (err: unknown) {
+                              setToastMessage(
+                                err instanceof Error
+                                  ? err.message
+                                  : "Media upload failed.",
+                              );
+                            }
+                          }}
+                          onAddResourceFile={async (file) => {
+                            try {
+                              const presigned =
+                                await mediaService.presignMediaUpload({
+                                  filename: file.name,
+                                  contentType:
+                                    file.type || "application/octet-stream",
+                                  fileSize: file.size,
+                                  type: "document",
+                                  visibility: "protected",
+                                });
+                              await mediaService.uploadFileToPresignedUrl(
+                                presigned.uploadUrl,
+                                file,
+                              );
+                              await mediaService.confirmUpload(
+                                presigned.mediaAssetId,
+                              );
+                              const created = await handleCreateLessonResource(
+                                activeLesson.id,
+                                {
+                                  title: file.name,
+                                  mediaAssetId: presigned.mediaAssetId,
+                                },
+                              );
+                              handleLessonResourceAdded(
+                                activeSection.id,
+                                activeLesson.id,
+                                {
+                                  id: created.id,
+                                  name: created.title,
+                                  type: "document",
+                                  size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+                                  mediaAssetId: created.mediaAssetId,
+                                },
+                              );
+                              setToastMessage(
+                                "Resource attached successfully.",
+                              );
+                            } catch (err: unknown) {
+                              setToastMessage(
+                                err instanceof Error
+                                  ? err.message
+                                  : "Resource upload failed.",
+                              );
+                            }
+                          }}
+                          onDeleteResource={async (resId) => {
+                            try {
+                              await handleDeleteLessonResource(resId);
+                              const resItem = activeLesson.resources.find(
+                                (r) => r.id === resId,
+                              );
+                              if (resItem) {
+                                handleLessonResourceRemoved(
+                                  activeSection.id,
+                                  activeLesson.id,
+                                  resItem,
+                                );
+                              }
+                              setToastMessage("Resource removed.");
+                            } catch (err: unknown) {
+                              setToastMessage(
+                                err instanceof Error
+                                  ? err.message
+                                  : "Could not remove resource.",
+                              );
+                            }
+                          }}
+                          descriptionSection={
+                            <div className="flex flex-col gap-2">
+                              <LessonDescriptionEditor
+                                id={`lesson-description-${activeLesson.id}`}
+                                disabled={
+                                  activeLesson.isPendingCreation ||
+                                  savingLessonId === activeLesson.id
+                                }
+                                value={activeLesson.description}
+                                onChange={(val) =>
+                                  handleUpdateLesson(
+                                    activeSection.id,
+                                    activeLesson.id,
+                                    { description: val },
+                                  )
+                                }
+                                placeholder="Add a detailed description of what students will learn in this lesson..."
+                                maxLength={10000}
+                              />
+                            </div>
+                          }
+                          quizSection={
+                            currentCourseId &&
+                            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                              activeLesson.id,
+                            ) ? (
+                              <QuizAuthoringPanel
+                                courseId={currentCourseId}
+                                lessonId={activeLesson.id}
+                                lessonTitle={activeLesson.title}
+                                onQuizDeleted={() => {}}
+                              />
+                            ) : (
+                              <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
+                                Save the course and lesson before configuring an
+                                attached Quiz.
+                              </div>
+                            )
+                          }
+                        />
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="course-wizard-curriculum-panel flex flex-col gap-4 w-full flex-1 min-h-0">
+                    {/* Header row */}
+                    <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3">
+                      <div className="">
+                        <h2 className="m-0 text-(--text) text-[1.25rem] font-bold tracking-[-0.015em]">
+                          Course Curriculum
+                        </h2>
+                        <p className="m-0 mt-1 text-(--muted) text-[0.85rem]">
+                          Organize your course into sections and lessons. You
+                          can reorder them anytime.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2.5">
+                        {(isReorderingSections ||
+                          reorderSectionsMutation.isPending) && (
+                          <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2.5 py-1 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                            <CircleNotch
+                              size={13}
+                              className="animate-spin text-(--accent)"
+                            />
+                            <span>Saving section order...</span>
+                          </span>
                         )}
                         <button
                           type="button"
                           disabled={
-                            sec.isPendingCreation ||
-                            updatingSectionId === sec.id ||
-                            deletingSectionId === sec.id
+                            isCreatingSection ||
+                            createSectionMutation.isPending ||
+                            createCourseMutation.isPending ||
+                            isReorderingSections ||
+                            reorderSectionsMutation.isPending
                           }
-                          className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-[color,background-color,border-color] duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
-                          aria-label="Edit section title"
-                          title="Edit section title"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleStartEditSectionTitle(sec.id);
+                          style={{
+                            fontSize: "0.80rem",
+                            fontWeight: 700,
+                            height: "34px",
+                            borderRadius: "8px",
+                            gap: "6px",
+                            paddingLeft: "16px",
+                            paddingRight: "16px",
                           }}
+                          className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:whitespace-nowrap max-[768px]:self-start"
+                          onClick={handleAddSection}
                         >
-                          {updatingSectionId === sec.id ? (
-                            <CircleNotch
-                              size={14}
-                              className="animate-spin text-(--accent)"
-                            />
+                          {isCreatingSection ||
+                          createSectionMutation.isPending ||
+                          createCourseMutation.isPending ? (
+                            <>
+                              <CircleNotch size={15} className="animate-spin" />
+                              <span>Creating...</span>
+                            </>
                           ) : (
-                            <PencilSimple size={15} />
+                            <>
+                              <Plus size={15} weight="bold" />
+                              <span>Add Section</span>
+                            </>
                           )}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={
-                            sec.isPendingCreation ||
-                            deletingSectionId === sec.id ||
-                            updatingSectionId === sec.id
-                          }
-                          className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
-                          aria-label="Delete section"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteSection(sec.id);
-                          }}
-                        >
-                          {deletingSectionId === sec.id ? (
-                            <CircleNotch
-                              size={14}
-                              className="animate-spin text-red-400"
-                            />
-                          ) : (
-                            <Trash size={15} />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={deletingSectionId === sec.id}
-                          className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none [&>svg]:transition-transform [&>svg]:duration-200 ${
-                            sec.isExpanded
-                              ? "is-expanded [&>svg]:rotate-180"
-                              : ""
-                          }`}
-                          aria-label={
-                            sec.isExpanded
-                              ? "Collapse section"
-                              : "Expand section"
-                          }
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleSectionExpand(sec.id);
-                          }}
-                        >
-                          <CaretDown size={15} />
                         </button>
                       </div>
                     </div>
 
-                    {/* Section Body with CSS expand transition */}
-                    <div
-                      className={`grid transition-[grid-template-rows] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                        sec.isExpanded
-                          ? "is-open grid-rows-[1fr]"
-                          : "grid-rows-[0fr]"
-                      }`}
-                    >
-                      <div
-                        className={`min-h-0 overflow-hidden border-t border-transparent transition-[padding,border-color] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                          sec.isExpanded
-                            ? "px-4 pt-3 pb-4 border-t-[color-mix(in_srgb,var(--text)_8%,transparent)]"
-                            : "px-4 py-0"
-                        }`}
-                      >
-                        {sec.isExpanded && (
-                          <VirtualizedLessonList
-                            items={sec.lessons}
-                            getItemKey={getCurriculumLessonKey}
-                            pinnedItemIds={pinnedVirtualizedLessonIds}
-                            estimatedItemSize={168}
-                            itemGap={10}
-                            renderItem={(les, lesIndex) => {
-                              const isDraggedLesson =
-                                draggedLessonState?.sectionId === sec.id &&
-                                draggedLessonState.lessonId === les.id;
-                              const isDropBefore =
-                                lessonDropTarget?.sectionId === sec.id &&
-                                lessonDropTarget.lessonId === les.id &&
-                                lessonDropTarget.position === "before" &&
-                                !isDraggedLesson;
-                              const isDropAfter =
-                                lessonDropTarget?.sectionId === sec.id &&
-                                lessonDropTarget.lessonId === les.id &&
-                                lessonDropTarget.position === "after" &&
-                                !isDraggedLesson;
-
-                              return (
-                              <Fragment key={les.id}>
-                                {isDropBefore && <LessonDropIndicator />}
-                                <MemoizedLessonCard
-                                lesson={les}
-                                sectionId={sec.id}
-                                lessonIndex={lesIndex}
-                                isDragged={isDraggedLesson}
-                                isDragEnabled={
-                                  dragEnabledLessonId === les.id
+                    {/* Sections list or Empty State */}
+                    {sections.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-8 text-center">
+                        <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent) mb-3.5">
+                          <BookOpen size={24} weight="bold" />
+                        </div>
+                        <h3 className="m-0 text-(--text) text-[1.05rem] font-bold">
+                          No sections added yet
+                        </h3>
+                        <p className="m-0 mt-1.5 max-w-[320px] text-(--muted) text-[0.84rem]">
+                          Add your first section to start building your course
+                          curriculum.
+                        </p>
+                        <button
+                          type="button"
+                          disabled={
+                            isCreatingSection ||
+                            createSectionMutation.isPending ||
+                            createCourseMutation.isPending ||
+                            isReorderingSections ||
+                            reorderSectionsMutation.isPending
+                          }
+                          style={{
+                            fontSize: "0.80rem",
+                            fontWeight: 700,
+                            height: "34px",
+                            borderRadius: "8px",
+                            gap: "6px",
+                            paddingLeft: "16px",
+                            paddingRight: "16px",
+                            marginTop: "18px",
+                          }}
+                          className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed"
+                          onClick={handleAddSection}
+                        >
+                          {isCreatingSection ||
+                          createSectionMutation.isPending ||
+                          createCourseMutation.isPending ? (
+                            <>
+                              <CircleNotch size={15} className="animate-spin" />
+                              <span>Creating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Plus size={15} weight="bold" />
+                              <span>Add Section</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      sections.map((sec, secIndex) => (
+                        <div
+                          key={sec.id}
+                          className={`border rounded-[14px] bg-(--surface) shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
+                            deletingSectionId === sec.id
+                              ? "opacity-45 pointer-events-none border-red-500/30"
+                              : draggedSectionIndex === secIndex
+                                ? "opacity-35 border-dashed border-(--accent)"
+                                : "border-[color-mix(in_srgb,var(--text)_8%,transparent)]"
+                          }`}
+                          draggable={
+                            dragEnabledSectionId === sec.id &&
+                            !sec.isPendingCreation &&
+                            !updatingSectionId &&
+                            !deletingSectionId &&
+                            !isReorderingSections &&
+                            !reorderSectionsMutation.isPending
+                          }
+                          onDragStart={(e) =>
+                            handleSectionDragStart(e, secIndex, sec)
+                          }
+                          onDragOver={(e) => handleSectionDragOver(e, secIndex)}
+                          onDragEnd={handleSectionDragEnd}
+                        >
+                          {/* Section Header */}
+                          <div
+                            ref={(element) => {
+                              if (element) {
+                                sectionHeaderElementsRef.current.set(
+                                  sec.id,
+                                  element,
+                                );
+                              } else {
+                                sectionHeaderElementsRef.current.delete(sec.id);
+                              }
+                            }}
+                            className="flex items-center justify-between px-[18px] py-3.5 bg-[color-mix(in_srgb,var(--text)_2%,transparent)] select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]"
+                            onClick={() => handleToggleSectionExpand(sec.id)}
+                            title="Click to toggle section"
+                          >
+                            <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
+                              <span
+                                className={`flex items-center justify-center text-(--muted) transition-opacity duration-150 ${
+                                  sec.isPendingCreation ||
+                                  isReorderingSections ||
+                                  reorderSectionsMutation.isPending
+                                    ? "opacity-25 cursor-not-allowed pointer-events-none"
+                                    : "cursor-grab opacity-60 hover:opacity-100"
+                                }`}
+                                title={
+                                  sec.isPendingCreation
+                                    ? "Creating section..."
+                                    : isReorderingSections ||
+                                        reorderSectionsMutation.isPending
+                                      ? "Reordering in progress..."
+                                      : "Drag to reorder section"
                                 }
-                                isSaving={savingLessonId === les.id}
-                                isDeleting={deletingLessonId === les.id}
-                                isSectionReordering={Boolean(
-                                  reorderingLessonsSectionId,
-                                )}
-                                isReorderPending={
-                                  reorderLessonsMutation.isPending
-                                }
-                                isResourceBusy={
-                                  createLessonResourceMutation.isPending ||
-                                  deleteLessonResourceMutation.isPending
-                                }
-                                isLessonEditorMounted={mountedLessonEditorIds.includes(
-                                  les.id,
-                                )}
-                                isUrlFocused={
-                                  requestedSectionId === sec.id &&
-                                  requestedLessonId === les.id
-                                }
-                                onLessonEditorOpen={rememberLessonEditor}
-                                render={({
-                                  isExpanded,
-                                  setExpanded,
-                                  isEditorOpen,
-                                  setEditorOpen,
-                                  isQuizOpen,
-                                  setQuizOpen,
-                                  lessonEditorRef,
-                                  isLessonEditorMounted,
-                                  onLessonEditorOpen,
-                                }) => {
-                                  const shouldKeepEditorMounted =
-                                    isEditorOpen || isLessonEditorMounted;
-                                  const toggleLesson = async () => {
-                                    const nextExpanded = !isExpanded;
-                                    if (nextExpanded) {
-                                      setExpanded(true);
-                                      setEditorOpen(true);
-                                      onLessonEditorOpen(les.id);
-                                    }
-                                    const canToggle =
-                                      await handleToggleLessonExpand(
-                                        sec.id,
-                                        les.id,
-                                        nextExpanded,
-                                      );
-                                    if (!canToggle) {
-                                      setExpanded(isExpanded);
-                                      if (nextExpanded) setEditorOpen(false);
-                                    } else if (!nextExpanded) {
-                                      setExpanded(false);
-                                      setEditorOpen(false);
-                                      setQuizOpen(false);
-                                    }
-                                    if (canToggle) {
-                                      navigateToCurriculumFocus(
-                                        nextExpanded ? sec.id : null,
-                                        nextExpanded ? les.id : null,
-                                      );
-                                    }
-                                  };
-
-                                  return (
+                                onMouseEnter={() => {
+                                  if (
+                                    !sec.isPendingCreation &&
+                                    !isReorderingSections &&
+                                    !reorderSectionsMutation.isPending
+                                  ) {
+                                    setDragEnabledSectionId(sec.id);
+                                  }
+                                }}
+                                onMouseLeave={() => {
+                                  if (draggedSectionIndex === null)
+                                    setDragEnabledSectionId(null);
+                                }}
+                                onMouseDown={() => {
+                                  if (
+                                    !sec.isPendingCreation &&
+                                    !isReorderingSections &&
+                                    !reorderSectionsMutation.isPending
+                                  ) {
+                                    setDragEnabledSectionId(sec.id);
+                                  }
+                                }}
+                                onMouseUp={() => {
+                                  if (draggedSectionIndex === null)
+                                    setDragEnabledSectionId(null);
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <DotsSixVertical size={18} />
+                              </span>
+                              <div className="flex items-center gap-2.5 max-[768px]:flex-1 max-[768px]:min-w-0 max-[768px]:flex-wrap max-[768px]:gap-1.5">
+                                <span className="text-(--text) text-[0.92rem] font-bold max-[768px]:whitespace-nowrap max-[768px]:shrink-0">
+                                  Section {secIndex + 1}
+                                </span>
+                                {sec.isEditingTitle ? (
                                   <div
-                                    style={{ contain: "layout" }}
-                                    className={`border rounded-[10px] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
-                                      isDraggedLesson
-                                        ? "opacity-35 border-dashed border-(--accent)"
-                                        : "border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
-                                    }`}
-                                    draggable={
-                                      dragEnabledLessonId === les.id &&
-                                      !les.isPendingCreation &&
-                                      !reorderingLessonsSectionId &&
-                                      !reorderLessonsMutation.isPending
-                                    }
-                                    onDragStart={(e) => {
-                                      e.stopPropagation();
-                                      handleLessonDragStart(
-                                        e,
-                                        sec.id,
-                                        lesIndex,
-                                        les,
-                                      );
-                                    }}
-                                    onDragOver={(e) => {
-                                      e.stopPropagation();
-                                      handleLessonDragOver(
-                                        e,
-                                        sec.id,
-                                        les.id,
-                                      );
-                                    }}
-                                    onDragEnd={(e) => {
-                                      e.stopPropagation();
-                                      void handleLessonDragEnd();
-                                    }}
+                                    className="flex items-center gap-2 max-[768px]:w-full"
+                                    onClick={(e) => e.stopPropagation()}
                                   >
-                              <>
-                                {/* Lesson Header */}
-                                <div
-                                  className="flex items-center justify-between px-4 py-3 select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[10px_12px]"
-                                  onClick={() => void toggleLesson()}
-                                  title="Expand lesson editor"
-                                >
-                                  <div className="flex min-w-0 flex-1 items-center gap-2.5 max-[768px]:w-full max-[768px]:gap-2">
-                                    <span
-                                      className={`flex items-center justify-center text-(--muted) transition-opacity duration-150 ${
-                                        les.isPendingCreation ||
-                                        reorderingLessonsSectionId ||
-                                        reorderLessonsMutation.isPending
-                                          ? "opacity-25 cursor-not-allowed pointer-events-none"
-                                          : "cursor-grab opacity-60 hover:opacity-100"
-                                      }`}
-                                      title={
-                                        les.isPendingCreation
-                                          ? "Creating lesson..."
-                                          : reorderingLessonsSectionId ||
-                                              reorderLessonsMutation.isPending
-                                            ? "Reordering in progress..."
-                                            : "Drag to reorder lesson"
-                                      }
-                                      onMouseEnter={() => {
-                                        if (
-                                          !les.isPendingCreation &&
-                                          !reorderingLessonsSectionId &&
-                                          !reorderLessonsMutation.isPending
-                                        ) {
-                                          setDragEnabledLessonId(les.id);
-                                        }
-                                      }}
-                                      onMouseLeave={() => {
-                                        if (!draggedLessonState)
-                                          setDragEnabledLessonId(null);
-                                      }}
-                                      onMouseDown={() => {
-                                        if (
-                                          !les.isPendingCreation &&
-                                          !reorderingLessonsSectionId &&
-                                          !reorderLessonsMutation.isPending
-                                        ) {
-                                          setDragEnabledLessonId(les.id);
-                                        }
-                                      }}
-                                      onMouseUp={() => {
-                                        if (!draggedLessonState)
-                                          setDragEnabledLessonId(null);
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <DotsSixVertical size={18} />
-                                    </span>
-                                    <LessonContentTypeIcon
-                                      contentType={
-                                        les.pendingContentType || les.contentType
-                                      }
-                                    />
-                                    {les.isEditingTitle ? (
-                                      <div
-                                        className="flex min-w-0 flex-1 items-center gap-2"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        <span className="shrink-0 text-(--text) text-[0.88rem] font-medium">
-                                          {lesIndex + 1}.{" "}
-                                        </span>
-                                        <input
-                                          id={`les-title-${les.id}`}
-                                          type="text"
-                                          data-fixed-radius
-                                          maxLength={120}
-                                          value={les.title}
-                                          autoFocus
-                                          style={{
-                                            fontFamily: "inherit",
-                                            fontSize: "0.88rem",
-                                            fontWeight: 500,
-                                            lineHeight: 1.5,
-                                            borderRadius: "6px",
-                                          }}
-                                          disabled={
-                                            les.isPendingCreation ||
-                                            savingLessonId === les.id
-                                          }
-                                          onChange={(e) =>
-                                            handleUpdateLesson(sec.id, les.id, {
-                                              title: e.target.value,
-                                            })
-                                          }
-                                          onBlur={() => {
-                                            void handleLessonTitleBlur(
-                                              sec.id,
-                                              les.id,
-                                            );
-                                          }}
-                                          onKeyDown={(e) => {
-                                            if (e.key === "Enter") {
-                                              e.preventDefault();
-                                              e.currentTarget.blur();
-                                            } else if (e.key === "Escape") {
-                                              e.preventDefault();
-                                              handleCancelEditLessonTitle(
-                                                sec.id,
-                                                les.id,
-                                              );
-                                            }
-                                          }}
-                                          placeholder="e.g. Introduction to React Hooks"
-                                          className="h-7 min-w-0 flex-1 border border-[color-mix(in_srgb,var(--accent)_52%,transparent)] rounded-[6px] px-2 py-0.5 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] font-medium leading-[1.5] outline-none [font-family:inherit] focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
-                                        />
-                                        <button
-                                          type="button"
-                                          aria-label="Cancel lesson title edit"
-                                          title="Cancel title edit"
-                                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] text-(--muted) transition-colors hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:text-(--text)"
-                                          onMouseDown={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                          }}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleCancelEditLessonTitle(
-                                              sec.id,
-                                              les.id,
-                                            );
-                                          }}
-                                        >
-                                          <X size={14} />
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <div className="group/title flex min-w-0 flex-1 items-center gap-1.5">
-                                        <span className="min-w-0 flex-1 truncate whitespace-nowrap text-(--text) text-[0.88rem] font-medium cursor-pointer">
-                                          {lesIndex + 1}. {les.title}
-                                        </span>
-                                        <button
-                                          type="button"
-                                          aria-label="Edit lesson title"
-                                          title="Edit lesson title"
-                                          disabled={les.isPendingCreation}
-                                          className="mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border border-transparent bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-(--muted) opacity-0 transition-[opacity,color,background-color] duration-150 group-hover/title:opacity-100 group-focus-within/title:opacity-100 hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:text-(--text) focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) disabled:cursor-not-allowed disabled:opacity-30"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleStartEditLessonTitle(
-                                              sec.id,
-                                              les.id,
-                                            );
-                                          }}
-                                        >
-                                          <PencilSimple size={14} weight="bold" />
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
-                                    {les.isPendingCreation ? (
-                                      <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                                        <CircleNotch
-                                          size={12}
-                                          className="animate-spin text-(--accent)"
-                                        />
-                                        <span>Creating...</span>
-                                      </span>
-                                    ) : deletingLessonId === les.id ? (
-                                      <span className="inline-flex items-center gap-1 text-red-400 text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/28">
-                                        <CircleNotch
-                                          size={12}
-                                          className="animate-spin text-red-400"
-                                        />
-                                        <span>Deleting...</span>
-                                      </span>
-                                    ) : (
-                                      <CurriculumItemStatusIndicator
-                                        status={getCurriculumItemDisplayStatus(
-                                          les.id,
-                                        )}
-                                        testId={`curriculum-status-lesson-${les.id}`}
-                                      />
-                                    )}
-                                    {les.isPublished === false && (
-                                      <span
-                                        className="inline-flex items-center gap-1 text-[#f59e0b] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#f59e0b_12%,transparent)] border border-[color-mix(in_srgb,#f59e0b_28%,transparent)]"
-                                        title="Draft mode: This lesson is not published and is hidden from students."
-                                      >
-                                        <EyeSlash size={13} weight="bold" />{" "}
-                                        Unpublished
-                                      </span>
-                                    )}
-                                    {isEditorOpen && (
-                                      <>
-                                        <button
-                                          type="button"
-                                          disabled={savingLessonId === les.id || deletingLessonId === les.id}
-                                          className="inline-flex h-7 items-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-2.5 text-[14px]! font-[700]! text-(--text) transition-colors hover:bg-[color-mix(in_srgb,var(--text)_12%,transparent)] disabled:cursor-not-allowed disabled:opacity-50"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            lessonEditorRef.current?.cancel();
-                                          }}
-                                        >
-                                          Cancel
-                                        </button>
-                                        <button
-                                          type="button"
-                                          disabled={savingLessonId === les.id || deletingLessonId === les.id}
-                                          className="inline-flex h-7 items-center rounded-[8px] bg-(--accent) px-2.5 text-[14px]! font-[700]! text-(--on-accent,#ffffff) shadow-[0_2px_8px_var(--accent-shadow)] transition-colors hover:bg-(--accent-hover,var(--accent)) disabled:cursor-not-allowed disabled:opacity-50"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            lessonEditorRef.current?.save();
-                                          }}
-                                        >
-                                          Save
-                                        </button>
-                                      </>
-                                    )}
-                                    <button
-                                      type="button"
+                                    <input
+                                      type="text"
+                                      className="border border-(--accent) rounded-md px-2 py-0.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                      defaultValue={sec.title}
+                                      autoFocus
                                       disabled={
-                                        les.isPendingCreation ||
-                                        deletingLessonId === les.id
+                                        sec.isPendingCreation ||
+                                        updatingSectionId === sec.id
                                       }
-                                      className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                                      aria-label="Delete lesson"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteLesson(sec.id, les.id);
-                                      }}
-                                    >
-                                      {deletingLessonId === les.id ? (
-                                        <CircleNotch
-                                          size={14}
-                                          className="animate-spin text-red-400"
-                                        />
-                                      ) : (
-                                        <Trash size={15} />
-                                      )}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 [&>svg]:transition-transform [&>svg]:duration-200 ${
-                                        isExpanded
-                                          ? "is-expanded [&>svg]:rotate-180"
-                                          : ""
-                                      }`}
-                                      aria-label={
-                                        isExpanded
-                                          ? "Collapse lesson editor"
-                                          : "Expand lesson editor"
-                                      }
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        void toggleLesson();
-                                      }}
-                                    >
-                                      <CaretDown size={15} />
-                                    </button>
-                                  </div>
-                                </div>
-
-                                {(isExpanded || shouldKeepEditorMounted) && (
-                                  <div
-                                    aria-hidden={!isExpanded}
-                                    className={isExpanded ? undefined : "hidden"}
-                                  >
-                                    {les.isPendingCreation ? (
-                                  <div className="flex min-h-48 items-center justify-center border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-8">
-                                    <div className="flex items-center gap-2 text-(--muted) text-[0.86rem] font-semibold">
-                                      <CircleNotch
-                                        size={16}
-                                        className="animate-spin text-(--accent)"
-                                      />
-                                      Creating lesson...
-                                    </div>
-                                  </div>
-                                ) : shouldKeepEditorMounted ? (
-                                  <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-5 max-[768px]:p-[14px_12px_16px]">
-                                    <LessonStudioEditor
-                                      ref={lessonEditorRef}
-                                      hideHeader
-                                      sectionNumber={sections.findIndex((item) => item.id === sec.id) + 1}
-                                      sectionTitle={sec.title}
-                                      lessonNumber={lesIndex + 1}
-                                      playbackLessonNumber={getCourseWideLessonNumber(
-                                        sections,
-                                        les.id,
-                                      )}
-                                      lessonTitle={les.title}
-                                      courseSlug={editorData?.course?.slug}
-                                      courseTitle={courseTitle || undefined}
-                                      contentType={
-                                        (les.contentType as StudioLessonContentType) ||
-                                        "video"
-                                      }
-                                      isPublished={les.isPublished !== false}
-                                      isPreview={les.isPreview === true}
-                                      playbackSuspended={!isExpanded}
-                                      mediaInfo={getLessonMediaInfo(les)}
-                                      resources={les.resources.map((resource) => ({
-                                        id: resource.id,
-                                        name: resource.name,
-                                        type: resource.type,
-                                        size: resource.size,
-                                        mediaAssetId: resource.mediaAssetId,
-                                      }))}
-                                      isSaving={savingLessonId === les.id}
-                                      onBack={() => {
-                                        setExpanded(false);
-                                        setEditorOpen(false);
-                                        setQuizOpen(false);
-                                      }}
-                                      onCancel={(draft) =>
-                                        handleCancelLessonDraft(
+                                      onClick={(e) => e.stopPropagation()}
+                                      onBlur={(e) =>
+                                        handleSaveSectionTitle(
                                           sec.id,
-                                          les.id,
-                                          draft,
+                                          e.target.value,
                                         )
                                       }
-                                      onSave={async (payload) => {
-                                        handleUpdateLesson(sec.id, les.id, {
-                                          title: payload.title,
-                                          contentType: payload.contentType,
-                                          isPublished: payload.isPublished,
-                                          isPreview: payload.isPreview,
-                                        });
-                                        const saved = await persistLesson(
-                                          sec.id,
-                                          les.id,
-                                          { collapseOnSuccess: false },
-                                        );
-                                        if (saved) {
-                                          setToastMessage("Lesson changes saved successfully.");
-                                          setEditorOpen(false);
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          (e.target as HTMLInputElement).blur();
                                         }
                                       }}
-                                      onContentTypeChange={(contentType) => {
-                                        handleUpdateLesson(sec.id, les.id, {
-                                          contentType,
-                                        });
-                                      }}
-                                      onMediaAttached={(mediaAssetId) =>
-                                        handleLessonMediaAttached(
-                                          sec.id,
-                                          les.id,
-                                          mediaAssetId,
-                                        )
-                                      }
-                                      onProcessingComplete={() =>
-                                        handleLessonProcessingComplete()
-                                      }
-                                      onUploadMedia={async (file) => {
-                                        try {
-                                          const presigned =
-                                            await mediaService.presignMediaUpload({
-                                              filename: file.name,
-                                              contentType:
-                                                file.type || "application/octet-stream",
-                                              fileSize: file.size,
-                                              type:
-                                                les.contentType === "image"
-                                                  ? "image"
-                                                  : les.contentType === "document"
-                                                    ? "document"
-                                                    : "video",
-                                              visibility: "protected",
-                                            });
-                                          await mediaService.uploadFileToPresignedUrl(
-                                            presigned.uploadUrl,
-                                            file,
-                                          );
-                                          await mediaService.confirmUpload(
-                                            presigned.mediaAssetId,
-                                          );
-                                          const attached =
-                                            await handleLessonMediaAttached(
-                                              sec.id,
-                                              les.id,
-                                              presigned.mediaAssetId,
-                                            );
-                                          // A failed attach has already shown its own error.
-                                          if (!attached) return;
-                                          setToastMessage(
-                                            "Media uploaded and attached successfully.",
-                                          );
-                                        } catch (err: unknown) {
-                                          setToastMessage(
-                                            err instanceof Error
-                                              ? err.message
-                                              : "Media upload failed.",
-                                          );
-                                        }
-                                      }}
-                                      descriptionSection={
-                                        <LessonDescriptionEditor
-                                          id={`lesson-description-${les.id}`}
-                                          disabled={
-                                            les.isPendingCreation ||
-                                            savingLessonId === les.id
-                                          }
-                                          value={les.description}
-                                          onChange={(value) =>
-                                            handleUpdateLesson(sec.id, les.id, {
-                                              description: value,
-                                            })
-                                          }
-                                          placeholder="Add a detailed description of what students will learn in this lesson..."
-                                          maxLength={10000}
-                                        />
-                                      }
-                                      resourcesSection={
-                                        <LessonResourceManager
-                                          courseId={currentCourseId}
-                                          lessonId={les.id}
-                                          resources={les.resources}
-                                          disabled={
-                                            les.isPendingCreation ||
-                                            createLessonResourceMutation.isPending ||
-                                            deleteLessonResourceMutation.isPending
-                                          }
-                                          onCreateResource={(payload) =>
-                                            handleCreateLessonResource(les.id, payload)
-                                          }
-                                          onResourceAdded={(resource) =>
-                                            handleLessonResourceAdded(
-                                              sec.id,
-                                              les.id,
-                                              resource,
-                                            )
-                                          }
-                                          onDeleteResource={(resourceId) =>
-                                            handleDeleteLessonResource(resourceId)
-                                          }
-                                          onResourceRemoved={(resource) =>
-                                            handleLessonResourceRemoved(
-                                              sec.id,
-                                              les.id,
-                                              resource,
-                                            )
-                                          }
-                                        />
-                                      }
-                                      quizSection={
-                                        currentCourseId &&
-                                        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-                                          les.id,
-                                        ) ? (
-                                          <QuizAuthoringPanel
-                                            courseId={currentCourseId}
-                                            lessonId={les.id}
-                                            lessonTitle={les.title}
-                                            onQuizDeleted={() => {}}
-                                          />
-                                        ) : (
-                                          <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
-                                            Save the course and lesson before configuring an attached Quiz.
-                                          </div>
-                                        )
-                                      }
                                     />
                                   </div>
                                 ) : (
-                                  <div
-                                    className={`grid transition-[grid-template-rows] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                                      isExpanded
-                                        ? "is-open grid-rows-[1fr]"
-                                        : "grid-rows-[0fr]"
+                                  <span
+                                    className={`text-(--text) text-[0.92rem] font-semibold max-[768px]:break-words max-[768px]:min-w-0 ${
+                                      sec.isPendingCreation ||
+                                      updatingSectionId === sec.id ||
+                                      deletingSectionId === sec.id
+                                        ? "opacity-60 pointer-events-none"
+                                        : ""
                                     }`}
-                                    draggable={false}
-                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (
+                                        sec.isPendingCreation ||
+                                        updatingSectionId === sec.id ||
+                                        deletingSectionId === sec.id
+                                      )
+                                        return;
+                                      handleStartEditSectionTitle(sec.id);
+                                    }}
+                                    title={
+                                      sec.isPendingCreation
+                                        ? "Creating section..."
+                                        : "Click to edit section title"
+                                    }
                                   >
-                                    <div
-                                      className={`min-h-0 overflow-hidden border-t border-transparent bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] transition-[padding,border-color] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                                        isExpanded
-                                          ? "px-5 pt-4 pb-5 border-t-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[768px]:p-[14px_12px_16px]"
-                                          : "px-5 py-0 max-[768px]:p-0"
-                                      }`}
-                                    >
-                                      <div className="grid grid-cols-1 gap-6 max-[768px]:gap-3.5">
-                                        {/* Lesson description stays below the lightweight lesson controls. */}
-                                        <div className="order-2 flex min-w-0 flex-col gap-4.5">
-                                          {isEditorOpen ? (
-                                            <div className="mb-3 flex flex-col gap-2">
-                                              <div className="flex items-center justify-between gap-3">
-                                                <label
-                                                  id={`les-desc-label-${les.id}`}
-                                                  className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                                                >
-                                                  Lesson Description
-                                                </label>
-                                                <button
-                                                  type="button"
-                                                  className="inline-flex min-h-8 items-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-transparent px-2.5 text-xs font-semibold text-(--muted) transition-colors hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-                                                  onMouseDown={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                  }}
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleCancelLessonDescriptionEdit(
-                                                      sec.id,
-                                                      les.id,
-                                                    );
-                                                    setEditorOpen(false);
-                                                  }}
-                                                >
-                                                  Cancel
-                                                </button>
-                                              </div>
-                                              <div
-                                                className={
-                                                  les.isPendingCreation
-                                                    ? "opacity-60 pointer-events-none"
-                                                    : ""
-                                                }
-                                                onBlur={(e) => {
-                                                  if (
-                                                    !e.currentTarget.contains(
-                                                      e.relatedTarget as Node,
-                                                    )
-                                                  ) {
-                                                    void handleLessonFieldBlur(
-                                                      sec.id,
-                                                      les.id,
-                                                    );
-                                                  }
-                                                }}
-                                              >
-                                                <LessonDescriptionEditor
-                                                  id={`lesson-description-${les.id}`}
-                                                  disabled={les.isPendingCreation}
-                                                  value={les.description}
-                                                  onChange={(val) =>
-                                                    handleUpdateLesson(
-                                                      sec.id,
-                                                      les.id,
-                                                      {
-                                                        description: val,
-                                                      },
-                                                    )
-                                                  }
-                                                  placeholder="Add a detailed description of what students will learn in this lesson..."
-                                                  maxLength={10000}
-                                                />
-                                              </div>
-                                            </div>
-                                          ) : (
-                                            <LessonDescriptionPreview
-                                              description={les.description}
-                                              onEdit={() => {
+                                    {sec.title}
+                                  </span>
+                                )}
+                                <span className="ml-1 text-(--muted) text-[0.76rem] font-normal">
+                                  {sec.lessons.length}{" "}
+                                  {sec.lessons.length === 1
+                                    ? "Lesson"
+                                    : "Lessons"}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+                              {sec.isPendingCreation ? (
+                                <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                                  <CircleNotch
+                                    size={12}
+                                    className="animate-spin text-(--accent)"
+                                  />
+                                  <span>Creating...</span>
+                                </span>
+                              ) : deletingSectionId === sec.id ? (
+                                <span className="inline-flex items-center gap-1 text-red-400 text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/28">
+                                  <CircleNotch
+                                    size={12}
+                                    className="animate-spin text-red-400"
+                                  />
+                                  <span>Deleting...</span>
+                                </span>
+                              ) : reorderingLessonsSectionId === sec.id ? (
+                                <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                                  <CircleNotch
+                                    size={12}
+                                    className="animate-spin text-(--accent)"
+                                  />
+                                  <span>Saving order...</span>
+                                </span>
+                              ) : (
+                                <CurriculumItemStatusIndicator
+                                  status={getCurriculumItemDisplayStatus(
+                                    sec.id,
+                                  )}
+                                  testId={`curriculum-status-section-${sec.id}`}
+                                />
+                              )}
+                              <button
+                                type="button"
+                                disabled={
+                                  sec.isPendingCreation ||
+                                  updatingSectionId === sec.id ||
+                                  deletingSectionId === sec.id
+                                }
+                                className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-[color,background-color,border-color] duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+                                aria-label="Edit section title"
+                                title="Edit section title"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleStartEditSectionTitle(sec.id);
+                                }}
+                              >
+                                {updatingSectionId === sec.id ? (
+                                  <CircleNotch
+                                    size={14}
+                                    className="animate-spin text-(--accent)"
+                                  />
+                                ) : (
+                                  <PencilSimple size={15} />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={
+                                  sec.isPendingCreation ||
+                                  deletingSectionId === sec.id ||
+                                  updatingSectionId === sec.id
+                                }
+                                className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+                                aria-label="Delete section"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteSection(sec.id);
+                                }}
+                              >
+                                {deletingSectionId === sec.id ? (
+                                  <CircleNotch
+                                    size={14}
+                                    className="animate-spin text-red-400"
+                                  />
+                                ) : (
+                                  <Trash size={15} />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={deletingSectionId === sec.id}
+                                className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none [&>svg]:transition-transform [&>svg]:duration-200 ${
+                                  sec.isExpanded
+                                    ? "is-expanded [&>svg]:rotate-180"
+                                    : ""
+                                }`}
+                                aria-label={
+                                  sec.isExpanded
+                                    ? "Collapse section"
+                                    : "Expand section"
+                                }
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleSectionExpand(sec.id);
+                                }}
+                              >
+                                <CaretDown size={15} />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Section Body with CSS expand transition */}
+                          <div
+                            className={`grid transition-[grid-template-rows] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                              sec.isExpanded
+                                ? "is-open grid-rows-[1fr]"
+                                : "grid-rows-[0fr]"
+                            }`}
+                          >
+                            <div
+                              className={`min-h-0 overflow-hidden border-t border-transparent transition-[padding,border-color] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                                sec.isExpanded
+                                  ? "px-4 pt-3 pb-4 border-t-[color-mix(in_srgb,var(--text)_8%,transparent)]"
+                                  : "px-4 py-0"
+                              }`}
+                            >
+                              {sec.isExpanded && (
+                                <VirtualizedLessonList
+                                  items={sec.lessons}
+                                  getItemKey={getCurriculumLessonKey}
+                                  pinnedItemIds={pinnedVirtualizedLessonIds}
+                                  estimatedItemSize={168}
+                                  itemGap={10}
+                                  renderItem={(les, lesIndex) => {
+                                    const isDraggedLesson =
+                                      draggedLessonState?.sectionId ===
+                                        sec.id &&
+                                      draggedLessonState.lessonId === les.id;
+                                    const isDropBefore =
+                                      lessonDropTarget?.sectionId === sec.id &&
+                                      lessonDropTarget.lessonId === les.id &&
+                                      lessonDropTarget.position === "before" &&
+                                      !isDraggedLesson;
+                                    const isDropAfter =
+                                      lessonDropTarget?.sectionId === sec.id &&
+                                      lessonDropTarget.lessonId === les.id &&
+                                      lessonDropTarget.position === "after" &&
+                                      !isDraggedLesson;
+
+                                    return (
+                                      <Fragment key={les.id}>
+                                        {isDropBefore && (
+                                          <LessonDropIndicator />
+                                        )}
+                                        <MemoizedLessonCard
+                                          lesson={les}
+                                          sectionId={sec.id}
+                                          lessonIndex={lesIndex}
+                                          isDragged={isDraggedLesson}
+                                          isDragEnabled={
+                                            dragEnabledLessonId === les.id
+                                          }
+                                          isSaving={savingLessonId === les.id}
+                                          isDeleting={
+                                            deletingLessonId === les.id
+                                          }
+                                          isSectionReordering={Boolean(
+                                            reorderingLessonsSectionId,
+                                          )}
+                                          isReorderPending={
+                                            reorderLessonsMutation.isPending
+                                          }
+                                          isResourceBusy={
+                                            createLessonResourceMutation.isPending ||
+                                            deleteLessonResourceMutation.isPending
+                                          }
+                                          isLessonEditorMounted={mountedLessonEditorIds.includes(
+                                            les.id,
+                                          )}
+                                          isUrlFocused={
+                                            requestedSectionId === sec.id &&
+                                            requestedLessonId === les.id
+                                          }
+                                          onLessonEditorOpen={
+                                            rememberLessonEditor
+                                          }
+                                          render={({
+                                            isExpanded,
+                                            setExpanded,
+                                            isEditorOpen,
+                                            setEditorOpen,
+                                            isQuizOpen,
+                                            setQuizOpen,
+                                            lessonEditorRef,
+                                            isLessonEditorMounted,
+                                            onLessonEditorOpen,
+                                          }) => {
+                                            const shouldKeepEditorMounted =
+                                              isEditorOpen ||
+                                              isLessonEditorMounted;
+                                            const toggleLesson = async () => {
+                                              const nextExpanded = !isExpanded;
+                                              if (nextExpanded) {
+                                                setExpanded(true);
                                                 setEditorOpen(true);
                                                 onLessonEditorOpen(les.id);
-                                              }}
-                                            />
-                                          )}
-                                        </div>
-
-                                        {/* Right column */}
-                                        <div className="order-1 flex min-w-0 flex-col gap-4.5">
-                                            {/* Content Type Selector */}
-                                            <div className="flex flex-col gap-2 mb-4">
-                                              <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                                                Content Type{""}
-                                                <span className="text-[#ff5252] ml-0.5">
-                                                  *
-                                                </span>
-                                              </label>
-                                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                                <div
-                                                  className={`relative flex items-center gap-2.5 border rounded-[10px] px-3 py-2.5 text-left transition-[border-color,background-color] duration-150 ease-out ${
-                                                    les.isPendingCreation
-                                                      ? "opacity-60 cursor-not-allowed"
-                                                      : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
-                                                  } ${
-                                                    les.contentType === "video"
-                                                      ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
-                                                      : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
-                                                  }`}
-                                                  onClick={() => {
-                                                    if (les.isPendingCreation)
-                                                      return;
-                                                    void handleLessonDiscreteChange(
-                                                      sec.id,
-                                                      les.id,
-                                                      {
-                                                        contentType: "video",
-                                                      },
-                                                    );
-                                                  }}
-                                                >
-                                                  <div
-                                                    className={`flex w-4 h-4 shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "video" ? "border-(--accent)" : "border-(--muted)"}`}
-                                                  >
-                                                    {les.contentType ===
-                                                      "video" && (
-                                                      <div className="w-1.5 h-1.5 rounded-full bg-(--accent)" />
-                                                    )}
-                                                  </div>
-                                                  <div className="flex items-center justify-center text-(--accent)">
-                                                    <Video
-                                                      size={16}
-                                                      weight="fill"
-                                                    />
-                                                  </div>
-                                                  <div className="flex flex-col min-w-0">
-                                                    <span className="text-(--text) text-[0.82rem] font-bold leading-tight truncate">
-                                                      Video
-                                                    </span>
-                                                    <span className="text-(--muted) text-[0.70rem] truncate">
-                                                      Video lesson
-                                                    </span>
-                                                  </div>
-                                                </div>
-
-                                                <div
-                                                  className={`relative flex items-center gap-2.5 border rounded-[10px] px-3 py-2.5 text-left transition-[border-color,background-color] duration-150 ease-out ${
-                                                    les.isPendingCreation
-                                                      ? "opacity-60 cursor-not-allowed"
-                                                      : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
-                                                  } ${
-                                                    les.contentType ===
-                                                    "document"
-                                                      ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
-                                                      : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
-                                                  }`}
-                                                  onClick={() => {
-                                                    if (les.isPendingCreation)
-                                                      return;
-                                                    void handleLessonDiscreteChange(
-                                                      sec.id,
-                                                      les.id,
-                                                      {
-                                                        contentType: "document",
-                                                      },
-                                                    );
-                                                  }}
-                                                >
-                                                  <div
-                                                    className={`flex w-4 h-4 shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "document" ? "border-(--accent)" : "border-(--muted)"}`}
-                                                  >
-                                                    {les.contentType ===
-                                                      "document" && (
-                                                      <div className="w-1.5 h-1.5 rounded-full bg-(--accent)" />
-                                                    )}
-                                                  </div>
-                                                  <div className="flex items-center justify-center text-(--accent)">
-                                                    <FileText
-                                                      size={16}
-                                                      weight="fill"
-                                                    />
-                                                  </div>
-                                                  <div className="flex flex-col min-w-0">
-                                                    <span className="text-(--text) text-[0.82rem] font-bold leading-tight truncate">
-                                                      Document
-                                                    </span>
-                                                    <span className="text-(--muted) text-[0.70rem] truncate">
-                                                      PDF / Reading
-                                                    </span>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                              {/* Content Source Controls (Video or Document) */}
-                                              <div className="flex flex-col gap-2 mb-0">
-                                                <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                                                  {les.contentType === "video"
-                                                    ? "Video Source"
-                                                    : "Document / PDF Source"}
-                                                  <span className="text-[#ff5252] ml-0.5">
-                                                    *
-                                                  </span>
-                                                </label>
-                                                {les.contentType === "video" ? (
-                                                  <LessonVideoUpload
-                                                    mediaAssetId={
-                                                      les.contentMediaId
-                                                    }
-                                                    disabled={
-                                                      les.isPendingCreation
-                                                    }
-                                                    onMediaAttached={(
-                                                      mediaAssetId,
-                                                    ) =>
-                                                      handleLessonMediaAttached(
-                                                        sec.id,
-                                                        les.id,
-                                                        mediaAssetId,
-                                                      )
-                                                    }
-                                                    onProcessingComplete={() =>
-                                                      handleLessonProcessingComplete()
-                                                    }
-                                                  />
-                                                ) : (
-                                                <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:flex max-[768px]:gap-2">
-                                                  <button
-                                                    type="button"
-                                                    disabled={
-                                                      les.isPendingCreation
-                                                    }
-                                                    style={{
-                                                      fontSize: "0.80rem",
-                                                      fontWeight: 700,
-                                                      height: "34px",
-                                                      borderRadius: "8px",
-                                                      gap: "6px",
-                                                      paddingLeft: "16px",
-                                                      paddingRight: "16px",
-                                                    }}
-                                                    className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
-                                                  >
-                                                    <UploadSimple size={15} />
-                                                    Upload
-                                                  </button>
-                                                  <button
-                                                    type="button"
-                                                    disabled={
-                                                      les.isPendingCreation
-                                                    }
-                                                    style={{
-                                                      fontSize: "0.80rem",
-                                                      fontWeight: 500,
-                                                      height: "34px",
-                                                      borderRadius: "8px",
-                                                      gap: "6px",
-                                                      paddingLeft: "14px",
-                                                      paddingRight: "14px",
-                                                    }}
-                                                    className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text) bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
-                                                  >
-                                                    <FileText
-                                                      size={15}
-                                                      className="text-(--text-secondary)"
-                                                    />
-                                                    Select from Media
-                                                  </button>
-                                                </div>
-                                              )}
-                                            </div>
-
-                                            {/* Lesson Publishing Status */}
-                                            <div className="flex flex-col gap-2 mb-0">
-                                              <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                                                Publishing Status
-                                              </label>
-                                              <ThemedSelect
-                                                value={
-                                                  les.isPublished !== false
-                                                    ? "published"
-                                                    : "draft"
-                                                }
-                                                onValueChange={(value) => {
-                                                  if (les.isPendingCreation)
-                                                    return;
-                                                  void handleLessonDiscreteChange(
-                                                    sec.id,
-                                                    les.id,
-                                                    {
-                                                      isPublished:
-                                                        value === "published",
-                                                    },
-                                                  );
-                                                }}
-                                                options={[
-                                                  ["published", "Published"],
-                                                  ["draft", "Draft (Hidden)"],
-                                                ]}
-                                                disabled={les.isPendingCreation}
-                                                ariaLabel="Publishing status"
-                                                triggerClassName="!h-9 !w-full !rounded-[8px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !px-3 !text-[0.84rem] !text-(--text) !bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] font-semibold disabled:!opacity-60"
-                                              />
-                                            </div>
-                                          </div>
-
-                                          {/* Free Preview Toggle */}
-                                          <div
-                                            className={`flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[8px] px-3 py-2 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-3 ${les.isPendingCreation ? "opacity-60 pointer-events-none" : ""}`}
-                                          >
-                                            <div className="pr-3">
-                                              <strong className="block mb-0.5 text-(--text) text-[0.88rem] font-[650]">
-                                                Free Preview
-                                              </strong>
-                                              <p className="m-0 text-(--muted) text-[0.78rem]">
-                                                Allow prospective students to
-                                                view this lesson before
-                                                enrolling or purchasing.
-                                              </p>
-                                            </div>
-                                            <SettingsToggle
-                                              checked={les.isPreview === true}
-                                              onChange={(checked) => {
-                                                if (les.isPendingCreation)
-                                                  return;
-                                                void handleLessonDiscreteChange(
+                                              }
+                                              const canToggle =
+                                                await handleToggleLessonExpand(
                                                   sec.id,
                                                   les.id,
-                                                  {
-                                                    isPreview: checked,
-                                                  },
+                                                  nextExpanded,
                                                 );
-                                              }}
-                                              label="Toggle Free Preview"
-                                            />
-                                          </div>
+                                              if (!canToggle) {
+                                                setExpanded(isExpanded);
+                                                if (nextExpanded)
+                                                  setEditorOpen(false);
+                                              } else if (!nextExpanded) {
+                                                setExpanded(false);
+                                                setEditorOpen(false);
+                                                setQuizOpen(false);
+                                              }
+                                              if (canToggle) {
+                                                navigateToCurriculumFocus(
+                                                  nextExpanded ? sec.id : null,
+                                                  nextExpanded ? les.id : null,
+                                                );
+                                              }
+                                            };
 
-                                          {/* Lesson Resources */}
-                                          <LessonResourceManager
-                                            courseId={currentCourseId}
-                                            lessonId={les.id}
-                                            resources={les.resources}
-                                            disabled={
-                                              les.isPendingCreation ||
-                                              createLessonResourceMutation.isPending ||
-                                              deleteLessonResourceMutation.isPending
-                                            }
-                                            onCreateResource={(payload) =>
-                                              handleCreateLessonResource(
-                                                les.id,
-                                                payload,
-                                              )
-                                            }
-                                            onResourceAdded={(resource) =>
-                                              handleLessonResourceAdded(
-                                                sec.id,
-                                                les.id,
-                                                resource,
-                                              )
-                                            }
-                                            onDeleteResource={(resourceId) =>
-                                              handleDeleteLessonResource(
-                                                resourceId,
-                                              )
-                                            }
-                                            onResourceRemoved={(resource) =>
-                                              handleLessonResourceRemoved(
-                                                sec.id,
-                                                les.id,
-                                                resource,
-                                              )
-                                            }
-                                          />
-                                        </div>
-                                      </div>
+                                            return (
+                                              <div
+                                                style={{ contain: "layout" }}
+                                                className={`border rounded-[10px] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
+                                                  isDraggedLesson
+                                                    ? "opacity-35 border-dashed border-(--accent)"
+                                                    : "border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
+                                                }`}
+                                                draggable={
+                                                  dragEnabledLessonId ===
+                                                    les.id &&
+                                                  !les.isPendingCreation &&
+                                                  !reorderingLessonsSectionId &&
+                                                  !reorderLessonsMutation.isPending
+                                                }
+                                                onDragStart={(e) => {
+                                                  e.stopPropagation();
+                                                  handleLessonDragStart(
+                                                    e,
+                                                    sec.id,
+                                                    lesIndex,
+                                                    les,
+                                                  );
+                                                }}
+                                                onDragOver={(e) => {
+                                                  e.stopPropagation();
+                                                  handleLessonDragOver(
+                                                    e,
+                                                    sec.id,
+                                                    les.id,
+                                                  );
+                                                }}
+                                                onDragEnd={(e) => {
+                                                  e.stopPropagation();
+                                                  void handleLessonDragEnd();
+                                                }}
+                                              >
+                                                <>
+                                                  {/* Lesson Header */}
+                                                  <div
+                                                    className="flex items-center justify-between px-4 py-3 select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[10px_12px]"
+                                                    onClick={() =>
+                                                      void toggleLesson()
+                                                    }
+                                                    title="Expand lesson editor"
+                                                  >
+                                                    <div className="flex min-w-0 flex-1 items-center gap-2.5 max-[768px]:w-full max-[768px]:gap-2">
+                                                      <span
+                                                        className={`flex items-center justify-center text-(--muted) transition-opacity duration-150 ${
+                                                          les.isPendingCreation ||
+                                                          reorderingLessonsSectionId ||
+                                                          reorderLessonsMutation.isPending
+                                                            ? "opacity-25 cursor-not-allowed pointer-events-none"
+                                                            : "cursor-grab opacity-60 hover:opacity-100"
+                                                        }`}
+                                                        title={
+                                                          les.isPendingCreation
+                                                            ? "Creating lesson..."
+                                                            : reorderingLessonsSectionId ||
+                                                                reorderLessonsMutation.isPending
+                                                              ? "Reordering in progress..."
+                                                              : "Drag to reorder lesson"
+                                                        }
+                                                        onMouseEnter={() => {
+                                                          if (
+                                                            !les.isPendingCreation &&
+                                                            !reorderingLessonsSectionId &&
+                                                            !reorderLessonsMutation.isPending
+                                                          ) {
+                                                            setDragEnabledLessonId(
+                                                              les.id,
+                                                            );
+                                                          }
+                                                        }}
+                                                        onMouseLeave={() => {
+                                                          if (
+                                                            !draggedLessonState
+                                                          )
+                                                            setDragEnabledLessonId(
+                                                              null,
+                                                            );
+                                                        }}
+                                                        onMouseDown={() => {
+                                                          if (
+                                                            !les.isPendingCreation &&
+                                                            !reorderingLessonsSectionId &&
+                                                            !reorderLessonsMutation.isPending
+                                                          ) {
+                                                            setDragEnabledLessonId(
+                                                              les.id,
+                                                            );
+                                                          }
+                                                        }}
+                                                        onMouseUp={() => {
+                                                          if (
+                                                            !draggedLessonState
+                                                          )
+                                                            setDragEnabledLessonId(
+                                                              null,
+                                                            );
+                                                        }}
+                                                        onClick={(e) =>
+                                                          e.stopPropagation()
+                                                        }
+                                                      >
+                                                        <DotsSixVertical
+                                                          size={18}
+                                                        />
+                                                      </span>
+                                                      <LessonContentTypeIcon
+                                                        contentType={
+                                                          les.pendingContentType ||
+                                                          les.contentType
+                                                        }
+                                                      />
+                                                      {les.isEditingTitle ? (
+                                                        <div
+                                                          className="flex min-w-0 flex-1 items-center gap-2"
+                                                          onClick={(e) =>
+                                                            e.stopPropagation()
+                                                          }
+                                                        >
+                                                          <span className="shrink-0 text-(--text) text-[0.88rem] font-medium">
+                                                            {lesIndex + 1}.{" "}
+                                                          </span>
+                                                          <input
+                                                            id={`les-title-${les.id}`}
+                                                            type="text"
+                                                            data-fixed-radius
+                                                            maxLength={120}
+                                                            value={les.title}
+                                                            autoFocus
+                                                            style={{
+                                                              fontFamily:
+                                                                "inherit",
+                                                              fontSize:
+                                                                "0.88rem",
+                                                              fontWeight: 500,
+                                                              lineHeight: 1.5,
+                                                              borderRadius:
+                                                                "6px",
+                                                            }}
+                                                            disabled={
+                                                              les.isPendingCreation ||
+                                                              savingLessonId ===
+                                                                les.id
+                                                            }
+                                                            onChange={(e) =>
+                                                              handleUpdateLesson(
+                                                                sec.id,
+                                                                les.id,
+                                                                {
+                                                                  title:
+                                                                    e.target
+                                                                      .value,
+                                                                },
+                                                              )
+                                                            }
+                                                            onBlur={() => {
+                                                              void handleLessonTitleBlur(
+                                                                sec.id,
+                                                                les.id,
+                                                              );
+                                                            }}
+                                                            onKeyDown={(e) => {
+                                                              if (
+                                                                e.key ===
+                                                                "Enter"
+                                                              ) {
+                                                                e.preventDefault();
+                                                                e.currentTarget.blur();
+                                                              } else if (
+                                                                e.key ===
+                                                                "Escape"
+                                                              ) {
+                                                                e.preventDefault();
+                                                                handleCancelEditLessonTitle(
+                                                                  sec.id,
+                                                                  les.id,
+                                                                );
+                                                              }
+                                                            }}
+                                                            placeholder="e.g. Introduction to React Hooks"
+                                                            className="h-7 min-w-0 flex-1 border border-[color-mix(in_srgb,var(--accent)_52%,transparent)] rounded-[6px] px-2 py-0.5 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] font-medium leading-[1.5] outline-none [font-family:inherit] focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
+                                                          />
+                                                          <button
+                                                            type="button"
+                                                            aria-label="Cancel lesson title edit"
+                                                            title="Cancel title edit"
+                                                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] text-(--muted) transition-colors hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:text-(--text)"
+                                                            onMouseDown={(
+                                                              e,
+                                                            ) => {
+                                                              e.preventDefault();
+                                                              e.stopPropagation();
+                                                            }}
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              handleCancelEditLessonTitle(
+                                                                sec.id,
+                                                                les.id,
+                                                              );
+                                                            }}
+                                                          >
+                                                            <X size={14} />
+                                                          </button>
+                                                        </div>
+                                                      ) : (
+                                                        <div className="group/title flex min-w-0 flex-1 items-center gap-1.5">
+                                                          <span className="min-w-0 flex-1 truncate whitespace-nowrap text-(--text) text-[0.88rem] font-medium cursor-pointer">
+                                                            {lesIndex + 1}.{" "}
+                                                            {les.title}
+                                                          </span>
+                                                          <button
+                                                            type="button"
+                                                            aria-label="Edit lesson title"
+                                                            title="Edit lesson title"
+                                                            disabled={
+                                                              les.isPendingCreation
+                                                            }
+                                                            className="mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border border-transparent bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-(--muted) opacity-0 transition-[opacity,color,background-color] duration-150 group-hover/title:opacity-100 group-focus-within/title:opacity-100 hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:text-(--text) focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) disabled:cursor-not-allowed disabled:opacity-30"
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              handleStartEditLessonTitle(
+                                                                sec.id,
+                                                                les.id,
+                                                              );
+                                                            }}
+                                                          >
+                                                            <PencilSimple
+                                                              size={14}
+                                                              weight="bold"
+                                                            />
+                                                          </button>
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+                                                      {les.isPendingCreation ? (
+                                                        <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                                                          <CircleNotch
+                                                            size={12}
+                                                            className="animate-spin text-(--accent)"
+                                                          />
+                                                          <span>
+                                                            Creating...
+                                                          </span>
+                                                        </span>
+                                                      ) : deletingLessonId ===
+                                                        les.id ? (
+                                                        <span className="inline-flex items-center gap-1 text-red-400 text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/28">
+                                                          <CircleNotch
+                                                            size={12}
+                                                            className="animate-spin text-red-400"
+                                                          />
+                                                          <span>
+                                                            Deleting...
+                                                          </span>
+                                                        </span>
+                                                      ) : (
+                                                        <CurriculumItemStatusIndicator
+                                                          status={getCurriculumItemDisplayStatus(
+                                                            les.id,
+                                                          )}
+                                                          testId={`curriculum-status-lesson-${les.id}`}
+                                                        />
+                                                      )}
+                                                      {les.isPublished ===
+                                                        false && (
+                                                        <span
+                                                          className="inline-flex items-center gap-1 text-[#f59e0b] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#f59e0b_12%,transparent)] border border-[color-mix(in_srgb,#f59e0b_28%,transparent)]"
+                                                          title="Draft mode: This lesson is not published and is hidden from students."
+                                                        >
+                                                          <EyeSlash
+                                                            size={13}
+                                                            weight="bold"
+                                                          />{" "}
+                                                          Unpublished
+                                                        </span>
+                                                      )}
+                                                      {isEditorOpen && (
+                                                        <>
+                                                          <button
+                                                            type="button"
+                                                            disabled={
+                                                              savingLessonId ===
+                                                                les.id ||
+                                                              deletingLessonId ===
+                                                                les.id
+                                                            }
+                                                            className="inline-flex h-7 items-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-2.5 text-[14px]! font-[700]! text-(--text) transition-colors hover:bg-[color-mix(in_srgb,var(--text)_12%,transparent)] disabled:cursor-not-allowed disabled:opacity-50"
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              lessonEditorRef.current?.cancel();
+                                                            }}
+                                                          >
+                                                            Cancel
+                                                          </button>
+                                                          <button
+                                                            type="button"
+                                                            disabled={
+                                                              savingLessonId ===
+                                                                les.id ||
+                                                              deletingLessonId ===
+                                                                les.id
+                                                            }
+                                                            className="inline-flex h-7 items-center rounded-[8px] bg-(--accent) px-2.5 text-[14px]! font-[700]! text-(--on-accent,#ffffff) shadow-[0_2px_8px_var(--accent-shadow)] transition-colors hover:bg-(--accent-hover,var(--accent)) disabled:cursor-not-allowed disabled:opacity-50"
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              lessonEditorRef.current?.save();
+                                                            }}
+                                                          >
+                                                            Save
+                                                          </button>
+                                                        </>
+                                                      )}
+                                                      <button
+                                                        type="button"
+                                                        disabled={
+                                                          les.isPendingCreation ||
+                                                          deletingLessonId ===
+                                                            les.id
+                                                        }
+                                                        className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                        aria-label="Delete lesson"
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          handleDeleteLesson(
+                                                            sec.id,
+                                                            les.id,
+                                                          );
+                                                        }}
+                                                      >
+                                                        {deletingLessonId ===
+                                                        les.id ? (
+                                                          <CircleNotch
+                                                            size={14}
+                                                            className="animate-spin text-red-400"
+                                                          />
+                                                        ) : (
+                                                          <Trash size={15} />
+                                                        )}
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 [&>svg]:transition-transform [&>svg]:duration-200 ${
+                                                          isExpanded
+                                                            ? "is-expanded [&>svg]:rotate-180"
+                                                            : ""
+                                                        }`}
+                                                        aria-label={
+                                                          isExpanded
+                                                            ? "Collapse lesson editor"
+                                                            : "Expand lesson editor"
+                                                        }
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          void toggleLesson();
+                                                        }}
+                                                      >
+                                                        <CaretDown size={15} />
+                                                      </button>
+                                                    </div>
+                                                  </div>
 
-                                        {/* Quiz authoring stays behind an explicit action so it cannot slow lesson expansion. */}
-                                        <div className="mt-1 border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)] pt-4">
-                                          {isQuizOpen ? (
-                                            <div className="flex flex-col gap-3">
-                                              <div className="flex items-center justify-between gap-3">
-                                                <div className="flex items-center gap-2 text-xs font-semibold text-(--text)">
-                                                  <PuzzlePiece
-                                                    size={16}
-                                                    className="text-(--accent)"
-                                                    weight="fill"
-                                                  />
-                                                  <span>Quiz Assessment</span>
-                                                </div>
-                                                <button
-                                                  type="button"
-                                                  className="inline-flex min-h-8 items-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-transparent px-2.5 text-xs font-semibold text-(--muted) transition-colors hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:text-(--text)"
-                                                  onClick={() => setQuizOpen(false)}
-                                                >
-                                                  Close
-                                                </button>
+                                                  {(isExpanded ||
+                                                    shouldKeepEditorMounted) && (
+                                                    <div
+                                                      aria-hidden={!isExpanded}
+                                                      className={
+                                                        isExpanded
+                                                          ? undefined
+                                                          : "hidden"
+                                                      }
+                                                    >
+                                                      {les.isPendingCreation ? (
+                                                        <div className="flex min-h-48 items-center justify-center border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-8">
+                                                          <div className="flex items-center gap-2 text-(--muted) text-[0.86rem] font-semibold">
+                                                            <CircleNotch
+                                                              size={16}
+                                                              className="animate-spin text-(--accent)"
+                                                            />
+                                                            Creating lesson...
+                                                          </div>
+                                                        </div>
+                                                      ) : shouldKeepEditorMounted ? (
+                                                        <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-5 max-[768px]:p-[14px_12px_16px]">
+                                                          <LessonStudioEditor
+                                                            ref={
+                                                              lessonEditorRef
+                                                            }
+                                                            hideHeader
+                                                            sectionNumber={
+                                                              sections.findIndex(
+                                                                (item) =>
+                                                                  item.id ===
+                                                                  sec.id,
+                                                              ) + 1
+                                                            }
+                                                            sectionTitle={
+                                                              sec.title
+                                                            }
+                                                            lessonNumber={
+                                                              lesIndex + 1
+                                                            }
+                                                            playbackLessonNumber={getCourseWideLessonNumber(
+                                                              sections,
+                                                              les.id,
+                                                            )}
+                                                            lessonTitle={
+                                                              les.title
+                                                            }
+                                                            courseSlug={
+                                                              editorData?.course
+                                                                ?.slug
+                                                            }
+                                                            courseTitle={
+                                                              courseTitle ||
+                                                              undefined
+                                                            }
+                                                            contentType={
+                                                              (les.contentType as StudioLessonContentType) ||
+                                                              "video"
+                                                            }
+                                                            isPublished={
+                                                              les.isPublished !==
+                                                              false
+                                                            }
+                                                            isPreview={
+                                                              les.isPreview ===
+                                                              true
+                                                            }
+                                                            playbackSuspended={
+                                                              !isExpanded
+                                                            }
+                                                            mediaInfo={getLessonMediaInfo(
+                                                              les,
+                                                            )}
+                                                            resources={les.resources.map(
+                                                              (resource) => ({
+                                                                id: resource.id,
+                                                                name: resource.name,
+                                                                type: resource.type,
+                                                                size: resource.size,
+                                                                mediaAssetId:
+                                                                  resource.mediaAssetId,
+                                                              }),
+                                                            )}
+                                                            isSaving={
+                                                              savingLessonId ===
+                                                              les.id
+                                                            }
+                                                            onBack={() => {
+                                                              setExpanded(
+                                                                false,
+                                                              );
+                                                              setEditorOpen(
+                                                                false,
+                                                              );
+                                                              setQuizOpen(
+                                                                false,
+                                                              );
+                                                            }}
+                                                            onCancel={(draft) =>
+                                                              handleCancelLessonDraft(
+                                                                sec.id,
+                                                                les.id,
+                                                                draft,
+                                                              )
+                                                            }
+                                                            onSave={async (
+                                                              payload,
+                                                            ) => {
+                                                              handleUpdateLesson(
+                                                                sec.id,
+                                                                les.id,
+                                                                {
+                                                                  title:
+                                                                    payload.title,
+                                                                  contentType:
+                                                                    payload.contentType,
+                                                                  isPublished:
+                                                                    payload.isPublished,
+                                                                  isPreview:
+                                                                    payload.isPreview,
+                                                                },
+                                                              );
+                                                              const saved =
+                                                                await persistLesson(
+                                                                  sec.id,
+                                                                  les.id,
+                                                                  {
+                                                                    collapseOnSuccess: false,
+                                                                  },
+                                                                );
+                                                              if (saved) {
+                                                                setToastMessage(
+                                                                  "Lesson changes saved successfully.",
+                                                                );
+                                                                setEditorOpen(
+                                                                  false,
+                                                                );
+                                                              }
+                                                            }}
+                                                            onContentTypeChange={(
+                                                              contentType,
+                                                            ) => {
+                                                              handleUpdateLesson(
+                                                                sec.id,
+                                                                les.id,
+                                                                {
+                                                                  contentType,
+                                                                },
+                                                              );
+                                                            }}
+                                                            onMediaAttached={(
+                                                              mediaAssetId,
+                                                            ) =>
+                                                              handleLessonMediaAttached(
+                                                                sec.id,
+                                                                les.id,
+                                                                mediaAssetId,
+                                                              )
+                                                            }
+                                                            onProcessingComplete={() =>
+                                                              handleLessonProcessingComplete()
+                                                            }
+                                                            onUploadMedia={async (
+                                                              file,
+                                                            ) => {
+                                                              try {
+                                                                const presigned =
+                                                                  await mediaService.presignMediaUpload(
+                                                                    {
+                                                                      filename:
+                                                                        file.name,
+                                                                      contentType:
+                                                                        file.type ||
+                                                                        "application/octet-stream",
+                                                                      fileSize:
+                                                                        file.size,
+                                                                      type:
+                                                                        les.contentType ===
+                                                                        "image"
+                                                                          ? "image"
+                                                                          : les.contentType ===
+                                                                              "document"
+                                                                            ? "document"
+                                                                            : "video",
+                                                                      visibility:
+                                                                        "protected",
+                                                                    },
+                                                                  );
+                                                                await mediaService.uploadFileToPresignedUrl(
+                                                                  presigned.uploadUrl,
+                                                                  file,
+                                                                );
+                                                                await mediaService.confirmUpload(
+                                                                  presigned.mediaAssetId,
+                                                                );
+                                                                const attached =
+                                                                  await handleLessonMediaAttached(
+                                                                    sec.id,
+                                                                    les.id,
+                                                                    presigned.mediaAssetId,
+                                                                  );
+                                                                // A failed attach has already shown its own error.
+                                                                if (!attached)
+                                                                  return;
+                                                                setToastMessage(
+                                                                  "Media uploaded and attached successfully.",
+                                                                );
+                                                              } catch (err: unknown) {
+                                                                setToastMessage(
+                                                                  err instanceof
+                                                                    Error
+                                                                    ? err.message
+                                                                    : "Media upload failed.",
+                                                                );
+                                                              }
+                                                            }}
+                                                            descriptionSection={
+                                                              <LessonDescriptionEditor
+                                                                id={`lesson-description-${les.id}`}
+                                                                disabled={
+                                                                  les.isPendingCreation ||
+                                                                  savingLessonId ===
+                                                                    les.id
+                                                                }
+                                                                value={
+                                                                  les.description
+                                                                }
+                                                                onChange={(
+                                                                  value,
+                                                                ) =>
+                                                                  handleUpdateLesson(
+                                                                    sec.id,
+                                                                    les.id,
+                                                                    {
+                                                                      description:
+                                                                        value,
+                                                                    },
+                                                                  )
+                                                                }
+                                                                placeholder="Add a detailed description of what students will learn in this lesson..."
+                                                                maxLength={
+                                                                  10000
+                                                                }
+                                                              />
+                                                            }
+                                                            resourcesSection={
+                                                              <LessonResourceManager
+                                                                courseId={
+                                                                  currentCourseId
+                                                                }
+                                                                lessonId={
+                                                                  les.id
+                                                                }
+                                                                resources={
+                                                                  les.resources
+                                                                }
+                                                                disabled={
+                                                                  les.isPendingCreation ||
+                                                                  createLessonResourceMutation.isPending ||
+                                                                  deleteLessonResourceMutation.isPending
+                                                                }
+                                                                onCreateResource={(
+                                                                  payload,
+                                                                ) =>
+                                                                  handleCreateLessonResource(
+                                                                    les.id,
+                                                                    payload,
+                                                                  )
+                                                                }
+                                                                onResourceAdded={(
+                                                                  resource,
+                                                                ) =>
+                                                                  handleLessonResourceAdded(
+                                                                    sec.id,
+                                                                    les.id,
+                                                                    resource,
+                                                                  )
+                                                                }
+                                                                onDeleteResource={(
+                                                                  resourceId,
+                                                                ) =>
+                                                                  handleDeleteLessonResource(
+                                                                    resourceId,
+                                                                  )
+                                                                }
+                                                                onResourceRemoved={(
+                                                                  resource,
+                                                                ) =>
+                                                                  handleLessonResourceRemoved(
+                                                                    sec.id,
+                                                                    les.id,
+                                                                    resource,
+                                                                  )
+                                                                }
+                                                              />
+                                                            }
+                                                            quizSection={
+                                                              currentCourseId &&
+                                                              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                                                                les.id,
+                                                              ) ? (
+                                                                <QuizAuthoringPanel
+                                                                  courseId={
+                                                                    currentCourseId
+                                                                  }
+                                                                  lessonId={
+                                                                    les.id
+                                                                  }
+                                                                  lessonTitle={
+                                                                    les.title
+                                                                  }
+                                                                  onQuizDeleted={() => {}}
+                                                                />
+                                                              ) : (
+                                                                <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
+                                                                  Save the
+                                                                  course and
+                                                                  lesson before
+                                                                  configuring an
+                                                                  attached Quiz.
+                                                                </div>
+                                                              )
+                                                            }
+                                                          />
+                                                        </div>
+                                                      ) : (
+                                                        <div
+                                                          className={`grid transition-[grid-template-rows] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                                                            isExpanded
+                                                              ? "is-open grid-rows-[1fr]"
+                                                              : "grid-rows-[0fr]"
+                                                          }`}
+                                                          draggable={false}
+                                                          onMouseDown={(e) =>
+                                                            e.stopPropagation()
+                                                          }
+                                                        >
+                                                          <div
+                                                            className={`min-h-0 overflow-hidden border-t border-transparent bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] transition-[padding,border-color] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                                                              isExpanded
+                                                                ? "px-5 pt-4 pb-5 border-t-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[768px]:p-[14px_12px_16px]"
+                                                                : "px-5 py-0 max-[768px]:p-0"
+                                                            }`}
+                                                          >
+                                                            <div className="grid grid-cols-1 gap-6 max-[768px]:gap-3.5">
+                                                              {/* Lesson description stays below the lightweight lesson controls. */}
+                                                              <div className="order-2 flex min-w-0 flex-col gap-4.5">
+                                                                {isEditorOpen ? (
+                                                                  <div className="mb-3 flex flex-col gap-2">
+                                                                    <div className="flex items-center justify-between gap-3">
+                                                                      <label
+                                                                        id={`les-desc-label-${les.id}`}
+                                                                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                                                                      >
+                                                                        Lesson
+                                                                        Description
+                                                                      </label>
+                                                                      <button
+                                                                        type="button"
+                                                                        className="inline-flex min-h-8 items-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-transparent px-2.5 text-xs font-semibold text-(--muted) transition-colors hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+                                                                        onMouseDown={(
+                                                                          e,
+                                                                        ) => {
+                                                                          e.preventDefault();
+                                                                          e.stopPropagation();
+                                                                        }}
+                                                                        onClick={(
+                                                                          e,
+                                                                        ) => {
+                                                                          e.stopPropagation();
+                                                                          handleCancelLessonDescriptionEdit(
+                                                                            sec.id,
+                                                                            les.id,
+                                                                          );
+                                                                          setEditorOpen(
+                                                                            false,
+                                                                          );
+                                                                        }}
+                                                                      >
+                                                                        Cancel
+                                                                      </button>
+                                                                    </div>
+                                                                    <div
+                                                                      className={
+                                                                        les.isPendingCreation
+                                                                          ? "opacity-60 pointer-events-none"
+                                                                          : ""
+                                                                      }
+                                                                      onBlur={(
+                                                                        e,
+                                                                      ) => {
+                                                                        if (
+                                                                          !e.currentTarget.contains(
+                                                                            e.relatedTarget as Node,
+                                                                          )
+                                                                        ) {
+                                                                          void handleLessonFieldBlur(
+                                                                            sec.id,
+                                                                            les.id,
+                                                                          );
+                                                                        }
+                                                                      }}
+                                                                    >
+                                                                      <LessonDescriptionEditor
+                                                                        id={`lesson-description-${les.id}`}
+                                                                        disabled={
+                                                                          les.isPendingCreation
+                                                                        }
+                                                                        value={
+                                                                          les.description
+                                                                        }
+                                                                        onChange={(
+                                                                          val,
+                                                                        ) =>
+                                                                          handleUpdateLesson(
+                                                                            sec.id,
+                                                                            les.id,
+                                                                            {
+                                                                              description:
+                                                                                val,
+                                                                            },
+                                                                          )
+                                                                        }
+                                                                        placeholder="Add a detailed description of what students will learn in this lesson..."
+                                                                        maxLength={
+                                                                          10000
+                                                                        }
+                                                                      />
+                                                                    </div>
+                                                                  </div>
+                                                                ) : (
+                                                                  <LessonDescriptionPreview
+                                                                    description={
+                                                                      les.description
+                                                                    }
+                                                                    onEdit={() => {
+                                                                      setEditorOpen(
+                                                                        true,
+                                                                      );
+                                                                      onLessonEditorOpen(
+                                                                        les.id,
+                                                                      );
+                                                                    }}
+                                                                  />
+                                                                )}
+                                                              </div>
+
+                                                              {/* Right column */}
+                                                              <div className="order-1 flex min-w-0 flex-col gap-4.5">
+                                                                {/* Content Type Selector */}
+                                                                <div className="flex flex-col gap-2 mb-4">
+                                                                  <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                                                                    Content Type
+                                                                    {""}
+                                                                    <span className="text-[#ff5252] ml-0.5">
+                                                                      *
+                                                                    </span>
+                                                                  </label>
+                                                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                                                    <div
+                                                                      className={`relative flex items-center gap-2.5 border rounded-[10px] px-3 py-2.5 text-left transition-[border-color,background-color] duration-150 ease-out ${
+                                                                        les.isPendingCreation
+                                                                          ? "opacity-60 cursor-not-allowed"
+                                                                          : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
+                                                                      } ${
+                                                                        les.contentType ===
+                                                                        "video"
+                                                                          ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
+                                                                          : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
+                                                                      }`}
+                                                                      onClick={() => {
+                                                                        if (
+                                                                          les.isPendingCreation
+                                                                        )
+                                                                          return;
+                                                                        void handleLessonDiscreteChange(
+                                                                          sec.id,
+                                                                          les.id,
+                                                                          {
+                                                                            contentType:
+                                                                              "video",
+                                                                          },
+                                                                        );
+                                                                      }}
+                                                                    >
+                                                                      <div
+                                                                        className={`flex w-4 h-4 shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "video" ? "border-(--accent)" : "border-(--muted)"}`}
+                                                                      >
+                                                                        {les.contentType ===
+                                                                          "video" && (
+                                                                          <div className="w-1.5 h-1.5 rounded-full bg-(--accent)" />
+                                                                        )}
+                                                                      </div>
+                                                                      <div className="flex items-center justify-center text-(--accent)">
+                                                                        <Video
+                                                                          size={
+                                                                            16
+                                                                          }
+                                                                          weight="fill"
+                                                                        />
+                                                                      </div>
+                                                                      <div className="flex flex-col min-w-0">
+                                                                        <span className="text-(--text) text-[0.82rem] font-bold leading-tight truncate">
+                                                                          Video
+                                                                        </span>
+                                                                        <span className="text-(--muted) text-[0.70rem] truncate">
+                                                                          Video
+                                                                          lesson
+                                                                        </span>
+                                                                      </div>
+                                                                    </div>
+
+                                                                    <div
+                                                                      className={`relative flex items-center gap-2.5 border rounded-[10px] px-3 py-2.5 text-left transition-[border-color,background-color] duration-150 ease-out ${
+                                                                        les.isPendingCreation
+                                                                          ? "opacity-60 cursor-not-allowed"
+                                                                          : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
+                                                                      } ${
+                                                                        les.contentType ===
+                                                                        "document"
+                                                                          ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
+                                                                          : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
+                                                                      }`}
+                                                                      onClick={() => {
+                                                                        if (
+                                                                          les.isPendingCreation
+                                                                        )
+                                                                          return;
+                                                                        void handleLessonDiscreteChange(
+                                                                          sec.id,
+                                                                          les.id,
+                                                                          {
+                                                                            contentType:
+                                                                              "document",
+                                                                          },
+                                                                        );
+                                                                      }}
+                                                                    >
+                                                                      <div
+                                                                        className={`flex w-4 h-4 shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "document" ? "border-(--accent)" : "border-(--muted)"}`}
+                                                                      >
+                                                                        {les.contentType ===
+                                                                          "document" && (
+                                                                          <div className="w-1.5 h-1.5 rounded-full bg-(--accent)" />
+                                                                        )}
+                                                                      </div>
+                                                                      <div className="flex items-center justify-center text-(--accent)">
+                                                                        <FileText
+                                                                          size={
+                                                                            16
+                                                                          }
+                                                                          weight="fill"
+                                                                        />
+                                                                      </div>
+                                                                      <div className="flex flex-col min-w-0">
+                                                                        <span className="text-(--text) text-[0.82rem] font-bold leading-tight truncate">
+                                                                          Document
+                                                                        </span>
+                                                                        <span className="text-(--muted) text-[0.70rem] truncate">
+                                                                          PDF /
+                                                                          Reading
+                                                                        </span>
+                                                                      </div>
+                                                                    </div>
+                                                                  </div>
+                                                                </div>
+
+                                                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                                                  {/* Content Source Controls (Video or Document) */}
+                                                                  <div className="flex flex-col gap-2 mb-0">
+                                                                    <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                                                                      {les.contentType ===
+                                                                      "video"
+                                                                        ? "Video Source"
+                                                                        : "Document / PDF Source"}
+                                                                      <span className="text-[#ff5252] ml-0.5">
+                                                                        *
+                                                                      </span>
+                                                                    </label>
+                                                                    {les.contentType ===
+                                                                    "video" ? (
+                                                                      <LessonVideoUpload
+                                                                        mediaAssetId={
+                                                                          les.contentMediaId
+                                                                        }
+                                                                        disabled={
+                                                                          les.isPendingCreation
+                                                                        }
+                                                                        onMediaAttached={(
+                                                                          mediaAssetId,
+                                                                        ) =>
+                                                                          handleLessonMediaAttached(
+                                                                            sec.id,
+                                                                            les.id,
+                                                                            mediaAssetId,
+                                                                          )
+                                                                        }
+                                                                        onProcessingComplete={() =>
+                                                                          handleLessonProcessingComplete()
+                                                                        }
+                                                                      />
+                                                                    ) : (
+                                                                      <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:flex max-[768px]:gap-2">
+                                                                        <button
+                                                                          type="button"
+                                                                          disabled={
+                                                                            les.isPendingCreation
+                                                                          }
+                                                                          style={{
+                                                                            fontSize:
+                                                                              "0.80rem",
+                                                                            fontWeight: 700,
+                                                                            height:
+                                                                              "34px",
+                                                                            borderRadius:
+                                                                              "8px",
+                                                                            gap: "6px",
+                                                                            paddingLeft:
+                                                                              "16px",
+                                                                            paddingRight:
+                                                                              "16px",
+                                                                          }}
+                                                                          className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
+                                                                        >
+                                                                          <UploadSimple
+                                                                            size={
+                                                                              15
+                                                                            }
+                                                                          />
+                                                                          Upload
+                                                                        </button>
+                                                                        <button
+                                                                          type="button"
+                                                                          disabled={
+                                                                            les.isPendingCreation
+                                                                          }
+                                                                          style={{
+                                                                            fontSize:
+                                                                              "0.80rem",
+                                                                            fontWeight: 500,
+                                                                            height:
+                                                                              "34px",
+                                                                            borderRadius:
+                                                                              "8px",
+                                                                            gap: "6px",
+                                                                            paddingLeft:
+                                                                              "14px",
+                                                                            paddingRight:
+                                                                              "14px",
+                                                                          }}
+                                                                          className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text) bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
+                                                                        >
+                                                                          <FileText
+                                                                            size={
+                                                                              15
+                                                                            }
+                                                                            className="text-(--text-secondary)"
+                                                                          />
+                                                                          Select
+                                                                          from
+                                                                          Media
+                                                                        </button>
+                                                                      </div>
+                                                                    )}
+                                                                  </div>
+
+                                                                  {/* Lesson Publishing Status */}
+                                                                  <div className="flex flex-col gap-2 mb-0">
+                                                                    <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                                                                      Publishing
+                                                                      Status
+                                                                    </label>
+                                                                    <ThemedSelect
+                                                                      value={
+                                                                        les.isPublished !==
+                                                                        false
+                                                                          ? "published"
+                                                                          : "draft"
+                                                                      }
+                                                                      onValueChange={(
+                                                                        value,
+                                                                      ) => {
+                                                                        if (
+                                                                          les.isPendingCreation
+                                                                        )
+                                                                          return;
+                                                                        void handleLessonDiscreteChange(
+                                                                          sec.id,
+                                                                          les.id,
+                                                                          {
+                                                                            isPublished:
+                                                                              value ===
+                                                                              "published",
+                                                                          },
+                                                                        );
+                                                                      }}
+                                                                      options={[
+                                                                        [
+                                                                          "published",
+                                                                          "Published",
+                                                                        ],
+                                                                        [
+                                                                          "draft",
+                                                                          "Draft (Hidden)",
+                                                                        ],
+                                                                      ]}
+                                                                      disabled={
+                                                                        les.isPendingCreation
+                                                                      }
+                                                                      ariaLabel="Publishing status"
+                                                                      triggerClassName="!h-9 !w-full !rounded-[8px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !px-3 !text-[0.84rem] !text-(--text) !bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] font-semibold disabled:!opacity-60"
+                                                                    />
+                                                                  </div>
+                                                                </div>
+
+                                                                {/* Free Preview Toggle */}
+                                                                <div
+                                                                  className={`flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[8px] px-3 py-2 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-3 ${les.isPendingCreation ? "opacity-60 pointer-events-none" : ""}`}
+                                                                >
+                                                                  <div className="pr-3">
+                                                                    <strong className="block mb-0.5 text-(--text) text-[0.88rem] font-[650]">
+                                                                      Free
+                                                                      Preview
+                                                                    </strong>
+                                                                    <p className="m-0 text-(--muted) text-[0.78rem]">
+                                                                      Allow
+                                                                      prospective
+                                                                      students
+                                                                      to view
+                                                                      this
+                                                                      lesson
+                                                                      before
+                                                                      enrolling
+                                                                      or
+                                                                      purchasing.
+                                                                    </p>
+                                                                  </div>
+                                                                  <SettingsToggle
+                                                                    checked={
+                                                                      les.isPreview ===
+                                                                      true
+                                                                    }
+                                                                    onChange={(
+                                                                      checked,
+                                                                    ) => {
+                                                                      if (
+                                                                        les.isPendingCreation
+                                                                      )
+                                                                        return;
+                                                                      void handleLessonDiscreteChange(
+                                                                        sec.id,
+                                                                        les.id,
+                                                                        {
+                                                                          isPreview:
+                                                                            checked,
+                                                                        },
+                                                                      );
+                                                                    }}
+                                                                    label="Toggle Free Preview"
+                                                                  />
+                                                                </div>
+
+                                                                {/* Lesson Resources */}
+                                                                <LessonResourceManager
+                                                                  courseId={
+                                                                    currentCourseId
+                                                                  }
+                                                                  lessonId={
+                                                                    les.id
+                                                                  }
+                                                                  resources={
+                                                                    les.resources
+                                                                  }
+                                                                  disabled={
+                                                                    les.isPendingCreation ||
+                                                                    createLessonResourceMutation.isPending ||
+                                                                    deleteLessonResourceMutation.isPending
+                                                                  }
+                                                                  onCreateResource={(
+                                                                    payload,
+                                                                  ) =>
+                                                                    handleCreateLessonResource(
+                                                                      les.id,
+                                                                      payload,
+                                                                    )
+                                                                  }
+                                                                  onResourceAdded={(
+                                                                    resource,
+                                                                  ) =>
+                                                                    handleLessonResourceAdded(
+                                                                      sec.id,
+                                                                      les.id,
+                                                                      resource,
+                                                                    )
+                                                                  }
+                                                                  onDeleteResource={(
+                                                                    resourceId,
+                                                                  ) =>
+                                                                    handleDeleteLessonResource(
+                                                                      resourceId,
+                                                                    )
+                                                                  }
+                                                                  onResourceRemoved={(
+                                                                    resource,
+                                                                  ) =>
+                                                                    handleLessonResourceRemoved(
+                                                                      sec.id,
+                                                                      les.id,
+                                                                      resource,
+                                                                    )
+                                                                  }
+                                                                />
+                                                              </div>
+                                                            </div>
+
+                                                            {/* Quiz authoring stays behind an explicit action so it cannot slow lesson expansion. */}
+                                                            <div className="mt-1 border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)] pt-4">
+                                                              {isQuizOpen ? (
+                                                                <div className="flex flex-col gap-3">
+                                                                  <div className="flex items-center justify-between gap-3">
+                                                                    <div className="flex items-center gap-2 text-xs font-semibold text-(--text)">
+                                                                      <PuzzlePiece
+                                                                        size={
+                                                                          16
+                                                                        }
+                                                                        className="text-(--accent)"
+                                                                        weight="fill"
+                                                                      />
+                                                                      <span>
+                                                                        Quiz
+                                                                        Assessment
+                                                                      </span>
+                                                                    </div>
+                                                                    <button
+                                                                      type="button"
+                                                                      className="inline-flex min-h-8 items-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-transparent px-2.5 text-xs font-semibold text-(--muted) transition-colors hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:text-(--text)"
+                                                                      onClick={() =>
+                                                                        setQuizOpen(
+                                                                          false,
+                                                                        )
+                                                                      }
+                                                                    >
+                                                                      Close
+                                                                    </button>
+                                                                  </div>
+                                                                  {currentCourseId &&
+                                                                  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                                                                    les.id,
+                                                                  ) ? (
+                                                                    <QuizAuthoringPanel
+                                                                      courseId={
+                                                                        currentCourseId
+                                                                      }
+                                                                      lessonId={
+                                                                        les.id
+                                                                      }
+                                                                      lessonTitle={
+                                                                        les.title
+                                                                      }
+                                                                      onQuizDeleted={() => {
+                                                                        // Quiz deleted, query invalidation in hook updates UI
+                                                                      }}
+                                                                    />
+                                                                  ) : (
+                                                                    <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
+                                                                      Save the
+                                                                      course and
+                                                                      lesson
+                                                                      before
+                                                                      configuring
+                                                                      an
+                                                                      attached
+                                                                      Quiz.
+                                                                    </div>
+                                                                  )}
+                                                                </div>
+                                                              ) : (
+                                                                <button
+                                                                  type="button"
+                                                                  disabled={
+                                                                    les.isPendingCreation
+                                                                  }
+                                                                  className="inline-flex min-h-9 items-center gap-2 rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] px-3 text-xs font-semibold text-(--accent-ink,var(--accent)) transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] disabled:cursor-not-allowed disabled:opacity-50"
+                                                                  onClick={() =>
+                                                                    setQuizOpen(
+                                                                      true,
+                                                                    )
+                                                                  }
+                                                                >
+                                                                  <PuzzlePiece
+                                                                    size={15}
+                                                                    weight="fill"
+                                                                  />
+                                                                  Add Quiz
+                                                                </button>
+                                                              )}
+                                                            </div>
+                                                          </div>
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  )}
+                                                </>
                                               </div>
-                                              {currentCourseId &&
-                                              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-                                                les.id,
-                                              ) ? (
-                                                <QuizAuthoringPanel
-                                                  courseId={currentCourseId}
-                                                  lessonId={les.id}
-                                                  lessonTitle={les.title}
-                                                  onQuizDeleted={() => {
-                                                    // Quiz deleted, query invalidation in hook updates UI
-                                                  }}
-                                                />
-                                              ) : (
-                                                <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
-                                                  Save the course and lesson before configuring an attached Quiz.
-                                                </div>
-                                              )}
-                                            </div>
-                                          ) : (
-                                            <button
-                                              type="button"
-                                              disabled={les.isPendingCreation}
-                                              className="inline-flex min-h-9 items-center gap-2 rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] px-3 text-xs font-semibold text-(--accent-ink,var(--accent)) transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] disabled:cursor-not-allowed disabled:opacity-50"
-                                              onClick={() => setQuizOpen(true)}
-                                            >
-                                              <PuzzlePiece size={15} weight="fill" />
-                                              Add Quiz
-                                            </button>
-                                          )}
-                                        </div>
-                                    </div>
-                                  </div>
-                                )}
-                                  </div>
-                                )}
-                              </>
-                            </div>
-                                  );
-                                }}
+                                            );
+                                          }}
+                                        />
+                                        {isDropAfter && <LessonDropIndicator />}
+                                      </Fragment>
+                                    );
+                                  }}
                                 />
-                                {isDropAfter && <LessonDropIndicator />}
-                              </Fragment>
-                              );
-                            }}
-                          />
-                        )}
+                              )}
 
-                        {/* Add Lesson Action */}
-                        <div className="mt-3.5">
-                          <button
-                            type="button"
-                            disabled={
-                              sec.isPendingCreation ||
-                              creatingLessonSectionId === sec.id ||
-                              createLessonMutation.isPending
+                              {/* Add Lesson Action */}
+                              <div className="mt-3.5">
+                                <button
+                                  type="button"
+                                  disabled={
+                                    sec.isPendingCreation ||
+                                    creatingLessonSectionId === sec.id ||
+                                    createLessonMutation.isPending
+                                  }
+                                  className="inline-flex items-center gap-1.5 text-(--muted) enabled:hover:text-(--text) text-[0.82rem] font-medium border-0 bg-transparent p-0 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none enabled:cursor-pointer"
+                                  onClick={() => handleAddLesson(sec.id)}
+                                >
+                                  {creatingLessonSectionId === sec.id ? (
+                                    <>
+                                      <CircleNotch
+                                        size={14}
+                                        className="animate-spin text-(--accent)"
+                                      />
+                                      <span>Adding Lesson...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Plus size={16} /> Add Lesson
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )
+              ) : panelStep === "access-rules" ? (
+                <div className="flex w-full flex-col gap-5">
+                  {/* Top Grid: 1. Who can access & 2. Access duration */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+                    {/* Card 1: Who can access this course? */}
+                    <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                      <div className="mb-4.5 flex items-center justify-between">
+                        <div>
+                          <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                            1. Who can access this course?
+                          </h3>
+                          <p className="m-0 text-(--muted) text-[0.83rem]">
+                            Choose who is allowed to access this course.
+                          </p>
+                        </div>
+                        <AccessRulesControlStatusIndicator
+                          status={getAccessControlDisplayStatus("accessType")}
+                          testId="access-rules-status-accessType"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-3">
+                        {/* Radio option: Everyone */}
+                        <label
+                          className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                            isAccessRulesSaving ||
+                            savingAccessControls.has("accessType")
+                              ? "opacity-60 cursor-not-allowed"
+                              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                          } ${
+                            accessRules.accessType === "everyone"
+                              ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                          }`}
+                          onClick={() => {
+                            if (
+                              !isAccessRulesSaving &&
+                              !savingAccessControls.has("accessType")
+                            ) {
+                              handleAccessTypeChange("everyone");
                             }
-                            className="inline-flex items-center gap-1.5 text-(--muted) enabled:hover:text-(--text) text-[0.82rem] font-medium border-0 bg-transparent p-0 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none enabled:cursor-pointer"
-                            onClick={() => handleAddLesson(sec.id)}
-                          >
-                            {creatingLessonSectionId === sec.id ? (
-                              <>
-                                <CircleNotch
-                                  size={14}
-                                  className="animate-spin text-(--accent)"
-                                />
-                                <span>Adding Lesson...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Plus size={16} /> Add Lesson
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )
-        ) : panelStep === "access-rules" ? (
-            <div className="flex w-full flex-col gap-5">
-              {/* Top Grid: 1. Who can access & 2. Access duration */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
-                {/* Card 1: Who can access this course? */}
-                <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                  <div className="mb-4.5 flex items-center justify-between">
-                    <div>
-                      <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                        1. Who can access this course?
-                      </h3>
-                      <p className="m-0 text-(--muted) text-[0.83rem]">
-                        Choose who is allowed to access this course.
-                      </p>
-                    </div>
-                    <AccessRulesControlStatusIndicator
-                      status={getAccessControlDisplayStatus("accessType")}
-                      testId="access-rules-status-accessType"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-3">
-                    {/* Radio option: Everyone */}
-                    <label
-                      className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                        isAccessRulesSaving ||
-                        savingAccessControls.has("accessType")
-                          ? "opacity-60 cursor-not-allowed"
-                          : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                      } ${
-                        accessRules.accessType === "everyone"
-                          ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                          : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                      }`}
-                      onClick={() => {
-                        if (
-                          !isAccessRulesSaving &&
-                          !savingAccessControls.has("accessType")
-                        ) {
-                          handleAccessTypeChange("everyone");
-                        }
-                      }}
-                    >
-                      <div
-                        className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                          accessRules.accessType === "everyone"
-                            ? "border-(--accent)"
-                            : "border-(--muted)"
-                        }`}
-                      >
-                        {accessRules.accessType === "everyone" && (
-                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                        )}
-                      </div>
-                      <div className="flex flex-1 flex-col gap-0.75">
-                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                          Everyone
-                        </strong>
-                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                          Anyone with access to the platform can access this
-                          course.
-                        </p>
-                      </div>
-                    </label>
-
-                    {/* Radio option: Restricted access (Coming soon - Disabled) */}
-                    <div
-                      className="relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 opacity-60 cursor-not-allowed select-none border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                      aria-disabled="true"
-                    >
-                      <div className="flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
-                      <div className="flex flex-1 flex-col gap-0.75 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <strong className="text-(--text) text-[0.9rem] font-[650] leading-[18px]">
-                            Restricted access
-                          </strong>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
-                            Coming soon
-                          </span>
-                        </div>
-                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                          Only users who meet the selected requirements can
-                          access this course.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card 2: Access duration */}
-                <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                  <div className="mb-4.5 flex items-center justify-between">
-                    <div>
-                      <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                        2. Access duration
-                      </h3>
-                      <p className="m-0 text-(--muted) text-[0.83rem]">
-                        Set how long learners can access this course.
-                      </p>
-                    </div>
-                    <AccessRulesControlStatusIndicator
-                      status={getAccessControlDisplayStatus("durationMode")}
-                      testId="access-rules-status-durationMode"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-3">
-                    {/* Option 1: Lifetime access */}
-                    <div
-                      className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                        isAccessRulesSaving ||
-                        savingAccessControls.has("durationMode")
-                          ? "opacity-60 cursor-not-allowed"
-                          : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                      } ${
-                        accessRules.durationMode === "lifetime"
-                          ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                          : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                      }`}
-                      onClick={() =>
-                        !isAccessRulesSaving &&
-                        !savingAccessControls.has("durationMode") &&
-                        handleDurationModeChange("lifetime")
-                      }
-                    >
-                      <div
-                        className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                          accessRules.durationMode === "lifetime"
-                            ? "border-(--accent)"
-                            : "border-(--muted)"
-                        }`}
-                      >
-                        {accessRules.durationMode === "lifetime" && (
-                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                        )}
-                      </div>
-                      <div className="flex flex-1 flex-col gap-0.75">
-                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                          Lifetime access
-                        </strong>
-                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                          Learners can access this course forever.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Option 2: Fixed duration */}
-                    <div
-                      className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                        isAccessRulesSaving ||
-                        savingAccessControls.has("durationMode")
-                          ? "opacity-60 cursor-not-allowed"
-                          : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                      } ${
-                        accessRules.durationMode === "fixed"
-                          ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                          : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                      }`}
-                      onClick={() =>
-                        !isAccessRulesSaving &&
-                        !savingAccessControls.has("durationMode") &&
-                        handleDurationModeChange("fixed")
-                      }
-                    >
-                      <div
-                        className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                          accessRules.durationMode === "fixed"
-                            ? "border-(--accent)"
-                            : "border-(--muted)"
-                        }`}
-                      >
-                        {accessRules.durationMode === "fixed" && (
-                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                        )}
-                      </div>
-                      <div className="flex flex-1 flex-col gap-0.75">
-                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                          Fixed duration
-                        </strong>
-                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                          Set a duration for how long learners can access this
-                          course.
-                        </p>
-
-                        {accessRules.durationMode === "fixed" && (
-                          <div
-                            className="flex items-center gap-2.5 mt-3 flex-wrap"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <input
-                              type="number"
-                              disabled={
-                                isAccessRulesSaving ||
-                                savingAccessControls.has("durationMode")
-                              }
-                              className="w-[80px] h-9 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] font-semibold outline-none transition-[border-color] duration-150 hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] focus:border-(--accent) box-border text-center disabled:opacity-60 disabled:cursor-not-allowed"
-                              min={1}
-                              value={accessRules.fixedDurationValue}
-                              onChange={(e) =>
-                                handleFixedDurationValueChange(
-                                  parseInt(e.target.value, 10),
-                                )
-                              }
-                              onBlur={() => {
-                                void flushFixedDurationPersistence();
-                              }}
-                            />
-                            <ThemedSelect
-                              disabled={
-                                isAccessRulesSaving ||
-                                savingAccessControls.has("durationMode") ||
-                                savingAccessControls.has("fixedDuration")
-                              }
-                              value={accessRules.fixedDurationUnit}
-                              onValueChange={(val) =>
-                                handleFixedDurationUnitChange(
-                                  val as DurationUnit,
-                                )
-                              }
-                              options={[
-                                ["Days", "Days"],
-                                ["Weeks", "Weeks"],
-                                ["Months", "Months"],
-                                ["Years", "Years"],
-                              ]}
-                              ariaLabel="Select duration unit"
-                              triggerClassName="!w-[130px] !h-9 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all flex items-center justify-between disabled:!opacity-60 disabled:!cursor-not-allowed"
-                            />
-                            <AccessRulesControlStatusIndicator
-                              status={getAccessControlDisplayStatus(
-                                "fixedDuration",
-                              )}
-                              testId="access-rules-status-fixedDuration"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Card: 3. Learner interactions */}
-              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) w-full">
-                <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                    3. Learner interactions
-                  </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
-                    Manage how learners can interact within this course.
-                  </p>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  {/* Toggle 1: Q&A */}
-                  <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                    <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                      <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
-                        <Question size={20} weight="bold" />
-                      </div>
-                      <div className="min-w-0">
-                        <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
-                          Q&A
-                        </strong>
-                        <p className="m-0 text-(--muted) text-[0.8rem]">
-                          Allow learners to ask questions about lessons.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2.5 shrink-0">
-                      <AccessRulesControlStatusIndicator
-                        status={getAccessControlDisplayStatus("enableQA")}
-                        testId="access-rules-status-enableQA"
-                      />
-                      <SettingsToggle
-                        checked={accessRules.enableQA}
-                        disabled={
-                          isAccessRulesSaving ||
-                          savingAccessControls.has("enableQA")
-                        }
-                        onChange={handleToggleQA}
-                        label="Toggle Q&A"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Toggle 2: Comments */}
-                  <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                    <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                      <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
-                        <ChatCircleText size={20} weight="fill" />
-                      </div>
-                      <div className="min-w-0">
-                        <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
-                          Comments
-                        </strong>
-                        <p className="m-0 text-(--muted) text-[0.8rem]">
-                          Allow learners to comment on course content.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2.5 shrink-0">
-                      <AccessRulesControlStatusIndicator
-                        status={getAccessControlDisplayStatus("enableComments")}
-                        testId="access-rules-status-enableComments"
-                      />
-                      <SettingsToggle
-                        checked={accessRules.enableComments}
-                        disabled={
-                          isAccessRulesSaving ||
-                          savingAccessControls.has("enableComments")
-                        }
-                        onChange={handleToggleComments}
-                        label="Toggle Comments"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Toggle 3: Notes */}
-                  <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                    <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                      <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
-                        <NotePencil size={20} weight="bold" />
-                      </div>
-                      <div className="min-w-0">
-                        <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
-                          Notes
-                        </strong>
-                        <p className="m-0 text-(--muted) text-[0.8rem]">
-                          Allow learners to take notes while learning.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2.5 shrink-0">
-                      <AccessRulesControlStatusIndicator
-                        status={getAccessControlDisplayStatus("enableNotes")}
-                        testId="access-rules-status-enableNotes"
-                      />
-                      <SettingsToggle
-                        checked={accessRules.enableNotes}
-                        disabled={
-                          isAccessRulesSaving ||
-                          savingAccessControls.has("enableNotes")
-                        }
-                        onChange={handleToggleNotes}
-                        label="Toggle Notes"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : panelStep === "pricing" ? (
-            <div className="flex w-full flex-col gap-5">
-              {pricingValidationError && (
-                <div className="flex items-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[0.84rem] font-semibold text-red-400">
-                  <WarningCircle size={18} weight="bold" className="shrink-0" />
-                  <span>{pricingValidationError}</span>
-                </div>
-              )}
-
-              {/* Top 2-Column Grid: 1. Course pricing & 2. Price details */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
-                {/* Card 1: Course pricing */}
-                <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200">
-                  <div className="flex items-center justify-between mb-4.5">
-                    <div>
-                      <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                        1. Course pricing
-                      </h3>
-                      <p className="m-0 text-(--muted) text-[0.83rem]">
-                        Choose how you want to sell this course.
-                      </p>
-                    </div>
-                    <PricingControlStatusIndicator
-                      status={getPricingControlDisplayStatus("pricingType")}
-                      testId="pricing-field-status-pricingType"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-3">
-                    {/* Radio Option: Free */}
-                    <div
-                      className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                        isSavingPricing || isPricingControlSaving("pricingType")
-                          ? "opacity-60 cursor-not-allowed"
-                          : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                      } ${
-                        pricing.pricingType === "free"
-                          ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                          : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                      }`}
-                      onClick={() =>
-                        !isSavingPricing &&
-                        !isPricingControlSaving("pricingType") &&
-                        handlePricingTypeChange("free")
-                      }
-                    >
-                      <div
-                        className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                          pricing.pricingType === "free"
-                            ? "border-(--accent)"
-                            : "border-(--muted)"
-                        }`}
-                      >
-                        {pricing.pricingType === "free" && (
-                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                        )}
-                      </div>
-                      <div className="flex flex-1 flex-col gap-0.75">
-                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                          Free
-                        </strong>
-                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                          Anyone who can access the course can enroll for free.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Radio Option: Paid */}
-                    <div
-                      className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                        isSavingPricing || isPricingControlSaving("pricingType")
-                          ? "opacity-60 cursor-not-allowed"
-                          : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                      } ${
-                        pricing.pricingType === "paid"
-                          ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                          : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                      }`}
-                      onClick={() =>
-                        !isSavingPricing &&
-                        !isPricingControlSaving("pricingType") &&
-                        handlePricingTypeChange("paid")
-                      }
-                    >
-                      <div
-                        className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                          pricing.pricingType === "paid"
-                            ? "border-(--accent)"
-                            : "border-(--muted)"
-                        }`}
-                      >
-                        {pricing.pricingType === "paid" && (
-                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                        )}
-                      </div>
-                      <div className="flex flex-1 flex-col gap-0.75">
-                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                          Paid
-                        </strong>
-                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                          Learners must purchase the course to get access.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card 2: Price details */}
-                <div
-                  className={`flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200 ${
-                    pricing.pricingType === "free"
-                      ? "is-disabled opacity-55 pointer-events-none"
-                      : ""
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-4.5">
-                    <div>
-                      <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                        2. Price details
-                      </h3>
-                      <p className="m-0 text-(--muted) text-[0.83rem]">
-                        Set the pricing for your course.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-1.75">
-                    {/* Currency Combobox Field */}
-                    <div className="flex flex-col gap-2 mb-5">
-                      <div className="flex items-center justify-between">
-                        <label
-                          id="currency-label"
-                          className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                        >
-                          Currency{" "}
-                          <span className="text-[#ff5252] ml-0.5">*</span>
-                        </label>
-                        <PricingControlStatusIndicator
-                          status={getPricingControlDisplayStatus("currency")}
-                          testId="pricing-field-status-currency"
-                        />
-                      </div>
-                      <ThemedSelect
-                        value={pricing.currency || "INR"}
-                        onValueChange={handleCurrencyChange}
-                        options={currencyOptions}
-                        disabled={
-                          pricing.pricingType === "free" ||
-                          isSavingPricing ||
-                          isPricingControlSaving("pricingType") ||
-                          isPricingControlSaving("currency")
-                        }
-                        ariaLabel="Select currency"
-                        searchable
-                        searchPlaceholder="Search currencies by name or code..."
-                        triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem] !font-medium disabled:!opacity-60 disabled:!cursor-not-allowed"
-                      />
-                      <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
-                        Choose the currency for course pricing.
-                      </p>
-                    </div>
-
-                    {/* Selling Price Field */}
-                    <div className="flex flex-col gap-2 mb-5">
-                      <div className="flex items-center justify-between">
-                        <label
-                          htmlFor="selling-price"
-                          className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                        >
-                          Selling price{" "}
-                          <span className="text-[#ff5252] ml-0.5">*</span>
-                        </label>
-                        <PricingControlStatusIndicator
-                          status={getPricingControlDisplayStatus(
-                            "sellingPrice",
-                          )}
-                          testId="pricing-field-status-sellingPrice"
-                        />
-                      </div>
-                      <div className="relative flex items-center w-full">
-                        <span className="absolute left-3.5 text-(--muted) text-[0.9rem] font-semibold pointer-events-none">
-                          {getCurrencySymbol(pricing.currency || "INR")}
-                        </span>
-                        <input
-                          id="selling-price"
-                          type="text"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          disabled={
-                            pricing.pricingType === "free" ||
-                            isSavingPricing ||
-                            isPricingControlSaving("pricingType")
-                          }
-                          value={pricing.sellingPrice}
-                          onChange={(e) =>
-                            handleSellingPriceChange(e.target.value)
-                          }
-                          onBlur={() => {
-                            void flushPricingPersistence();
                           }}
-                          placeholder="1999"
-                          className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
-                        />
-                      </div>
-                      <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
-                        This is the price learners will pay.
-                      </p>
-                    </div>
-
-                    {/* Original Price Field */}
-                    <div className="flex flex-col gap-2 mb-5">
-                      <div className="flex items-center justify-between">
-                        <label
-                          htmlFor="original-price"
-                          className="text-(--text-secondary) text-[0.84rem] font-semibold"
-                        >
-                          Original price
-                        </label>
-                        <PricingControlStatusIndicator
-                          status={getPricingControlDisplayStatus(
-                            "originalPrice",
-                          )}
-                          testId="pricing-field-status-originalPrice"
-                        />
-                      </div>
-                      <div className="relative flex items-center w-full">
-                        <span className="absolute left-3.5 text-(--muted) text-[0.9rem] font-semibold pointer-events-none">
-                          {getCurrencySymbol(pricing.currency || "INR")}
-                        </span>
-                        <input
-                          id="original-price"
-                          type="text"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          disabled={
-                            pricing.pricingType === "free" ||
-                            isSavingPricing ||
-                            isPricingControlSaving("pricingType")
-                          }
-                          value={pricing.originalPrice}
-                          onChange={(e) =>
-                            handleOriginalPriceChange(e.target.value)
-                          }
-                          onBlur={() => {
-                            void flushPricingPersistence();
-                          }}
-                          placeholder="2999"
-                          className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
-                        />
-                      </div>
-                      <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
-                        Enter original price to show discount.
-                      </p>
-                    </div>
-
-                    {/* Dynamic Discount Calculation Badge */}
-                    {(() => {
-                      const sell = parseFloat(
-                        pricing.sellingPrice.replace(/,/g, ""),
-                      );
-                      const orig = parseFloat(
-                        pricing.originalPrice.replace(/,/g, ""),
-                      );
-                      let discountPercent = 0;
-                      let isValidDiscount = false;
-
-                      if (
-                        !isNaN(sell) &&
-                        !isNaN(orig) &&
-                        sell > 0 &&
-                        orig > sell
-                      ) {
-                        discountPercent = Math.round(
-                          ((orig - sell) / orig) * 100,
-                        );
-                        isValidDiscount = discountPercent > 0;
-                      }
-
-                      return (
-                        <div className="flex items-center gap-3 mt-1 flex-wrap">
-                          <div
-                            className={`inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap border rounded-lg px-2.5 py-1.5 text-[0.80rem] font-bold transition-[border-color,background-color,color] duration-150 ease-out ${
-                              isValidDiscount && pricing.pricingType === "paid"
-                                ? "is-active border-green-500/40 text-green-400 bg-green-500/12"
-                                : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
-                            }`}
-                          >
-                            <Tag size={15} weight="bold" className="shrink-0" />
-                            <span className="whitespace-nowrap leading-none">
-                              {isValidDiscount && pricing.pricingType === "paid"
-                                ? `${discountPercent}% OFF`
-                                : "0% OFF"}
-                            </span>
-                          </div>
-                          <span className="text-(--muted) text-[0.8rem] leading-tight">
-                            Discount is calculated automatically.
-                          </span>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 3: Quiz Pricing */}
-              <CourseQuizPricingCard
-                courseId={currentCourseId}
-                courseCurrency={pricing.currency || "INR"}
-                onNavigateTab={(tab) => {
-                  const stepId = parseWizardTab(tab);
-                  if (stepId) void navigateToStep(stepId);
-                }}
-              />
-
-              {/* Bottom Card: Coupons Banner */}
-              <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[14px] px-5.5 py-4 bg-(--surface) shadow-(--card-shadow) max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3.5">
-                <div className="flex items-center gap-3.5">
-                  <div className="flex w-9.5 h-9.5 items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
-                    <Info size={20} weight="bold" />
-                  </div>
-                  <div>
-                    <strong className="block mb-0.5 text-(--text) text-[0.92rem] font-[650]">
-                      Coupons
-                    </strong>
-                    <p className="m-0 text-(--muted) text-[0.82rem]">
-                      Create and manage coupon codes separately from the Coupons
-                      section.
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  style={{
-                    fontSize: "0.80rem",
-                    fontWeight: 700,
-                    height: "34px",
-                    borderRadius: "8px",
-                    gap: "6px",
-                    paddingLeft: "18px",
-                    paddingRight: "18px",
-                  }}
-                  className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] max-[768px]:w-full max-[768px]:justify-center"
-                  onClick={() => {
-                    if (!onNavigatePage) return;
-                    if (!currentCourseId) {
-                      onNavigatePage("/coupons/create");
-                      return;
-                    }
-                    const params = new URLSearchParams({
-                      courseId: currentCourseId,
-                    });
-                    params.set(
-                      "returnTo",
-                      `${window.location.pathname}${window.location.search}`,
-                    );
-                    onNavigatePage(`/coupons/create?${params.toString()}`);
-                  }}
-                >
-                  Go to Coupons <ArrowUpRight size={15} weight="bold" />
-                </button>
-              </div>
-            </div>
-          ) : panelStep === "extras" ? (
-            <div className="flex w-full flex-col gap-5">
-              {/* Top 2-Column Grid: 1. Certificates & 2. This course includes */}
-              <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-5 max-[768px]:gap-3.5 w-full min-w-0">
-                {/* Card 1: Certificates */}
-                <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                  <div className="mb-4.5">
-                    <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                      1. Certificates
-                    </h3>
-                    <p className="m-0 text-(--muted) text-[0.83rem]">
-                      Configure how certificates will be issued for this course.
-                    </p>
-                  </div>
-
-                  {/* Enable Certificate Toggle Row */}
-                  <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-4.5">
-                    <div className="flex flex-col min-w-0 pr-3">
-                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
-                        Enable certificate
-                      </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem]">
-                        Issue certificates to learners on course completion.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2.5 shrink-0">
-                      <ExtrasControlStatusIndicator
-                        status={getExtrasControlDisplayStatus(
-                          "enableCertificate",
-                        )}
-                        testId="extras-field-status-enableCertificate"
-                      />
-                      <SettingsToggle
-                        checked={extras.enableCertificate}
-                        disabled={isSavingCertificate}
-                        onChange={handleToggleCertificate}
-                        label="Toggle certificate"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Certificate Configuration Controls */}
-                  <div
-                    className={`flex flex-col gap-4.5 transition-opacity duration-200 ${
-                      !extras.enableCertificate
-                        ? "is-disabled opacity-50 pointer-events-none"
-                        : ""
-                    }`}
-                  >
-                    {/* Template Selector */}
-                    <div className="flex flex-col gap-2 mb-5">
-                      <div className="flex items-center justify-between mb-0.5">
-                        <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                          Certificate template
-                        </label>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
-                          Coming soon
-                        </span>
-                      </div>
-                      <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
-                        Choose from pre-designed certificate templates.
-                      </p>
-                      <div className="opacity-60 cursor-not-allowed pointer-events-none">
-                        <ThemedSelect
-                          value={extras.certificateTemplate}
-                          onValueChange={handleCertificateTemplateChange}
-                          options={[
-                            ["purple-certificate", "Modern Purple Certificate"],
-                            ["blue-certificate", "Classic Blue Certificate"],
-                            ["dark-certificate", "Minimal Dark Certificate"],
-                          ]}
-                          ariaLabel="Select certificate template"
-                          className="w-full"
-                          disabled
-                          triggerClassName="!w-full !h-10 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Certificate Issuance Options */}
-                    <div className="flex flex-col gap-2 mb-5">
-                      <div className="flex items-center justify-between mb-0.5">
-                        <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                          Certificate issuance
-                        </label>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
-                          Coming soon
-                        </span>
-                      </div>
-                      <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
-                        Choose when the certificate should be issued.
-                      </p>
-
-                      <div className="flex flex-col gap-2.5 opacity-60 cursor-not-allowed pointer-events-none select-none">
-                        {/* Option 1: On course completion */}
-                        <div
-                          className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                            extras.issuanceType === "completion"
-                              ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                          }`}
                         >
                           <div
                             className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                              extras.issuanceType === "completion"
+                              accessRules.accessType === "everyone"
                                 ? "border-(--accent)"
                                 : "border-(--muted)"
                             }`}
                           >
-                            {extras.issuanceType === "completion" && (
+                            {accessRules.accessType === "everyone" && (
                               <div className="w-2 h-2 rounded-full bg-(--accent)" />
                             )}
                           </div>
                           <div className="flex flex-1 flex-col gap-0.75">
                             <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                              On course completion
+                              Everyone
                             </strong>
                             <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                              Issue certificate when the learner completes all
-                              lessons.
+                              Anyone with access to the platform can access this
+                              course.
                             </p>
                           </div>
-                        </div>
+                        </label>
 
-                        {/* Option 2: Minimum completion percentage */}
+                        {/* Radio option: Restricted access (Coming soon - Disabled) */}
                         <div
-                          className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                            extras.issuanceType === "percentage"
-                              ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                          }`}
+                          className="relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 opacity-60 cursor-not-allowed select-none border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                          aria-disabled="true"
                         >
-                          <div
-                            className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                              extras.issuanceType === "percentage"
-                                ? "border-(--accent)"
-                                : "border-(--muted)"
-                            }`}
-                          >
-                            {extras.issuanceType === "percentage" && (
-                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                            )}
-                          </div>
-                          <div className="flex flex-1 flex-col gap-0.75">
-                            <div className="flex items-center justify-between w-full">
-                              <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                                Minimum completion percentage
+                          <div className="flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
+                          <div className="flex flex-1 flex-col gap-0.75 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <strong className="text-(--text) text-[0.9rem] font-[650] leading-[18px]">
+                                Restricted access
                               </strong>
-                              {extras.issuanceType === "percentage" && (
-                                <div className="flex items-center gap-1.5">
-                                  <input
-                                    type="number"
-                                    disabled
-                                    className="w-[76px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.86rem] font-semibold outline-none text-center cursor-not-allowed"
-                                    min={1}
-                                    max={100}
-                                    value={extras.minCompletionPercentage}
-                                    readOnly
-                                  />
-                                  <span className="text-(--text) text-[0.86rem] font-bold">
-                                    %
-                                  </span>
-                                </div>
-                              )}
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                                Coming soon
+                              </span>
                             </div>
                             <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                              Issue certificate when learner reaches the
-                              selected percentage.
+                              Only users who meet the selected requirements can
+                              access this course.
                             </p>
                           </div>
                         </div>
+                      </div>
+                    </div>
 
-                        {/* Option 3: Custom rule */}
+                    {/* Card 2: Access duration */}
+                    <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                      <div className="mb-4.5 flex items-center justify-between">
+                        <div>
+                          <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                            2. Access duration
+                          </h3>
+                          <p className="m-0 text-(--muted) text-[0.83rem]">
+                            Set how long learners can access this course.
+                          </p>
+                        </div>
+                        <AccessRulesControlStatusIndicator
+                          status={getAccessControlDisplayStatus("durationMode")}
+                          testId="access-rules-status-durationMode"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-3">
+                        {/* Option 1: Lifetime access */}
                         <div
                           className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                            extras.issuanceType === "custom"
+                            isAccessRulesSaving ||
+                            savingAccessControls.has("durationMode")
+                              ? "opacity-60 cursor-not-allowed"
+                              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                          } ${
+                            accessRules.durationMode === "lifetime"
                               ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
                               : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
                           }`}
+                          onClick={() =>
+                            !isAccessRulesSaving &&
+                            !savingAccessControls.has("durationMode") &&
+                            handleDurationModeChange("lifetime")
+                          }
                         >
                           <div
                             className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                              extras.issuanceType === "custom"
+                              accessRules.durationMode === "lifetime"
                                 ? "border-(--accent)"
                                 : "border-(--muted)"
                             }`}
                           >
-                            {extras.issuanceType === "custom" && (
+                            {accessRules.durationMode === "lifetime" && (
                               <div className="w-2 h-2 rounded-full bg-(--accent)" />
                             )}
                           </div>
                           <div className="flex flex-1 flex-col gap-0.75">
                             <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                              Custom rule
+                              Lifetime access
                             </strong>
                             <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                              Define your own custom rule for certificate
-                              issuance.
+                              Learners can access this course forever.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Option 2: Fixed duration */}
+                        <div
+                          className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                            isAccessRulesSaving ||
+                            savingAccessControls.has("durationMode")
+                              ? "opacity-60 cursor-not-allowed"
+                              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                          } ${
+                            accessRules.durationMode === "fixed"
+                              ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                          }`}
+                          onClick={() =>
+                            !isAccessRulesSaving &&
+                            !savingAccessControls.has("durationMode") &&
+                            handleDurationModeChange("fixed")
+                          }
+                        >
+                          <div
+                            className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                              accessRules.durationMode === "fixed"
+                                ? "border-(--accent)"
+                                : "border-(--muted)"
+                            }`}
+                          >
+                            {accessRules.durationMode === "fixed" && (
+                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                            )}
+                          </div>
+                          <div className="flex flex-1 flex-col gap-0.75">
+                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                              Fixed duration
+                            </strong>
+                            <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                              Set a duration for how long learners can access
+                              this course.
                             </p>
 
-                            {extras.issuanceType === "custom" && (
-                              <div className="mt-2 w-full">
+                            {accessRules.durationMode === "fixed" && (
+                              <div
+                                className="flex items-center gap-2.5 mt-3 flex-wrap"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <input
-                                  type="text"
-                                  disabled
-                                  readOnly
-                                  className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] outline-none cursor-not-allowed"
-                                  value={extras.customRuleText}
-                                  placeholder="e.g. Complete all quizzes with > 80% score"
+                                  type="number"
+                                  disabled={
+                                    isAccessRulesSaving ||
+                                    savingAccessControls.has("durationMode")
+                                  }
+                                  className="w-[80px] h-9 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] font-semibold outline-none transition-[border-color] duration-150 hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] focus:border-(--accent) box-border text-center disabled:opacity-60 disabled:cursor-not-allowed"
+                                  min={1}
+                                  value={accessRules.fixedDurationValue}
+                                  onChange={(e) =>
+                                    handleFixedDurationValueChange(
+                                      parseInt(e.target.value, 10),
+                                    )
+                                  }
+                                  onBlur={() => {
+                                    void flushFixedDurationPersistence();
+                                  }}
+                                />
+                                <ThemedSelect
+                                  disabled={
+                                    isAccessRulesSaving ||
+                                    savingAccessControls.has("durationMode") ||
+                                    savingAccessControls.has("fixedDuration")
+                                  }
+                                  value={accessRules.fixedDurationUnit}
+                                  onValueChange={(val) =>
+                                    handleFixedDurationUnitChange(
+                                      val as DurationUnit,
+                                    )
+                                  }
+                                  options={[
+                                    ["Days", "Days"],
+                                    ["Weeks", "Weeks"],
+                                    ["Months", "Months"],
+                                    ["Years", "Years"],
+                                  ]}
+                                  ariaLabel="Select duration unit"
+                                  triggerClassName="!w-[130px] !h-9 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all flex items-center justify-between disabled:!opacity-60 disabled:!cursor-not-allowed"
+                                />
+                                <AccessRulesControlStatusIndicator
+                                  status={getAccessControlDisplayStatus(
+                                    "fixedDuration",
+                                  )}
+                                  testId="access-rules-status-fixedDuration"
                                 />
                               </div>
                             )}
@@ -13159,772 +12862,1497 @@ export function CourseCreatePage({
                         </div>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Delivery Toggle Row */}
-                    <div className="flex items-center justify-between border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-3.5 opacity-60 cursor-not-allowed">
-                      <div>
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <strong className="text-(--text) text-[0.88rem] font-[650]">
-                            Delivery
-                          </strong>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
-                            Coming soon
-                          </span>
+                  {/* Bottom Card: 3. Learner interactions */}
+                  <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) w-full">
+                    <div className="mb-4.5">
+                      <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                        3. Learner interactions
+                      </h3>
+                      <p className="m-0 text-(--muted) text-[0.83rem]">
+                        Manage how learners can interact within this course.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                      {/* Toggle 1: Q&A */}
+                      <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                        <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                          <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                            <Question size={20} weight="bold" />
+                          </div>
+                          <div className="min-w-0">
+                            <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                              Q&A
+                            </strong>
+                            <p className="m-0 text-(--muted) text-[0.8rem]">
+                              Allow learners to ask questions about lessons.
+                            </p>
+                          </div>
                         </div>
-                        <p className="m-0 text-(--muted) text-[0.78rem]">
-                          Automatically email the certificate to learners.
-                        </p>
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <AccessRulesControlStatusIndicator
+                            status={getAccessControlDisplayStatus("enableQA")}
+                            testId="access-rules-status-enableQA"
+                          />
+                          <SettingsToggle
+                            checked={accessRules.enableQA}
+                            disabled={
+                              isAccessRulesSaving ||
+                              savingAccessControls.has("enableQA")
+                            }
+                            onChange={handleToggleQA}
+                            label="Toggle Q&A"
+                          />
+                        </div>
                       </div>
-                      <div className="pointer-events-none">
-                        <SettingsToggle
-                          checked={extras.autoEmailCertificate}
-                          onChange={handleToggleAutoEmailCertificate}
-                          label="Toggle certificate delivery"
-                        />
+
+                      {/* Toggle 2: Comments */}
+                      <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                        <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                          <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                            <ChatCircleText size={20} weight="fill" />
+                          </div>
+                          <div className="min-w-0">
+                            <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                              Comments
+                            </strong>
+                            <p className="m-0 text-(--muted) text-[0.8rem]">
+                              Allow learners to comment on course content.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <AccessRulesControlStatusIndicator
+                            status={getAccessControlDisplayStatus(
+                              "enableComments",
+                            )}
+                            testId="access-rules-status-enableComments"
+                          />
+                          <SettingsToggle
+                            checked={accessRules.enableComments}
+                            disabled={
+                              isAccessRulesSaving ||
+                              savingAccessControls.has("enableComments")
+                            }
+                            onChange={handleToggleComments}
+                            label="Toggle Comments"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Toggle 3: Notes */}
+                      <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                        <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                          <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                            <NotePencil size={20} weight="bold" />
+                          </div>
+                          <div className="min-w-0">
+                            <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                              Notes
+                            </strong>
+                            <p className="m-0 text-(--muted) text-[0.8rem]">
+                              Allow learners to take notes while learning.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <AccessRulesControlStatusIndicator
+                            status={getAccessControlDisplayStatus(
+                              "enableNotes",
+                            )}
+                            testId="access-rules-status-enableNotes"
+                          />
+                          <SettingsToggle
+                            checked={accessRules.enableNotes}
+                            disabled={
+                              isAccessRulesSaving ||
+                              savingAccessControls.has("enableNotes")
+                            }
+                            onChange={handleToggleNotes}
+                            label="Toggle Notes"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-
-                {/* Card 2: This course includes */}
-                <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                  <div className="mb-4.5">
-                    <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                      2. This course includes
-                    </h3>
-                    <p className="m-0 text-(--muted) text-[0.83rem]">
-                      These details are calculated from your curriculum.
-                    </p>
-                  </div>
-
-                  {/* Derived Live Stats Summary Grid */}
-                  <div className="grid grid-cols-1 min-[1024px]:grid-cols-3 gap-3 mb-6 max-[768px]:gap-2.5">
-                    <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
-                      <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-indigo-500 bg-indigo-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
-                        <BookOpen size={20} weight="fill" />
-                      </div>
-                      <div className="flex flex-col">
-                        <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
-                          {totalSections}
-                        </strong>
-                        <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
-                          Sections
-                        </span>
-                      </div>
+              ) : panelStep === "pricing" ? (
+                <div className="flex w-full flex-col gap-5">
+                  {pricingValidationError && (
+                    <div className="flex items-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[0.84rem] font-semibold text-red-400">
+                      <WarningCircle
+                        size={18}
+                        weight="bold"
+                        className="shrink-0"
+                      />
+                      <span>{pricingValidationError}</span>
                     </div>
+                  )}
 
-                    <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
-                      <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-purple-500 bg-purple-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
-                        <PlayCircle size={20} weight="fill" />
-                      </div>
-                      <div className="flex flex-col">
-                        <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
-                          {totalLessons}
-                        </strong>
-                        <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
-                          Lessons
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
-                      <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-blue-500 bg-blue-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
-                        <Clock size={20} weight="bold" />
-                      </div>
-                      <div className="flex flex-col">
-                        <strong
-                          className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]"
-                          data-testid="course-extra-duration"
-                        >
-                          {computedDuration}
-                        </strong>
-                        <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
-                          Content length
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Divider between Stats & Inclusions */}
-                  <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] my-4.5" />
-
-                  {/* Additional Inclusions Section */}
-                  <div className="flex flex-col gap-3.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <h4 className="m-0 text-(--text) text-[0.95rem] font-bold">
-                          Course inclusions
-                        </h4>
-                        {isReorderingIncludes ||
-                        reorderIncludesMutation.isPending ? (
-                          <span className="inline-flex items-center gap-1 text-(--accent) text-[0.72rem] font-bold px-2.5 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                            <CircleNotch
-                              size={12}
-                              className="animate-spin text-(--accent)"
-                            />
-                            <span>Saving inclusion order...</span>
-                          </span>
-                        ) : (
-                          <ExtrasControlStatusIndicator
-                            status={extrasControlStatus["inclusions"] ?? null}
-                            testId="extras-field-status-inclusions"
-                          />
-                        )}
-                      </div>
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.75 rounded-full text-[0.72rem] font-bold tracking-wide border ${
-                          manualIncludesDraft.length >= 6
-                            ? "bg-amber-500/10 text-amber-500 border-amber-500/30"
-                            : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) border-[color-mix(in_srgb,var(--text)_12%,transparent)]"
-                        }`}
-                      >
-                        {manualIncludesDraft.length} / 6
-                      </span>
-                    </div>
-                    <p className="m-0 text-(--muted) text-[0.82rem] leading-normal">
-                      Perks and benefits your learners will receive upon
-                      enrolling (max 6 items). Click suggestions below or add
-                      custom inclusions.
-                    </p>
-
-                    {/* Active Inclusions List */}
-                    <div className="flex flex-col gap-2.5">
-                      {manualIncludesDraft.length === 0 ? (
-                        <div className="border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-5 text-center text-(--muted) text-[0.82rem] bg-[color-mix(in_srgb,var(--canvas)_30%,var(--surface))]">
-                          No inclusions added yet. Choose from the suggested
-                          perks below or add a custom benefit.
+                  {/* Top 2-Column Grid: 1. Course pricing & 2. Price details */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+                    {/* Card 1: Course pricing */}
+                    <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200">
+                      <div className="flex items-center justify-between mb-4.5">
+                        <div>
+                          <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                            1. Course pricing
+                          </h3>
+                          <p className="m-0 text-(--muted) text-[0.83rem]">
+                            Choose how you want to sell this course.
+                          </p>
                         </div>
-                      ) : (
-                        manualIncludesDraft.map((item, index) => (
+                        <PricingControlStatusIndicator
+                          status={getPricingControlDisplayStatus("pricingType")}
+                          testId="pricing-field-status-pricingType"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-3">
+                        {/* Radio Option: Free */}
+                        <div
+                          className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                            isSavingPricing ||
+                            isPricingControlSaving("pricingType")
+                              ? "opacity-60 cursor-not-allowed"
+                              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                          } ${
+                            pricing.pricingType === "free"
+                              ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                          }`}
+                          onClick={() =>
+                            !isSavingPricing &&
+                            !isPricingControlSaving("pricingType") &&
+                            handlePricingTypeChange("free")
+                          }
+                        >
                           <div
-                            key={item.id}
-                            draggable={
-                              !isReorderingIncludes &&
-                              !reorderIncludesMutation.isPending &&
-                              !isExtrasSaving &&
-                              !item.isPendingCreation &&
-                              !deletingIncludeIds.has(item.id) &&
-                              !savingIncludeIds.has(item.id) &&
-                              dragEnabledInclusionId === item.id
-                            }
-                            onDragStart={(e) =>
-                              handleInclusionDragStart(e, index, item.text)
-                            }
-                            onDragOver={(e) =>
-                              handleInclusionDragOver(e, index)
-                            }
-                            onDragEnd={handleInclusionDragEnd}
-                            className={`flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] transition-all ${
-                              item.isPendingCreation ||
-                              deletingIncludeIds.has(item.id) ||
-                              savingIncludeIds.has(item.id)
-                                ? "opacity-75 border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
-                                : isReorderingIncludes || isExtrasSaving
-                                  ? "opacity-60"
-                                  : "hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] shadow-xs"
+                            className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                              pricing.pricingType === "free"
+                                ? "border-(--accent)"
+                                : "border-(--muted)"
                             }`}
                           >
-                            {item.isPendingCreation ? (
-                              <span
-                                className="flex items-center justify-center p-1 rounded-md shrink-0 text-(--accent)"
-                                title="Adding inclusion..."
-                              >
-                                <CircleNotch
-                                  size={18}
-                                  className="animate-spin text-(--accent)"
-                                />
-                              </span>
-                            ) : (
-                              <span
-                                className={`flex items-center justify-center p-1 rounded-md shrink-0 transition-colors ${
-                                  isReorderingIncludes ||
-                                  reorderIncludesMutation.isPending ||
-                                  isExtrasSaving ||
-                                  deletingIncludeIds.has(item.id) ||
-                                  savingIncludeIds.has(item.id)
-                                    ? "opacity-30 cursor-not-allowed pointer-events-none"
-                                    : "text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] select-none cursor-grab active:cursor-grabbing"
-                                }`}
-                                onMouseEnter={() => {
-                                  if (
-                                    !isReorderingIncludes &&
-                                    !reorderIncludesMutation.isPending &&
-                                    !isExtrasSaving &&
-                                    !deletingIncludeIds.has(item.id) &&
-                                    !savingIncludeIds.has(item.id)
-                                  ) {
-                                    setDragEnabledInclusionId(item.id);
-                                  }
-                                }}
-                                onMouseLeave={() =>
-                                  setDragEnabledInclusionId(null)
-                                }
-                                title={
-                                  isReorderingIncludes
-                                    ? "Saving order..."
-                                    : deletingIncludeIds.has(item.id)
-                                      ? "Deleting..."
-                                      : savingIncludeIds.has(item.id)
-                                        ? "Saving..."
-                                        : "Drag to reorder"
-                                }
-                              >
-                                <DotsSixVertical size={18} />
-                              </span>
+                            {pricing.pricingType === "free" && (
+                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
                             )}
-                            <input
-                              type="text"
-                              disabled={
-                                isReorderingIncludes ||
-                                reorderIncludesMutation.isPending ||
-                                isExtrasSaving ||
-                                item.isPendingCreation ||
-                                deletingIncludeIds.has(item.id) ||
-                                savingIncludeIds.has(item.id)
-                              }
-                              className="flex-1 min-w-0 border-none text-(--text) bg-transparent text-[0.88rem] font-medium outline-none placeholder:text-(--muted) disabled:opacity-60 disabled:cursor-not-allowed"
-                              value={item.text}
-                              onFocus={() => setFocusedInclusionId(item.id)}
-                              onBlur={() => {
-                                void handleManualInclusionBlur(item.id);
-                              }}
-                              onChange={(e) =>
-                                handleUpdateManualInclusionText(
-                                  item.id,
-                                  e.target.value.slice(0, 25),
-                                )
-                              }
-                              placeholder="e.g. Personal guidance"
-                              maxLength={25}
-                            />
-                            {getExtrasControlDisplayStatus(item.id) ? (
-                              <ExtrasControlStatusIndicator
-                                status={getExtrasControlDisplayStatus(item.id)}
-                                testId={`extras-field-status-inclusion-${item.id}`}
-                              />
-                            ) : focusedInclusionId === item.id ? (
-                              <span className="text-(--muted) text-[0.74rem] font-medium shrink-0 select-none px-1">
-                                {item.text.length} / 25
-                              </span>
-                            ) : null}
-                            <button
-                              type="button"
-                              disabled={
-                                isReorderingIncludes ||
-                                reorderIncludesMutation.isPending ||
-                                isExtrasSaving ||
-                                item.isPendingCreation ||
-                                deletingIncludeIds.has(item.id) ||
-                                savingIncludeIds.has(item.id)
-                              }
-                              onClick={() =>
-                                handleDeleteManualInclusion(item.id)
-                              }
-                              className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all bg-transparent cursor-pointer p-0 disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none shrink-0"
-                              aria-label={
-                                deletingIncludeIds.has(item.id)
-                                  ? "Deleting inclusion..."
-                                  : "Remove inclusion"
-                              }
-                              title={
-                                deletingIncludeIds.has(item.id)
-                                  ? "Deleting..."
-                                  : "Remove inclusion"
-                              }
-                            >
-                              {deletingIncludeIds.has(item.id) ? (
-                                <CircleNotch
-                                  size={14}
-                                  className="animate-spin text-red-500"
-                                />
-                              ) : (
-                                <Trash size={15} />
-                              )}
-                            </button>
                           </div>
-                        ))
-                      )}
+                          <div className="flex flex-1 flex-col gap-0.75">
+                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                              Free
+                            </strong>
+                            <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                              Anyone who can access the course can enroll for
+                              free.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Radio Option: Paid */}
+                        <div
+                          className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                            isSavingPricing ||
+                            isPricingControlSaving("pricingType")
+                              ? "opacity-60 cursor-not-allowed"
+                              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
+                          } ${
+                            pricing.pricingType === "paid"
+                              ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                          }`}
+                          onClick={() =>
+                            !isSavingPricing &&
+                            !isPricingControlSaving("pricingType") &&
+                            handlePricingTypeChange("paid")
+                          }
+                        >
+                          <div
+                            className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                              pricing.pricingType === "paid"
+                                ? "border-(--accent)"
+                                : "border-(--muted)"
+                            }`}
+                          >
+                            {pricing.pricingType === "paid" && (
+                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                            )}
+                          </div>
+                          <div className="flex flex-1 flex-col gap-0.75">
+                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                              Paid
+                            </strong>
+                            <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                              Learners must purchase the course to get access.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
-                    {/* Suggested quick-add chips */}
-                    {manualIncludesDraft.length < 6 &&
-                      suggestedInclusions.length > 0 && (
-                        <div className="flex flex-col gap-2 mt-1">
-                          <span className="text-(--muted) text-[0.74rem] font-bold uppercase tracking-wider">
-                            Suggested perks (click to add)
+                    {/* Card 2: Price details */}
+                    <div
+                      className={`flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200 ${
+                        pricing.pricingType === "free"
+                          ? "is-disabled opacity-55 pointer-events-none"
+                          : ""
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-4.5">
+                        <div>
+                          <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                            2. Price details
+                          </h3>
+                          <p className="m-0 text-(--muted) text-[0.83rem]">
+                            Set the pricing for your course.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1.75">
+                        {/* Currency Combobox Field */}
+                        <div className="flex flex-col gap-2 mb-5">
+                          <div className="flex items-center justify-between">
+                            <label
+                              id="currency-label"
+                              className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                            >
+                              Currency{" "}
+                              <span className="text-[#ff5252] ml-0.5">*</span>
+                            </label>
+                            <PricingControlStatusIndicator
+                              status={getPricingControlDisplayStatus(
+                                "currency",
+                              )}
+                              testId="pricing-field-status-currency"
+                            />
+                          </div>
+                          <ThemedSelect
+                            value={pricing.currency || "INR"}
+                            onValueChange={handleCurrencyChange}
+                            options={currencyOptions}
+                            disabled={
+                              pricing.pricingType === "free" ||
+                              isSavingPricing ||
+                              isPricingControlSaving("pricingType") ||
+                              isPricingControlSaving("currency")
+                            }
+                            ariaLabel="Select currency"
+                            searchable
+                            searchPlaceholder="Search currencies by name or code..."
+                            triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem] !font-medium disabled:!opacity-60 disabled:!cursor-not-allowed"
+                          />
+                          <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
+                            Choose the currency for course pricing.
+                          </p>
+                        </div>
+
+                        {/* Selling Price Field */}
+                        <div className="flex flex-col gap-2 mb-5">
+                          <div className="flex items-center justify-between">
+                            <label
+                              htmlFor="selling-price"
+                              className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                            >
+                              Selling price{" "}
+                              <span className="text-[#ff5252] ml-0.5">*</span>
+                            </label>
+                            <PricingControlStatusIndicator
+                              status={getPricingControlDisplayStatus(
+                                "sellingPrice",
+                              )}
+                              testId="pricing-field-status-sellingPrice"
+                            />
+                          </div>
+                          <div className="relative flex items-center w-full">
+                            <span className="absolute left-3.5 text-(--muted) text-[0.9rem] font-semibold pointer-events-none">
+                              {getCurrencySymbol(pricing.currency || "INR")}
+                            </span>
+                            <input
+                              id="selling-price"
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              disabled={
+                                pricing.pricingType === "free" ||
+                                isSavingPricing ||
+                                isPricingControlSaving("pricingType")
+                              }
+                              value={pricing.sellingPrice}
+                              onChange={(e) =>
+                                handleSellingPriceChange(e.target.value)
+                              }
+                              onBlur={() => {
+                                void flushPricingPersistence();
+                              }}
+                              placeholder="1999"
+                              className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
+                            />
+                          </div>
+                          <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
+                            This is the price learners will pay.
+                          </p>
+                        </div>
+
+                        {/* Original Price Field */}
+                        <div className="flex flex-col gap-2 mb-5">
+                          <div className="flex items-center justify-between">
+                            <label
+                              htmlFor="original-price"
+                              className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                            >
+                              Original price
+                            </label>
+                            <PricingControlStatusIndicator
+                              status={getPricingControlDisplayStatus(
+                                "originalPrice",
+                              )}
+                              testId="pricing-field-status-originalPrice"
+                            />
+                          </div>
+                          <div className="relative flex items-center w-full">
+                            <span className="absolute left-3.5 text-(--muted) text-[0.9rem] font-semibold pointer-events-none">
+                              {getCurrencySymbol(pricing.currency || "INR")}
+                            </span>
+                            <input
+                              id="original-price"
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              disabled={
+                                pricing.pricingType === "free" ||
+                                isSavingPricing ||
+                                isPricingControlSaving("pricingType")
+                              }
+                              value={pricing.originalPrice}
+                              onChange={(e) =>
+                                handleOriginalPriceChange(e.target.value)
+                              }
+                              onBlur={() => {
+                                void flushPricingPersistence();
+                              }}
+                              placeholder="2999"
+                              className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
+                            />
+                          </div>
+                          <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
+                            Enter original price to show discount.
+                          </p>
+                        </div>
+
+                        {/* Dynamic Discount Calculation Badge */}
+                        {(() => {
+                          const sell = parseFloat(
+                            pricing.sellingPrice.replace(/,/g, ""),
+                          );
+                          const orig = parseFloat(
+                            pricing.originalPrice.replace(/,/g, ""),
+                          );
+                          let discountPercent = 0;
+                          let isValidDiscount = false;
+
+                          if (
+                            !isNaN(sell) &&
+                            !isNaN(orig) &&
+                            sell > 0 &&
+                            orig > sell
+                          ) {
+                            discountPercent = Math.round(
+                              ((orig - sell) / orig) * 100,
+                            );
+                            isValidDiscount = discountPercent > 0;
+                          }
+
+                          return (
+                            <div className="flex items-center gap-3 mt-1 flex-wrap">
+                              <div
+                                className={`inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap border rounded-lg px-2.5 py-1.5 text-[0.80rem] font-bold transition-[border-color,background-color,color] duration-150 ease-out ${
+                                  isValidDiscount &&
+                                  pricing.pricingType === "paid"
+                                    ? "is-active border-green-500/40 text-green-400 bg-green-500/12"
+                                    : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
+                                }`}
+                              >
+                                <Tag
+                                  size={15}
+                                  weight="bold"
+                                  className="shrink-0"
+                                />
+                                <span className="whitespace-nowrap leading-none">
+                                  {isValidDiscount &&
+                                  pricing.pricingType === "paid"
+                                    ? `${discountPercent}% OFF`
+                                    : "0% OFF"}
+                                </span>
+                              </div>
+                              <span className="text-(--muted) text-[0.8rem] leading-tight">
+                                Discount is calculated automatically.
+                              </span>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 3: Quiz Pricing */}
+                  <CourseQuizPricingCard
+                    courseId={currentCourseId}
+                    courseCurrency={pricing.currency || "INR"}
+                    onNavigateTab={(tab) => {
+                      const stepId = parseWizardTab(tab);
+                      if (stepId) void navigateToStep(stepId);
+                    }}
+                  />
+
+                  {/* Bottom Card: Coupons Banner */}
+                  <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[14px] px-5.5 py-4 bg-(--surface) shadow-(--card-shadow) max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3.5">
+                    <div className="flex items-center gap-3.5">
+                      <div className="flex w-9.5 h-9.5 items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                        <Info size={20} weight="bold" />
+                      </div>
+                      <div>
+                        <strong className="block mb-0.5 text-(--text) text-[0.92rem] font-[650]">
+                          Coupons
+                        </strong>
+                        <p className="m-0 text-(--muted) text-[0.82rem]">
+                          Create and manage coupon codes separately from the
+                          Coupons section.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      style={{
+                        fontSize: "0.80rem",
+                        fontWeight: 700,
+                        height: "34px",
+                        borderRadius: "8px",
+                        gap: "6px",
+                        paddingLeft: "18px",
+                        paddingRight: "18px",
+                      }}
+                      className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] max-[768px]:w-full max-[768px]:justify-center"
+                      onClick={() => {
+                        if (!onNavigatePage) return;
+                        if (!currentCourseId) {
+                          onNavigatePage("/coupons/create");
+                          return;
+                        }
+                        const params = new URLSearchParams({
+                          courseId: currentCourseId,
+                        });
+                        params.set(
+                          "returnTo",
+                          `${window.location.pathname}${window.location.search}`,
+                        );
+                        onNavigatePage(`/coupons/create?${params.toString()}`);
+                      }}
+                    >
+                      Go to Coupons <ArrowUpRight size={15} weight="bold" />
+                    </button>
+                  </div>
+                </div>
+              ) : panelStep === "extras" ? (
+                <div className="flex w-full flex-col gap-5">
+                  {/* Top 2-Column Grid: 1. Certificates & 2. This course includes */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+                    {/* Card 1: Certificates */}
+                    <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                      <div className="mb-4.5">
+                        <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                          1. Certificates
+                        </h3>
+                        <p className="m-0 text-(--muted) text-[0.83rem]">
+                          Configure how certificates will be issued for this
+                          course.
+                        </p>
+                      </div>
+
+                      {/* Enable Certificate Toggle Row */}
+                      <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-4.5">
+                        <div className="flex flex-col min-w-0 pr-3">
+                          <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                            Enable certificate
+                          </strong>
+                          <p className="m-0 text-(--muted) text-[0.8rem]">
+                            Issue certificates to learners on course completion.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <ExtrasControlStatusIndicator
+                            status={getExtrasControlDisplayStatus(
+                              "enableCertificate",
+                            )}
+                            testId="extras-field-status-enableCertificate"
+                          />
+                          <SettingsToggle
+                            checked={extras.enableCertificate}
+                            disabled={isSavingCertificate}
+                            onChange={handleToggleCertificate}
+                            label="Toggle certificate"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Certificate Configuration Controls */}
+                      <div
+                        className={`flex flex-col gap-4.5 transition-opacity duration-200 ${
+                          !extras.enableCertificate
+                            ? "is-disabled opacity-50 pointer-events-none"
+                            : ""
+                        }`}
+                      >
+                        {/* Template Selector */}
+                        <div className="flex flex-col gap-2 mb-5">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                              Certificate template
+                            </label>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                              Coming soon
+                            </span>
+                          </div>
+                          <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
+                            Choose from pre-designed certificate templates.
+                          </p>
+                          <div className="opacity-60 cursor-not-allowed pointer-events-none">
+                            <ThemedSelect
+                              value={extras.certificateTemplate}
+                              onValueChange={handleCertificateTemplateChange}
+                              options={[
+                                [
+                                  "purple-certificate",
+                                  "Modern Purple Certificate",
+                                ],
+                                [
+                                  "blue-certificate",
+                                  "Classic Blue Certificate",
+                                ],
+                                [
+                                  "dark-certificate",
+                                  "Minimal Dark Certificate",
+                                ],
+                              ]}
+                              ariaLabel="Select certificate template"
+                              className="w-full"
+                              disabled
+                              triggerClassName="!w-full !h-10 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Certificate Issuance Options */}
+                        <div className="flex flex-col gap-2 mb-5">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                              Certificate issuance
+                            </label>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                              Coming soon
+                            </span>
+                          </div>
+                          <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
+                            Choose when the certificate should be issued.
+                          </p>
+
+                          <div className="flex flex-col gap-2.5 opacity-60 cursor-not-allowed pointer-events-none select-none">
+                            {/* Option 1: On course completion */}
+                            <div
+                              className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                                extras.issuanceType === "completion"
+                                  ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                                  : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                              }`}
+                            >
+                              <div
+                                className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                                  extras.issuanceType === "completion"
+                                    ? "border-(--accent)"
+                                    : "border-(--muted)"
+                                }`}
+                              >
+                                {extras.issuanceType === "completion" && (
+                                  <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                                )}
+                              </div>
+                              <div className="flex flex-1 flex-col gap-0.75">
+                                <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                                  On course completion
+                                </strong>
+                                <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                                  Issue certificate when the learner completes
+                                  all lessons.
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Option 2: Minimum completion percentage */}
+                            <div
+                              className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                                extras.issuanceType === "percentage"
+                                  ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                                  : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                              }`}
+                            >
+                              <div
+                                className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                                  extras.issuanceType === "percentage"
+                                    ? "border-(--accent)"
+                                    : "border-(--muted)"
+                                }`}
+                              >
+                                {extras.issuanceType === "percentage" && (
+                                  <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                                )}
+                              </div>
+                              <div className="flex flex-1 flex-col gap-0.75">
+                                <div className="flex items-center justify-between w-full">
+                                  <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                                    Minimum completion percentage
+                                  </strong>
+                                  {extras.issuanceType === "percentage" && (
+                                    <div className="flex items-center gap-1.5">
+                                      <input
+                                        type="number"
+                                        disabled
+                                        className="w-[76px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.86rem] font-semibold outline-none text-center cursor-not-allowed"
+                                        min={1}
+                                        max={100}
+                                        value={extras.minCompletionPercentage}
+                                        readOnly
+                                      />
+                                      <span className="text-(--text) text-[0.86rem] font-bold">
+                                        %
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                                <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                                  Issue certificate when learner reaches the
+                                  selected percentage.
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Option 3: Custom rule */}
+                            <div
+                              className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                                extras.issuanceType === "custom"
+                                  ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                                  : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                              }`}
+                            >
+                              <div
+                                className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                                  extras.issuanceType === "custom"
+                                    ? "border-(--accent)"
+                                    : "border-(--muted)"
+                                }`}
+                              >
+                                {extras.issuanceType === "custom" && (
+                                  <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                                )}
+                              </div>
+                              <div className="flex flex-1 flex-col gap-0.75">
+                                <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                                  Custom rule
+                                </strong>
+                                <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                                  Define your own custom rule for certificate
+                                  issuance.
+                                </p>
+
+                                {extras.issuanceType === "custom" && (
+                                  <div className="mt-2 w-full">
+                                    <input
+                                      type="text"
+                                      disabled
+                                      readOnly
+                                      className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] outline-none cursor-not-allowed"
+                                      value={extras.customRuleText}
+                                      placeholder="e.g. Complete all quizzes with > 80% score"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Delivery Toggle Row */}
+                        <div className="flex items-center justify-between border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-3.5 opacity-60 cursor-not-allowed">
+                          <div>
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <strong className="text-(--text) text-[0.88rem] font-[650]">
+                                Delivery
+                              </strong>
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                                Coming soon
+                              </span>
+                            </div>
+                            <p className="m-0 text-(--muted) text-[0.78rem]">
+                              Automatically email the certificate to learners.
+                            </p>
+                          </div>
+                          <div className="pointer-events-none">
+                            <SettingsToggle
+                              checked={extras.autoEmailCertificate}
+                              onChange={handleToggleAutoEmailCertificate}
+                              label="Toggle certificate delivery"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card 2: This course includes */}
+                    <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                      <div className="mb-4.5">
+                        <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                          2. This course includes
+                        </h3>
+                        <p className="m-0 text-(--muted) text-[0.83rem]">
+                          These details are calculated from your curriculum.
+                        </p>
+                      </div>
+
+                      {/* Derived Live Stats Summary Grid */}
+                      <div className="grid grid-cols-1 min-[1024px]:grid-cols-3 gap-3 mb-6 max-[768px]:gap-2.5">
+                        <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
+                          <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-indigo-500 bg-indigo-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
+                            <BookOpen size={20} weight="fill" />
+                          </div>
+                          <div className="flex flex-col">
+                            <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
+                              {totalSections}
+                            </strong>
+                            <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
+                              Sections
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
+                          <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-purple-500 bg-purple-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
+                            <PlayCircle size={20} weight="fill" />
+                          </div>
+                          <div className="flex flex-col">
+                            <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
+                              {totalLessons}
+                            </strong>
+                            <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
+                              Lessons
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
+                          <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-blue-500 bg-blue-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
+                            <Clock size={20} weight="bold" />
+                          </div>
+                          <div className="flex flex-col">
+                            <strong
+                              className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]"
+                              data-testid="course-extra-duration"
+                            >
+                              {computedDuration}
+                            </strong>
+                            <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
+                              Content length
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Divider between Stats & Inclusions */}
+                      <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] my-4.5" />
+
+                      {/* Additional Inclusions Section */}
+                      <div className="flex flex-col gap-3.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <h4 className="m-0 text-(--text) text-[0.95rem] font-bold">
+                              Course inclusions
+                            </h4>
+                            {isReorderingIncludes ||
+                            reorderIncludesMutation.isPending ? (
+                              <span className="inline-flex items-center gap-1 text-(--accent) text-[0.72rem] font-bold px-2.5 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                                <CircleNotch
+                                  size={12}
+                                  className="animate-spin text-(--accent)"
+                                />
+                                <span>Saving inclusion order...</span>
+                              </span>
+                            ) : (
+                              <ExtrasControlStatusIndicator
+                                status={
+                                  extrasControlStatus["inclusions"] ?? null
+                                }
+                                testId="extras-field-status-inclusions"
+                              />
+                            )}
+                          </div>
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.75 rounded-full text-[0.72rem] font-bold tracking-wide border ${
+                              manualIncludesDraft.length >= 6
+                                ? "bg-amber-500/10 text-amber-500 border-amber-500/30"
+                                : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) border-[color-mix(in_srgb,var(--text)_12%,transparent)]"
+                            }`}
+                          >
+                            {manualIncludesDraft.length} / 6
                           </span>
-                          <div className="flex flex-wrap gap-2">
-                            {suggestedInclusions
-                              .slice(0, 6 - manualIncludesDraft.length)
-                              .map((suggestion) => (
+                        </div>
+                        <p className="m-0 text-(--muted) text-[0.82rem] leading-normal">
+                          Perks and benefits your learners will receive upon
+                          enrolling (max 6 items). Click suggestions below or
+                          add custom inclusions.
+                        </p>
+
+                        {/* Active Inclusions List */}
+                        <div className="flex flex-col gap-2.5">
+                          {manualIncludesDraft.length === 0 ? (
+                            <div className="border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-5 text-center text-(--muted) text-[0.82rem] bg-[color-mix(in_srgb,var(--canvas)_30%,var(--surface))]">
+                              No inclusions added yet. Choose from the suggested
+                              perks below or add a custom benefit.
+                            </div>
+                          ) : (
+                            manualIncludesDraft.map((item, index) => (
+                              <div
+                                key={item.id}
+                                draggable={
+                                  !isReorderingIncludes &&
+                                  !reorderIncludesMutation.isPending &&
+                                  !isExtrasSaving &&
+                                  !item.isPendingCreation &&
+                                  !deletingIncludeIds.has(item.id) &&
+                                  !savingIncludeIds.has(item.id) &&
+                                  dragEnabledInclusionId === item.id
+                                }
+                                onDragStart={(e) =>
+                                  handleInclusionDragStart(e, index, item.text)
+                                }
+                                onDragOver={(e) =>
+                                  handleInclusionDragOver(e, index)
+                                }
+                                onDragEnd={handleInclusionDragEnd}
+                                className={`flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] transition-all ${
+                                  item.isPendingCreation ||
+                                  deletingIncludeIds.has(item.id) ||
+                                  savingIncludeIds.has(item.id)
+                                    ? "opacity-75 border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
+                                    : isReorderingIncludes || isExtrasSaving
+                                      ? "opacity-60"
+                                      : "hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] shadow-xs"
+                                }`}
+                              >
+                                {item.isPendingCreation ? (
+                                  <span
+                                    className="flex items-center justify-center p-1 rounded-md shrink-0 text-(--accent)"
+                                    title="Adding inclusion..."
+                                  >
+                                    <CircleNotch
+                                      size={18}
+                                      className="animate-spin text-(--accent)"
+                                    />
+                                  </span>
+                                ) : (
+                                  <span
+                                    className={`flex items-center justify-center p-1 rounded-md shrink-0 transition-colors ${
+                                      isReorderingIncludes ||
+                                      reorderIncludesMutation.isPending ||
+                                      isExtrasSaving ||
+                                      deletingIncludeIds.has(item.id) ||
+                                      savingIncludeIds.has(item.id)
+                                        ? "opacity-30 cursor-not-allowed pointer-events-none"
+                                        : "text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] select-none cursor-grab active:cursor-grabbing"
+                                    }`}
+                                    onMouseEnter={() => {
+                                      if (
+                                        !isReorderingIncludes &&
+                                        !reorderIncludesMutation.isPending &&
+                                        !isExtrasSaving &&
+                                        !deletingIncludeIds.has(item.id) &&
+                                        !savingIncludeIds.has(item.id)
+                                      ) {
+                                        setDragEnabledInclusionId(item.id);
+                                      }
+                                    }}
+                                    onMouseLeave={() =>
+                                      setDragEnabledInclusionId(null)
+                                    }
+                                    title={
+                                      isReorderingIncludes
+                                        ? "Saving order..."
+                                        : deletingIncludeIds.has(item.id)
+                                          ? "Deleting..."
+                                          : savingIncludeIds.has(item.id)
+                                            ? "Saving..."
+                                            : "Drag to reorder"
+                                    }
+                                  >
+                                    <DotsSixVertical size={18} />
+                                  </span>
+                                )}
+                                <input
+                                  type="text"
+                                  disabled={
+                                    isReorderingIncludes ||
+                                    reorderIncludesMutation.isPending ||
+                                    isExtrasSaving ||
+                                    item.isPendingCreation ||
+                                    deletingIncludeIds.has(item.id) ||
+                                    savingIncludeIds.has(item.id)
+                                  }
+                                  className="flex-1 min-w-0 border-none text-(--text) bg-transparent text-[0.88rem] font-medium outline-none placeholder:text-(--muted) disabled:opacity-60 disabled:cursor-not-allowed"
+                                  value={item.text}
+                                  onFocus={() => setFocusedInclusionId(item.id)}
+                                  onBlur={() => {
+                                    void handleManualInclusionBlur(item.id);
+                                  }}
+                                  onChange={(e) =>
+                                    handleUpdateManualInclusionText(
+                                      item.id,
+                                      e.target.value.slice(0, 25),
+                                    )
+                                  }
+                                  placeholder="e.g. Personal guidance"
+                                  maxLength={25}
+                                />
+                                {getExtrasControlDisplayStatus(item.id) ? (
+                                  <ExtrasControlStatusIndicator
+                                    status={getExtrasControlDisplayStatus(
+                                      item.id,
+                                    )}
+                                    testId={`extras-field-status-inclusion-${item.id}`}
+                                  />
+                                ) : focusedInclusionId === item.id ? (
+                                  <span className="text-(--muted) text-[0.74rem] font-medium shrink-0 select-none px-1">
+                                    {item.text.length} / 25
+                                  </span>
+                                ) : null}
                                 <button
-                                  key={suggestion}
                                   type="button"
                                   disabled={
                                     isReorderingIncludes ||
                                     reorderIncludesMutation.isPending ||
                                     isExtrasSaving ||
-                                    manualIncludesDraft.length >= 6
+                                    item.isPendingCreation ||
+                                    deletingIncludeIds.has(item.id) ||
+                                    savingIncludeIds.has(item.id)
                                   }
                                   onClick={() =>
-                                    handleAddManualInclusion(suggestion)
+                                    handleDeleteManualInclusion(item.id)
                                   }
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[0.78rem] font-semibold border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] text-(--text-secondary) hover:text-(--text) hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+                                  className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all bg-transparent cursor-pointer p-0 disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none shrink-0"
+                                  aria-label={
+                                    deletingIncludeIds.has(item.id)
+                                      ? "Deleting inclusion..."
+                                      : "Remove inclusion"
+                                  }
+                                  title={
+                                    deletingIncludeIds.has(item.id)
+                                      ? "Deleting..."
+                                      : "Remove inclusion"
+                                  }
                                 >
-                                  <Plus size={13} weight="bold" />
-                                  <span>{suggestion}</span>
+                                  {deletingIncludeIds.has(item.id) ? (
+                                    <CircleNotch
+                                      size={14}
+                                      className="animate-spin text-red-500"
+                                    />
+                                  ) : (
+                                    <Trash size={15} />
+                                  )}
                                 </button>
-                              ))}
+                              </div>
+                            ))
+                          )}
+                        </div>
+
+                        {/* Suggested quick-add chips */}
+                        {manualIncludesDraft.length < 6 &&
+                          suggestedInclusions.length > 0 && (
+                            <div className="flex flex-col gap-2 mt-1">
+                              <span className="text-(--muted) text-[0.74rem] font-bold uppercase tracking-wider">
+                                Suggested perks (click to add)
+                              </span>
+                              <div className="flex flex-wrap gap-2">
+                                {suggestedInclusions
+                                  .slice(0, 6 - manualIncludesDraft.length)
+                                  .map((suggestion) => (
+                                    <button
+                                      key={suggestion}
+                                      type="button"
+                                      disabled={
+                                        isReorderingIncludes ||
+                                        reorderIncludesMutation.isPending ||
+                                        isExtrasSaving ||
+                                        manualIncludesDraft.length >= 6
+                                      }
+                                      onClick={() =>
+                                        handleAddManualInclusion(suggestion)
+                                      }
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[0.78rem] font-semibold border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] text-(--text-secondary) hover:text-(--text) hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+                                    >
+                                      <Plus size={13} weight="bold" />
+                                      <span>{suggestion}</span>
+                                    </button>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
+
+                        {/* Add inclusion button */}
+                        <button
+                          type="button"
+                          disabled={
+                            isReorderingIncludes ||
+                            reorderIncludesMutation.isPending ||
+                            isExtrasSaving ||
+                            manualIncludesDraft.length >= 6
+                          }
+                          onClick={() => handleAddManualInclusion()}
+                          className={`inline-flex items-center justify-center gap-2 h-9 w-full border border-dashed rounded-xl text-[0.84rem] font-bold mt-1 transition-all ${
+                            manualIncludesDraft.length >= 6 ||
+                            isReorderingIncludes ||
+                            isExtrasSaving
+                              ? "border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) opacity-50 cursor-not-allowed"
+                              : "border-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] hover:border-(--accent) cursor-pointer"
+                          }`}
+                          title={
+                            isReorderingIncludes
+                              ? "Saving inclusion order..."
+                              : manualIncludesDraft.length >= 6
+                                ? "Maximum 6 inclusions reached"
+                                : "Add custom inclusion"
+                          }
+                        >
+                          <Plus size={15} weight="bold" />
+                          <span>
+                            {manualIncludesDraft.length >= 6
+                              ? "Maximum 6 inclusions reached"
+                              : "Add custom inclusion"}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : panelStep === "publish" ? (
+                <div className="flex w-full flex-col gap-5">
+                  {/* Top 2-Column Grid: 1. Publish settings & 2. Final checklist */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+                    {/* Card 1: Publish settings */}
+                    <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                      <div className="mb-4.5">
+                        <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                          1. Publish settings
+                        </h3>
+                        <p className="m-0 text-(--muted) text-[0.83rem]">
+                          Choose when and how your course becomes visible.
+                        </p>
+                      </div>
+
+                      {/* Informational Course Status Display */}
+                      <div className="flex flex-col gap-1.5 mb-4.5">
+                        <label className="text-(--text) text-[0.86rem] font-[650]">
+                          Course status
+                        </label>
+                        <div className="flex items-center mt-0.5">
+                          <span
+                            className={`inline-flex items-center rounded-md px-2.5 py-1 text-[0.8rem] font-bold uppercase tracking-[0.04em] ${
+                              isPublished
+                                ? "is-published border border-green-500/35 text-green-500 bg-green-500/12"
+                                : "is-draft border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
+                            }`}
+                          >
+                            {isPublished ? "Published" : "Draft"}
+                          </span>
+                        </div>
+                        <p className="m-0 mt-1 text-(--muted) text-[0.78rem] leading-[1.4]">
+                          {isPublished
+                            ? "Your course is currently published and visible to students according to your settings."
+                            : "Your course is currently a draft and hasn't been published yet."}
+                        </p>
+                      </div>
+                      {/* Course visibility select */}
+                      <div className="flex flex-col gap-1.5 mb-4.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-(--text) text-[0.86rem] font-[650]">
+                            Course visibility
+                          </label>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                            Coming soon
+                          </span>
+                        </div>
+                        <div className="opacity-60 cursor-not-allowed pointer-events-none">
+                          <ThemedSelect
+                            disabled
+                            value={publishSettings.visibility}
+                            onValueChange={(val) =>
+                              setPublishSettings((prev) => ({
+                                ...prev,
+                                visibility: val as CourseVisibility,
+                              }))
+                            }
+                            options={[
+                              [
+                                "public",
+                                "Public — Anyone on the platform can discover and enroll in this course.",
+                              ],
+                              [
+                                "private",
+                                "Private — Only invited students can access this course.",
+                              ],
+                              [
+                                "unlisted",
+                                "Unlisted — Only users with a direct link can view this course.",
+                              ],
+                            ]}
+                            ariaLabel="Select course visibility (Coming soon)"
+                            triggerClassName="!w-full !h-10 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--muted) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold !cursor-not-allowed"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Publish on radio options */}
+                      <div className="flex flex-col gap-1.5 mb-4.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-(--text) text-[0.86rem] font-[650]">
+                            Publish on
+                          </label>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                            Coming soon
+                          </span>
+                        </div>
+
+                        <div className="flex flex-col gap-2.5 opacity-60 pointer-events-none cursor-not-allowed select-none">
+                          {/* Option 1: Publish immediately */}
+                          <div
+                            className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 cursor-not-allowed select-none ${
+                              publishSettings.scheduleOption === "now"
+                                ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                                : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                            }`}
+                          >
+                            <div
+                              className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
+                                publishSettings.scheduleOption === "now"
+                                  ? "border-(--accent)"
+                                  : "border-(--muted)"
+                              }`}
+                            >
+                              {publishSettings.scheduleOption === "now" && (
+                                <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                              )}
+                            </div>
+                            <div className="flex flex-1 flex-col gap-0.75">
+                              <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                                Publish immediately
+                              </strong>
+                              <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                                Make this course live immediately upon saving.
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Option 2: Schedule for later */}
+                          <div
+                            className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 cursor-not-allowed select-none ${
+                              publishSettings.scheduleOption === "later"
+                                ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
+                                : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                            }`}
+                          >
+                            <div
+                              className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
+                                publishSettings.scheduleOption === "later"
+                                  ? "border-(--accent)"
+                                  : "border-(--muted)"
+                              }`}
+                            >
+                              {publishSettings.scheduleOption === "later" && (
+                                <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                              )}
+                            </div>
+                            <div className="flex flex-1 flex-col gap-0.75">
+                              <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                                Schedule for a future date
+                              </strong>
+                              <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                                Set a specific date and time when this course
+                                should go live.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card 2: Pre-publish Checklist */}
+                    <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                      <div className="mb-4.5">
+                        <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                          2. Pre-publish Checklist
+                        </h3>
+                        <p className="m-0 text-(--muted) text-[0.83rem]">
+                          Review all required items before publishing your
+                          course.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-col gap-2.5 mb-5">
+                        {validationChecklistItems.map((item) => {
+                          const state = getChecklistState(item.area);
+                          const sectionErrors =
+                            serverValidation?.sections[item.area].errors ?? [];
+                          const isInvalid = state === "invalid";
+                          const isExpanded =
+                            isInvalid && expandedValidationArea === item.area;
+                          const errorSummary =
+                            sectionErrors.length > 1
+                              ? String(sectionErrors.length) + " issues"
+                              : sectionErrors[0] || "Needs attention";
+
+                          return (
+                            <div key={item.area}>
+                              <div
+                                className={[
+                                  "flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] transition-[border-color,background-color] duration-150 ease-out",
+                                  isExpanded
+                                    ? "rounded-t-[10px] rounded-b-none"
+                                    : "rounded-[10px]",
+                                ].join(" ")}
+                              >
+                                <div className="flex min-w-0 items-center gap-3">
+                                  {state === "validating" ? (
+                                    <CircleNotch
+                                      size={20}
+                                      className="shrink-0 animate-spin text-(--accent)"
+                                    />
+                                  ) : state === "valid" ? (
+                                    <CheckCircle
+                                      size={20}
+                                      weight="fill"
+                                      className="shrink-0 text-green-500"
+                                    />
+                                  ) : state === "invalid" ? (
+                                    <WarningCircle
+                                      size={20}
+                                      weight="fill"
+                                      className="shrink-0 text-rose-400"
+                                    />
+                                  ) : (
+                                    <Info
+                                      size={20}
+                                      weight="fill"
+                                      className="shrink-0 text-(--muted)"
+                                    />
+                                  )}
+                                  <strong className="truncate text-(--text) text-[0.9rem] font-[650]">
+                                    {item.label}
+                                  </strong>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2 text-[0.82rem]">
+                                  {state === "validating" ? (
+                                    <span className="text-(--accent)">
+                                      Validating...
+                                    </span>
+                                  ) : state === "idle" ? (
+                                    <span className="text-(--muted)">
+                                      Not checked
+                                    </span>
+                                  ) : state === "valid" ? (
+                                    <span className="text-(--muted)">
+                                      {item.summary}
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <span className="max-w-[15rem] truncate text-rose-400">
+                                        {errorSummary}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="inline-flex h-7 w-7 items-center justify-center rounded-[7px] border-0 bg-transparent p-0 text-rose-300 transition-colors hover:bg-rose-500/10 hover:text-rose-200"
+                                        onClick={() =>
+                                          setExpandedValidationArea(
+                                            isExpanded ? null : item.area,
+                                          )
+                                        }
+                                        aria-expanded={isExpanded}
+                                        aria-controls={
+                                          "validation-errors-" + item.area
+                                        }
+                                        aria-label={
+                                          (isExpanded ? "Hide" : "Show") +
+                                          " " +
+                                          item.label +
+                                          " validation errors"
+                                        }
+                                      >
+                                        <CaretRight
+                                          size={16}
+                                          weight="bold"
+                                          className={`transition-transform duration-200 ease-out motion-reduce:transition-none ${isExpanded ? "rotate-90" : "rotate-0"}`}
+                                        />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <div
+                                id={"validation-errors-" + item.area}
+                                aria-hidden={!isExpanded}
+                                className={[
+                                  "grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
+                                  isExpanded
+                                    ? "grid-rows-[1fr] opacity-100"
+                                    : "grid-rows-[0fr] opacity-0 pointer-events-none",
+                                ].join(" ")}
+                              >
+                                <div className="min-h-0">
+                                  <div className="-mt-px border-x border-b border-[color-mix(in_srgb,#fb7185_24%,transparent)] rounded-b-[10px] bg-[color-mix(in_srgb,#fb7185_5%,var(--surface))] px-4 py-3 text-[0.78rem] leading-[1.45] text-(--text-secondary)">
+                                    <ul className="m-0 flex list-disc flex-col gap-1.5 pl-5 marker:text-rose-400">
+                                      {sectionErrors.map((message, index) => (
+                                        <li key={item.area + "-error-" + index}>
+                                          {message}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Ready-to-publish State Box */}
+                      {isCourseReadyToPublish ? (
+                        <div className="flex items-center gap-4 border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] rounded-xl px-4.5 py-4 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
+                          <div className="flex w-10.5 h-10.5 shrink-0 items-center justify-center rounded-xl text-(--accent) bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]">
+                            <BookOpen size={24} weight="fill" />
+                          </div>
+                          <div>
+                            <strong className="block mb-0.75 text-(--text) text-[0.94rem] font-bold">
+                              Your course is ready to be published!
+                            </strong>
+                            <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                              Once published, students can see and enroll in
+                              this course according to your settings.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-4 border border-red-500/30 rounded-xl px-4.5 py-4 bg-red-500/8">
+                          <div className="flex w-10.5 h-10.5 shrink-0 items-center justify-center rounded-xl text-red-500 bg-red-500/16">
+                            <Info size={24} weight="bold" />
+                          </div>
+                          <div>
+                            <strong className="block mb-0.75 text-(--text) text-[0.94rem] font-bold">
+                              Course needs attention
+                            </strong>
+                            <p className="m-0 text-(--muted) text-[0.8rem]">
+                              Please fix incomplete sections highlighted above
+                              before publishing.
+                            </p>
                           </div>
                         </div>
                       )}
-
-                    {/* Add inclusion button */}
-                    <button
-                      type="button"
-                      disabled={
-                        isReorderingIncludes ||
-                        reorderIncludesMutation.isPending ||
-                        isExtrasSaving ||
-                        manualIncludesDraft.length >= 6
-                      }
-                      onClick={() => handleAddManualInclusion()}
-                      className={`inline-flex items-center justify-center gap-2 h-9 w-full border border-dashed rounded-xl text-[0.84rem] font-bold mt-1 transition-all ${
-                        manualIncludesDraft.length >= 6 ||
-                        isReorderingIncludes ||
-                        isExtrasSaving
-                          ? "border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) opacity-50 cursor-not-allowed"
-                          : "border-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] hover:border-(--accent) cursor-pointer"
-                      }`}
-                      title={
-                        isReorderingIncludes
-                          ? "Saving inclusion order..."
-                          : manualIncludesDraft.length >= 6
-                            ? "Maximum 6 inclusions reached"
-                            : "Add custom inclusion"
-                      }
-                    >
-                      <Plus size={15} weight="bold" />
-                      <span>
-                        {manualIncludesDraft.length >= 6
-                          ? "Maximum 6 inclusions reached"
-                          : "Add custom inclusion"}
-                      </span>
-                    </button>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          ) : panelStep === "publish" ? (
-            <div className="flex w-full flex-col gap-5">
-              {/* Top 2-Column Grid: 1. Publish settings & 2. Final checklist */}
-              <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-5 max-[768px]:gap-3.5 w-full min-w-0">
-                {/* Card 1: Publish settings */}
-                <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                  <div className="mb-4.5">
-                    <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                      1. Publish settings
+
+                  {/* Bottom Card 3: What happens after publishing? */}
+                  <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                    <h3 className="m-0 mb-4.5 text-(--text) text-[1.05rem] font-bold">
+                      3. What happens after publishing?
                     </h3>
-                    <p className="m-0 text-(--muted) text-[0.83rem]">
-                      Choose when and how your course becomes visible.
-                    </p>
-                  </div>
 
-                  {/* Informational Course Status Display */}
-                  <div className="flex flex-col gap-1.5 mb-4.5">
-                    <label className="text-(--text) text-[0.86rem] font-[650]">
-                      Course status
-                    </label>
-                    <div className="flex items-center mt-0.5">
-                      <span
-                        className={`inline-flex items-center rounded-md px-2.5 py-1 text-[0.8rem] font-bold uppercase tracking-[0.04em] ${
-                          isPublished
-                            ? "is-published border border-green-500/35 text-green-500 bg-green-500/12"
-                            : "is-draft border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
-                        }`}
-                      >
-                        {isPublished ? "Published" : "Draft"}
-                      </span>
-                    </div>
-                    <p className="m-0 mt-1 text-(--muted) text-[0.78rem] leading-[1.4]">
-                      {isPublished
-                        ? "Your course is currently published and visible to students according to your settings."
-                        : "Your course is currently a draft and hasn't been published yet."}
-                    </p>
-                  </div>
-                  {/* Course visibility select */}
-                  <div className="flex flex-col gap-1.5 mb-4.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-(--text) text-[0.86rem] font-[650]">
-                        Course visibility
-                      </label>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
-                        Coming soon
-                      </span>
-                    </div>
-                    <div className="opacity-60 cursor-not-allowed pointer-events-none">
-                      <ThemedSelect
-                        disabled
-                        value={publishSettings.visibility}
-                        onValueChange={(val) =>
-                          setPublishSettings((prev) => ({
-                            ...prev,
-                            visibility: val as CourseVisibility,
-                          }))
-                        }
-                        options={[
-                          [
-                            "public",
-                            "Public — Anyone on the platform can discover and enroll in this course.",
-                          ],
-                          [
-                            "private",
-                            "Private — Only invited students can access this course.",
-                          ],
-                          [
-                            "unlisted",
-                            "Unlisted — Only users with a direct link can view this course.",
-                          ],
-                        ]}
-                        ariaLabel="Select course visibility (Coming soon)"
-                        triggerClassName="!w-full !h-10 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--muted) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold !cursor-not-allowed"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Publish on radio options */}
-                  <div className="flex flex-col gap-1.5 mb-4.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-(--text) text-[0.86rem] font-[650]">
-                        Publish on
-                      </label>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
-                        Coming soon
-                      </span>
-                    </div>
-
-                    <div className="flex flex-col gap-2.5 opacity-60 pointer-events-none cursor-not-allowed select-none">
-                      {/* Option 1: Publish immediately */}
-                      <div
-                        className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 cursor-not-allowed select-none ${
-                          publishSettings.scheduleOption === "now"
-                            ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                        }`}
-                      >
-                        <div
-                          className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
-                            publishSettings.scheduleOption === "now"
-                              ? "border-(--accent)"
-                              : "border-(--muted)"
-                          }`}
-                        >
-                          {publishSettings.scheduleOption === "now" && (
-                            <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                          )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                      {/* Feature 1: Visible to students */}
+                      <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                        <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-indigo-500 bg-indigo-500/[0.14]">
+                          <Eye size={22} weight="bold" />
                         </div>
-                        <div className="flex flex-1 flex-col gap-0.75">
-                          <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                            Publish immediately
+                        <div>
+                          <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
+                            Visible to students
                           </strong>
                           <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                            Make this course live immediately upon saving.
+                            Students will be able to discover your course on the
+                            platform.
                           </p>
                         </div>
                       </div>
 
-                      {/* Option 2: Schedule for later */}
-                      <div
-                        className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 cursor-not-allowed select-none ${
-                          publishSettings.scheduleOption === "later"
-                            ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                        }`}
-                      >
-                        <div
-                          className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
-                            publishSettings.scheduleOption === "later"
-                              ? "border-(--accent)"
-                              : "border-(--muted)"
-                          }`}
-                        >
-                          {publishSettings.scheduleOption === "later" && (
-                            <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                          )}
+                      {/* Feature 2: Enrollment starts */}
+                      <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                        <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-purple-500 bg-purple-500/[0.14]">
+                          <UserPlus size={22} weight="bold" />
                         </div>
-                        <div className="flex flex-1 flex-col gap-0.75">
-                          <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                            Schedule for a future date
+                        <div>
+                          <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
+                            Enrollment starts
                           </strong>
                           <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                            Set a specific date and time when this course should
-                            go live.
+                            Students who meet the access rules can enroll in
+                            your course.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Feature 3: Track performance */}
+                      <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                        <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-blue-500 bg-blue-500/[0.14]">
+                          <PlayCircle size={22} weight="fill" />
+                        </div>
+                        <div>
+                          <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
+                            Track performance
+                          </strong>
+                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                            Monitor enrollments, progress, and engagement in
+                            real-time.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Feature 4: Earn with every sale */}
+                      <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
+                        <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-pink-500 bg-pink-500/[0.14]">
+                          <ChartBar size={22} weight="bold" />
+                        </div>
+                        <div>
+                          <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
+                            Earn with every sale
+                          </strong>
+                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                            Get paid for every successful enrollment.
                           </p>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-
-                {/* Card 2: Pre-publish Checklist */}
-                <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                  <div className="mb-4.5">
-                    <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                      2. Pre-publish Checklist
-                    </h3>
-                    <p className="m-0 text-(--muted) text-[0.83rem]">
-                      Review all required items before publishing your course.
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col gap-2.5 mb-5">
-                    {validationChecklistItems.map((item) => {
-                      const state = getChecklistState(item.area);
-                      const sectionErrors =
-                        serverValidation?.sections[item.area].errors ?? [];
-                      const isInvalid = state === "invalid";
-                      const isExpanded =
-                        isInvalid && expandedValidationArea === item.area;
-                      const errorSummary =
-                        sectionErrors.length > 1
-                          ? String(sectionErrors.length) + " issues"
-                          : sectionErrors[0] || "Needs attention";
-
-                      return (
-                        <div key={item.area}>
-                          <div
-                            className={[
-                              "flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] transition-[border-color,background-color] duration-150 ease-out",
-                              isExpanded
-                                ? "rounded-t-[10px] rounded-b-none"
-                                : "rounded-[10px]",
-                            ].join(" ")}
-                          >
-                            <div className="flex min-w-0 items-center gap-3">
-                              {state === "validating" ? (
-                                <CircleNotch
-                                  size={20}
-                                  className="shrink-0 animate-spin text-(--accent)"
-                                />
-                              ) : state === "valid" ? (
-                                <CheckCircle
-                                  size={20}
-                                  weight="fill"
-                                  className="shrink-0 text-green-500"
-                                />
-                              ) : state === "invalid" ? (
-                                <WarningCircle
-                                  size={20}
-                                  weight="fill"
-                                  className="shrink-0 text-rose-400"
-                                />
-                              ) : (
-                                <Info
-                                  size={20}
-                                  weight="fill"
-                                  className="shrink-0 text-(--muted)"
-                                />
-                              )}
-                              <strong className="truncate text-(--text) text-[0.9rem] font-[650]">
-                                {item.label}
-                              </strong>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-2 text-[0.82rem]">
-                              {state === "validating" ? (
-                                <span className="text-(--accent)">
-                                  Validating...
-                                </span>
-                              ) : state === "idle" ? (
-                                <span className="text-(--muted)">
-                                  Not checked
-                                </span>
-                              ) : state === "valid" ? (
-                                <span className="text-(--muted)">
-                                  {item.summary}
-                                </span>
-                              ) : (
-                                <>
-                                  <span className="max-w-[15rem] truncate text-rose-400">
-                                    {errorSummary}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    className="inline-flex h-7 w-7 items-center justify-center rounded-[7px] border-0 bg-transparent p-0 text-rose-300 transition-colors hover:bg-rose-500/10 hover:text-rose-200"
-                                    onClick={() =>
-                                      setExpandedValidationArea(
-                                        isExpanded ? null : item.area,
-                                      )
-                                    }
-                                    aria-expanded={isExpanded}
-                                    aria-controls={
-                                      "validation-errors-" + item.area
-                                    }
-                                    aria-label={
-                                      (isExpanded ? "Hide" : "Show") +
-                                      " " +
-                                      item.label +
-                                      " validation errors"
-                                    }
-                                  >
-                                    <CaretRight
-                                      size={16}
-                                      weight="bold"
-                                      className={`transition-transform duration-200 ease-out motion-reduce:transition-none ${isExpanded ? "rotate-90" : "rotate-0"}`}
-                                    />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          <div
-                            id={"validation-errors-" + item.area}
-                            aria-hidden={!isExpanded}
-                            className={[
-                              "grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
-                              isExpanded
-                                ? "grid-rows-[1fr] opacity-100"
-                                : "grid-rows-[0fr] opacity-0 pointer-events-none",
-                            ].join(" ")}
-                          >
-                            <div className="min-h-0">
-                              <div className="-mt-px border-x border-b border-[color-mix(in_srgb,#fb7185_24%,transparent)] rounded-b-[10px] bg-[color-mix(in_srgb,#fb7185_5%,var(--surface))] px-4 py-3 text-[0.78rem] leading-[1.45] text-(--text-secondary)">
-                                <ul className="m-0 flex list-disc flex-col gap-1.5 pl-5 marker:text-rose-400">
-                                  {sectionErrors.map((message, index) => (
-                                    <li key={item.area + "-error-" + index}>
-                                      {message}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Ready-to-publish State Box */}
-                  {isCourseReadyToPublish ? (
-                    <div className="flex items-center gap-4 border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] rounded-xl px-4.5 py-4 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
-                      <div className="flex w-10.5 h-10.5 shrink-0 items-center justify-center rounded-xl text-(--accent) bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]">
-                        <BookOpen size={24} weight="fill" />
-                      </div>
-                      <div>
-                        <strong className="block mb-0.75 text-(--text) text-[0.94rem] font-bold">
-                          Your course is ready to be published!
-                        </strong>
-                        <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                          Once published, students can see and enroll in this
-                          course according to your settings.
-                        </p>
-                      </div>
+              ) : (
+                <div className="relative z-10 grid grid-cols-1 min-[1100px]:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
+                  <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
+                    <div className="mb-4.5">
+                      <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
+                        {WIZARD_STEPS.find((s) => s.id === panelStep)?.label}
+                      </h2>
+                      <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
+                        This section will allow configuring course {panelStep}.
+                      </p>
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-4 border border-red-500/30 rounded-xl px-4.5 py-4 bg-red-500/8">
-                      <div className="flex w-10.5 h-10.5 shrink-0 items-center justify-center rounded-xl text-red-500 bg-red-500/16">
-                        <Info size={24} weight="bold" />
-                      </div>
-                      <div>
-                        <strong className="block mb-0.75 text-(--text) text-[0.94rem] font-bold">
-                          Course needs attention
-                        </strong>
-                        <p className="m-0 text-(--muted) text-[0.8rem]">
-                          Please fix incomplete sections highlighted above
-                          before publishing.
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                  </section>
                 </div>
-              </div>
-
-              {/* Bottom Card 3: What happens after publishing? */}
-              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                <h3 className="m-0 mb-4.5 text-(--text) text-[1.05rem] font-bold">
-                  3. What happens after publishing?
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                  {/* Feature 1: Visible to students */}
-                  <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                    <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-indigo-500 bg-indigo-500/[0.14]">
-                      <Eye size={22} weight="bold" />
-                    </div>
-                    <div>
-                      <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
-                        Visible to students
-                      </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Students will be able to discover your course on the
-                        platform.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Feature 2: Enrollment starts */}
-                  <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                    <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-purple-500 bg-purple-500/[0.14]">
-                      <UserPlus size={22} weight="bold" />
-                    </div>
-                    <div>
-                      <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
-                        Enrollment starts
-                      </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Students who meet the access rules can enroll in your
-                        course.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Feature 3: Track performance */}
-                  <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                    <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-blue-500 bg-blue-500/[0.14]">
-                      <PlayCircle size={22} weight="fill" />
-                    </div>
-                    <div>
-                      <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
-                        Track performance
-                      </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Monitor enrollments, progress, and engagement in
-                        real-time.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Feature 4: Earn with every sale */}
-                  <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                    <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-pink-500 bg-pink-500/[0.14]">
-                      <ChartBar size={22} weight="bold" />
-                    </div>
-                    <div>
-                      <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
-                        Earn with every sale
-                      </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Get paid for every successful enrollment.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="relative z-10 grid grid-cols-1 min-[1100px]:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
-              <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
-                <div className="mb-4.5">
-                  <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
-                    {WIZARD_STEPS.find((s) => s.id === panelStep)?.label}
-                  </h2>
-                  <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
-                    This section will allow configuring course {panelStep}.
-                  </p>
-                </div>
-              </section>
-            </div>
-          )
-        }
+              )
+            }
           </SwipeableTabPanel>
         </Suspense>
       )}

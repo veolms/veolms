@@ -59,9 +59,21 @@ export async function up(database: Kysely<any>): Promise<void> {
   await (database as Kysely<any>)
     .insertInto("roles")
     .values([
-      { id: "00000000-0000-4000-8000-000000000000", name: "admin", description: "System administrator with full platform access" },
-      { id: "00000000-0000-4000-8000-000000000001", name: "instructor", description: "Course instructor and author" },
-      { id: "00000000-0000-4000-8000-000000000002", name: "student", description: "Enrolled student" },
+      {
+        id: "00000000-0000-4000-8000-000000000000",
+        name: "admin",
+        description: "System administrator with full platform access",
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000001",
+        name: "instructor",
+        description: "Course instructor and author",
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000002",
+        name: "student",
+        description: "Enrolled student",
+      },
     ])
     .execute();
 
@@ -268,9 +280,21 @@ export async function up(database: Kysely<any>): Promise<void> {
 }
 
 export async function down(database: Kysely<any>): Promise<void> {
-  await database.schema.dropTable("webauthn_challenges").ifExists().cascade().execute();
-  await database.schema.dropTable("mfa_backup_codes").ifExists().cascade().execute();
-  await database.schema.dropTable("user_totp_credentials").ifExists().cascade().execute();
+  await database.schema
+    .dropTable("webauthn_challenges")
+    .ifExists()
+    .cascade()
+    .execute();
+  await database.schema
+    .dropTable("mfa_backup_codes")
+    .ifExists()
+    .cascade()
+    .execute();
+  await database.schema
+    .dropTable("user_totp_credentials")
+    .ifExists()
+    .cascade()
+    .execute();
   await database.schema.dropTable("passkeys").ifExists().cascade().execute();
   await database.schema.dropTable("otp_codes").ifExists().cascade().execute();
   await database.schema

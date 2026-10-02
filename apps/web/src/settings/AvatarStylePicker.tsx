@@ -117,10 +117,7 @@ export function AvatarStylePicker({
   >({});
 
   const effectiveSeed = shuffleCount > 0 ? `${seed}-${shuffleCount}` : seed;
-  const generatedPreviewUrl = buildDicebearSvgUrl(
-    selectedStyle,
-    effectiveSeed,
-  );
+  const generatedPreviewUrl = buildDicebearSvgUrl(selectedStyle, effectiveSeed);
 
   // Guarantee that an avatar is selected when saved tab is active
   const effectiveSelectedSavedId = useMemo(() => {
@@ -140,7 +137,13 @@ export function AvatarStylePicker({
       return savedAvatars[0].id;
     }
     return null;
-  }, [userSelectedSavedId, avatars, activeSavedAvatar, googleAvatar, savedAvatars]);
+  }, [
+    userSelectedSavedId,
+    avatars,
+    activeSavedAvatar,
+    googleAvatar,
+    savedAvatars,
+  ]);
 
   const selectedSavedAvatar = useMemo(() => {
     if (effectiveSelectedSavedId) {
@@ -360,7 +363,9 @@ export function AvatarStylePicker({
               disabled={isSaving || isPreviewLoading}
               onClick={handleShuffle}
               title={
-                isPreviewLoading ? "Generating avatar..." : "Shuffle avatar look"
+                isPreviewLoading
+                  ? "Generating avatar..."
+                  : "Shuffle avatar look"
               }
               aria-busy={isPreviewLoading}
             >
@@ -375,11 +380,7 @@ export function AvatarStylePicker({
                 </>
               ) : (
                 <>
-                  <ArrowsClockwise
-                    size={13}
-                    weight="bold"
-                    aria-hidden="true"
-                  />
+                  <ArrowsClockwise size={13} weight="bold" aria-hidden="true" />
                   Shuffle look
                 </>
               )}
@@ -450,10 +451,14 @@ export function AvatarStylePicker({
                       }`}
                       disabled={isSaving}
                       onClick={() => setUserSelectedSavedId(googleAvatar.id)}
-                      onDoubleClick={() => confirmSavedDirectly(googleAvatar.id)}
+                      onDoubleClick={() =>
+                        confirmSavedDirectly(googleAvatar.id)
+                      }
                       title="Google Account Photo (Double-click to apply directly)"
                       aria-label="Google Account Photo"
-                      aria-pressed={effectiveSelectedSavedId === googleAvatar.id}
+                      aria-pressed={
+                        effectiveSelectedSavedId === googleAvatar.id
+                      }
                     >
                       {effectiveSelectedSavedId === googleAvatar.id && (
                         <span
@@ -560,8 +565,8 @@ export function AvatarStylePicker({
                 </div>
               ) : (
                 <p className="settings-profile__avatar-empty-hint">
-                  No synced or saved photos available. Choose the Generate avatar
-                  tab to customize a new look.
+                  No synced or saved photos available. Choose the Generate
+                  avatar tab to customize a new look.
                 </p>
               )
             ) : (

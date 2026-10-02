@@ -1,5 +1,9 @@
 import { sql } from "kysely";
-import type { PaymentStatus, PaymentAttemptStatus, Json } from "@veolms/database";
+import type {
+  PaymentStatus,
+  PaymentAttemptStatus,
+  Json,
+} from "@veolms/database";
 import type { Executor } from "../shared/repository.types.ts";
 
 export async function findPaymentById(database: Executor, paymentId: string) {
@@ -10,7 +14,10 @@ export async function findPaymentById(database: Executor, paymentId: string) {
     .executeTakeFirst();
 }
 
-export async function findPaymentByOrderId(database: Executor, orderId: string) {
+export async function findPaymentByOrderId(
+  database: Executor,
+  orderId: string,
+) {
   return await database
     .selectFrom("payments")
     .selectAll()

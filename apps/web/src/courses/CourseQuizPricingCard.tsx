@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
@@ -23,7 +17,8 @@ function getCurrencySymbol(code: string): string {
         currency: code,
       })
         .formatToParts(0)
-        .find((part) => part.type === "currency")?.value || (code === "INR" ? "₹" : "$")
+        .find((part) => part.type === "currency")?.value ||
+      (code === "INR" ? "₹" : "$")
     );
   } catch {
     return code === "INR" ? "₹" : code === "USD" ? "$" : code;
@@ -44,18 +39,23 @@ export function CourseQuizPricingCard({
   const savedPricing = pricingQuery.data;
   const saveMutation = useSetQuizCoursePricing();
 
-  const initialPricingType = savedPricing?.pricingType === "paid" ? "paid" : "free";
-  const initialPrice = savedPricing && savedPricing.price > 0
-    ? String(savedPricing.price)
-    : "";
-  const initialSalePrice = savedPricing?.salePrice && savedPricing.salePrice > 0
-    ? String(savedPricing.salePrice)
-    : "";
+  const initialPricingType =
+    savedPricing?.pricingType === "paid" ? "paid" : "free";
+  const initialPrice =
+    savedPricing && savedPricing.price > 0 ? String(savedPricing.price) : "";
+  const initialSalePrice =
+    savedPricing?.salePrice && savedPricing.salePrice > 0
+      ? String(savedPricing.salePrice)
+      : "";
 
-  const [pricingType, setPricingType] = useState<"free" | "paid">(initialPricingType);
+  const [pricingType, setPricingType] = useState<"free" | "paid">(
+    initialPricingType,
+  );
   const [priceInput, setPriceInput] = useState(initialPrice);
   const [salePriceInput, setSalePriceInput] = useState(initialSalePrice);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const timerRef = useRef<number | null>(null);
@@ -79,7 +79,12 @@ export function CourseQuizPricingCard({
   const validationError = useMemo(() => {
     if (pricingType !== "paid") return null;
     const numPrice = Number(priceInput);
-    if (!priceInput.trim() || isNaN(numPrice) || numPrice <= 0 || !Number.isInteger(numPrice)) {
+    if (
+      !priceInput.trim() ||
+      isNaN(numPrice) ||
+      numPrice <= 0 ||
+      !Number.isInteger(numPrice)
+    ) {
       return "Price must be a whole number greater than 0.";
     }
     if (salePriceInput.trim()) {
@@ -95,21 +100,27 @@ export function CourseQuizPricingCard({
   }, [pricingType, priceInput, salePriceInput]);
 
   const performSave = useCallback(
-    async (
-      nextType: "free" | "paid",
-      nextPrice: string,
-      nextSale: string,
-    ) => {
+    async (nextType: "free" | "paid", nextPrice: string, nextSale: string) => {
       if (!courseId) return;
 
       if (nextType === "paid") {
         const numPrice = Number(nextPrice);
-        if (!nextPrice.trim() || isNaN(numPrice) || numPrice <= 0 || !Number.isInteger(numPrice)) {
+        if (
+          !nextPrice.trim() ||
+          isNaN(numPrice) ||
+          numPrice <= 0 ||
+          !Number.isInteger(numPrice)
+        ) {
           return;
         }
         if (nextSale.trim()) {
           const numSale = Number(nextSale);
-          if (isNaN(numSale) || numSale <= 0 || numSale >= numPrice || !Number.isInteger(numSale)) {
+          if (
+            isNaN(numSale) ||
+            numSale <= 0 ||
+            numSale >= numPrice ||
+            !Number.isInteger(numSale)
+          ) {
             return;
           }
         }
@@ -123,9 +134,7 @@ export function CourseQuizPricingCard({
           pricingType: nextType,
           price: nextType === "paid" ? Number(nextPrice) : 0,
           salePrice:
-            nextType === "paid" && nextSale.trim()
-              ? Number(nextSale)
-              : null,
+            nextType === "paid" && nextSale.trim() ? Number(nextSale) : null,
         };
 
         // One course-level price covers every quiz in the course.
@@ -180,12 +189,14 @@ export function CourseQuizPricingCard({
               3. Course quiz pricing
             </h3>
             <p className="m-0 text-(--muted) text-[0.83rem]">
-              Set the overall price for quizzes in this course. Paying once gives learners access to all quizzes attached to this course.
+              Set the overall price for quizzes in this course. Paying once
+              gives learners access to all quizzes attached to this course.
             </p>
           </div>
         </div>
         <p className="text-sm text-red-400 mb-3">
-          Unable to load quiz pricing. {pricingQuery.error?.message ?? "Please try again."}
+          Unable to load quiz pricing.{" "}
+          {pricingQuery.error?.message ?? "Please try again."}
         </p>
         <div className="flex items-center gap-3">
           <Button
@@ -209,7 +220,8 @@ export function CourseQuizPricingCard({
             3. Course quiz pricing
           </h3>
           <p className="m-0 text-(--muted) text-[0.83rem]">
-            Set the overall price for quizzes in this course. Paying once gives learners access to all quizzes attached to this course.
+            Set the overall price for quizzes in this course. Paying once gives
+            learners access to all quizzes attached to this course.
           </p>
         </div>
 
@@ -269,7 +281,8 @@ export function CourseQuizPricingCard({
                   Free (Included in Course)
                 </span>
                 <span className="text-xs text-(--muted) leading-relaxed">
-                  All quizzes in this course are included for free when learners enroll in the course.
+                  All quizzes in this course are included for free when learners
+                  enroll in the course.
                 </span>
               </div>
             </label>
@@ -301,7 +314,8 @@ export function CourseQuizPricingCard({
                   Paid (Course Quiz Pass)
                 </span>
                 <span className="text-xs text-(--muted) leading-relaxed">
-                  Learners can purchase standalone quiz access to unlock and take all quizzes attached to this course.
+                  Learners can purchase standalone quiz access to unlock and
+                  take all quizzes attached to this course.
                 </span>
               </div>
             </label>
@@ -314,7 +328,8 @@ export function CourseQuizPricingCard({
                 {/* Regular Price */}
                 <div>
                   <label className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                    Course Quiz Pass Price ({courseCurrency}) <span className="text-rose-500">*</span>
+                    Course Quiz Pass Price ({courseCurrency}){" "}
+                    <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative flex items-center">
                     <span className="absolute left-3 text-xs font-semibold text-(--muted) pointer-events-none">
@@ -332,7 +347,11 @@ export function CourseQuizPricingCard({
                         scheduleSave(pricingType, val, salePriceInput);
                       }}
                       onBlur={() => {
-                        void performSave(pricingType, priceInput, salePriceInput);
+                        void performSave(
+                          pricingType,
+                          priceInput,
+                          salePriceInput,
+                        );
                       }}
                       className="w-full h-9.5 rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] pl-7 pr-3 text-xs sm:text-sm font-semibold text-(--text) outline-none transition-all placeholder:text-(--muted) focus:border-(--accent)"
                     />
@@ -346,7 +365,9 @@ export function CourseQuizPricingCard({
                 <div>
                   <label className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
                     Sale Price ({courseCurrency}){" "}
-                    <span className="text-(--muted) font-normal">(optional)</span>
+                    <span className="text-(--muted) font-normal">
+                      (optional)
+                    </span>
                   </label>
                   <div className="relative flex items-center">
                     <span className="absolute left-3 text-xs font-semibold text-(--muted) pointer-events-none">
@@ -364,7 +385,11 @@ export function CourseQuizPricingCard({
                         scheduleSave(pricingType, priceInput, val);
                       }}
                       onBlur={() => {
-                        void performSave(pricingType, priceInput, salePriceInput);
+                        void performSave(
+                          pricingType,
+                          priceInput,
+                          salePriceInput,
+                        );
                       }}
                       className="w-full h-9.5 rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] pl-7 pr-3 text-xs sm:text-sm font-semibold text-(--text) outline-none transition-all placeholder:text-(--muted) focus:border-(--accent)"
                     />

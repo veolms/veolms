@@ -26,10 +26,7 @@ export function createBundleController({
     return bundle;
   }
 
-  async function listAllBundles(
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ) {
+  async function listAllBundles(request: FastifyRequest, reply: FastifyReply) {
     const bundles = await service.listAllBundles();
     return bundles;
   }

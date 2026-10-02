@@ -226,9 +226,11 @@ export function createEnrollmentService({
     return await enrollmentRepo.listTopCoursesByEnrollment(database, options);
   }
 
-  async function listEnrollmentCountsByCourse(options: {
-    courseId?: string | string[];
-  } = {}) {
+  async function listEnrollmentCountsByCourse(
+    options: {
+      courseId?: string | string[];
+    } = {},
+  ) {
     return await enrollmentRepo.listEnrollmentCountsByCourse(database, options);
   }
 

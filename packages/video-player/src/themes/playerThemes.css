@@ -103,9 +103,7 @@
   border: 0 !important;
 }
 
-[data-player-theme]
-  [role="switch"][aria-checked="true"]
-  [data-autoplay-track] {
+[data-player-theme] [role="switch"][aria-checked="true"] [data-autoplay-track] {
   background: rgb(255 255 255 / 0.56) !important;
 }
 

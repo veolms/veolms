@@ -1,5 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import type { CapabilitiesResponse, Permission, FeatureKey } from "@veolms/contracts";
+import type {
+  CapabilitiesResponse,
+  Permission,
+  FeatureKey,
+} from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { useAuthStore } from "../../store/auth.store";
 import { authorizationKeys } from "./authorization.keys";

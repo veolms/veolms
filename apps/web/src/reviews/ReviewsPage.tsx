@@ -175,9 +175,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
               <Icon
                 size={18}
                 weight={isActive ? "fill" : "regular"}
-                className={
-                  isActive ? "text-(--accent)" : "text-(--muted)"
-                }
+                className={isActive ? "text-(--accent)" : "text-(--muted)"}
               />
               <span>{tab.label}</span>
               {isActive && (
@@ -323,14 +321,12 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
               Contact Learner Support
             </h2>
             <p className="mt-2 text-xs md:text-sm text-(--text-secondary)">
-              Have questions or feedback regarding this course&apos;s reviews? Our
-              support team is here to help 24/7.
+              Have questions or feedback regarding this course&apos;s reviews?
+              Our support team is here to help 24/7.
             </p>
             <div className="mt-4 rounded-xl bg-(--card-surface-raised,var(--hover)) p-3.5 text-xs text-(--muted)">
               <span>Support email: </span>
-              <strong className="text-(--text)">
-                support@procodrr.com
-              </strong>
+              <strong className="text-(--text)">support@procodrr.com</strong>
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button

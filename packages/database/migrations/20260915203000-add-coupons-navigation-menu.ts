@@ -34,7 +34,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       can_delete = excluded.can_delete,
       updated_at = current_timestamp
   `.execute(db);
-} 
+}
 
 export async function down(db: Kysely<unknown>): Promise<void> {
   await sql`delete from menu_permissions where menu_id = ${couponMenuId}::uuid`.execute(

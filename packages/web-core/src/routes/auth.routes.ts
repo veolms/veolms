@@ -1,9 +1,4 @@
-import {
-  layout,
-  route,
-  type RouteConfigEntry,
-} from "@veolms/plugin-sdk";
-
+import { layout, route, type RouteConfigEntry } from "@veolms/plugin-sdk";
 
 export function getAuthRoutes(): RouteConfigEntry {
   return layout("routes/auth-layout.tsx", { id: "auth-layout" }, [

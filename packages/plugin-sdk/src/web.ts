@@ -179,6 +179,3 @@ export function pluginFile(
   }
   return pathname;
 }
-
-
-

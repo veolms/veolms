@@ -187,10 +187,7 @@ export async function deleteAllUserPasskeys(
   database: Executor,
   userId: string,
 ): Promise<void> {
-  await database
-    .deleteFrom("passkeys")
-    .where("user_id", "=", userId)
-    .execute();
+  await database.deleteFrom("passkeys").where("user_id", "=", userId).execute();
 }
 
 export function findUserPasskey(

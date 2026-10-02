@@ -99,12 +99,11 @@ export function VirtualizedLessonList<T>({
   );
   const [useWindowScroll, setUseWindowScroll] = useState(() => {
     if (typeof window === "undefined") return true;
-    const initialElement =
-      getScrollElementOverride
-        ? getScrollElementOverride()
-        : (typeof document !== "undefined"
-            ? getApplicationScrollElement()
-            : null);
+    const initialElement = getScrollElementOverride
+      ? getScrollElementOverride()
+      : typeof document !== "undefined"
+        ? getApplicationScrollElement()
+        : null;
     return initialElement === null;
   });
   const [scrollMargin, setScrollMargin] = useState(0);

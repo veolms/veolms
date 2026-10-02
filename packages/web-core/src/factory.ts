@@ -51,4 +51,3 @@ export function createVeoLMSWeb(
 
   return [...coreRoutes, ...extensionRoutes] satisfies RouteConfig;
 }
-

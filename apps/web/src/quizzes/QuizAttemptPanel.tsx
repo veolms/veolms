@@ -220,9 +220,9 @@ export function QuizAttemptPanel({
   // QUIZ_ENROLLMENT_REQUIRED if the attempt is started anyway.
   const isEnrollmentRequired = Boolean(
     !attemptId &&
-      !isStarting &&
-      ((preview && !preview.isEnrolled) ||
-        apiError?.code === "QUIZ_ENROLLMENT_REQUIRED"),
+    !isStarting &&
+    ((preview && !preview.isEnrolled) ||
+      apiError?.code === "QUIZ_ENROLLMENT_REQUIRED"),
   );
 
   if (isEnrollmentRequired && resolvedCourseId && !attemptId && !isStarting) {
@@ -422,7 +422,10 @@ export function QuizAttemptPanel({
   };
 
   return (
-    <section data-quiz-surface="" className="mx-auto w-full max-w-4xl text-(--text)">
+    <section
+      data-quiz-surface=""
+      className="mx-auto w-full max-w-4xl text-(--text)"
+    >
       <div
         className="overflow-hidden rounded-[16px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) transition-all"
         style={{ boxShadow: "var(--card-shadow)" }}
@@ -457,7 +460,8 @@ export function QuizAttemptPanel({
                   Assessment
                 </p>
                 <span className="rounded-md bg-(--accent)/10 px-1.5 py-0.5 text-[0.68rem] font-semibold text-(--accent)">
-                  Attempt {attempt.attemptNumber}{maxAttempts > 1 ? ` of ${maxAttempts}` : ""}
+                  Attempt {attempt.attemptNumber}
+                  {maxAttempts > 1 ? ` of ${maxAttempts}` : ""}
                 </span>
               </div>
               <h1 className="mt-0.5 text-base sm:text-lg font-semibold tracking-tight text-(--text)">
@@ -469,8 +473,16 @@ export function QuizAttemptPanel({
                 className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted)"
                 style={{ boxShadow: "var(--card-compact-shadow)" }}
               >
-                <Exam size={13} weight="bold" className="text-(--accent)" aria-hidden="true" />
-                <span>Attempt {attempt.attemptNumber}{maxAttempts > 1 ? ` / ${maxAttempts}` : ""}</span>
+                <Exam
+                  size={13}
+                  weight="bold"
+                  className="text-(--accent)"
+                  aria-hidden="true"
+                />
+                <span>
+                  Attempt {attempt.attemptNumber}
+                  {maxAttempts > 1 ? ` / ${maxAttempts}` : ""}
+                </span>
               </span>
               <span
                 aria-live="polite"
@@ -492,7 +504,12 @@ export function QuizAttemptPanel({
                 className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-400"
                 style={{ boxShadow: "var(--card-compact-shadow)" }}
               >
-                <CheckCircle size={13} weight="bold" className="text-emerald-400" aria-hidden="true" />
+                <CheckCircle
+                  size={13}
+                  weight="bold"
+                  className="text-emerald-400"
+                  aria-hidden="true"
+                />
                 <AutosaveStatus status={autosync.status} />
               </span>
             </div>
@@ -552,11 +569,15 @@ export function QuizAttemptPanel({
                 />
               </div>
               <p className="text-[0.72rem] sm:text-xs text-(--muted)">
-                Grading is case-insensitive. Answer will be checked against accepted responses.
+                Grading is case-insensitive. Answer will be checked against
+                accepted responses.
               </p>
             </div>
           ) : (
-            <fieldset disabled={timeExpired} className="mt-4 sm:mt-6 grid gap-2 sm:gap-2.5">
+            <fieldset
+              disabled={timeExpired}
+              className="mt-4 sm:mt-6 grid gap-2 sm:gap-2.5"
+            >
               <legend className="sr-only">Answer choices</legend>
               {question.options.map((option, index) => {
                 const isSelected = selected.includes(option.id);
@@ -601,7 +622,11 @@ export function QuizAttemptPanel({
                     >
                       {isSelected ? (
                         isMultiple ? (
-                          <Check size={12} weight="bold" className="text-(--on-accent,white)" />
+                          <Check
+                            size={12}
+                            weight="bold"
+                            className="text-(--on-accent,white)"
+                          />
                         ) : (
                           <span className="size-2 sm:size-2.5 rounded-full bg-(--accent)" />
                         )
@@ -658,7 +683,10 @@ export function QuizAttemptPanel({
               aria-label={`Progress: Question ${currentIndex + 1} of ${attempt.questions.length}`}
             >
               <span className="text-[0.68rem] sm:text-[0.72rem] font-semibold text-(--muted)">
-                {Math.round(((currentIndex + 1) / attempt.questions.length) * 100)}%
+                {Math.round(
+                  ((currentIndex + 1) / attempt.questions.length) * 100,
+                )}
+                %
               </span>
               <div className="h-1 sm:h-1.5 w-full overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)]">
                 <div
@@ -726,12 +754,18 @@ export function QuizAttemptPanel({
             aria-modal="true"
             aria-labelledby="submit-quiz-title"
             className="w-full max-w-md rounded-[16px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-6 text-(--text)"
-            style={{ boxShadow: "var(--card-shadow), 0 25px 50px -12px rgba(0, 0, 0, 0.4)" }}
+            style={{
+              boxShadow:
+                "var(--card-shadow), 0 25px 50px -12px rgba(0, 0, 0, 0.4)",
+            }}
           >
             <div className="flex size-10 sm:size-11 items-center justify-center rounded-xl bg-(--accent)/12 text-(--accent)">
               <CheckCircle size={22} weight="bold" />
             </div>
-            <h2 id="submit-quiz-title" className="mt-3 sm:mt-4 text-lg sm:text-xl font-bold">
+            <h2
+              id="submit-quiz-title"
+              className="mt-3 sm:mt-4 text-lg sm:text-xl font-bold"
+            >
               Submit quiz?
             </h2>
             <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm leading-relaxed text-(--muted)">
@@ -811,7 +845,9 @@ function QuizResultCard({
           className="rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) p-2.5 sm:p-4"
           style={{ boxShadow: "var(--card-compact-shadow)" }}
         >
-          <span className="block text-[0.68rem] sm:text-xs font-semibold text-(--muted)">Score</span>
+          <span className="block text-[0.68rem] sm:text-xs font-semibold text-(--muted)">
+            Score
+          </span>
           <strong className="text-base sm:text-lg font-bold text-(--text)">
             {result.score} / {result.maxScore}
           </strong>
@@ -820,15 +856,20 @@ function QuizResultCard({
           className="rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) p-2.5 sm:p-4"
           style={{ boxShadow: "var(--card-compact-shadow)" }}
         >
-          <span className="block text-[0.68rem] sm:text-xs font-semibold text-(--muted)">Attempt</span>
+          <span className="block text-[0.68rem] sm:text-xs font-semibold text-(--muted)">
+            Attempt
+          </span>
           <strong className="text-base sm:text-lg font-bold text-(--text)">
-            #{result.attemptNumber}{maxAttempts > 1 ? ` of ${maxAttempts}` : ""}
+            #{result.attemptNumber}
+            {maxAttempts > 1 ? ` of ${maxAttempts}` : ""}
           </strong>
         </div>
       </div>
       <div className="mt-5 sm:mt-6 flex flex-wrap gap-2.5">
         {onRetry ? (
-          <Button onClick={onRetry} className="h-9 sm:h-10 text-xs sm:text-sm">Try another attempt</Button>
+          <Button onClick={onRetry} className="h-9 sm:h-10 text-xs sm:text-sm">
+            Try another attempt
+          </Button>
         ) : null}
         {onContinueCourse ? (
           <Button
@@ -841,7 +882,9 @@ function QuizResultCard({
       </div>
       {result.feedbackMode !== "never" && result.answers?.length ? (
         <div className="mt-5 sm:mt-7 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-4 sm:pt-6">
-          <h2 className="text-base sm:text-lg font-bold text-(--text)">Answer review</h2>
+          <h2 className="text-base sm:text-lg font-bold text-(--text)">
+            Answer review
+          </h2>
           <ol className="mt-3 sm:mt-4 grid gap-2.5 sm:gap-3.5">
             {result.answers.map((answer, index) => (
               <li
@@ -859,14 +902,19 @@ function QuizResultCard({
                   {answer.pointsAwarded} point(s)
                 </p>
                 <p className="mt-2 text-sm text-(--muted)">
-                  <span className="font-semibold text-(--text)">Your answer:</span>{" "}
-                  {answer.textResponse !== undefined && answer.textResponse !== null
+                  <span className="font-semibold text-(--text)">
+                    Your answer:
+                  </span>{" "}
+                  {answer.textResponse !== undefined &&
+                  answer.textResponse !== null
                     ? answer.textResponse || "No answer"
                     : answer.selectedOptionTexts?.join(", ") || "No answer"}
                 </p>
                 {!answer.isCorrect ? (
                   <p className="mt-1 text-sm text-(--muted)">
-                    <span className="font-semibold text-(--text)">Correct answer:</span>{" "}
+                    <span className="font-semibold text-(--text)">
+                      Correct answer:
+                    </span>{" "}
                     {answer.correctOptionTexts?.join(" or ") || "None"}
                   </p>
                 ) : null}

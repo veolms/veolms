@@ -103,48 +103,53 @@ export interface LessonStudioEditorProps {
 export const LessonStudioEditor = forwardRef<
   LessonStudioEditorHandle,
   LessonStudioEditorProps
->(function LessonStudioEditor({
-  sectionNumber,
-  sectionTitle,
-  lessonNumber,
-  playbackLessonNumber,
-  lessonTitle: initialTitle,
-  courseSlug,
-  courseTitle,
-  contentType: initialContentType,
-  isPublished: initialIsPublished,
-  isPreview: initialIsPreview,
-  mediaInfo,
-  resources = [],
-  isSaving = false,
-  onBack,
-  onCancel,
-  onSave,
-  onContentTypeChange,
-  onDeleteLesson,
-  onPreviewLesson,
-  onUploadMedia,
-  onMediaAttached,
-  onProcessingComplete,
-  onUploadThumbnail,
-  onAddResourceFile,
-  onDeleteResource,
-  descriptionSection,
-  quizSection,
-  resourcesSection,
-  hideHeader = false,
-  playbackSuspended = false,
-}: LessonStudioEditorProps, ref) {
+>(function LessonStudioEditor(
+  {
+    sectionNumber,
+    sectionTitle,
+    lessonNumber,
+    playbackLessonNumber,
+    lessonTitle: initialTitle,
+    courseSlug,
+    courseTitle,
+    contentType: initialContentType,
+    isPublished: initialIsPublished,
+    isPreview: initialIsPreview,
+    mediaInfo,
+    resources = [],
+    isSaving = false,
+    onBack,
+    onCancel,
+    onSave,
+    onContentTypeChange,
+    onDeleteLesson,
+    onPreviewLesson,
+    onUploadMedia,
+    onMediaAttached,
+    onProcessingComplete,
+    onUploadThumbnail,
+    onAddResourceFile,
+    onDeleteResource,
+    descriptionSection,
+    quizSection,
+    resourcesSection,
+    hideHeader = false,
+    playbackSuspended = false,
+  }: LessonStudioEditorProps,
+  ref,
+) {
   // Local editable draft state
   const [title, setTitle] = useState(initialTitle);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [contentType, setContentType] = useState<StudioLessonContentType>(initialContentType);
+  const [contentType, setContentType] =
+    useState<StudioLessonContentType>(initialContentType);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   // Bumped when processing finishes so the workspace requests playback again.
   const [playbackRevision, setPlaybackRevision] = useState(0);
   // Asset whose generated thumbnail is available while it is still processing.
-  const [processingThumbnailMediaId, setProcessingThumbnailMediaId] =
-    useState<string | null>(null);
+  const [processingThumbnailMediaId, setProcessingThumbnailMediaId] = useState<
+    string | null
+  >(null);
   const [isPublished, setIsPublished] = useState(initialIsPublished);
   const [isPreview, setIsPreview] = useState(initialIsPreview);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -192,7 +197,10 @@ export const LessonStudioEditor = forwardRef<
   useEffect(() => {
     if (!showMoreMenu) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+      if (
+        moreMenuRef.current &&
+        !moreMenuRef.current.contains(e.target as Node)
+      ) {
         setShowMoreMenu(false);
       }
     };
@@ -342,168 +350,168 @@ export const LessonStudioEditor = forwardRef<
       {/* ========================================================================= */}
       {!hideHeader && (
         <div className="flex flex-col gap-3.5 pb-2">
-        {/* Breadcrumb Row */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-[0.82rem] sm:text-[0.86rem] text-(--muted) font-medium">
-            {/* Back Button */}
-            <button
-              type="button"
-              onClick={handleCancel}
-              title="Back to Course Content"
-              aria-label="Back to Course Content"
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] transition-colors cursor-pointer"
-            >
-              <ArrowLeft size={14} weight="bold" />
-            </button>
+          {/* Breadcrumb Row */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[0.82rem] sm:text-[0.86rem] text-(--muted) font-medium">
+              {/* Back Button */}
+              <button
+                type="button"
+                onClick={handleCancel}
+                title="Back to Course Content"
+                aria-label="Back to Course Content"
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] transition-colors cursor-pointer"
+              >
+                <ArrowLeft size={14} weight="bold" />
+              </button>
 
-            {/* Breadcrumb links */}
-            <button
-              type="button"
-              onClick={onBack}
-              className="hover:text-(--text) transition-colors cursor-pointer bg-transparent border-none p-0 text-inherit font-inherit"
-            >
-              Section {sectionNumber}
-            </button>
-            <CaretRight size={12} className="text-(--muted) opacity-60" />
-            <button
-              type="button"
-              onClick={onBack}
-              className="hover:text-(--text) transition-colors cursor-pointer bg-transparent border-none p-0 text-inherit font-inherit max-w-40 sm:max-w-64 truncate"
-            >
-              {sectionTitle || "Course Content"}
-            </button>
-            <CaretRight size={12} className="text-(--muted) opacity-60" />
-            <span className="font-semibold text-(--text)">Edit Lesson</span>
-          </div>
-
-          {/* More Menu Dropdown */}
-          <div ref={moreMenuRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setShowMoreMenu((prev) => !prev)}
-              aria-label="More lesson options"
-              title="More options"
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] transition-colors cursor-pointer"
-            >
-              <DotsThree size={18} weight="bold" />
-            </button>
-
-            {showMoreMenu && (
-              <div className="absolute right-0 top-full mt-1.5 z-40 w-44 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--card-surface,var(--surface)) p-1.5 text-xs text-(--text) shadow-(--card-floating-shadow)">
-                {onPreviewLesson && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowMoreMenu(false);
-                      onPreviewLesson();
-                    }}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left font-medium hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] transition-colors cursor-pointer"
-                  >
-                    <Eye size={15} />
-                    <span>Preview Lesson</span>
-                  </button>
-                )}
-                {onDeleteLesson && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowMoreMenu(false);
-                      onDeleteLesson();
-                    }}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left font-medium text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
-                  >
-                    <Trash size={15} />
-                    <span>Delete Lesson</span>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Title & Action Buttons Row */}
-        <div className="flex items-center justify-between gap-4 max-[768px]:flex-col max-[768px]:items-start">
-          {/* Lesson Index Badge + Editable Title */}
-          <div className="flex min-w-0 flex-1 items-center gap-3 w-full">
-            {/* Number badge matching image: [ 1 ] */}
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-[12px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-sm sm:text-base font-bold text-(--text) shadow-sm">
-              {lessonNumber}
+              {/* Breadcrumb links */}
+              <button
+                type="button"
+                onClick={onBack}
+                className="hover:text-(--text) transition-colors cursor-pointer bg-transparent border-none p-0 text-inherit font-inherit"
+              >
+                Section {sectionNumber}
+              </button>
+              <CaretRight size={12} className="text-(--muted) opacity-60" />
+              <button
+                type="button"
+                onClick={onBack}
+                className="hover:text-(--text) transition-colors cursor-pointer bg-transparent border-none p-0 text-inherit font-inherit max-w-40 sm:max-w-64 truncate"
+              >
+                {sectionTitle || "Course Content"}
+              </button>
+              <CaretRight size={12} className="text-(--muted) opacity-60" />
+              <span className="font-semibold text-(--text)">Edit Lesson</span>
             </div>
 
-            {/* Title / Inline Input */}
-            {isEditingTitle ? (
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                <input
-                  ref={titleInputRef}
-                  type="text"
-                  value={title}
-                  autoFocus
-                  onChange={(e) => setTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      setIsEditingTitle(false);
-                    } else if (e.key === "Escape") {
-                      setTitle(initialTitle);
-                      setIsEditingTitle(false);
-                    }
-                  }}
-                  className="h-10 min-w-0 flex-1 rounded-[10px] border-2 border-(--accent) bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] px-3 text-base sm:text-lg font-bold text-(--text) outline-none shadow-sm"
-                />
-                <button
-                  type="button"
-                  onClick={() => setIsEditingTitle(false)}
-                  className="flex h-9 w-9 items-center justify-center rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-(--muted) hover:text-(--text) cursor-pointer"
-                >
-                  <X size={15} weight="bold" />
-                </button>
-              </div>
-            ) : (
-              <div
-                onClick={() => setIsEditingTitle(true)}
-                className="group flex min-w-0 flex-1 items-center gap-2 cursor-pointer"
+            {/* More Menu Dropdown */}
+            <div ref={moreMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setShowMoreMenu((prev) => !prev)}
+                aria-label="More lesson options"
+                title="More options"
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] transition-colors cursor-pointer"
               >
-                <h1 className="m-0 truncate text-lg sm:text-xl font-bold tracking-[-0.015em] text-(--text)">
-                  {title || "Untitled Lesson"}
-                </h1>
-                <button
-                  type="button"
-                  aria-label="Edit lesson title"
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-(--muted) opacity-60 group-hover:opacity-100 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) transition-all cursor-pointer"
-                >
-                  <PencilSimple size={15} weight="bold" />
-                </button>
-              </div>
-            )}
-          </div>
+                <DotsThree size={18} weight="bold" />
+              </button>
 
-          {/* Action Buttons: Cancel and Save Changes */}
-          <div className="flex items-center gap-2.5 shrink-0 max-[768px]:w-full max-[768px]:justify-end">
-            <button
-              type="button"
-              onClick={handleCancel}
-              disabled={isSaving}
-              className="inline-flex h-9.5 items-center justify-center rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_7%,var(--surface))] px-4 sm:px-5 text-[0.82rem] font-semibold text-(--text) shadow-sm transition-all hover:bg-[color-mix(in_srgb,var(--text)_12%,var(--surface))] active:scale-95 cursor-pointer disabled:opacity-50"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving}
-              className="inline-flex h-9.5 items-center justify-center gap-1.5 rounded-[10px] border-none bg-(--accent) px-5 text-[0.82rem] font-bold text-(--on-accent,#ffffff) shadow-[0_3px_12px_var(--accent-shadow)] transition-all hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_16px_var(--accent-shadow)] active:scale-95 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {isSaving ? (
-                <>
-                  <CircleNotch size={15} className="animate-spin" />
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <span>Save Changes</span>
+              {showMoreMenu && (
+                <div className="absolute right-0 top-full mt-1.5 z-40 w-44 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--card-surface,var(--surface)) p-1.5 text-xs text-(--text) shadow-(--card-floating-shadow)">
+                  {onPreviewLesson && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMoreMenu(false);
+                        onPreviewLesson();
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left font-medium hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] transition-colors cursor-pointer"
+                    >
+                      <Eye size={15} />
+                      <span>Preview Lesson</span>
+                    </button>
+                  )}
+                  {onDeleteLesson && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMoreMenu(false);
+                        onDeleteLesson();
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left font-medium text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+                    >
+                      <Trash size={15} />
+                      <span>Delete Lesson</span>
+                    </button>
+                  )}
+                </div>
               )}
-            </button>
+            </div>
           </div>
-        </div>
+
+          {/* Title & Action Buttons Row */}
+          <div className="flex items-center justify-between gap-4 max-[768px]:flex-col max-[768px]:items-start">
+            {/* Lesson Index Badge + Editable Title */}
+            <div className="flex min-w-0 flex-1 items-center gap-3 w-full">
+              {/* Number badge matching image: [ 1 ] */}
+              <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-[12px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-sm sm:text-base font-bold text-(--text) shadow-sm">
+                {lessonNumber}
+              </div>
+
+              {/* Title / Inline Input */}
+              {isEditingTitle ? (
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <input
+                    ref={titleInputRef}
+                    type="text"
+                    value={title}
+                    autoFocus
+                    onChange={(e) => setTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        setIsEditingTitle(false);
+                      } else if (e.key === "Escape") {
+                        setTitle(initialTitle);
+                        setIsEditingTitle(false);
+                      }
+                    }}
+                    className="h-10 min-w-0 flex-1 rounded-[10px] border-2 border-(--accent) bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] px-3 text-base sm:text-lg font-bold text-(--text) outline-none shadow-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingTitle(false)}
+                    className="flex h-9 w-9 items-center justify-center rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-(--muted) hover:text-(--text) cursor-pointer"
+                  >
+                    <X size={15} weight="bold" />
+                  </button>
+                </div>
+              ) : (
+                <div
+                  onClick={() => setIsEditingTitle(true)}
+                  className="group flex min-w-0 flex-1 items-center gap-2 cursor-pointer"
+                >
+                  <h1 className="m-0 truncate text-lg sm:text-xl font-bold tracking-[-0.015em] text-(--text)">
+                    {title || "Untitled Lesson"}
+                  </h1>
+                  <button
+                    type="button"
+                    aria-label="Edit lesson title"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-(--muted) opacity-60 group-hover:opacity-100 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) transition-all cursor-pointer"
+                  >
+                    <PencilSimple size={15} weight="bold" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons: Cancel and Save Changes */}
+            <div className="flex items-center gap-2.5 shrink-0 max-[768px]:w-full max-[768px]:justify-end">
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={isSaving}
+                className="inline-flex h-9.5 items-center justify-center rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_7%,var(--surface))] px-4 sm:px-5 text-[0.82rem] font-semibold text-(--text) shadow-sm transition-all hover:bg-[color-mix(in_srgb,var(--text)_12%,var(--surface))] active:scale-95 cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving}
+                className="inline-flex h-9.5 items-center justify-center gap-1.5 rounded-[10px] border-none bg-(--accent) px-5 text-[0.82rem] font-bold text-(--on-accent,#ffffff) shadow-[0_3px_12px_var(--accent-shadow)] transition-all hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_16px_var(--accent-shadow)] active:scale-95 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isSaving ? (
+                  <>
+                    <CircleNotch size={15} className="animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Changes</span>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -530,22 +538,24 @@ export const LessonStudioEditor = forwardRef<
               }
               void onUploadMedia?.(file);
             }}
-            videoUploadSection={onMediaAttached ? (
-              <LessonVideoUpload
-                ref={videoUploadRef}
-                inline
-                hideTrigger
-                mediaAssetId={mediaInfo?.id}
-                disabled={isSaving}
-                onPreviewFile={setPreviewFile}
-                onMediaAttached={onMediaAttached}
-                onThumbnailAvailable={setProcessingThumbnailMediaId}
-                onProcessingComplete={() => {
-                  setPlaybackRevision((revision) => revision + 1);
-                  void onProcessingComplete?.();
-                }}
-              />
-            ) : null}
+            videoUploadSection={
+              onMediaAttached ? (
+                <LessonVideoUpload
+                  ref={videoUploadRef}
+                  inline
+                  hideTrigger
+                  mediaAssetId={mediaInfo?.id}
+                  disabled={isSaving}
+                  onPreviewFile={setPreviewFile}
+                  onMediaAttached={onMediaAttached}
+                  onThumbnailAvailable={setProcessingThumbnailMediaId}
+                  onProcessingComplete={() => {
+                    setPlaybackRevision((revision) => revision + 1);
+                    void onProcessingComplete?.();
+                  }}
+                />
+              ) : null
+            }
             onUploadThumbnail={onUploadThumbnail}
             playbackSuspended={playbackSuspended}
           />
@@ -599,7 +609,8 @@ export const LessonStudioEditor = forwardRef<
                   Free Preview
                 </span>
                 <p className="m-0 mt-0.5 text-[0.72rem] sm:text-[0.74rem] text-(--muted) leading-relaxed">
-                  Allow prospective students to view this lesson before enrolling or purchasing.
+                  Allow prospective students to view this lesson before
+                  enrolling or purchasing.
                 </p>
               </div>
             </div>
@@ -610,7 +621,6 @@ export const LessonStudioEditor = forwardRef<
               label="Toggle free preview"
             />
           </div>
-
         </div>
       </div>
 

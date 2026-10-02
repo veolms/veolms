@@ -4,9 +4,13 @@ import { PHONE_LESSON_DRAWER_TIMELINE_COVER_OFFSET } from "../../src/learning/us
 
 const LEARNING_DESKTOP_VIEWPORT = { width: 1424, height: 678 } as const;
 
-const mobileLessonDrawerTopOffsetFromPlayer = (
-  playerBounds: { y: number; height: number },
-) => playerBounds.y + playerBounds.height - PHONE_LESSON_DRAWER_TIMELINE_COVER_OFFSET;
+const mobileLessonDrawerTopOffsetFromPlayer = (playerBounds: {
+  y: number;
+  height: number;
+}) =>
+  playerBounds.y +
+  playerBounds.height -
+  PHONE_LESSON_DRAWER_TIMELINE_COVER_OFFSET;
 
 test.beforeEach(async ({ page }) => {
   await installBaselineState(page);

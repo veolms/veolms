@@ -11,7 +11,7 @@
 - The first document request links only the active palette's dark and light
   sheets. The palette catalog is fetched when the user opens palette selection
   so previews and changes remain immediate after the picker is opened.
-Tailwind remains the shared utility layer and is compiled by Tailwind v4 from
-Tailwind-first; custom CSS belongs with the route or component that needs it.
-Keep theme contracts, preference-driven global behavior, and the established
-cascade order in their shared entries.
+  Tailwind remains the shared utility layer and is compiled by Tailwind v4 from
+  Tailwind-first; custom CSS belongs with the route or component that needs it.
+  Keep theme contracts, preference-driven global behavior, and the established
+  cascade order in their shared entries.

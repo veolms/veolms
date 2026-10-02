@@ -204,7 +204,8 @@ export function NotificationsPage({
                 Unable to load notifications
               </h3>
               <p className="mt-1 max-w-sm text-xs md:text-sm text-(--muted) leading-relaxed">
-                Notifications could not be loaded. Please check your connection and try again.
+                Notifications could not be loaded. Please check your connection
+                and try again.
               </p>
               <button
                 type="button"
@@ -293,7 +294,11 @@ export function NotificationsPage({
                   type="button"
                   onClick={loadMore}
                   aria-busy={isFetchingNextPage}
-                  aria-label={isFetchingNextPage ? "Loading more notifications" : undefined}
+                  aria-label={
+                    isFetchingNextPage
+                      ? "Loading more notifications"
+                      : undefined
+                  }
                   disabled={isFetchingNextPage}
                   className="self-center rounded-xl border border-(--border) bg-(--card-surface) px-4 py-2 text-sm font-semibold text-(--text) disabled:cursor-wait disabled:opacity-60"
                 >

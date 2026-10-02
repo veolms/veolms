@@ -1,8 +1,5 @@
 import crypto from "node:crypto";
-import type {
-  Database,
-  DatabaseExecutor,
-} from "@veolms/database";
+import type { Database, DatabaseExecutor } from "@veolms/database";
 import type { EngagementTargetType } from "@veolms/contracts";
 import { sql, type Kysely, type Transaction } from "kysely";
 import {

@@ -18,7 +18,6 @@ export async function findCouponById(database: Executor, id: string) {
     .executeTakeFirst();
 }
 
-
 export async function countCouponRedemptionsGlobal(
   database: Executor,
   couponId: string,
@@ -172,7 +171,6 @@ export async function insertCouponRedemptionIfLimitNotReached(
 
   return { success: false, reason: "global_limit_reached" };
 }
-
 
 export async function insertCoupon(
   database: Executor,
@@ -377,7 +375,9 @@ export async function getCouponOverallSummary(
       .selectFrom("coupon_redemptions")
       .select([
         sql<number>`count(*)::int`.as("total_redemptions"),
-        sql<number>`coalesce(sum(discount_amount), 0)::int`.as("total_discount_given"),
+        sql<number>`coalesce(sum(discount_amount), 0)::int`.as(
+          "total_discount_given",
+        ),
       ])
       .where("coupon_id", "in", couponIds)
       .executeTakeFirst();

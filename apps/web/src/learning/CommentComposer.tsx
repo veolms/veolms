@@ -17,9 +17,7 @@ import {
 } from "./discussion-editor/DiscussionEditor";
 import type { DiscussionFormattingState } from "./discussion-editor/commands";
 import type { InteractionCapabilities } from "./discussionFeed";
-import {
-  AttachmentComposerPreview,
-} from "./discussion-attachments";
+import { AttachmentComposerPreview } from "./discussion-attachments";
 import { LinkPreviewCard } from "./LinkPreviewCard";
 import {
   revokeLocalAttachmentPreview,
@@ -145,7 +143,8 @@ export function CommentComposer({
 
   const detectedUrl = extractFirstUrl(draft.markdown);
   const [dismissedUrl, setDismissedUrl] = useState<string | null>(null);
-  const activeUrl = detectedUrl && detectedUrl !== dismissedUrl ? detectedUrl : null;
+  const activeUrl =
+    detectedUrl && detectedUrl !== dismissedUrl ? detectedUrl : null;
   const { data: linkPreview } = useLinkPreview(activeUrl);
 
   const resetAfterLocalSubmit = () => {

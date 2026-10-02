@@ -42,7 +42,9 @@ export function CourseReviewHeader({
 
   const handleGuidelines = () => {
     setMoreMenuOpen(false);
-    setNotice?.("Review guidelines: Keep feedback respectful and constructive.");
+    setNotice?.(
+      "Review guidelines: Keep feedback respectful and constructive.",
+    );
   };
 
   return (
@@ -62,7 +64,11 @@ export function CourseReviewHeader({
           </h2>
           <div className="flex flex-wrap items-center gap-1.5 text-xs md:text-sm text-(--muted) mt-0.5">
             <span className="flex items-center gap-1 font-medium text-(--text)">
-              <Star size={15} weight="fill" className="text-amber-400 fill-amber-400" />
+              <Star
+                size={15}
+                weight="fill"
+                className="text-amber-400 fill-amber-400"
+              />
               {courseMeta.averageRating.toFixed(1)}
             </span>
             <span>({courseMeta.totalReviews} reviews)</span>

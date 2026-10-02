@@ -227,7 +227,9 @@ export function createAttemptService(options: QuizServiceOptions) {
             ? []
             : (assignment.shuffle_options
                 ? stableShuffle(
-                    options.filter((option) => option.question_id === question.id),
+                    options.filter(
+                      (option) => option.question_id === question.id,
+                    ),
                     attempt.id,
                   )
                 : options.filter((option) => option.question_id === question.id)
@@ -900,7 +902,9 @@ export function createAttemptService(options: QuizServiceOptions) {
       ]),
     ]);
     const quizzesById = new Map(quizRows.map((quiz) => [quiz.id, quiz]));
-    const lessonsById = new Map(lessonRows.map((lesson) => [lesson.id, lesson]));
+    const lessonsById = new Map(
+      lessonRows.map((lesson) => [lesson.id, lesson]),
+    );
     const items = [];
     for (const assignment of assignments) {
       const quiz = quizzesById.get(assignment.quiz_id);

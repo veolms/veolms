@@ -210,5 +210,3 @@ export async function down(database: Kysely<unknown>): Promise<void> {
       on outbox_events (created_at) where processed_at is null
   `.execute(database);
 }
-
-

@@ -40,7 +40,6 @@
   --student-surface-block-start: var(--application-page-block-start, 0px);
 }
 
-
 /* Graphite Studio keeps discussion copy readable on the same raised neutral
    surfaces used by the student home cards. Accent color is reserved for
    selection, actions, and status-not the message-card fill. */
@@ -109,9 +108,7 @@
   box-shadow: var(--card-shadow);
 }
 
-.discussion-hub__sticky-region
-  ~ .swipeable-tab-panel
-  .discussion-hub__layout {
+.discussion-hub__sticky-region ~ .swipeable-tab-panel .discussion-hub__layout {
   margin-top: 0;
 }
 
@@ -305,8 +302,10 @@
 }
 
 .discussion-hub__filters--comments {
-  grid-template-columns:
-    minmax(210px, 1.7fr) minmax(122px, 0.66fr) minmax(150px, 0.75fr);
+  grid-template-columns: minmax(210px, 1.7fr) minmax(122px, 0.66fr) minmax(
+      150px,
+      0.75fr
+    );
 }
 
 .discussion-hub__filters--mentions {
@@ -802,7 +801,8 @@
     padding: 0 12px;
     color: var(--text-secondary);
     background: color-mix(in srgb, var(--surface-strong) 72%, var(--canvas));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+    box-shadow: inset 0 0 0 1px
+      color-mix(in srgb, var(--accent) 20%, transparent);
     font: inherit;
     font-size: 0.78rem;
     font-weight: 600;

@@ -101,7 +101,8 @@ function kpi(value: number, previousValue: number): AnalyticsKpi {
 
 function resolveDateRange(query: AnalyticsFilterQuery) {
   const to = query.to ?? new Date();
-  const from = query.from ?? new Date(to.getTime() - DEFAULT_RANGE_DAYS * DAY_MS);
+  const from =
+    query.from ?? new Date(to.getTime() - DEFAULT_RANGE_DAYS * DAY_MS);
   const spanMs = Math.max(to.getTime() - from.getTime(), DAY_MS);
   const prevTo = from;
   const prevFrom = new Date(from.getTime() - spanMs);
@@ -187,8 +188,14 @@ function normalizeRevenueTrend(
   from: Date,
   bucketCount: number,
 ) {
-  const valuesByDate = new Map(points.map((point) => [point.date, point.value]));
-  const start = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate());
+  const valuesByDate = new Map(
+    points.map((point) => [point.date, point.value]),
+  );
+  const start = Date.UTC(
+    from.getUTCFullYear(),
+    from.getUTCMonth(),
+    from.getUTCDate(),
+  );
   const trend: Array<{ date: string; value: number }> = [];
 
   for (let index = 0; index < bucketCount; index += 1) {
@@ -201,8 +208,13 @@ function normalizeRevenueTrend(
 }
 
 export function createAnalyticsService(options: AnalyticsServiceOptions) {
-  const { orderService, enrollmentService, studentsService, courseService, learningProgressService } =
-    options;
+  const {
+    orderService,
+    enrollmentService,
+    studentsService,
+    courseService,
+    learningProgressService,
+  } = options;
 
   /**
    * A single `courseId` is ownership-checked for instructors (strict
@@ -278,8 +290,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     const mine = await courseService.listMyCourses(actor.id, actor.roles);
     return mine.courses
       .filter(
-        (course) =>
-          course.status === "published" || course.status === "draft",
+        (course) => course.status === "published" || course.status === "draft",
       )
       .map((course) => ({
         id: course.id,
@@ -293,10 +304,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
   async function resolveDashboardAnalyticsCourseIds(
     actor: AnalyticsActor,
   ): Promise<string[]> {
-    const scoped = await courseService.listMyCourseScope(
-      actor.id,
-      actor.roles,
-    );
+    const scoped = await courseService.listMyCourseScope(actor.id, actor.roles);
 
     // Preserve the existing course-scoped analytics eligibility rule while
     // using the collaborative course population for instructors.
@@ -348,7 +356,9 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     const enrollmentByCourse = new Map(
       topByEnrollment.map((row) => [row.courseId, row.enrollmentCount]),
     );
-    const titleById = new Map(courses.map((course) => [course.id, course.title]));
+    const titleById = new Map(
+      courses.map((course) => [course.id, course.title]),
+    );
     const targetIds =
       topByEnrollment.length > 0
         ? topByEnrollment.map((row) => row.courseId)
@@ -362,7 +372,12 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
           // would independently resolve to whichever currency it sells the
           // most in, and a mixed-currency deployment would show inconsistent
           // per-course revenue next to a single-currency column header.
-          orderService.getRawStatsForCourses(scope, { courseId, from, to, currency }),
+          orderService.getRawStatsForCourses(scope, {
+            courseId,
+            from,
+            to,
+            currency,
+          }),
           learningProgressService.getAverageProgressAndCompletionRate({
             courseId,
           }),
@@ -415,19 +430,31 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       progressCompletionPrev,
       orderFunnel,
     ] = await Promise.all([
-      orderService.getRawStatsForCourses(scope, { courseId: courseIdFilter, from, to }),
+      orderService.getRawStatsForCourses(scope, {
+        courseId: courseIdFilter,
+        from,
+        to,
+      }),
       orderService.getRawStatsForCourses(scope, {
         courseId: courseIdFilter,
         from: prevFrom,
         to: prevTo,
       }),
-      enrollmentService.getEnrollmentStats({ courseId: courseIdFilter, from, to }),
+      enrollmentService.getEnrollmentStats({
+        courseId: courseIdFilter,
+        from,
+        to,
+      }),
       enrollmentService.getEnrollmentStats({
         courseId: courseIdFilter,
         from: prevFrom,
         to: prevTo,
       }),
-      studentsService.getActiveLearnerCount({ courseId: courseIdFilter, from, to }),
+      studentsService.getActiveLearnerCount({
+        courseId: courseIdFilter,
+        from,
+        to,
+      }),
       studentsService.getActiveLearnerCount({
         courseId: courseIdFilter,
         from: prevFrom,
@@ -456,7 +483,11 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
         courseId: courseIdFilter,
         asOf: prevTo,
       }),
-      orderService.getOrderStatusFunnel(scope, { from, to, courseId: courseIdFilter }),
+      orderService.getOrderStatusFunnel(scope, {
+        from,
+        to,
+        courseId: courseIdFilter,
+      }),
     ]);
 
     const currency = rawStatsCurrent.currency;
@@ -472,7 +503,14 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
         to,
         currency,
       }),
-      buildCoursePerformance(scope, courses, courseIdFilter, from, to, currency),
+      buildCoursePerformance(
+        scope,
+        courses,
+        courseIdFilter,
+        from,
+        to,
+        currency,
+      ),
     ]);
 
     // `started` counts anyone active in the window regardless of when they
@@ -525,7 +563,8 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     courseIdFilter: string | string[] | undefined,
     range: DashboardRange,
   ) {
-    const { from, to, prevFrom, prevTo, days } = resolveDashboardRevenueRange(range);
+    const { from, to, prevFrom, prevTo, days } =
+      resolveDashboardRevenueRange(range);
     const current = await orderService.getRawStatsForCourses(scope, {
       courseId: courseIdFilter,
       from,
@@ -757,10 +796,16 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     };
   }
 
-  function buildEmptyResponse(query: AnalyticsFilterQuery): AnalyticsOverviewResponse {
+  function buildEmptyResponse(
+    query: AnalyticsFilterQuery,
+  ): AnalyticsOverviewResponse {
     const emptyKpi = kpi(0, 0);
     return {
-      scope: { type: "course", courseId: query.courseId ?? null, courseIds: [] },
+      scope: {
+        type: "course",
+        courseId: query.courseId ?? null,
+        courseIds: [],
+      },
       currency: "INR",
       overview: {
         netRevenue: emptyKpi,

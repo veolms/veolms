@@ -161,7 +161,11 @@ export function createSmsService({
       try {
         const result = await provider.sendOtp(phoneNo, otp, options);
         log.info(
-          { to: phoneNo, provider: result.provider, messageId: result.messageId },
+          {
+            to: phoneNo,
+            provider: result.provider,
+            messageId: result.messageId,
+          },
           "SMS OTP delivered successfully",
         );
         return {
@@ -209,7 +213,11 @@ export function createSmsService({
       try {
         const result = await provider.sendText(phoneNo, content.text);
         log.info(
-          { to: phoneNo, provider: result.provider, messageId: result.messageId },
+          {
+            to: phoneNo,
+            provider: result.provider,
+            messageId: result.messageId,
+          },
           "SMS text delivered successfully",
         );
         return {

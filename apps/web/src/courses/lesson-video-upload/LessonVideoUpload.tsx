@@ -621,7 +621,9 @@ export const LessonVideoUpload = forwardRef<
     } catch (error) {
       setTrackProgress(true);
       setErrorMessage(
-        error instanceof Error ? error.message : "Unable to cancel video processing.",
+        error instanceof Error
+          ? error.message
+          : "Unable to cancel video processing.",
       );
     }
   }, [activeMediaId, resetReconnectBackoff]);
@@ -924,7 +926,12 @@ export const LessonVideoUpload = forwardRef<
     setPhase(mediaAssetId ? "attached" : "idle");
     setTrackProgress(Boolean(mediaAssetId && isUploadSurfaceActive));
     setIsReplacingVideo(false);
-  }, [isUploadSurfaceActive, mediaAssetId, onPreviewFile, resetReconnectBackoff]);
+  }, [
+    isUploadSurfaceActive,
+    mediaAssetId,
+    onPreviewFile,
+    resetReconnectBackoff,
+  ]);
 
   const removeSelectedFile = useCallback(() => {
     onPreviewFile?.(null);
@@ -938,9 +945,9 @@ export const LessonVideoUpload = forwardRef<
     errorMessage ||
     attachmentError ||
     (progressStreamError &&
-      (hasReceivedProgress ||
-        streamConnectionState === "closed" ||
-        streamErrorCount >= 3)
+    (hasReceivedProgress ||
+      streamConnectionState === "closed" ||
+      streamErrorCount >= 3)
       ? progressStreamError
       : null) ||
     (phase === "failed" ? "Video processing could not be completed." : null);
@@ -1050,72 +1057,70 @@ export const LessonVideoUpload = forwardRef<
       />
 
       {!hideTrigger ? (
-      <div
-        className={`${stackStatusBelow ? "flex flex-col items-center gap-1.5" : "flex flex-wrap items-center gap-2"} max-[768px]:w-full`}
-      >
-        {(!hideUploadWhenAttached || activeMediaId) && (
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={openModal}
-            style={{
-              fontSize: "0.80rem",
-              fontWeight: 700,
-              height: "34px",
-              borderRadius: "8px",
-              gap: "6px",
-              paddingLeft: "16px",
-              paddingRight: "16px",
-            }}
-            className={`${stackStatusBelow ? "inline-flex h-8.5 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] text-[0.8rem] font-bold" : "inline-flex h-8.5 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) px-4 text-[0.8rem] font-bold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)]"} transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 max-[768px]:flex-1 cursor-pointer`}
-          >
-            {hasVideo ? <PlayCircle size={15} /> : <UploadSimple size={15} />}
-            <span>
-              {hasVideo ? attachedActionLabel : "Upload"}
-            </span>
-          </button>
-        )}
-        {isReplacementFlow && mediaAssetId ? (
-          <span
-            aria-live="polite"
-            className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.76rem] text-(--muted)"
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <CheckCircle
-                size={14}
-                weight="fill"
-                className="text-emerald-400"
-              />
-              Current video kept
-            </span>
-            <span className="text-[color-mix(in_srgb,var(--muted)_70%,transparent)]">
-              · Replacement: {statusLabel || "Ready to upload"}
-            </span>
-          </span>
-        ) : (
-          activeMediaId && (
+        <div
+          className={`${stackStatusBelow ? "flex flex-col items-center gap-1.5" : "flex flex-wrap items-center gap-2"} max-[768px]:w-full`}
+        >
+          {(!hideUploadWhenAttached || activeMediaId) && (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={openModal}
+              style={{
+                fontSize: "0.80rem",
+                fontWeight: 700,
+                height: "34px",
+                borderRadius: "8px",
+                gap: "6px",
+                paddingLeft: "16px",
+                paddingRight: "16px",
+              }}
+              className={`${stackStatusBelow ? "inline-flex h-8.5 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] text-[0.8rem] font-bold" : "inline-flex h-8.5 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) px-4 text-[0.8rem] font-bold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)]"} transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 max-[768px]:flex-1 cursor-pointer`}
+            >
+              {hasVideo ? <PlayCircle size={15} /> : <UploadSimple size={15} />}
+              <span>{hasVideo ? attachedActionLabel : "Upload"}</span>
+            </button>
+          )}
+          {isReplacementFlow && mediaAssetId ? (
             <span
               aria-live="polite"
-              className="inline-flex items-center gap-1.5 text-[0.76rem] text-(--muted)"
+              className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.76rem] text-(--muted)"
             >
-              {phase === "transcoding" && (
-                <CircleNotch
-                  size={14}
-                  className="animate-spin text-(--accent)"
-                />
-              )}
-              {phase === "ready" && (
+              <span className="inline-flex items-center gap-1.5">
                 <CheckCircle
                   size={14}
                   weight="fill"
                   className="text-emerald-400"
                 />
-              )}
-              {statusLabel}
+                Current video kept
+              </span>
+              <span className="text-[color-mix(in_srgb,var(--muted)_70%,transparent)]">
+                · Replacement: {statusLabel || "Ready to upload"}
+              </span>
             </span>
-          )
-        )}
-      </div>
+          ) : (
+            activeMediaId && (
+              <span
+                aria-live="polite"
+                className="inline-flex items-center gap-1.5 text-[0.76rem] text-(--muted)"
+              >
+                {phase === "transcoding" && (
+                  <CircleNotch
+                    size={14}
+                    className="animate-spin text-(--accent)"
+                  />
+                )}
+                {phase === "ready" && (
+                  <CheckCircle
+                    size={14}
+                    weight="fill"
+                    className="text-emerald-400"
+                  />
+                )}
+                {statusLabel}
+              </span>
+            )
+          )}
+        </div>
       ) : null}
 
       {inline &&
@@ -1137,8 +1142,8 @@ export const LessonVideoUpload = forwardRef<
                 className="mt-0.5 shrink-0 text-emerald-400"
               />
               <span>
-                Your current lesson video stays available until this
-                replacement is ready.
+                Your current lesson video stays available until this replacement
+                is ready.
               </span>
             </div>
           )}
@@ -1177,7 +1182,6 @@ export const LessonVideoUpload = forwardRef<
           )}
 
           {stageContent}
-
         </div>
       ) : null}
 
@@ -1419,8 +1423,8 @@ function SelectVideoStage({
         </p>
       )}
 
-      {!selectedFile && (
-        minimal ? (
+      {!selectedFile &&
+        (minimal ? (
           <LessonUploadDropzone
             title={
               isReplacement
@@ -1497,8 +1501,7 @@ function SelectVideoStage({
               Choose
             </button>
           </div>
-        )
-      )}
+        ))}
 
       {selectedFile && (
         <VideoFileSummary
@@ -1509,7 +1512,6 @@ function SelectVideoStage({
           onRemove={onRemoveFile}
         />
       )}
-
     </div>
   );
 }
@@ -1604,7 +1606,6 @@ function TranscodingProgressStage({
         embedded={embedded}
         onReplace={onReplace}
       />
-
     </div>
   );
 }
@@ -1717,9 +1718,7 @@ function VideoFileSummary({
           aria-label="Upload video"
           className={`inline-flex h-8 shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-none bg-(--accent) px-3.5 text-[0.76rem] font-semibold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] transition-all hover:bg-(--accent-hover,var(--accent)) active:scale-95 ${uploadTextOnly ? "" : "gap-1.5"}`}
         >
-          {!uploadTextOnly && (
-            <CloudArrowUp size={15} weight="bold" />
-          )}
+          {!uploadTextOnly && <CloudArrowUp size={15} weight="bold" />}
           <span>Upload</span>
         </button>
       )}

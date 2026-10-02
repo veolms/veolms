@@ -15,7 +15,10 @@ export async function findBundleById(database: Executor, bundleId: string) {
  * of N sequential ones. Used by pricing.service.ts's calculatePricing, which
  * runs on every GET /cart, checkout preview, and order-creation call.
  */
-export async function findBundlesByIds(database: Executor, bundleIds: string[]) {
+export async function findBundlesByIds(
+  database: Executor,
+  bundleIds: string[],
+) {
   if (bundleIds.length === 0) return [];
   return await database
     .selectFrom("course_bundles")
@@ -92,7 +95,10 @@ export async function listBundleCourses(database: Executor, bundleId: string) {
  * `bundle_id` themselves. Used by pricing.service.ts's calculatePricing,
  * which runs on every GET /cart, checkout preview, and order-creation call.
  */
-export async function listBundleCoursesForBundleIds(database: Executor, bundleIds: string[]) {
+export async function listBundleCoursesForBundleIds(
+  database: Executor,
+  bundleIds: string[],
+) {
   if (bundleIds.length === 0) return [];
   return await database
     .selectFrom("course_bundle_items")
@@ -186,20 +192,14 @@ export async function updateBundle(
     .executeTakeFirst();
 }
 
-export async function deleteBundleItems(
-  database: Executor,
-  bundleId: string,
-) {
+export async function deleteBundleItems(database: Executor, bundleId: string) {
   return await database
     .deleteFrom("course_bundle_items")
     .where("bundle_id", "=", bundleId)
     .execute();
 }
 
-export async function softDeleteBundle(
-  database: Executor,
-  bundleId: string,
-) {
+export async function softDeleteBundle(database: Executor, bundleId: string) {
   return await database
     .updateTable("course_bundles")
     .set({

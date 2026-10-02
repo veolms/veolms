@@ -176,7 +176,11 @@ export async function sumOtherCountedRefunds(
   return existingRefunds
     .filter((r) => {
       if (exclude?.refundId && r.id === exclude.refundId) return false;
-      if (exclude?.gatewayRefundId && r.gateway_refund_id === exclude.gatewayRefundId) return false;
+      if (
+        exclude?.gatewayRefundId &&
+        r.gateway_refund_id === exclude.gatewayRefundId
+      )
+        return false;
       return r.status === "processed" || r.status === "pending";
     })
     .reduce((sum, r) => sum + r.amount, 0);
@@ -201,4 +205,3 @@ export async function listStaleRefunds(
     .limit(limit)
     .execute();
 }
-

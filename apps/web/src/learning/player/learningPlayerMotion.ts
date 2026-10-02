@@ -34,8 +34,7 @@ export interface LearningMiniPlayerLayout {
 
 export const getLearningMiniPlayerPlaylistHeight = (
   layout?: Pick<LearningMiniPlayerLayout, "playlistHeight"> | null,
-) =>
-  layout?.playlistHeight ?? LEARNING_MINI_PLAYER_DESKTOP_PLAYLIST_HEIGHT;
+) => layout?.playlistHeight ?? LEARNING_MINI_PLAYER_DESKTOP_PLAYLIST_HEIGHT;
 
 export const getLearningMiniPlayerHeight = (
   width: number,
@@ -290,7 +289,8 @@ export function runLearningPlayerFlipRestore(
     clearLearningPlayerMinimizeCornerRadius();
   };
   const handleTransitionEnd = (event: TransitionEvent) => {
-    if (event.target === element && event.propertyName === "transform") finish();
+    if (event.target === element && event.propertyName === "transform")
+      finish();
   };
   const timer = window.setTimeout(
     finish,

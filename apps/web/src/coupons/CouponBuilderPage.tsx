@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import type { CreateCouponRequest, UpdateCouponRequest } from "@veolms/contracts";
+import type {
+  CreateCouponRequest,
+  UpdateCouponRequest,
+} from "@veolms/contracts";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { DiceFiveIcon as DiceFive } from "@phosphor-icons/react/DiceFive";
@@ -45,8 +48,17 @@ const discountTypeOptions: readonly [string, string][] = [
 ];
 
 function generateRandomCode(): string {
-  const prefixes = ["PROMO", "SPECIAL", "SUPER", "SAVE", "FLASH", "MEGA", "LEARN"];
-  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)] ?? "PROMO";
+  const prefixes = [
+    "PROMO",
+    "SPECIAL",
+    "SUPER",
+    "SAVE",
+    "FLASH",
+    "MEGA",
+    "LEARN",
+  ];
+  const prefix =
+    prefixes[Math.floor(Math.random() * prefixes.length)] ?? "PROMO";
   return `${prefix}${Math.floor(10 + Math.random() * 89)}`;
 }
 
@@ -68,7 +80,10 @@ function FieldLabel({
   required?: boolean;
 }) {
   return (
-    <label htmlFor={htmlFor} className="mb-1.5 block text-[13px] font-medium text-(--text)">
+    <label
+      htmlFor={htmlFor}
+      className="mb-1.5 block text-[13px] font-medium text-(--text)"
+    >
       {children}
       {required ? <RequiredMark /> : null}
     </label>
@@ -94,7 +109,9 @@ function Switch({
       aria-label={label}
       onClick={() => onChange(!checked)}
       className={`relative h-6 w-11 shrink-0 rounded-full transition-colors cursor-pointer ${
-        checked ? "bg-(--accent)" : "bg-[color-mix(in_srgb,var(--text)_22%,transparent)]"
+        checked
+          ? "bg-(--accent)"
+          : "bg-[color-mix(in_srgb,var(--text)_22%,transparent)]"
       }`}
     >
       <span
@@ -124,7 +141,10 @@ export function CouponBuilderPage({
   const createMutation = useCreateCoupon();
   const updateMutation = useUpdateCoupon();
 
-  const defaultStart = useMemo(() => toLocalDateTimeValue(new Date(), "start"), []);
+  const defaultStart = useMemo(
+    () => toLocalDateTimeValue(new Date(), "start"),
+    [],
+  );
   const defaultEnd = useMemo(
     () =>
       toLocalDateTimeValue(
@@ -153,26 +173,36 @@ export function CouponBuilderPage({
   const handleDiscountTypeChange = (value: string) => {
     const nextType = value as "percentage" | "fixed";
     setDiscountType(nextType);
-    if (nextType === "percentage" && typeof discountValue === "number" && discountValue > 100) {
+    if (
+      nextType === "percentage" &&
+      typeof discountValue === "number" &&
+      discountValue > 100
+    ) {
       setDiscountValue(100);
     }
   };
 
-  const handleDiscountValueChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDiscountValueChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const sanitized = sanitizeNumberInput(event.target.value, {
       max: discountType === "percentage" ? 100 : 100000,
     });
     setDiscountValue(sanitized);
   };
 
-  const handleUsageLimitChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUsageLimitChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const sanitized = sanitizeNumberInput(event.target.value, {
       max: 1000000,
     });
     setUsageLimit(sanitized);
   };
 
-  const handlePerUserLimitChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePerUserLimitChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const sanitized = sanitizeNumberInput(event.target.value, {
       max: 100000,
     });
@@ -188,8 +218,12 @@ export function CouponBuilderPage({
       setDescription(copy.description);
       setDiscountType(existingCoupon.discountType);
       setDiscountValue(money.discountValue);
-      setStartsAt(isoToLocalDateTimeValue(existingCoupon.startsAt) || defaultStart);
-      setExpiresAt(isoToLocalDateTimeValue(existingCoupon.expiresAt) || defaultEnd);
+      setStartsAt(
+        isoToLocalDateTimeValue(existingCoupon.startsAt) || defaultStart,
+      );
+      setExpiresAt(
+        isoToLocalDateTimeValue(existingCoupon.expiresAt) || defaultEnd,
+      );
       setHasUsageLimit(Boolean(existingCoupon.globalUsageLimit));
       setUsageLimit(existingCoupon.globalUsageLimit ?? 2000);
       setHasPerUserLimit(Boolean(existingCoupon.perUserLimit));
@@ -241,7 +275,9 @@ export function CouponBuilderPage({
   };
 
   const removeRestrictedCourse = (courseId: string) => {
-    setRestrictedCourseIds((current) => current.filter((id) => id !== courseId));
+    setRestrictedCourseIds((current) =>
+      current.filter((id) => id !== courseId),
+    );
   };
 
   const handleSubmit = async (event?: React.FormEvent) => {
@@ -275,11 +311,7 @@ export function CouponBuilderPage({
 
     const startDateObj = parseLocalDateTime(startsAt);
     const endDateObj = parseLocalDateTime(expiresAt);
-    if (
-      !startDateObj ||
-      !endDateObj ||
-      startDateObj >= endDateObj
-    ) {
+    if (!startDateObj || !endDateObj || startDateObj >= endDateObj) {
       setErrorMessage("Expiry date must be after start date.");
       return;
     }
@@ -303,8 +335,10 @@ export function CouponBuilderPage({
           minOrderAmount: money.minOrderAmount,
           startsAt: startDateObj.toISOString(),
           expiresAt: endDateObj.toISOString(),
-          globalUsageLimit: hasUsageLimit && usageLimit ? Number(usageLimit) : null,
-          perUserLimit: hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
+          globalUsageLimit:
+            hasUsageLimit && usageLimit ? Number(usageLimit) : null,
+          perUserLimit:
+            hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
           isActive: existingCoupon.isActive,
           restrictedCourseIds:
             restrictedCourseIds.length > 0 ? restrictedCourseIds : null,
@@ -320,8 +354,10 @@ export function CouponBuilderPage({
           minOrderAmount: money.minOrderAmount,
           startsAt: startDateObj.toISOString(),
           expiresAt: endDateObj.toISOString(),
-          globalUsageLimit: hasUsageLimit && usageLimit ? Number(usageLimit) : undefined,
-          perUserLimit: hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
+          globalUsageLimit:
+            hasUsageLimit && usageLimit ? Number(usageLimit) : undefined,
+          perUserLimit:
+            hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
           isActive: true,
           restrictedCourseIds:
             restrictedCourseIds.length > 0 ? restrictedCourseIds : undefined,
@@ -356,11 +392,11 @@ export function CouponBuilderPage({
       <header>
         <button
           type="button"
-        onClick={() => onNavigatePage?.(afterSavePath)}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-(--muted) hover:text-(--text) cursor-pointer"
-      >
-        <ArrowLeft size={16} weight="bold" />
-        {isSafeReturnPath(returnTo) ? "Back to course" : "Back to Coupons"}
+          onClick={() => onNavigatePage?.(afterSavePath)}
+          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-(--muted) hover:text-(--text) cursor-pointer"
+        >
+          <ArrowLeft size={16} weight="bold" />
+          {isSafeReturnPath(returnTo) ? "Back to course" : "Back to Coupons"}
         </button>
         <h1 className="m-0 text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
           {isEditMode ? "Edit Coupon" : "Create Coupon"}
@@ -394,7 +430,11 @@ export function CouponBuilderPage({
                   value={code}
                   disabled={isEditMode}
                   onChange={(event) =>
-                    setCode(event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ""))
+                    setCode(
+                      event.target.value
+                        .toUpperCase()
+                        .replace(/[^A-Z0-9_-]/g, ""),
+                    )
                   }
                   placeholder="DIWALI50"
                   maxLength={30}
@@ -523,7 +563,9 @@ export function CouponBuilderPage({
                 onChange={setHasUsageLimit}
                 label="Set usage limit"
               />
-              <span className="text-sm text-(--text)">Set usage limit (optional)</span>
+              <span className="text-sm text-(--text)">
+                Set usage limit (optional)
+              </span>
               <input
                 type="number"
                 min={1}
@@ -543,7 +585,9 @@ export function CouponBuilderPage({
                 onChange={setHasPerUserLimit}
                 label="Limit per user"
               />
-              <span className="text-sm text-(--text)">Limit per user (optional)</span>
+              <span className="text-sm text-(--text)">
+                Limit per user (optional)
+              </span>
               <input
                 type="number"
                 min={1}
@@ -619,14 +663,18 @@ export function CouponBuilderPage({
               Cancel
             </button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? <CircleNotch size={16} className="animate-spin" /> : null}
+              {isSubmitting ? (
+                <CircleNotch size={16} className="animate-spin" />
+              ) : null}
               {isEditMode ? "Save changes" : "Create Coupon"}
             </Button>
           </div>
         </form>
 
         <aside className={`${surfaceClass} sticky top-4 w-full p-5`}>
-          <h2 className="m-0 text-base font-semibold text-(--text)">Coupon Preview</h2>
+          <h2 className="m-0 text-base font-semibold text-(--text)">
+            Coupon Preview
+          </h2>
           <p className="mt-1 mb-4 text-sm text-(--muted)">
             This is how it will appear to learners.
           </p>

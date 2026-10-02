@@ -28,16 +28,25 @@ export function OverviewTab({ data }: { data: AnalyticsOverviewResponse }) {
     insights.push(
       `Net revenue is ${overview.netRevenue.changePercent >= 0 ? "up" : "down"} ${Math.abs(
         overview.netRevenue.changePercent,
-      ).toFixed(1)}% vs the previous period, at ${formatCurrencyAmount(overview.netRevenue.value, currency)}.`,
+      ).toFixed(
+        1,
+      )}% vs the previous period, at ${formatCurrencyAmount(overview.netRevenue.value, currency)}.`,
     );
   }
   if (overview.orderFunnel.created > 0) {
-    const payRate = (overview.orderFunnel.paid / overview.orderFunnel.created) * 100;
-    insights.push(`${formatPercent(payRate)} of created orders convert to a paid order.`);
+    const payRate =
+      (overview.orderFunnel.paid / overview.orderFunnel.created) * 100;
+    insights.push(
+      `${formatPercent(payRate)} of created orders convert to a paid order.`,
+    );
   }
   if (overview.learningFunnel.enrolled > 0) {
-    const startRate = (overview.learningFunnel.started / overview.learningFunnel.enrolled) * 100;
-    insights.push(`${formatPercent(startRate)} of enrolled learners have started at least one lesson.`);
+    const startRate =
+      (overview.learningFunnel.started / overview.learningFunnel.enrolled) *
+      100;
+    insights.push(
+      `${formatPercent(startRate)} of enrolled learners have started at least one lesson.`,
+    );
   }
   if (overview.coursePerformance[0]) {
     insights.push(
@@ -105,9 +114,21 @@ export function OverviewTab({ data }: { data: AnalyticsOverviewResponse }) {
         >
           <FunnelList
             rows={[
-              { label: "Created", value: overview.orderFunnel.created, tone: "blue" },
-              { label: "Paid", value: overview.orderFunnel.paid, tone: "emerald" },
-              { label: "Refunded", value: overview.orderFunnel.refunded, tone: "rose" },
+              {
+                label: "Created",
+                value: overview.orderFunnel.created,
+                tone: "blue",
+              },
+              {
+                label: "Paid",
+                value: overview.orderFunnel.paid,
+                tone: "emerald",
+              },
+              {
+                label: "Refunded",
+                value: overview.orderFunnel.refunded,
+                tone: "rose",
+              },
             ]}
           />
         </ChartSection>
@@ -117,16 +138,34 @@ export function OverviewTab({ data }: { data: AnalyticsOverviewResponse }) {
         >
           <FunnelList
             rows={[
-              { label: "Enrolled", value: overview.learningFunnel.enrolled, tone: "violet" },
-              { label: "Started", value: overview.learningFunnel.started, tone: "amber" },
-              { label: "Completed", value: overview.learningFunnel.completed, tone: "teal" },
+              {
+                label: "Enrolled",
+                value: overview.learningFunnel.enrolled,
+                tone: "violet",
+              },
+              {
+                label: "Started",
+                value: overview.learningFunnel.started,
+                tone: "amber",
+              },
+              {
+                label: "Completed",
+                value: overview.learningFunnel.completed,
+                tone: "teal",
+              },
             ]}
           />
         </ChartSection>
       </div>
 
-      <ChartSection title="Course Performance" description="Top courses by enrollment">
-        <CoursePerformanceTable rows={overview.coursePerformance} currency={currency} />
+      <ChartSection
+        title="Course Performance"
+        description="Top courses by enrollment"
+      >
+        <CoursePerformanceTable
+          rows={overview.coursePerformance}
+          currency={currency}
+        />
       </ChartSection>
 
       <InsightsPanel insights={insights} />

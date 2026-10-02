@@ -1,8 +1,4 @@
-import {
-  useDebugValue,
-  useMemo,
-  useSyncExternalStore,
-} from "react";
+import { useDebugValue, useMemo, useSyncExternalStore } from "react";
 
 export { useSyncExternalStore };
 
@@ -24,10 +20,7 @@ function createSelectionReader<Snapshot, Selection>(
     }
 
     const selection = selector(snapshot);
-    if (
-      hasSnapshot &&
-      isEqual?.(previousSelection, selection)
-    ) {
+    if (hasSnapshot && isEqual?.(previousSelection, selection)) {
       previousSnapshot = snapshot;
       return previousSelection;
     }

@@ -89,10 +89,7 @@ function StatCard({
   }
 
   return (
-    <div
-      className={cardClassName}
-      style={{ boxShadow: "var(--card-shadow)" }}
-    >
+    <div className={cardClassName} style={{ boxShadow: "var(--card-shadow)" }}>
       {content}
     </div>
   );

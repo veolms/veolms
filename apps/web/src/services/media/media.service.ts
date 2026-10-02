@@ -185,7 +185,9 @@ export const mediaService = {
     return api.post(`/media/${mediaAssetId}/transcode/retry`);
   },
 
-  cancelTranscode(mediaAssetId: string): Promise<{ cancelled: true; jobId: string }> {
+  cancelTranscode(
+    mediaAssetId: string,
+  ): Promise<{ cancelled: true; jobId: string }> {
     return api.post(`/media/${mediaAssetId}/transcode/cancel`);
   },
 };

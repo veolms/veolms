@@ -32,8 +32,15 @@ export function OrderHistoryPagination({
       aria-label="Purchase history pages"
     >
       <p>
-        Showing <span className="font-semibold text-(--text)">{startItem}–{endItem}</span> of{" "}
-        <span className="font-semibold text-(--text)">{totalFilteredCount}</span> orders
+        Showing{" "}
+        <span className="font-semibold text-(--text)">
+          {startItem}–{endItem}
+        </span>{" "}
+        of{" "}
+        <span className="font-semibold text-(--text)">
+          {totalFilteredCount}
+        </span>{" "}
+        orders
       </p>
       <div className="flex items-center gap-1.5">
         <button

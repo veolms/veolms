@@ -72,10 +72,7 @@ export const subscribeToPointerGestureClaims = (
 ) => {
   const handleClaim = (event: Event) => {
     const detail = (event as CustomEvent<PointerGestureClaim>).detail;
-    if (
-      detail?.owner !== "curriculum" ||
-      !Number.isInteger(detail.pointerId)
-    )
+    if (detail?.owner !== "curriculum" || !Number.isInteger(detail.pointerId))
       return;
     listener(detail);
   };

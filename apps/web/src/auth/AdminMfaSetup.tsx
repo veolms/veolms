@@ -431,8 +431,8 @@ export function AdminMfaSetup({
                   <div className="auth-two-factor__copy">
                     <p className="auth-two-factor__title">Register a passkey</p>
                     <p className="auth-two-factor__body">
-                      Use your device fingerprint, face, or PIN. No code to type —
-                      secure and phishing-resistant.
+                      Use your device fingerprint, face, or PIN. No code to type
+                      — secure and phishing-resistant.
                     </p>
                   </div>
                 </div>
@@ -485,9 +485,11 @@ export function AdminMfaSetup({
             >
               <Icon aria-hidden name="authenticator" size={18} />
               <span>
-                {setupTotpMutation.isPending
-                  ? <LoadingSpinnerIcon size={16} />
-                  : "Use authenticator app"}
+                {setupTotpMutation.isPending ? (
+                  <LoadingSpinnerIcon size={16} />
+                ) : (
+                  "Use authenticator app"
+                )}
               </span>
             </button>
           </>

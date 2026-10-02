@@ -27,7 +27,8 @@ const accessRoutes: RoutePlugin = async (app, options) => {
         operationId: "grantManualAccess",
         tags: ["Access Grants"],
         summary: "Grant manual course access to a user",
-        description: "Creates an audited manual access grant and active enrollment without a gateway transaction.",
+        description:
+          "Creates an audited manual access grant and active enrollment without a gateway transaction.",
         body: createManualAccessGrantRequestSchema,
         response: {
           201: jsonResponse("Access grant created", accessGrantSchema),
@@ -49,7 +50,8 @@ const accessRoutes: RoutePlugin = async (app, options) => {
         operationId: "revokeAccessGrant",
         tags: ["Access Grants"],
         summary: "Revoke an access grant",
-        description: "Revokes an active access grant and flips corresponding enrollment status to revoked.",
+        description:
+          "Revokes an active access grant and flips corresponding enrollment status to revoked.",
         params: z.object({ grantId: z.uuid() }),
         response: {
           200: jsonResponse(
@@ -75,7 +77,10 @@ const accessRoutes: RoutePlugin = async (app, options) => {
         summary: "List access grants for a user",
         params: z.object({ userId: z.uuid() }),
         response: {
-          200: jsonResponse("List of access grants", z.array(accessGrantSchema)),
+          200: jsonResponse(
+            "List of access grants",
+            z.array(accessGrantSchema),
+          ),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
         },

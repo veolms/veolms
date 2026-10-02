@@ -115,7 +115,10 @@ export const suspendUserRequestSchema = z.object({
   userId: z.uuid(),
   courseId: z.uuid().nullable().optional(),
   scope: suspensionScopeSchema.default("all"),
-  duration: suspensionDurationSchema.default({ type: "temporary", durationHours: 24 }),
+  duration: suspensionDurationSchema.default({
+    type: "temporary",
+    durationHours: 24,
+  }),
   reason: z.string().min(1).max(500),
 });
 export type SuspendUserRequest = z.infer<typeof suspendUserRequestSchema>;

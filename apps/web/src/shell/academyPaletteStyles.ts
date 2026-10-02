@@ -89,7 +89,9 @@ function loadAcademyPaletteStylesheet(
   });
 }
 
-export function ensureAcademyPaletteStylesheets(paletteId: string): Promise<void> {
+export function ensureAcademyPaletteStylesheets(
+  paletteId: string,
+): Promise<void> {
   if (typeof document === "undefined") return Promise.resolve();
 
   const palette = academyPaletteStylesById[paletteId] ? paletteId : "codex";
@@ -121,7 +123,8 @@ export function ensureAcademyPaletteCatalogStylesheet(): Promise<void> {
   paletteCatalogLoad = new Promise<void>((resolve, reject) => {
     const link = existing ?? document.createElement("link");
     const finish = () => resolve();
-    const fail = () => reject(new Error("Could not load academy theme palettes"));
+    const fail = () =>
+      reject(new Error("Could not load academy theme palettes"));
     link.addEventListener("load", finish, { once: true });
     link.addEventListener("error", fail, { once: true });
     link.rel = "stylesheet";

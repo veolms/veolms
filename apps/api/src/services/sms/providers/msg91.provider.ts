@@ -44,10 +44,7 @@ export class Msg91Provider implements ISmsProvider {
   private readonly config: Msg91ProviderConfig;
   private readonly log?: FastifyBaseLogger | undefined;
 
-  constructor(
-    config: Msg91ProviderConfig,
-    logger?: FastifyBaseLogger,
-  ) {
+  constructor(config: Msg91ProviderConfig, logger?: FastifyBaseLogger) {
     this.config = config;
     this.log = logger?.child({ provider: "msg91" });
   }
@@ -62,7 +59,9 @@ export class Msg91Provider implements ISmsProvider {
     options?: SendOtpOptions,
   ): Promise<SmsProviderResult> {
     if (!this.config.authKey || !this.config.templateId) {
-      throw new Error("MSG91 credentials (authKey, templateId) are not configured");
+      throw new Error(
+        "MSG91 credentials (authKey, templateId) are not configured",
+      );
     }
 
     const formattedMobile = formatPhoneForMsg91(phoneNo);

@@ -31,7 +31,9 @@ const webhookRoutes: RoutePlugin = async (app, options) => {
         const json = JSON.parse(body.toString("utf-8"));
         done(null, json);
       } catch (err: unknown) {
-        const parseErr = (err instanceof Error ? err : new Error("Invalid JSON")) as Error & {
+        const parseErr = (
+          err instanceof Error ? err : new Error("Invalid JSON")
+        ) as Error & {
           statusCode?: number;
         };
         parseErr.statusCode = 400;
@@ -56,7 +58,8 @@ const webhookRoutes: RoutePlugin = async (app, options) => {
         operationId: "handleRazorpayWebhook",
         tags: ["Commerce - Webhooks"],
         summary: "Ingest Razorpay webhook events",
-        description: "Verifies webhook signature, deduplicates event, and queues payment fulfillment in background.",
+        description:
+          "Verifies webhook signature, deduplicates event, and queues payment fulfillment in background.",
         response: {
           200: jsonResponse(
             "Webhook received successfully",

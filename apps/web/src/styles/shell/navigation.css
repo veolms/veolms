@@ -996,7 +996,7 @@
 }
 
 :root[data-sidebar-state="collapsed"]
-.courses-app:not(.courses-app--collapsed)
+  .courses-app:not(.courses-app--collapsed)
   .courses-sidebar__brand {
   min-height: 48px;
   flex-direction: row;
@@ -1115,7 +1115,8 @@
 
 :root[data-sidebar-state="collapsed"]
   .courses-app:not(.courses-app--collapsed)
-  .courses-nav button {
+  .courses-nav
+  button {
   width: 100%;
   justify-content: flex-start;
   gap: 15px;
@@ -1125,15 +1126,18 @@
 
 :root[data-sidebar-state="collapsed"]
   .courses-app:not(.courses-app--collapsed)
-  .courses-nav button
+  .courses-nav
+  button
   > .courses-nav__text,
 :root[data-sidebar-state="collapsed"]
   .courses-app:not(.courses-app--collapsed)
-  .courses-nav button
+  .courses-nav
+  button
   > b,
 :root[data-sidebar-state="collapsed"]
   .courses-app:not(.courses-app--collapsed)
-  .courses-nav button
+  .courses-nav
+  button
   > .courses-nav__shortcut,
 :root[data-sidebar-state="collapsed"]
   .courses-app:not(.courses-app--collapsed)

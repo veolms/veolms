@@ -206,9 +206,7 @@ export function createPricingService({
       list.push(bc);
       bundleCoursesByBundleId.set(bc.bundle_id, list);
     }
-    const quizzesByPricingId = new Map(
-      quizRows.map((q) => [q.pricing_id, q]),
-    );
+    const quizzesByPricingId = new Map(quizRows.map((q) => [q.pricing_id, q]));
 
     for (const item of items) {
       if (item.itemType === "course") {
@@ -508,10 +506,7 @@ export function createPricingService({
     }
 
     const totalTax = 0; // Configurable tax if needed in future
-    const totalAmount = Math.max(
-      0,
-      subtotalAmount - totalDiscount + totalTax,
-    );
+    const totalAmount = Math.max(0, subtotalAmount - totalDiscount + totalTax);
 
     const pricing: PricingCalculation = {
       subtotalAmount,

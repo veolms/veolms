@@ -61,11 +61,7 @@ export interface CourseReviewMeta {
 }
 
 export type ReviewTabId =
-  | "all"
-  | "with-comments"
-  | "highest-rated"
-  | "lowest-rated"
-  | "my-review";
+  "all" | "with-comments" | "highest-rated" | "lowest-rated" | "my-review";
 
 export const initialCourseMeta: CourseReviewMeta = {
   courseId: "typescript-course",

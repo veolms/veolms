@@ -61,7 +61,11 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
         activeTag === "textarea" ||
         (document.activeElement as HTMLElement)?.isContentEditable;
 
-      if (!isInput && (event.key === "/" || ((event.metaKey || event.ctrlKey) && event.key === "k"))) {
+      if (
+        !isInput &&
+        (event.key === "/" ||
+          ((event.metaKey || event.ctrlKey) && event.key === "k"))
+      ) {
         event.preventDefault();
         document.getElementById("coupons-search-input")?.focus();
       }
@@ -176,7 +180,9 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
             <span className="flex size-10 items-center justify-center rounded-xl bg-rose-500/10 text-rose-500">
               <Tag size={22} weight="bold" />
             </span>
-            <h3 className="mt-3 text-sm font-semibold">Could not load coupons</h3>
+            <h3 className="mt-3 text-sm font-semibold">
+              Could not load coupons
+            </h3>
             <p className="mt-1 max-w-sm text-xs leading-5 text-(--muted)">
               {error?.message || "Try again in a moment."}
             </p>

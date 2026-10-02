@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
@@ -71,7 +65,9 @@ export function SelectCourseForQuizModal({
         modalRef.current.querySelectorAll<HTMLElement>(
           'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
-      ).filter((el) => el.offsetParent !== null || el === searchInputRef.current);
+      ).filter(
+        (el) => el.offsetParent !== null || el === searchInputRef.current,
+      );
 
       if (!focusableElements.length) return;
       const first = focusableElements[0]!;
@@ -108,7 +104,9 @@ export function SelectCourseForQuizModal({
     (courseId: string) => {
       dismissThen(() => {
         onClose();
-        onNavigatePage?.(`/courses/create?edit=${encodeURIComponent(courseId)}&tab=curriculum`);
+        onNavigatePage?.(
+          `/courses/create?edit=${encodeURIComponent(courseId)}&tab=curriculum`,
+        );
       });
     },
     [dismissThen, onClose, onNavigatePage],
@@ -199,7 +197,8 @@ export function SelectCourseForQuizModal({
                 No courses found
               </h4>
               <p className="text-xs text-(--muted) max-w-xs mb-4">
-                You need at least one course to create and attach quizzes in the curriculum.
+                You need at least one course to create and attach quizzes in the
+                curriculum.
               </p>
               <button
                 type="button"
@@ -255,9 +254,13 @@ export function SelectCourseForQuizModal({
                               : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted)"
                           }`}
                         >
-                          {course.status === "published" ? "Published" : "Draft"}
+                          {course.status === "published"
+                            ? "Published"
+                            : "Draft"}
                         </span>
-                        {course.difficulty && <span>• {course.difficulty}</span>}
+                        {course.difficulty && (
+                          <span>• {course.difficulty}</span>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -72,7 +72,7 @@ export const OrderRefundModal = memo(function OrderRefundModal({
       }
       if (parsedInr > totalPaidInr) {
         setErrorMessage(
-          `Partial refund cannot exceed total paid amount (₹${totalPaidInr}).`
+          `Partial refund cannot exceed total paid amount (₹${totalPaidInr}).`,
         );
         return;
       }
@@ -89,7 +89,9 @@ export const OrderRefundModal = memo(function OrderRefundModal({
         },
       });
 
-      setNotice?.(`Refund processed successfully for order ${order.orderNumber}.`);
+      setNotice?.(
+        `Refund processed successfully for order ${order.orderNumber}.`,
+      );
       onClose();
     } catch (err) {
       setErrorMessage(getApiError(err).message || "Failed to process refund.");
@@ -144,7 +146,11 @@ export const OrderRefundModal = memo(function OrderRefundModal({
                 role="alert"
                 className="flex items-center gap-2.5 rounded-[12px] border-none bg-rose-500/12 p-3 sm:p-3.5 text-[0.76rem] font-semibold leading-snug text-rose-400 shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,black_15%,transparent))]"
               >
-                <WarningCircle size={18} weight="fill" className="shrink-0 text-rose-500" />
+                <WarningCircle
+                  size={18}
+                  weight="fill"
+                  className="shrink-0 text-rose-500"
+                />
                 <span>{errorMessage}</span>
               </div>
             )}

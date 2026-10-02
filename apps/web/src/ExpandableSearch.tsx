@@ -56,9 +56,7 @@ export function ExpandableSearch({
   const inputRef = useRef<HTMLInputElement>(null);
   const useForcedDesktopLayout = persistentDesktop && forcePersistentDesktop;
   const persistentRootClass =
-    persistentDesktop && !useForcedDesktopLayout
-      ? "min-[900px]:contents"
-      : "";
+    persistentDesktop && !useForcedDesktopLayout ? "min-[900px]:contents" : "";
   const persistentIdleClass =
     persistentDesktop && !useForcedDesktopLayout
       ? "min-[821px]:visible min-[900px]:contents"
@@ -92,11 +90,12 @@ export function ExpandableSearch({
   const inputClass = overlay
     ? "text-white caret-white placeholder:text-white/60"
     : "text-(--text) caret-(--text) placeholder:text-(--muted)";
-  const inputVisibilityClass = open || useForcedDesktopLayout
-    ? "visible"
-    : persistentDesktop
-      ? "invisible min-[821px]:visible"
-      : "invisible";
+  const inputVisibilityClass =
+    open || useForcedDesktopLayout
+      ? "visible"
+      : persistentDesktop
+        ? "invisible min-[821px]:visible"
+        : "invisible";
 
   useEffect(() => {
     if (!open) return undefined;
@@ -197,7 +196,9 @@ export function ExpandableSearch({
         >
           {persistentDesktop && (
             <MagnifyingGlass
-              className={useForcedDesktopLayout ? "block" : "hidden min-[821px]:block"}
+              className={
+                useForcedDesktopLayout ? "block" : "hidden min-[821px]:block"
+              }
               size={19}
               aria-hidden="true"
             />
@@ -224,7 +225,13 @@ export function ExpandableSearch({
             aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
           />
           {persistentDesktop && (
-            <span className={useForcedDesktopLayout ? "inline-flex" : "hidden min-[821px]:inline-flex"}>
+            <span
+              className={
+                useForcedDesktopLayout
+                  ? "inline-flex"
+                  : "hidden min-[821px]:inline-flex"
+              }
+            >
               <SearchShortcutHint />
             </span>
           )}
@@ -252,7 +259,13 @@ export function ExpandableSearch({
             </button>
           ) : (
             <MagnifyingGlass
-              className={useForcedDesktopLayout ? "hidden" : persistentDesktop ? "min-[821px]:hidden" : ""}
+              className={
+                useForcedDesktopLayout
+                  ? "hidden"
+                  : persistentDesktop
+                    ? "min-[821px]:hidden"
+                    : ""
+              }
               size={21}
               aria-hidden="true"
               data-mobile-search-icon

@@ -16,7 +16,8 @@ function getPreviewTypeLabel(card: DiscussionWorkspaceCard): string {
   if (card.itemType === "note" || card.kind === "note") return "Note";
 
   const isQuestion = card.kind === "question" || card.kind === "qna";
-  if (card.itemType === "reply") return isQuestion ? "Q&A reply" : "Comment reply";
+  if (card.itemType === "reply")
+    return isQuestion ? "Q&A reply" : "Comment reply";
   return isQuestion ? "Q&A" : "Comment";
 }
 
@@ -55,7 +56,9 @@ function DiscussionWorkspaceActionPreview({
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5 text-xs text-(--text-muted)">
-          <span className="truncate font-medium text-(--text)">{authorLabel}</span>
+          <span className="truncate font-medium text-(--text)">
+            {authorLabel}
+          </span>
           <span aria-hidden="true">·</span>
           <span className="shrink-0">{getPreviewTypeLabel(card)}</span>
           {card.activity && (
@@ -65,7 +68,10 @@ function DiscussionWorkspaceActionPreview({
             </>
           )}
         </div>
-        <p className="mt-0.5 truncate text-xs text-(--text-muted)" title={previewText}>
+        <p
+          className="mt-0.5 truncate text-xs text-(--text-muted)"
+          title={previewText}
+        >
           {previewText}
         </p>
       </div>

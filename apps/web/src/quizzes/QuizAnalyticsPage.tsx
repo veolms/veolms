@@ -619,7 +619,13 @@ function InstructorOverview({
                 title="No quizzes yet"
                 message="Create your first assessment to start measuring learning outcomes."
                 action={
-                  <Button onClick={() => (onOpenCreateQuiz ? onOpenCreateQuiz() : onNavigatePage?.("/quizzes/create"))}>
+                  <Button
+                    onClick={() =>
+                      onOpenCreateQuiz
+                        ? onOpenCreateQuiz()
+                        : onNavigatePage?.("/quizzes/create")
+                    }
+                  >
                     <Plus size={17} weight="bold" />
                     <span>Create quiz</span>
                   </Button>
@@ -641,7 +647,11 @@ function InstructorOverview({
               icon={<Plus size={19} weight="bold" />}
               title="Create a quiz"
               detail="Start a new draft"
-              onClick={() => (onOpenCreateQuiz ? onOpenCreateQuiz() : onNavigatePage?.("/quizzes/create"))}
+              onClick={() =>
+                onOpenCreateQuiz
+                  ? onOpenCreateQuiz()
+                  : onNavigatePage?.("/quizzes/create")
+              }
             />
             <QuickAction
               icon={<ChartBar size={19} weight="bold" />}
@@ -713,7 +723,11 @@ function QuizLibrary({
             </p>
           </div>
           <Button
-            onClick={() => (onOpenCreateQuiz ? onOpenCreateQuiz() : onNavigatePage?.("/quizzes/create"))}
+            onClick={() =>
+              onOpenCreateQuiz
+                ? onOpenCreateQuiz()
+                : onNavigatePage?.("/quizzes/create")
+            }
             className="h-9 sm:h-10 text-xs sm:text-sm"
           >
             <Plus size={16} weight="bold" />
@@ -775,7 +789,13 @@ function QuizLibrary({
             }
             action={
               !quizzes.length ? (
-                <Button onClick={() => (onOpenCreateQuiz ? onOpenCreateQuiz() : onNavigatePage?.("/quizzes/create"))}>
+                <Button
+                  onClick={() =>
+                    onOpenCreateQuiz
+                      ? onOpenCreateQuiz()
+                      : onNavigatePage?.("/quizzes/create")
+                  }
+                >
                   <Plus size={17} weight="bold" />
                   <span>Create quiz</span>
                 </Button>

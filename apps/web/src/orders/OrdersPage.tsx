@@ -92,7 +92,11 @@ export function OrdersPage({
         role="status"
         aria-label="Loading orders dashboard"
       >
-        <CircleNotch size={32} className="animate-spin text-(--accent)" aria-hidden="true" />
+        <CircleNotch
+          size={32}
+          className="animate-spin text-(--accent)"
+          aria-hidden="true"
+        />
       </main>
     );
   }
@@ -102,7 +106,10 @@ export function OrdersPage({
     return (
       <Suspense
         fallback={
-          <div className="grid min-h-52 place-items-center" aria-label="Loading order history">
+          <div
+            className="grid min-h-52 place-items-center"
+            aria-label="Loading order history"
+          >
             <CircleNotch size={26} className="animate-spin text-(--accent)" />
           </div>
         }
@@ -203,8 +210,6 @@ export function OrdersPage({
         onClose={() => filterState.setRefundTargetOrder(null)}
         setNotice={setNotice}
       />
-
     </main>
   );
 }
-

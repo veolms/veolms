@@ -799,11 +799,7 @@ export function createThreadsService(
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
       }
 
-      await courseAccess.assertCanParticipateInCourse(
-        db,
-        actor,
-        row.courseId,
-      );
+      await courseAccess.assertCanParticipateInCourse(db, actor, row.courseId);
       await courseAccess.assertCanAccessThread(db, actor, row);
       courseAccess.assertThreadIsActive(row);
 

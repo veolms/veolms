@@ -23,11 +23,12 @@ describe("defaultStoryboardLoader", () => {
       src: "https://cdn.example/lesson.mpd",
       networking: { requestFilter, responseFilter },
     };
-    const fetchMock = vi.fn(async () =>
-      new Response("WEBVTT\n\noriginal", {
-        status: 200,
-        headers: { "content-type": "text/vtt" },
-      }),
+    const fetchMock = vi.fn(
+      async () =>
+        new Response("WEBVTT\n\noriginal", {
+          status: 200,
+          headers: { "content-type": "text/vtt" },
+        }),
     );
     vi.stubGlobal("fetch", fetchMock);
 

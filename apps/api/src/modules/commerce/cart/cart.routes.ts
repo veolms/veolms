@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  cartResponseSchema,
-  cartItemInputSchema,
-} from "@veolms/contracts";
+import { cartResponseSchema, cartItemInputSchema } from "@veolms/contracts";
 import { jsonResponse } from "../../../lib/responses.ts";
 import { errorResponse } from "../../../lib/errors.ts";
 import type { RoutePlugin } from "../../../lib/route-plugin.ts";
@@ -24,7 +21,8 @@ const cartRoutes: RoutePlugin = async (app, options) => {
         operationId: "getActiveCart",
         tags: ["Commerce - Cart"],
         summary: "Get active student cart",
-        description: "Returns the authenticated student's current cart with updated live pricing.",
+        description:
+          "Returns the authenticated student's current cart with updated live pricing.",
         response: {
           200: jsonResponse("The active student cart", cartResponseSchema),
           401: errorResponse("Unauthorized"),
@@ -43,10 +41,14 @@ const cartRoutes: RoutePlugin = async (app, options) => {
         operationId: "addCartItem",
         tags: ["Commerce - Cart"],
         summary: "Add item to cart",
-        description: "Adds a course or bundle to the student's cart after validating availability and ownership.",
+        description:
+          "Adds a course or bundle to the student's cart after validating availability and ownership.",
         body: cartItemInputSchema,
         response: {
-          200: jsonResponse("Item successfully added to cart", cartResponseSchema),
+          200: jsonResponse(
+            "Item successfully added to cart",
+            cartResponseSchema,
+          ),
           400: errorResponse("Item not available or invalid"),
           401: errorResponse("Unauthorized"),
           404: errorResponse("Item not found"),

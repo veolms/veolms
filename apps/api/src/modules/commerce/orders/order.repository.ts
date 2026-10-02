@@ -1,6 +1,10 @@
 import { sql } from "kysely";
 import type { OrderStatus, OrderItemType } from "@veolms/database";
-import type { OrderScope, OrderCursorPayload, OrderSortOrder } from "@veolms/contracts";
+import type {
+  OrderScope,
+  OrderCursorPayload,
+  OrderSortOrder,
+} from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 
 export interface ListOrdersOptions {
@@ -403,7 +407,10 @@ export async function getRevenueTrend(
  * Same as findOrderById, but takes a `SELECT ... FOR UPDATE` row lock. Must
  * be called inside a transaction.
  */
-export async function findOrderByIdForUpdate(database: Executor, orderId: string) {
+export async function findOrderByIdForUpdate(
+  database: Executor,
+  orderId: string,
+) {
   return await database
     .selectFrom("orders")
     .selectAll()
@@ -443,7 +450,10 @@ export async function listOrderItems(database: Executor, orderId: string) {
     .execute();
 }
 
-export async function findOrderItemById(database: Executor, orderItemId: string) {
+export async function findOrderItemById(
+  database: Executor,
+  orderItemId: string,
+) {
   return await database
     .selectFrom("order_items")
     .selectAll()

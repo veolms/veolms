@@ -19,7 +19,7 @@ const creatorGatewayRoutes: RoutePlugin = async (app, options) => {
   });
   const controller = createCreatorGatewayController({ service });
 
-  // 1. POST /payments/gateway-config - Connect / save payment gateway keys 
+  // 1. POST /payments/gateway-config - Connect / save payment gateway keys
   app.post(
     "/payments/gateway-config",
     {

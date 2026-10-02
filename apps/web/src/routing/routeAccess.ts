@@ -97,9 +97,7 @@ export function isLearningPath(pathname: string): boolean {
     return true;
   }
 
-  return (
-    /^\/courses\/[^/]+(?:\/[^/]+)?$/.test(path)
-  );
+  return /^\/courses\/[^/]+(?:\/[^/]+)?$/.test(path);
 }
 
 export function isPublicAcademyPath(pathname: string): boolean {

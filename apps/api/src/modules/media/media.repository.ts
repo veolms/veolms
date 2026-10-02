@@ -123,7 +123,11 @@ export async function updateMediaAssetMetadata(
   mediaId: string,
   metadata: Json,
 ) {
-  await database.updateTable("media_assets").set({ metadata, updated_at: new Date() }).where("id", "=", mediaId).execute();
+  await database
+    .updateTable("media_assets")
+    .set({ metadata, updated_at: new Date() })
+    .where("id", "=", mediaId)
+    .execute();
 }
 
 export async function updateMediaAssetProbedDetails(
@@ -140,10 +144,12 @@ export async function updateMediaAssetProbedDetails(
   const updates: Record<string, unknown> = {
     updated_at: new Date(),
   };
-  if (details.size_bytes !== undefined) updates["size_bytes"] = details.size_bytes;
+  if (details.size_bytes !== undefined)
+    updates["size_bytes"] = details.size_bytes;
   if (details.width !== undefined) updates["width"] = details.width;
   if (details.height !== undefined) updates["height"] = details.height;
-  if (details.duration_seconds !== undefined) updates["duration_seconds"] = details.duration_seconds;
+  if (details.duration_seconds !== undefined)
+    updates["duration_seconds"] = details.duration_seconds;
   if (details.metadata !== undefined) updates["metadata"] = details.metadata;
 
   await database
@@ -176,7 +182,9 @@ export async function insertVideoJob(
     .values({
       status: "queued",
       ...rest,
-      video_metadata: video_metadata ? JSON.stringify(video_metadata) : undefined,
+      video_metadata: video_metadata
+        ? JSON.stringify(video_metadata)
+        : undefined,
     })
     .execute();
 }
@@ -330,7 +338,6 @@ export async function findPlaybackMediaContext(
     .where("course_lessons.deleted_at", "is", null)
     .executeTakeFirst();
 }
-
 
 export async function findVideoOutputsByVideoIds(
   database: Kysely<Database>,

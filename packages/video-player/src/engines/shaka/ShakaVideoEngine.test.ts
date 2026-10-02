@@ -6,9 +6,7 @@ import type {
   ShakaResponseFilterLike,
 } from "./shaka-internal";
 import { SHAKA_SEGMENT_PREFETCH_LIMIT } from "./shaka-internal";
-import {
-  setEarlyShakaPreloadSessionForTests,
-} from "./shaka-early-preload";
+import { setEarlyShakaPreloadSessionForTests } from "./shaka-early-preload";
 import { ShakaVideoEngine } from "./ShakaVideoEngine";
 
 class FakeMediaElement extends EventTarget {
@@ -48,7 +46,9 @@ class FakeNetworkingEngine {
     this.responseFilters.push(filter);
   });
   unregisterResponseFilter = vi.fn((filter: ShakaResponseFilterLike) => {
-    this.responseFilters = this.responseFilters.filter((item) => item !== filter);
+    this.responseFilters = this.responseFilters.filter(
+      (item) => item !== filter,
+    );
   });
 }
 
@@ -161,7 +161,8 @@ class FakeShakaPlayer {
   }
 
   selectVariantTrack(track: (typeof this.variants)[number]): void {
-    for (const candidate of this.variants) candidate.active = candidate === track;
+    for (const candidate of this.variants)
+      candidate.active = candidate === track;
   }
 
   getAudioTracks(): typeof this.audios {
@@ -189,7 +190,10 @@ class FakeShakaPlayer {
   selectTextTrack(track: (typeof this.texts)[number] | null): void {
     // Shaka returns early when the HLS default text stream is already
     // selected, so visibility must be enabled separately.
-    if (track && this.texts.some((candidate) => candidate === track && candidate.active)) {
+    if (
+      track &&
+      this.texts.some((candidate) => candidate === track && candidate.active)
+    ) {
       return;
     }
     for (const candidate of this.texts) candidate.active = candidate === track;
@@ -388,7 +392,8 @@ describe("ShakaVideoEngine", () => {
     );
     expect(engine.getSnapshot().selectedTextTrackId).toBeNull();
     expect(
-      engine.getTextTracks().find((track) => track.id === "shaka-text:20")?.active,
+      engine.getTextTracks().find((track) => track.id === "shaka-text:20")
+        ?.active,
     ).toBe(false);
 
     engine.selectTextTrack("shaka-text:20");
@@ -396,16 +401,20 @@ describe("ShakaVideoEngine", () => {
     expect(engine.getSnapshot()).toMatchObject({
       selectedTextTrackId: "shaka-text:20",
     });
-    expect(engine.getTextTracks().find((track) => track.id === "shaka-text:20")).toMatchObject({
+    expect(
+      engine.getTextTracks().find((track) => track.id === "shaka-text:20"),
+    ).toMatchObject({
       active: true,
     });
   });
 
   it("maps DRM, retry configuration, and mutable networking hooks", async () => {
     const player = new FakeShakaPlayer();
-    const requestFilter = vi.fn((request: { headers: Record<string, string> }) => {
-      request.headers.Authorization = "Bearer refreshed";
-    });
+    const requestFilter = vi.fn(
+      (request: { headers: Record<string, string> }) => {
+        request.headers.Authorization = "Bearer refreshed";
+      },
+    );
     const engine = new ShakaVideoEngine({
       runtimeLoader: async () => runtimeFor(player),
     });
@@ -469,11 +478,7 @@ describe("ShakaVideoEngine", () => {
   it("only applies the built-in FairPlay transform to skd init data", async () => {
     const player = new FakeShakaPlayer();
     const transform = vi.fn(
-      (
-        data: Uint8Array,
-        _contentId: string,
-        _certificate: Uint8Array,
-      ) => data,
+      (data: Uint8Array, _contentId: string, _certificate: Uint8Array) => data,
     );
     const runtime = runtimeFor(player) as {
       default: Record<string, unknown>;
@@ -542,10 +547,12 @@ describe("ShakaVideoEngine", () => {
     let resolveSecond: (() => void) | undefined;
     player.load
       .mockImplementationOnce(
-        () => new Promise((resolve) => (resolveFirst = () => resolve(undefined))),
+        () =>
+          new Promise((resolve) => (resolveFirst = () => resolve(undefined))),
       )
       .mockImplementationOnce(
-        () => new Promise((resolve) => (resolveSecond = () => resolve(undefined))),
+        () =>
+          new Promise((resolve) => (resolveSecond = () => resolve(undefined))),
       );
     const engine = new ShakaVideoEngine({
       runtimeLoader: async () => runtimeFor(player),

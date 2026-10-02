@@ -138,7 +138,8 @@ export function useDiscussionWorkspaceCardActions({
     if (!destination || typeof window === "undefined") return;
 
     try {
-      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      if (!navigator.clipboard?.writeText)
+        throw new Error("Clipboard unavailable");
       await navigator.clipboard.writeText(
         new URL(destination, window.location.origin).toString(),
       );

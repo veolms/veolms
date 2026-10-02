@@ -71,18 +71,9 @@ export interface DiscussionAccess {
     actor: DiscussionActor,
     courseId: string,
   ): Promise<void>;
-  assertNotesEnabled(
-    db: DatabaseExecutor,
-    courseId: string,
-  ): Promise<void>;
-  assertCommentsEnabled(
-    db: DatabaseExecutor,
-    courseId: string,
-  ): Promise<void>;
-  assertQaEnabled(
-    db: DatabaseExecutor,
-    courseId: string,
-  ): Promise<void>;
+  assertNotesEnabled(db: DatabaseExecutor, courseId: string): Promise<void>;
+  assertCommentsEnabled(db: DatabaseExecutor, courseId: string): Promise<void>;
+  assertQaEnabled(db: DatabaseExecutor, courseId: string): Promise<void>;
   assertThreadKindEnabled(
     db: DatabaseExecutor,
     courseId: string,
@@ -166,11 +157,7 @@ export function createDiscussionAccess(): DiscussionAccess {
       .selectFrom("courses as c")
       .leftJoin("course_access_rules as ar", "ar.course_id", "c.id")
       .leftJoin("course_pricing as p", "p.course_id", "c.id")
-      .select((eb) => [
-        "c.id",
-        "c.status",
-        isOpenCourseAccess(eb).as("isOpen"),
-      ])
+      .select((eb) => ["c.id", "c.status", isOpenCourseAccess(eb).as("isOpen")])
       .where("c.id", "=", courseId)
       .where("c.deleted_at", "is", null)
       .executeTakeFirst();
@@ -401,7 +388,10 @@ export function createDiscussionAccess(): DiscussionAccess {
         ids.add(course.creator_id);
       }
 
-      const grantMemberIds = await access.listActiveUserIdsForCourse(db, courseId);
+      const grantMemberIds = await access.listActiveUserIdsForCourse(
+        db,
+        courseId,
+      );
       for (const id of grantMemberIds) ids.add(id);
 
       const now = new Date();
@@ -492,4 +482,3 @@ export async function assertCanAccessNote(
   const access = createDiscussionAccess();
   return access.assertCanAccessNote(db, actor, note, maskedNotFoundError);
 }
-

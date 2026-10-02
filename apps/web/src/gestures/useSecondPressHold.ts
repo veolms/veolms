@@ -144,10 +144,7 @@ export function useSecondPressHold<T extends HTMLElement>({
   }, []);
 
   const finishSecondPress = useCallback(
-    (
-      event: Parameters<PointerEventHandler<T>>[0],
-      cancelled = false,
-    ) => {
+    (event: Parameters<PointerEventHandler<T>>[0], cancelled = false) => {
       const pointer = secondPointerRef.current;
       if (!pointer || pointer.pointerId !== event.pointerId) return;
       clearHoldTimer();
@@ -186,8 +183,10 @@ export function useSecondPressHold<T extends HTMLElement>({
   );
 
   const onClick: MouseEventHandler<T> = useCallback((event) => {
-    const { deferFirstPress: deferFirstPressOption, secondPressWindow: secondPressWindowOption } =
-      optionsRef.current;
+    const {
+      deferFirstPress: deferFirstPressOption,
+      secondPressWindow: secondPressWindowOption,
+    } = optionsRef.current;
     if (event.detail === 0) {
       disarm();
       callbacksRef.current.onPress?.();

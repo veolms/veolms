@@ -40,50 +40,67 @@ export function usePlayerState<Selected>(
 }
 
 export const usePlaybackState = () =>
-  usePlayerState(({ media }) => ({
-    paused: media.paused,
-    playing: media.playing,
-    buffering: media.buffering,
-    ended: media.ended,
-  }), shallowEqual);
+  usePlayerState(
+    ({ media }) => ({
+      paused: media.paused,
+      playing: media.playing,
+      buffering: media.buffering,
+      ended: media.ended,
+    }),
+    shallowEqual,
+  );
 
 export const useCurrentTime = () =>
   usePlayerState(({ media }) => media.currentTime);
 
-export const useDuration = () =>
-  usePlayerState(({ media }) => media.duration);
+export const useDuration = () => usePlayerState(({ media }) => media.duration);
 
 export const useVolume = () =>
-  usePlayerState(({ media }) => ({
-    volume: media.volume,
-    muted: media.muted,
-  }), shallowEqual);
+  usePlayerState(
+    ({ media }) => ({
+      volume: media.volume,
+      muted: media.muted,
+    }),
+    shallowEqual,
+  );
 
 export const useQuality = () =>
-  usePlayerState(({ media }) => ({
-    auto: media.autoQuality,
-    selectedId: media.selectedQualityId,
-    qualities: media.qualities,
-  }), shallowEqual);
+  usePlayerState(
+    ({ media }) => ({
+      auto: media.autoQuality,
+      selectedId: media.selectedQualityId,
+      qualities: media.qualities,
+    }),
+    shallowEqual,
+  );
 
 export const useTracks = () =>
-  usePlayerState(({ media }) => ({
-    audioTracks: media.audioTracks,
-    textTracks: media.textTracks,
-    selectedAudioTrackId: media.selectedAudioTrackId,
-    selectedTextTrackId: media.selectedTextTrackId,
-  }), shallowEqual);
+  usePlayerState(
+    ({ media }) => ({
+      audioTracks: media.audioTracks,
+      textTracks: media.textTracks,
+      selectedAudioTrackId: media.selectedAudioTrackId,
+      selectedTextTrackId: media.selectedTextTrackId,
+    }),
+    shallowEqual,
+  );
 
 export const useChapters = () =>
-  usePlayerState((snapshot) => ({
-    chapters: snapshot.chapters,
-    activeChapterId: snapshot.activeChapterId,
-  }), shallowEqual);
+  usePlayerState(
+    (snapshot) => ({
+      chapters: snapshot.chapters,
+      activeChapterId: snapshot.activeChapterId,
+    }),
+    shallowEqual,
+  );
 
 export const usePlayerCapabilities = () =>
   usePlayerState(({ capabilities }) => capabilities, shallowEqual);
 
-function shallowEqual<Shape extends object>(left: Shape, right: Shape): boolean {
+function shallowEqual<Shape extends object>(
+  left: Shape,
+  right: Shape,
+): boolean {
   if (left === right) return true;
   const keys = Object.keys(left) as Array<keyof Shape>;
   if (keys.length !== Object.keys(right).length) return false;

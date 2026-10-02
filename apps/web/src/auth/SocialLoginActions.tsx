@@ -64,30 +64,38 @@ export function SocialLoginActions({
       <div className="auth-social__actions">
         <button
           aria-busy={loadingProvider === "google"}
-          aria-label={loadingProvider === "google" ? "Connecting to Google" : undefined}
+          aria-label={
+            loadingProvider === "google" ? "Connecting to Google" : undefined
+          }
           className="auth-social__button"
           disabled={loadingProvider !== null}
           onClick={() => handleOauth("google")}
           type="button"
         >
           <GoogleBrandIcon size={18} />
-          {loadingProvider === "google"
-            ? <LoadingSpinnerIcon size={18} />
-            : "Continue with Google"}
+          {loadingProvider === "google" ? (
+            <LoadingSpinnerIcon size={18} />
+          ) : (
+            "Continue with Google"
+          )}
         </button>
 
         <button
           aria-busy={loadingProvider === "github"}
-          aria-label={loadingProvider === "github" ? "Connecting to GitHub" : undefined}
+          aria-label={
+            loadingProvider === "github" ? "Connecting to GitHub" : undefined
+          }
           className="auth-social__button"
           disabled={loadingProvider !== null}
           onClick={() => handleOauth("github")}
           type="button"
         >
           <GitHubBrandIcon size={18} />
-          {loadingProvider === "github"
-            ? <LoadingSpinnerIcon size={18} />
-            : "Continue with GitHub"}
+          {loadingProvider === "github" ? (
+            <LoadingSpinnerIcon size={18} />
+          ) : (
+            "Continue with GitHub"
+          )}
         </button>
       </div>
     </div>

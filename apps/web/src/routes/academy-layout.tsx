@@ -87,10 +87,7 @@ import {
   openLearningMiniPlayerSession,
   subscribeToLearningMiniPlayer,
 } from "../learning/player/learningMiniPlayerStore";
-import type {
-  NavigateTo,
-  NavigationOptions,
-} from "../routing/navigation";
+import type { NavigateTo, NavigationOptions } from "../routing/navigation";
 import { AcademyRouteGuard } from "../routing/RouteGuards";
 import { buildLoginPath } from "../routing/routeAccess";
 import {
@@ -383,17 +380,15 @@ export default function AcademyLayout() {
 
     if (previousPath !== currentLocationPath) {
       if (pending?.sourcePath !== previousPath) {
-        applicationScrollPositionsRef.current.set(
-          previousPath,
-          { position: readApplicationScrollPosition() },
-        );
+        applicationScrollPositionsRef.current.set(previousPath, {
+          position: readApplicationScrollPosition(),
+        });
       }
       renderedLocationPathRef.current = currentLocationPath;
     }
 
-    const storedEntry = applicationScrollPositionsRef.current.get(
-      currentLocationPath,
-    );
+    const storedEntry =
+      applicationScrollPositionsRef.current.get(currentLocationPath);
     const position =
       pending?.destinationPath === currentLocationPath
         ? pending.position
@@ -473,10 +468,10 @@ export default function AcademyLayout() {
           canRestoreScroll: options?.canRestoreScroll,
         };
         if (options?.captureScroll !== false) {
-        applicationScrollPositionsRef.current.set(
-          sourceStorageKey,
-          sourceEntry,
-        );
+          applicationScrollPositionsRef.current.set(
+            sourceStorageKey,
+            sourceEntry,
+          );
           if (sourceStorageKey !== sourcePath) {
             applicationScrollPositionsRef.current.set(sourcePath, sourceEntry);
           }
@@ -524,7 +519,8 @@ export default function AcademyLayout() {
           position,
           canRestoreScroll: resetDestinationScroll
             ? undefined
-            : (options?.canRestoreScroll ?? storedDestination?.canRestoreScroll),
+            : (options?.canRestoreScroll ??
+              storedDestination?.canRestoreScroll),
         };
         // Update synchronously so a second shortcut pressed before React's
         // route render still compares against the destination just requested.
@@ -546,10 +542,9 @@ export default function AcademyLayout() {
   const exitSettings = useCallback(() => {
     const destination = settingsReturnLocationRef.current;
     const sourcePath = locationPathRef.current;
-    applicationScrollPositionsRef.current.set(
-      sourcePath,
-      { position: readApplicationScrollPosition() },
-    );
+    applicationScrollPositionsRef.current.set(sourcePath, {
+      position: readApplicationScrollPosition(),
+    });
     pendingScrollPositionRef.current = {
       destinationPath: destination.path,
       sourcePath,
@@ -827,7 +822,7 @@ export default function AcademyLayout() {
 
     const isProtected = Boolean(
       current.playerProps.protectedPlayback ||
-        current.playerProps.playbackBootstrap != null,
+      current.playerProps.playbackBootstrap != null,
     );
 
     const token = ++selectLessonTokenRef.current;
@@ -860,14 +855,10 @@ export default function AcademyLayout() {
             playbackSuspended: true,
           },
         }
-      : applyPersistentMiniPlayerLessonChange(
-          current,
-          lessonNumber,
-          {
-            playbackBootstrap: null,
-            playbackSuspended: true,
-          },
-        );
+      : applyPersistentMiniPlayerLessonChange(current, lessonNumber, {
+          playbackBootstrap: null,
+          playbackSuspended: true,
+        });
     if (!updated) return;
 
     persistentPlayerRef.current = updated;
@@ -930,10 +921,9 @@ export default function AcademyLayout() {
                   message: "We couldn't prepare this video.",
                   actionLabel: "Retry",
                   onAction: () =>
-                    selectPersistentMiniPlayerLessonRef.current(
-                      lessonNumber,
-                      { retry: true },
-                    ),
+                    selectPersistentMiniPlayerLessonRef.current(lessonNumber, {
+                      retry: true,
+                    }),
                 };
 
         const withError: PersistentLearningPlayerRegistration = {
@@ -1351,9 +1341,7 @@ export default function AcademyLayout() {
         isDashboardRoute={
           normalizeNavigationPath(location.pathname) === "/dashboard"
         }
-        initialPublishedCoursePage={
-          staticCourseRouteData?.publishedCoursePage
-        }
+        initialPublishedCoursePage={staticCourseRouteData?.publishedCoursePage}
         initialPublishedCoursePageNeedsRefresh={
           staticCourseRouteData?.publishedCoursePageNeedsRefresh
         }

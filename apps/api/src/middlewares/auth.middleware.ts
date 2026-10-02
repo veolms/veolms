@@ -52,7 +52,9 @@ export function createAuthMiddleware(
     reply: FastifyReply,
     message = "Multi-factor authentication is required to access this resource.",
   ) {
-    return reply.code(403).send(httpError(403, "MFA_REQUIRED", message).toJSON());
+    return reply
+      .code(403)
+      .send(httpError(403, "MFA_REQUIRED", message).toJSON());
   }
 
   async function authenticate(
@@ -81,7 +83,9 @@ export function createAuthMiddleware(
     if (!request.user || !request.session) {
       return reply
         .code(401)
-        .send(httpError(401, "UNAUTHORIZED", "Authentication required").toJSON());
+        .send(
+          httpError(401, "UNAUTHORIZED", "Authentication required").toJSON(),
+        );
     }
   }
 
@@ -96,7 +100,9 @@ export function createAuthMiddleware(
     if (!request.user || !request.session) {
       return reply
         .code(401)
-        .send(httpError(401, "UNAUTHORIZED", "Authentication required").toJSON());
+        .send(
+          httpError(401, "UNAUTHORIZED", "Authentication required").toJSON(),
+        );
     }
 
     if (sessionHasPendingMfa(request)) {

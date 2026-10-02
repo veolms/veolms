@@ -82,21 +82,21 @@ The current implementation transcodes the applicable `360p`, `720p`, and `1080p`
 
 The following reflects the current repository, including the current worktree implementation.
 
-| Area | Implemented today | Gap or risk |
-|---|---|---|
-| Presigned upload | `POST /media/presign` creates a media asset in `uploading` state and returns a storage upload URL. | Upload session identity, expiration, idempotency, and recovery semantics are not fully represented in the product state. |
-| Browser upload | Frontend uses XHR upload progress. | Upload progress must be cleared or retained deliberately when the user cancels, refreshes, or replaces a file. |
-| Upload confirmation | Confirm checks object existence and exact size and is designed to be idempotent. | MIME/content validation, upload-session ownership, and explicit replacement metadata need to be formalized. |
-| Job creation | A unique active-job index prevents multiple active jobs for one media asset. Jobs have attempts and a maximum retry count. | The lesson replacement is not a first-class server-side transaction; the old and new asset relationship is not recorded. |
-| Retry | A transcode retry route exists for failed/uploaded media. | Retry UX and retryable versus permanent errors need explicit contracts. A retry must not lose the current ready lesson asset. |
-| Worker progress | `worker_monitoring.progress_percent` is updated during FFmpeg; the API prefers this live value and falls back to the job value. | This is aggregate progress only. Compression/finalization phases are not represented consistently, and the job row is not updated on every live callback. |
-| Output qualities | Worker targets applicable `360p`, `720p`, and `1080p` HLS qualities based on source dimensions. | There is no durable per-rendition table or completion event. The worker parser does not populate `currentQuality`. |
-| SSE endpoint | `/media/:mediaId/progress/stream` exists and sends progress snapshots using `EventSource` from the frontend. | The server loop currently re-reads state on an interval, has limited event types, no durable event sequence/`Last-Event-ID`, and no normal heartbeat protocol. |
-| Frontend transport | The upload component uses one validated `EventSource` per active job, preserves monotonic progress, distinguishes queued work from determinate progress, and automatically reconnects after a clean stream close with bounded backoff. | The backend still needs versioned snapshots, sequence replay/`Last-Event-ID`, and heartbeat semantics for fully durable reconnects. |
-| Lesson attachment | A candidate media ID is attached only after terminal `completed`; the parent persists it and rolls back the local lesson binding when persistence fails. | Replacement commit/discard is not yet a first-class server transaction, and old assets can become orphaned. |
-| Failure display | Media/job failure, stream interruption, queued worker state, and replacement failure have separate UI states and retry actions. | Stable server error codes and end-to-end transport/failure acceptance tests are still needed. |
-| Access control | API routes use authentication, MFA, ownership checks, and presigned storage access. | SSE reconnect behavior, authorization on every reconnect, and safe user-facing error mapping need production acceptance tests. |
-| Cleanup | Foreign keys protect referenced media. | Replacing a lesson does not immediately or safely garbage-collect the old asset; a reference-aware retention process is needed. |
+| Area                | Implemented today                                                                                                                                                                                                                      | Gap or risk                                                                                                                                                    |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Presigned upload    | `POST /media/presign` creates a media asset in `uploading` state and returns a storage upload URL.                                                                                                                                     | Upload session identity, expiration, idempotency, and recovery semantics are not fully represented in the product state.                                       |
+| Browser upload      | Frontend uses XHR upload progress.                                                                                                                                                                                                     | Upload progress must be cleared or retained deliberately when the user cancels, refreshes, or replaces a file.                                                 |
+| Upload confirmation | Confirm checks object existence and exact size and is designed to be idempotent.                                                                                                                                                       | MIME/content validation, upload-session ownership, and explicit replacement metadata need to be formalized.                                                    |
+| Job creation        | A unique active-job index prevents multiple active jobs for one media asset. Jobs have attempts and a maximum retry count.                                                                                                             | The lesson replacement is not a first-class server-side transaction; the old and new asset relationship is not recorded.                                       |
+| Retry               | A transcode retry route exists for failed/uploaded media.                                                                                                                                                                              | Retry UX and retryable versus permanent errors need explicit contracts. A retry must not lose the current ready lesson asset.                                  |
+| Worker progress     | `worker_monitoring.progress_percent` is updated during FFmpeg; the API prefers this live value and falls back to the job value.                                                                                                        | This is aggregate progress only. Compression/finalization phases are not represented consistently, and the job row is not updated on every live callback.      |
+| Output qualities    | Worker targets applicable `360p`, `720p`, and `1080p` HLS qualities based on source dimensions.                                                                                                                                        | There is no durable per-rendition table or completion event. The worker parser does not populate `currentQuality`.                                             |
+| SSE endpoint        | `/media/:mediaId/progress/stream` exists and sends progress snapshots using `EventSource` from the frontend.                                                                                                                           | The server loop currently re-reads state on an interval, has limited event types, no durable event sequence/`Last-Event-ID`, and no normal heartbeat protocol. |
+| Frontend transport  | The upload component uses one validated `EventSource` per active job, preserves monotonic progress, distinguishes queued work from determinate progress, and automatically reconnects after a clean stream close with bounded backoff. | The backend still needs versioned snapshots, sequence replay/`Last-Event-ID`, and heartbeat semantics for fully durable reconnects.                            |
+| Lesson attachment   | A candidate media ID is attached only after terminal `completed`; the parent persists it and rolls back the local lesson binding when persistence fails.                                                                               | Replacement commit/discard is not yet a first-class server transaction, and old assets can become orphaned.                                                    |
+| Failure display     | Media/job failure, stream interruption, queued worker state, and replacement failure have separate UI states and retry actions.                                                                                                        | Stable server error codes and end-to-end transport/failure acceptance tests are still needed.                                                                  |
+| Access control      | API routes use authentication, MFA, ownership checks, and presigned storage access.                                                                                                                                                    | SSE reconnect behavior, authorization on every reconnect, and safe user-facing error mapping need production acceptance tests.                                 |
+| Cleanup             | Foreign keys protect referenced media.                                                                                                                                                                                                 | Replacing a lesson does not immediately or safely garbage-collect the old asset; a reference-aware retention process is needed.                                |
 
 ## 5. User experience requirements
 
@@ -104,17 +104,17 @@ The following reflects the current repository, including the current worktree im
 
 The lesson card must show the state of the currently attached asset, not the state of a newly opened upload modal.
 
-| Current lesson state | Lesson card presentation | Allowed actions |
-|---|---|---|
-| No video | `Add video` | Upload new |
-| Uploading | `Uploading — 42%` | Cancel; continue later if upload protocol supports it |
-| Queued/provisioning | `Preparing video` | Open details; cancel if supported |
-| Processing | `Processing — 42%` | Open details; replace only with confirmation |
-| Ready | `Video ready` plus filename/duration | Preview; replace; remove if allowed |
-| Failed, no prior ready asset | `Video processing failed` | Retry; choose another file; remove failed draft |
-| Ready current + replacement processing | `Video ready` and secondary `Replacement processing — 42%` | Open replacement details; cancel/discard replacement |
-| Ready current + replacement failed | `Video ready` and secondary `Replacement failed` | Retry replacement; discard replacement; keep current |
-| Unknown/stale | `Status unavailable` | Reconnect status; retain last known safe attachment |
+| Current lesson state                   | Lesson card presentation                                   | Allowed actions                                       |
+| -------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------- |
+| No video                               | `Add video`                                                | Upload new                                            |
+| Uploading                              | `Uploading — 42%`                                          | Cancel; continue later if upload protocol supports it |
+| Queued/provisioning                    | `Preparing video`                                          | Open details; cancel if supported                     |
+| Processing                             | `Processing — 42%`                                         | Open details; replace only with confirmation          |
+| Ready                                  | `Video ready` plus filename/duration                       | Preview; replace; remove if allowed                   |
+| Failed, no prior ready asset           | `Video processing failed`                                  | Retry; choose another file; remove failed draft       |
+| Ready current + replacement processing | `Video ready` and secondary `Replacement processing — 42%` | Open replacement details; cancel/discard replacement  |
+| Ready current + replacement failed     | `Video ready` and secondary `Replacement failed`           | Retry replacement; discard replacement; keep current  |
+| Unknown/stale                          | `Status unavailable`                                       | Reconnect status; retain last known safe attachment   |
 
 The card must not show `Processing` solely because `contentMediaId` is non-null.
 
@@ -214,12 +214,12 @@ If compression is enabled and its duration cannot be measured, show an indetermi
 
 Recommended initial weighting:
 
-| Stage | Weight |
-|---|---:|
-| Validate/provision | 0–5% |
-| Optional source preparation/compression | 5–20% |
-| HLS transcode | 20–95% |
-| Finalize/upload/verify | 95–100% |
+| Stage                                   |  Weight |
+| --------------------------------------- | ------: |
+| Validate/provision                      |    0–5% |
+| Optional source preparation/compression |   5–20% |
+| HLS transcode                           |  20–95% |
+| Finalize/upload/verify                  | 95–100% |
 
 The exact weighting is an implementation detail, but it must be monotonic, documented, and tested. A percentage is allowed to remain unchanged for a period of time; it must not move backwards except when a new attempt is explicitly started.
 
@@ -237,13 +237,13 @@ The target quality list is based on source dimensions. The backend must persist 
 
 The UI may then show:
 
-| Quality | Meaning |
-|---|---|
-| Pending | Requested but processing has not started or has no verified output. |
-| Processing | Output generation is in progress. |
-| Ready | The rendition manifest and required segments passed verification. |
-| Not applicable | Source cannot produce that quality; this is not a failure. |
-| Failed | This rendition failed and the aggregate job policy determines whether playback can continue. |
+| Quality        | Meaning                                                                                      |
+| -------------- | -------------------------------------------------------------------------------------------- |
+| Pending        | Requested but processing has not started or has no verified output.                          |
+| Processing     | Output generation is in progress.                                                            |
+| Ready          | The rendition manifest and required segments passed verification.                            |
+| Not applicable | Source cannot produce that quality; this is not a failure.                                   |
+| Failed         | This rendition failed and the aggregate job policy determines whether playback can continue. |
 
 Until this backend capability exists, remove the current “Playback files — Pending” illusion if it implies per-format progress. Use a single aggregate row and list the requested qualities as metadata.
 
@@ -265,17 +265,17 @@ The existing progress stream can remain the route for compatibility, but its pro
 
 ### 8.2 Event types
 
-| Event | Required payload purpose |
-|---|---|
-| `snapshot` | Current asset, candidate/replacement, job, progress, renditions, version, and timestamps. |
-| `status` | State/stage transition, attempt, retryability, and user-safe message. |
-| `progress` | Aggregate percentage, processed duration, speed/fps when known, and `lastUpdatedAt`. |
-| `rendition` | One quality status change, only after rendition tracking is implemented. |
+| Event       | Required payload purpose                                                                               |
+| ----------- | ------------------------------------------------------------------------------------------------------ |
+| `snapshot`  | Current asset, candidate/replacement, job, progress, renditions, version, and timestamps.              |
+| `status`    | State/stage transition, attempt, retryability, and user-safe message.                                  |
+| `progress`  | Aggregate percentage, processed duration, speed/fps when known, and `lastUpdatedAt`.                   |
+| `rendition` | One quality status change, only after rendition tracking is implemented.                               |
 | `completed` | Verified output prefix/master playlist, ready qualities, metadata, and replacement commit eligibility. |
-| `failed` | Stable error code, retryability, attempt count, and whether the current lesson video remains usable. |
-| `cancelled` | Cancellation result and whether the candidate can be discarded. |
-| `heartbeat` | Connection liveness only; it must not change media state. |
-| `error` | Transport or authorization error; it must not masquerade as a transcode failure. |
+| `failed`    | Stable error code, retryability, attempt count, and whether the current lesson video remains usable.   |
+| `cancelled` | Cancellation result and whether the candidate can be discarded.                                        |
+| `heartbeat` | Connection liveness only; it must not change media state.                                              |
+| `error`     | Transport or authorization error; it must not masquerade as a transcode failure.                       |
 
 Example `snapshot` payload shape:
 
@@ -315,14 +315,14 @@ The current server-side snapshot loop is acceptable as a short-term compatibilit
 
 ### 9.1 Existing endpoints to retain or formalize
 
-| Endpoint | Current use | Target behavior |
-|---|---|---|
-| `POST /media/presign` | Start upload | Accept upload/session metadata, idempotency key, and optional replacement context. Return asset/session IDs and constraints. |
-| Storage `PUT` | Transfer bytes | Enforce presigned size/content constraints where supported. |
-| `POST /media/:id/upload-complete` | Confirm upload | Idempotent; verify ownership, object existence, size, content type, and upload session. Queue one job. |
-| `GET /media/:id/progress/stream` | Live progress | Versioned SSE snapshot/events with heartbeat, sequence, reconnect, and terminal semantics. |
-| `POST /media/:id/transcode/retry` | Retry failed job | Idempotent per request key; return current job if active; classify retryable/permanent failure. |
-| `GET /media/:id/progress` | Existing polling/diagnostics | Keep temporarily for support and compatibility; do not call it from the upload UI. Mark deprecated for frontend use. |
+| Endpoint                          | Current use                  | Target behavior                                                                                                              |
+| --------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `POST /media/presign`             | Start upload                 | Accept upload/session metadata, idempotency key, and optional replacement context. Return asset/session IDs and constraints. |
+| Storage `PUT`                     | Transfer bytes               | Enforce presigned size/content constraints where supported.                                                                  |
+| `POST /media/:id/upload-complete` | Confirm upload               | Idempotent; verify ownership, object existence, size, content type, and upload session. Queue one job.                       |
+| `GET /media/:id/progress/stream`  | Live progress                | Versioned SSE snapshot/events with heartbeat, sequence, reconnect, and terminal semantics.                                   |
+| `POST /media/:id/transcode/retry` | Retry failed job             | Idempotent per request key; return current job if active; classify retryable/permanent failure.                              |
+| `GET /media/:id/progress`         | Existing polling/diagnostics | Keep temporarily for support and compatibility; do not call it from the upload UI. Mark deprecated for frontend use.         |
 
 ### 9.2 Target replacement endpoints
 
@@ -376,8 +376,6 @@ Behavior: retain the candidate, show the last completed stage, allow retry, incr
 Examples: unsupported codec, corrupt source, invalid size/type, duration/quality policy violation, missing authorization, and output validation failure caused by the source.
 
 Behavior: show a clear user-safe reason, offer **Choose another video**, and keep the current ready video if this was a replacement. Do not repeatedly auto-retry a permanent source failure.
-
-
 
 ### Browser refresh, tab close, and offline mode
 
@@ -484,24 +482,23 @@ Support tooling should be able to display the state timeline and manually retry 
 - Output verification and media status synchronization.
 - Reference-aware cleanup does not delete assets still used by another lesson/course field.
 
-
 ### Browser end-to-end matrix
 
 Test at minimum:
 
-| Scenario | Expected result |
-|---|---|
-| New lesson, successful upload | Upload → queued → processing → ready; lesson attaches only after ready according to product policy. |
-| Existing ready, open modal | Shows current ready video; no fake 0% processing state. |
-| Existing ready, cancel file picker | No changes. |
-| Existing ready, replacement succeeds | Old remains current until atomic commit, then new becomes current. |
-| Existing ready, replacement fails | Old remains playable; candidate can retry/discard. |
-| Existing failed, retry succeeds | Same candidate/job attempt policy is visible; ready on completion. |
-| SSE disconnect at 0%, 42%, and 100% | Last state retained; reconnect notice; no false failure. |
-| Refresh while processing | Snapshot restores correct job/progress. |
-| Two tabs replace the same lesson | One commit wins; the other receives a conflict and refreshes status. |
-| Network loss during upload | Candidate/session is recoverable or safely restartable; current video remains intact. |
-| Unsupported/corrupt/oversized video | Clear validation failure; no stuck job or orphaned active attachment. |
+| Scenario                             | Expected result                                                                                     |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| New lesson, successful upload        | Upload → queued → processing → ready; lesson attaches only after ready according to product policy. |
+| Existing ready, open modal           | Shows current ready video; no fake 0% processing state.                                             |
+| Existing ready, cancel file picker   | No changes.                                                                                         |
+| Existing ready, replacement succeeds | Old remains current until atomic commit, then new becomes current.                                  |
+| Existing ready, replacement fails    | Old remains playable; candidate can retry/discard.                                                  |
+| Existing failed, retry succeeds      | Same candidate/job attempt policy is visible; ready on completion.                                  |
+| SSE disconnect at 0%, 42%, and 100%  | Last state retained; reconnect notice; no false failure.                                            |
+| Refresh while processing             | Snapshot restores correct job/progress.                                                             |
+| Two tabs replace the same lesson     | One commit wins; the other receives a conflict and refreshes status.                                |
+| Network loss during upload           | Candidate/session is recoverable or safely restartable; current video remains intact.               |
+| Unsupported/corrupt/oversized video  | Clear validation failure; no stuck job or orphaned active attachment.                               |
 
 ## 15. Delivery plan
 

@@ -159,7 +159,9 @@ export function CouponsTable({
                   {coupon.code}
                 </p>
                 <p className="mt-0.5 sm:mt-1 truncate text-[0.72rem] sm:text-xs text-(--muted)">
-                  {couponCampaignTitle(coupon)} · {formatCouponDiscount(coupon)} · {formatCouponDate(coupon.startsAt, true)} – {formatCouponDate(coupon.expiresAt, true)}
+                  {couponCampaignTitle(coupon)} · {formatCouponDiscount(coupon)}{" "}
+                  · {formatCouponDate(coupon.startsAt, true)} –{" "}
+                  {formatCouponDate(coupon.expiresAt, true)}
                 </p>
                 {hasUsageLimit ? (
                   <div className="mt-2 flex items-center gap-2.5">
@@ -179,7 +181,9 @@ export function CouponsTable({
                       />
                     </div>
                     <span className="text-[0.7rem] sm:text-[0.75rem] font-medium text-(--muted)">
-                      {redemptionCount.toLocaleString("en-IN")} / {usageLimit.toLocaleString("en-IN")} used ({usagePercent}%)
+                      {redemptionCount.toLocaleString("en-IN")} /{" "}
+                      {usageLimit.toLocaleString("en-IN")} used ({usagePercent}
+                      %)
                     </span>
                   </div>
                 ) : null}
@@ -211,9 +215,17 @@ export function CouponsTable({
                 className="inline-flex size-8 sm:size-9 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] text-(--text) shadow-[var(--card-compact-shadow)] hover:bg-(--hover) cursor-pointer"
               >
                 {coupon.isActive ? (
-                  <ToggleRight size={16} weight="bold" className="text-emerald-500" />
+                  <ToggleRight
+                    size={16}
+                    weight="bold"
+                    className="text-emerald-500"
+                  />
                 ) : (
-                  <ToggleLeft size={16} weight="bold" className="text-(--muted)" />
+                  <ToggleLeft
+                    size={16}
+                    weight="bold"
+                    className="text-(--muted)"
+                  />
                 )}
               </button>
               <button

@@ -20,7 +20,11 @@ export function createRefundController({
   ) {
     const refund = await service.getRefundById(request.params.refundId);
     if (!refund) {
-      throw new AppError(404, "REFUND_NOT_FOUND", "Refund record was not found.");
+      throw new AppError(
+        404,
+        "REFUND_NOT_FOUND",
+        "Refund record was not found.",
+      );
     }
     return refund;
   }

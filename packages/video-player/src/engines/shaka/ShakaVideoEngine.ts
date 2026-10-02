@@ -102,7 +102,9 @@ function variantsForSelectedAudio(
 ): ShakaVariantTrackLike[] {
   const activeAudio = audioTracks.find((track) => track.active);
   const matching = activeAudio
-    ? variants.filter((variant) => variantMatchesAudioTrack(variant, activeAudio))
+    ? variants.filter((variant) =>
+        variantMatchesAudioTrack(variant, activeAudio),
+      )
     : [...variants];
   const candidates = matching.length > 0 ? matching : [...variants];
   const byVisualQuality = new Map<string, ShakaVariantTrackLike>();
@@ -113,8 +115,7 @@ function variantsForSelectedAudio(
     if (
       !current ||
       candidate.active ||
-      (!current.active &&
-        (candidate.bandwidth ?? 0) > (current.bandwidth ?? 0))
+      (!current.active && (candidate.bandwidth ?? 0) > (current.bandwidth ?? 0))
     ) {
       byVisualQuality.set(key, candidate);
     }
@@ -133,8 +134,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   readonly #textTracks = new Map<string, ShakaTextTrackLike>();
   #runtime: ShakaRuntimeLike | null = null;
   #player: ShakaPlayerLike | null = null;
-  #requestFilter: ReturnType<typeof createShakaNetworkingFilters>["requestFilter"] =
-    null;
+  #requestFilter: ReturnType<
+    typeof createShakaNetworkingFilters
+  >["requestFilter"] = null;
   #responseFilter: ReturnType<
     typeof createShakaNetworkingFilters
   >["responseFilter"] = null;
@@ -160,7 +162,10 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     };
   }
 
-  async load(source: VideoSource, options: VideoLoadOptions = {}): Promise<void> {
+  async load(
+    source: VideoSource,
+    options: VideoLoadOptions = {},
+  ): Promise<void> {
     this.requireMedia();
     const player = this.requirePlayer();
     const runtime = this.requireRuntime();
@@ -288,7 +293,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     player.configure({ abr: { enabled: true } });
     this.#autoQuality = true;
     this.refreshTracks(false);
-    const active = this.getQualities().find((quality) => quality.active) ?? null;
+    const active =
+      this.getQualities().find((quality) => quality.active) ?? null;
     this.setTrackState({
       autoQuality: true,
       selectedQualityId: active?.id ?? null,
@@ -309,7 +315,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
 
     player.selectAudioTrack(track);
     this.refreshTracks(false);
-    const selected = this.getAudioTracks().find((item) => item.id === id) ?? null;
+    const selected =
+      this.getAudioTracks().find((item) => item.id === id) ?? null;
     this.setTrackState({ selectedAudioTrackId: id });
     this.emit("audiotrackchange", { track: selected });
   }
@@ -339,7 +346,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     player.selectTextTrack(track);
     player.setTextTrackVisibility?.(true);
     this.refreshTracks(false);
-    const selected = this.getTextTracks().find((item) => item.id === id) ?? null;
+    const selected =
+      this.getTextTracks().find((item) => item.id === id) ?? null;
     this.setTrackState({ selectedTextTrackId: id });
     this.emit("texttrackchange", { track: selected });
   }
@@ -512,12 +520,14 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     listen("texttrackvisibilitychanged", () => this.refreshTracks(true));
     listen("adaptation", () => {
       this.refreshTracks(false);
-      const active = this.getQualities().find((quality) => quality.active) ?? null;
+      const active =
+        this.getQualities().find((quality) => quality.active) ?? null;
       this.emit("qualitychange", { quality: active, auto: true });
     });
     listen("variantchanged", () => {
       this.refreshTracks(false);
-      const active = this.getQualities().find((quality) => quality.active) ?? null;
+      const active =
+        this.getQualities().find((quality) => quality.active) ?? null;
       this.emit("qualitychange", { quality: active, auto: this.#autoQuality });
     });
     listen("abrstatuschanged", (event) => {
@@ -584,8 +594,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     const activeAudio = audioTracks.find((track) => track.active) ?? null;
     const activeText = isVisible
       ? (textTracks.find((track) => track.id === this.#selectedTextTrackId) ??
-         textTracks.find((track) => track.active) ??
-         null)
+        textTracks.find((track) => track.active) ??
+        null)
       : null;
 
     this.setTrackState({

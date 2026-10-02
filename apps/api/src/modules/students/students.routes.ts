@@ -30,7 +30,8 @@ const studentsRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "listStudents",
         tags: ["Students"],
-        summary: "List academy students with cursor-based pagination and filters",
+        summary:
+          "List academy students with cursor-based pagination and filters",
         querystring: studentListQuerySchema,
         response: {
           200: jsonResponse(

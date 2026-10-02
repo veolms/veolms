@@ -18,5 +18,10 @@ export const quizKeys = {
   studentReport: (studentId: string) =>
     [...quizKeys.all, "student-report", studentId] as const,
   pricingPreview: (courseId: string, assignmentId: string) =>
-    [...quizKeys.assignments(), "pricing-preview", courseId, assignmentId] as const,
+    [
+      ...quizKeys.assignments(),
+      "pricing-preview",
+      courseId,
+      assignmentId,
+    ] as const,
 };

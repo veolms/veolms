@@ -118,7 +118,9 @@ const canRestoreDiscussionScroll = ({ top }: ApplicationScrollPosition) => {
   const feedRect = feed.getBoundingClientRect();
   const scrollport = getApplicationScrollElement();
   const contentTop = scrollport
-    ? feedRect.top - scrollport.getBoundingClientRect().top + scrollport.scrollTop
+    ? feedRect.top -
+      scrollport.getBoundingClientRect().top +
+      scrollport.scrollTop
     : feedRect.top + window.scrollY;
 
   return contentTop + feedRect.height >= top;
@@ -140,7 +142,9 @@ function hasTextSelectionWithin(node: Node): boolean {
   return selection.getRangeAt(0).intersectsNode(node);
 }
 
-function isDiscussionCardInteractiveTarget(target: EventTarget | null): boolean {
+function isDiscussionCardInteractiveTarget(
+  target: EventTarget | null,
+): boolean {
   return (
     target instanceof Element &&
     Boolean(
@@ -1787,15 +1791,11 @@ export function DiscussionsWorkspace({
       courseId: overrides.courseId ?? selectedCourseId,
       ownership: effectiveOwnership,
       qnaStatus:
-        tabId === "q-and-a" && overrides.status
-          ? overrides.status
-          : qnaStatus,
-      qnaSort:
-        tabId === "q-and-a" && overrides.sort ? overrides.sort : qnaSort,
+        tabId === "q-and-a" && overrides.status ? overrides.status : qnaStatus,
+      qnaSort: tabId === "q-and-a" && overrides.sort ? overrides.sort : qnaSort,
       notesSort:
         tabId === "notes" && overrides.sort ? overrides.sort : notesSort,
-      sort:
-        tabId === "comments" && overrides.sort ? overrides.sort : sort,
+      sort: tabId === "comments" && overrides.sort ? overrides.sort : sort,
     });
   const discussionRestorationKey = getRestorationKeyForTab(activeTab);
   const transitionDiscussionScroll = ({
@@ -1952,11 +1952,7 @@ export function DiscussionsWorkspace({
   };
 
   const setDiscussionSort = (nextSort: string) => {
-    const currentSort = isQnaTab
-      ? qnaSort
-      : isNotesTab
-        ? notesSort
-        : sort;
+    const currentSort = isQnaTab ? qnaSort : isNotesTab ? notesSort : sort;
     if (nextSort === currentSort) return;
 
     if (isQnaTab) setQnaSort(nextSort);
@@ -2324,8 +2320,8 @@ export function DiscussionsWorkspace({
                 {statusLabels[discussionStatus]}
               </span>
               <span>
-                <ChatTeardropText size={17} />{" "}
-                {thread.replies} {thread.replies === 1 ? "reply" : "replies"}
+                <ChatTeardropText size={17} /> {thread.replies}{" "}
+                {thread.replies === 1 ? "reply" : "replies"}
               </span>
               <time>{thread.activity}</time>
             </div>
@@ -2452,7 +2448,9 @@ export function DiscussionsWorkspace({
                     }`}
                     triggerClassName="discussion-hub__select-trigger"
                     contentClassName={selectContentClassName}
-                    menuMaxWidth={inSheet ? Number.POSITIVE_INFINITY : undefined}
+                    menuMaxWidth={
+                      inSheet ? Number.POSITIVE_INFINITY : undefined
+                    }
                     matchMenuToContainer
                     options={[
                       ["activity", "Latest activity"],
@@ -2487,7 +2485,9 @@ export function DiscussionsWorkspace({
                     }
                     triggerClassName="discussion-hub__select-trigger"
                     contentClassName={selectContentClassName}
-                    menuMaxWidth={inSheet ? Number.POSITIVE_INFINITY : undefined}
+                    menuMaxWidth={
+                      inSheet ? Number.POSITIVE_INFINITY : undefined
+                    }
                     matchMenuToContainer={isQnaTab || isCommentsTab}
                     options={
                       isQnaTab
@@ -2606,10 +2606,7 @@ export function DiscussionsWorkspace({
               onKeyDown={handleRovingTabKeyDown}
               onFocus={scrollKeyboardFocusedTabIntoView}
             >
-              <Icon
-                size={19}
-                weight={activeTab === id ? "fill" : "regular"}
-              />
+              <Icon size={19} weight={activeTab === id ? "fill" : "regular"} />
               <span>{label}</span>
             </button>
           ))}
@@ -2636,8 +2633,7 @@ export function DiscussionsWorkspace({
           className="discussion-hub__filter-sheet"
           style={
             {
-              "--drawer-content-max-height":
-                "min(720px, calc(100dvh - 16px))",
+              "--drawer-content-max-height": "min(720px, calc(100dvh - 16px))",
             } as CSSProperties
           }
         >

@@ -107,7 +107,11 @@ export function OrderReceiptModal({
           <div className="rounded-xl bg-(--card-surface-raised,var(--hover)) p-3 col-span-2 sm:col-span-1">
             <span className="text-(--muted) block">Payment Status</span>
             <div className="flex items-center gap-1.5 mt-1">
-              <CheckCircle size={15} weight="fill" className="text-emerald-400" />
+              <CheckCircle
+                size={15}
+                weight="fill"
+                className="text-emerald-400"
+              />
               <strong className="text-(--text) font-semibold">
                 {order.statusLabel}
               </strong>

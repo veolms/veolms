@@ -106,10 +106,10 @@ export function StudentFiltersBar({
             id="students-course-filter"
             value={courseFilter}
             onValueChange={onCourseFilterChange}
-          options={courseOptions}
-          searchable
-          onOpen={onCourseFilterOpen}
-          onClose={onCourseFilterClose}
+            options={courseOptions}
+            searchable
+            onOpen={onCourseFilterOpen}
+            onClose={onCourseFilterClose}
             searchPlaceholder="Search courses..."
             defaultLimit={8}
             ariaLabel="Filter by course"

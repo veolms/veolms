@@ -32,7 +32,9 @@ export function Checkbox({
         checked={checked}
         disabled={disabled}
         onChange={(event) => onCheckedChange(event.target.checked)}
-        aria-label={ariaLabel ?? (typeof label === "string" ? label : undefined)}
+        aria-label={
+          ariaLabel ?? (typeof label === "string" ? label : undefined)
+        }
         className="peer sr-only"
       />
       <span

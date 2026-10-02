@@ -108,7 +108,10 @@ export interface ShakaPlayerLike {
     type: string,
     listener: (event: ShakaEventLike) => void,
   ): void;
-  attach(media: HTMLMediaElement, initializeMediaSource?: boolean): Promise<void>;
+  attach(
+    media: HTMLMediaElement,
+    initializeMediaSource?: boolean,
+  ): Promise<void>;
   detach(): Promise<void>;
   load(
     uriOrPreloader: string | ShakaPreloadManagerLike | null,
@@ -186,7 +189,8 @@ export async function defaultShakaRuntimeLoader(): Promise<unknown> {
 
 export function resolveShakaRuntime(module: unknown): ShakaRuntimeLike {
   const record = module as { default?: unknown } | null;
-  const candidate = (record?.default ?? module) as Partial<ShakaRuntimeLike> | null;
+  const candidate = (record?.default ??
+    module) as Partial<ShakaRuntimeLike> | null;
 
   if (
     !candidate ||
@@ -344,10 +348,12 @@ function retryConfiguration(
   const mapped: Record<string, number> = {};
   if (retry.maxAttempts !== undefined) mapped.maxAttempts = retry.maxAttempts;
   if (retry.baseDelayMs !== undefined) mapped.baseDelay = retry.baseDelayMs;
-  if (retry.backoffFactor !== undefined) mapped.backoffFactor = retry.backoffFactor;
+  if (retry.backoffFactor !== undefined)
+    mapped.backoffFactor = retry.backoffFactor;
   if (retry.fuzzFactor !== undefined) mapped.fuzzFactor = retry.fuzzFactor;
   if (retry.timeoutMs !== undefined) mapped.timeout = retry.timeoutMs;
-  if (retry.stallTimeoutMs !== undefined) mapped.stallTimeout = retry.stallTimeoutMs;
+  if (retry.stallTimeoutMs !== undefined)
+    mapped.stallTimeout = retry.stallTimeoutMs;
   if (retry.connectionTimeoutMs !== undefined) {
     mapped.connectionTimeout = retry.connectionTimeoutMs;
   }
@@ -453,7 +459,9 @@ export function createShakaConfiguration(
     }
     if (drm.playready) {
       servers["com.microsoft.playready"] = drm.playready.licenseUrl;
-      advanced["com.microsoft.playready"] = robustnessConfiguration(drm.playready);
+      advanced["com.microsoft.playready"] = robustnessConfiguration(
+        drm.playready,
+      );
     }
     if (drm.fairplay) {
       const fairPlayAdvanced = {
@@ -500,8 +508,7 @@ export function createShakaConfiguration(
         drmInfo?: { serverCertificate?: Uint8Array },
       ): Uint8Array => {
         const data = bytes(initData);
-        const certificate =
-          drmInfo?.serverCertificate ?? fairPlay.certificate;
+        const certificate = drmInfo?.serverCertificate ?? fairPlay.certificate;
 
         if (fairPlay.transformInitData) {
           return fairPlay.transformInitData(data, initDataType, certificate);

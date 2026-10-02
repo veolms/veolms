@@ -172,4 +172,3 @@ export const quizAssignedEventSchema = z.strictObject({
     .max(1000)
     .regex(/^\/(?!\/)/u, "Deep links must be internal application paths."),
 });
-

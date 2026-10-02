@@ -37,7 +37,9 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
   }, [rawCourses, searchQuery]);
 
   const handleProceed = (courseId: string) => {
-    onNavigatePage?.(`/courses/create?edit=${encodeURIComponent(courseId)}&tab=curriculum`);
+    onNavigatePage?.(
+      `/courses/create?edit=${encodeURIComponent(courseId)}&tab=curriculum`,
+    );
   };
 
   if (quizId) {
@@ -57,10 +59,7 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
   }
 
   return (
-    <main
-      data-quiz-surface=""
-      className="mx-auto w-full max-w-[1800px]"
-    >
+    <main data-quiz-surface="" className="mx-auto w-full max-w-[1800px]">
       {/* Back button & Page header */}
       <div className="mb-6 flex flex-col gap-3">
         <button
@@ -77,7 +76,8 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
             Create New Quiz
           </h1>
           <p className="max-w-2xl text-[0.88rem] leading-6 text-(--muted)">
-            Select a course to create or manage quizzes directly inside its curriculum.
+            Select a course to create or manage quizzes directly inside its
+            curriculum.
           </p>
         </div>
       </div>
@@ -134,7 +134,8 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
                 No courses found
               </h3>
               <p className="text-xs text-(--muted) max-w-sm mb-4">
-                You must have an existing course to create and attach quizzes in its curriculum.
+                You must have an existing course to create and attach quizzes in
+                its curriculum.
               </p>
               <Button
                 onClick={() => onNavigatePage?.("/courses/create")}
@@ -184,9 +185,13 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
                               : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted)"
                           }`}
                         >
-                          {course.status === "published" ? "Published" : "Draft"}
+                          {course.status === "published"
+                            ? "Published"
+                            : "Draft"}
                         </span>
-                        {course.difficulty && <span>• {course.difficulty}</span>}
+                        {course.difficulty && (
+                          <span>• {course.difficulty}</span>
+                        )}
                       </div>
                     </div>
                   </div>

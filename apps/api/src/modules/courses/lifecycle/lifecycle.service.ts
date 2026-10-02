@@ -372,7 +372,11 @@ export function createLifecycleService({
     creatorId: string,
     userRoles?: readonly string[],
   ): Promise<CourseValidationResponse> {
-    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+    );
     return await validateCourseObject(course, creatorId, userRoles);
   }
 
@@ -381,7 +385,11 @@ export function createLifecycleService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+    );
 
     const validation = await validateCourseObject(course, creatorId, userRoles);
     if (!validation.canPublish || validation.errors.length > 0) {
@@ -447,7 +455,11 @@ export function createLifecycleService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+    );
 
     const now = new Date();
     const updateResult = await courseRepo.updateCourse(
@@ -488,7 +500,11 @@ export function createLifecycleService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    return await courseService.getCourseEditorData(courseId, creatorId, userRoles);
+    return await courseService.getCourseEditorData(
+      courseId,
+      creatorId,
+      userRoles,
+    );
   }
 
   return {

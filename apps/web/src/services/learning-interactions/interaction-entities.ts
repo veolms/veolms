@@ -137,7 +137,6 @@ export function toLearningThreadEntity(
   };
 }
 
-
 function getOptimisticAuthor() {
   return {
     id: "optimistic-user",

@@ -285,9 +285,7 @@ export function createAttachmentsService(
 
       const id = crypto.randomUUID();
       const ext = resolveExtension(input.fileName, input.mimeType);
-      const storageKey = discussionUploadStorageKey(
-        `${id}${ext}`,
-      );
+      const storageKey = discussionUploadStorageKey(`${id}${ext}`);
       const kind =
         input.kind || getAttachmentKind(input.mimeType, input.fileName);
 
@@ -357,7 +355,9 @@ export function createAttachmentsService(
       }
 
       const dimensions = validateDimensions(file.mimetype, file);
-      const existingDimensions = getAttachmentDimensionFields(existing.metadata);
+      const existingDimensions = getAttachmentDimensionFields(
+        existing.metadata,
+      );
       const persistedDimensions =
         dimensions ||
         (existingDimensions.width !== null && existingDimensions.height !== null

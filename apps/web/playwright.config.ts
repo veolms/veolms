@@ -45,8 +45,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command:
-        "node --env-file-if-exists=../../.env ../api/src/index.ts",
+      command: "node --env-file-if-exists=../../.env ../api/src/index.ts",
       url: "http://127.0.0.1:4000/v1/health",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

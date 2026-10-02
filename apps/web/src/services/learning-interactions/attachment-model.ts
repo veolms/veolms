@@ -1,10 +1,7 @@
 import type { LearningThreadAttachmentSummary } from "@veolms/contracts";
 
 export type AttachmentUploadState =
-  | "local"
-  | "uploading"
-  | "confirmed"
-  | "failed";
+  "local" | "uploading" | "confirmed" | "failed";
 
 const LOCAL_MEDIA_METADATA_TIMEOUT_MS = 250;
 
@@ -51,7 +48,9 @@ export type InteractionAttachmentPatch = Partial<
   >
 >;
 
-export function createClientEntityId(kind: "thread" | "reply" | "note"): string {
+export function createClientEntityId(
+  kind: "thread" | "reply" | "note",
+): string {
   const randomUuid =
     typeof globalThis.crypto?.randomUUID === "function"
       ? globalThis.crypto.randomUUID()

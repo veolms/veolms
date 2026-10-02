@@ -29,8 +29,7 @@ interface ContentTypeItem {
   glowColor: string;
 }
 
-const ICON_DISPLAY_SIZES =
-  "(min-width: 640px) 44px, 40px";
+const ICON_DISPLAY_SIZES = "(min-width: 640px) 44px, 40px";
 
 function contentTypeIcon(src44: string, src88: string, src132: string) {
   return {

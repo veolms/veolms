@@ -20,9 +20,15 @@ export interface FulfillmentSchedulerOptions {
  */
 export class CommerceFulfillmentScheduler {
   private readonly logger?: FastifyBaseLogger;
-  private readonly orderExpirationWorker: ReturnType<typeof createOrderExpirationWorker>;
-  private readonly paymentRecoveryWorker: ReturnType<typeof createPaymentRecoveryWorker>;
-  private readonly refundReconciliationWorker: ReturnType<typeof createRefundReconciliationWorker>;
+  private readonly orderExpirationWorker: ReturnType<
+    typeof createOrderExpirationWorker
+  >;
+  private readonly paymentRecoveryWorker: ReturnType<
+    typeof createPaymentRecoveryWorker
+  >;
+  private readonly refundReconciliationWorker: ReturnType<
+    typeof createRefundReconciliationWorker
+  >;
   private readonly intervalMs: number;
   private timer: NodeJS.Timeout | null = null;
   private initialTimer: NodeJS.Timeout | null = null;
@@ -50,7 +56,9 @@ export class CommerceFulfillmentScheduler {
   start(): void {
     if (this.timer) return;
 
-    this.logger?.info("Starting Commerce Fulfillment Scheduler (Order Expiration, Payment Recovery, Refund Reconciliation)");
+    this.logger?.info(
+      "Starting Commerce Fulfillment Scheduler (Order Expiration, Payment Recovery, Refund Reconciliation)",
+    );
 
     // Run first cycle 10 seconds after server startup to avoid startup congestion
     this.initialTimer = setTimeout(() => {
@@ -100,7 +108,11 @@ export class CommerceFulfillmentScheduler {
         this.refundReconciliationWorker.reconcileStaleRefunds(),
       ]);
 
-      const workerNames = ["order-expiration", "payment-recovery", "refund-reconciliation"] as const;
+      const workerNames = [
+        "order-expiration",
+        "payment-recovery",
+        "refund-reconciliation",
+      ] as const;
       results.forEach((result, i) => {
         if (result.status === "rejected") {
           this.logger?.error(

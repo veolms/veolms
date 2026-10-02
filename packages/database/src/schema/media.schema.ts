@@ -3,11 +3,7 @@ import type { Json } from "./json.schema.ts";
 import type { VideoJobStatus, VideoQualityLevel } from "@veolms/contracts";
 
 export type MediaAssetStatus =
-  | "uploading"
-  | "uploaded"
-  | "processing"
-  | "ready"
-  | "failed";
+  "uploading" | "uploaded" | "processing" | "ready" | "failed";
 
 export interface ImageVariantMetadata {
   width: number;
@@ -72,7 +68,6 @@ export interface VideoJobTable {
   failed_at: Date | null;
   updated_at: Generated<Date>;
 }
-
 
 export type ImageJobStatus = "queued" | "processing" | "completed" | "failed";
 

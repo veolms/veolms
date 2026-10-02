@@ -114,8 +114,10 @@ export function createRefundService({
               );
             }
             const resumedItem = existing.order_item_id
-              ? ((await orderRepo.findOrderItemById(trx, existing.order_item_id)) ??
-                null)
+              ? ((await orderRepo.findOrderItemById(
+                  trx,
+                  existing.order_item_id,
+                )) ?? null)
               : null;
             return {
               kind: "dispatch" as const,

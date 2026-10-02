@@ -3,10 +3,7 @@ import type { Coupon } from "@veolms/contracts";
 export type CouponStatus = "active" | "scheduled" | "expired" | "draft";
 export type CouponTabFilter = "all" | CouponStatus;
 export type CouponSortOption =
-  | "newest"
-  | "oldest"
-  | "discount_high"
-  | "expiring_soon";
+  "newest" | "oldest" | "discount_high" | "expiring_soon";
 
 export const surfaceClass =
   "rounded-[14px] sm:rounded-[22px] overflow-hidden border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) text-(--text) shadow-(--card-shadow,var(--surface-depth-shadow))";
@@ -122,14 +119,20 @@ export function couponMoneyToForm(coupon: Coupon) {
 
 const PACKED_COUPON_COPY_V1_PREFIX = "__v1__:";
 
-export function packCouponCopy(title: string, description: string): string | undefined {
+export function packCouponCopy(
+  title: string,
+  description: string,
+): string | undefined {
   const nextTitle = title.trim();
   const nextDescription = description.trim();
   if (!nextTitle && !nextDescription) return undefined;
   return `${PACKED_COUPON_COPY_V1_PREFIX}${JSON.stringify({ t: nextTitle, d: nextDescription })}`;
 }
 
-export function unpackCouponCopy(raw?: string | null): { title: string; description: string } {
+export function unpackCouponCopy(raw?: string | null): {
+  title: string;
+  description: string;
+} {
   if (!raw?.trim()) return { title: "", description: "" };
   const str = raw.trim();
   if (str.startsWith(PACKED_COUPON_COPY_V1_PREFIX)) {
@@ -181,14 +184,18 @@ export function toLocalDateTimeValue(
   return `${date.getFullYear()}-${padTimePart(date.getMonth() + 1)}-${padTimePart(date.getDate())}T${padTimePart(hour)}:${padTimePart(minute)}`;
 }
 
-export function isoToLocalDateTimeValue(value: string | Date | null | undefined) {
+export function isoToLocalDateTimeValue(
+  value: string | Date | null | undefined,
+) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return `${date.getFullYear()}-${padTimePart(date.getMonth() + 1)}-${padTimePart(date.getDate())}T${padTimePart(date.getHours())}:${padTimePart(date.getMinutes())}`;
 }
 
-export function parseLocalDateTime(value: string | Date | null | undefined): Date | null {
+export function parseLocalDateTime(
+  value: string | Date | null | undefined,
+): Date | null {
   if (!value) return null;
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? null : value;

@@ -13,9 +13,7 @@ function resolveApiUrl(requestUrl: string, path: string): URL {
   // Prerendered page data must come from the same API as the discovered paths.
   const staticBuildBase = import.meta.env.STATIC_BUILD_API_URL;
   const normalizedStaticBuildBase = staticBuildBase
-    ? staticBuildBase
-        .replace(/\/+$/u, "")
-        .replace(/\/api\/v1$/u, "/v1")
+    ? staticBuildBase.replace(/\/+$/u, "").replace(/\/api\/v1$/u, "/v1")
     : undefined;
   const configuredBase =
     (isStaticBuild && normalizedStaticBuildBase

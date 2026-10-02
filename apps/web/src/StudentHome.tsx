@@ -486,15 +486,13 @@ export function StudentHome({
   const hasMeaningfulLearningProgress = enrolledCourses.some(
     (course) => course.progress > 0,
   );
-  const {
-    data: publishedCoursesData,
-    isLoading: publishedCoursesLoading,
-  } = useCourses({
-    enabled:
-      hasEnrolledCourseData &&
-      !initialEnrollmentError &&
-      !hasMeaningfulLearningProgress,
-  });
+  const { data: publishedCoursesData, isLoading: publishedCoursesLoading } =
+    useCourses({
+      enabled:
+        hasEnrolledCourseData &&
+        !initialEnrollmentError &&
+        !hasMeaningfulLearningProgress,
+    });
   const discoveryCourse = useMemo<CourseSummary | null>(
     () => publishedCoursesData?.courses.at(-1) ?? null,
     [publishedCoursesData?.courses],
@@ -595,15 +593,13 @@ export function StudentHome({
               />
             </div>
             <div className="home-resume-copy">
-              <span
-                className="learning-status in-progress"
-              >
+              <span className="learning-status in-progress">
                 Continue Learning
               </span>
               <h2 id="continue-learning-title">{heroCourse.title}</h2>
               <strong>
-                {heroCourse.sections} Sections <i />{" "}
-                {heroCourse.lectures} Lectures
+                {heroCourse.sections} Sections <i /> {heroCourse.lectures}{" "}
+                Lectures
               </strong>
               <p>
                 {heroCourse.enrolledOn
@@ -673,7 +669,7 @@ export function StudentHome({
                 className="primary-learning-action"
                 onClick={() =>
                   onNavigatePage(
-                      "/explore-courses/" +
+                    "/explore-courses/" +
                       encodeURIComponent(discoveryCourse.slug),
                   )
                 }

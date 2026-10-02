@@ -1234,11 +1234,11 @@ function ThreadSlide({
             data-testid="learning-thread-login-prompt"
           >
             <p className="text-sm font-medium text-(--muted)">
-            {participationState === "pending"
-              ? "Checking participation access…"
-              : participationActionLabel === "Get access"
-                ? "Get access to participate in this lesson's discussions."
-                : "Log in to participate in this lesson's discussions."}
+              {participationState === "pending"
+                ? "Checking participation access…"
+                : participationActionLabel === "Get access"
+                  ? "Get access to participate in this lesson's discussions."
+                  : "Log in to participate in this lesson's discussions."}
             </p>
             {participationState !== "pending" && onParticipationAction ? (
               <button

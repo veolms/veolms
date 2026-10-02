@@ -55,4 +55,3 @@ export async function down(database: Kysely<unknown>): Promise<void> {
       CHECK (target_type IN ('thread', 'reply'));
   `.execute(database);
 }
-

@@ -483,8 +483,7 @@ export function LessonPlayerControls({
   const ready = lifecycle === "ready";
   const hasError = lifecycle === "error" || Boolean(error);
   const loading = lifecycle !== "ready" || buffering;
-  const visible =
-    !controlsSuppressed && (controlsVisible || settingsOpen);
+  const visible = !controlsSuppressed && (controlsVisible || settingsOpen);
   const minimizeVisible =
     !controlsSuppressed && (visible || loading || hasError);
   const mobileFullscreen = mobileInteraction && fullscreen;
@@ -561,7 +560,9 @@ export function LessonPlayerControls({
           : "max-sm:opacity-100"
       }`}
     >
-      <div className={`pointer-events-auto sm:hidden ${mobileInteraction ? "sm:!block" : ""}`}>
+      <div
+        className={`pointer-events-auto sm:hidden ${mobileInteraction ? "sm:!block" : ""}`}
+      >
         <LessonTimeControl mobile />
       </div>
       <div
@@ -756,7 +757,9 @@ export function LessonPlayerControls({
         data-lesson-player-controls=""
       >
         <span ref={timelineAnchorRef} hidden />
-        {timelineHost ? createPortal(timelineLayer, timelineHost) : timelineLayer}
+        {timelineHost
+          ? createPortal(timelineLayer, timelineHost)
+          : timelineLayer}
         <div
           className={
             mobileFullscreen
@@ -779,49 +782,54 @@ export function LessonPlayerControls({
               cluster="player-actions"
               className={`relative isolate flex h-8 items-center gap-1 rounded-full !bg-transparent p-0 !shadow-none before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:backdrop-blur-sm before:content-[''] [&>*]:relative [&>*]:z-10 max-sm:before:hidden sm:h-10.5 sm:p-[3px] ${mobileInteraction ? "sm:!h-8 sm:!p-0 sm:before:hidden" : ""} ${circularSettingsControl ? "!size-9 !rounded-full !p-0 !justify-center sm:!size-9 sm:!p-0 [&>div]:!size-9 [&>div>button]:!size-9" : ""}`}
             >
-            <ZoomLevelIndicator className="mr-0.5" />
-            {showAutoplayControl ? (
-              <AutoplayToggle
-                enabled={autoplayEnabled}
-                mobileInteraction={mobileInteraction}
-                onEnabledChange={onAutoplayEnabledChange}
-              />
-            ) : null}
-            <span
-              className={`inline-flex sm:hidden ${mobileInteraction ? "sm:!inline-flex" : ""}`}
-              data-mobile-volume-control=""
-            >
-              <MuteButton
-                className={getPlayerIconPillClass(mobileInteraction)}
-                iconSize={22}
-              />
-            </span>
-            <SettingsMenu
-              includePictureInPicture
-              mobilePresentation="sheet"
-              mobileSheetPanelClassName={
-                mobileLandscapeFullscreen
-                  ? fullscreenCoursePanelVisible
-                    ? "[&&]:!rounded-b-none !inset-x-auto !right-auto !left-[calc(var(--learning-fullscreen-video-offset-x)+var(--learning-fullscreen-video-width)/2)] !w-[min(100dvh,var(--learning-fullscreen-video-width))] !-translate-x-1/2"
-                    : "[&&]:!rounded-b-none mx-auto max-w-[100dvh]"
-                  : undefined
-              }
-              mobileSheetPortalTarget={
-                mobileLandscapeFullscreen ? mobileSettingsSheetHost : undefined
-              }
-              triggerClassName={cn(
-                getPlayerIconPillClass(mobileInteraction, circularSettingsControl),
-                circularSettingsControl &&
-                  "!inline-flex !size-9 !w-9 !items-center !justify-center !p-0 !rounded-full !leading-none [&>svg]:!block [&>svg]:!shrink-0",
-              )}
-              extraMainItems={
-                <AmbientSettingsItem
-                  enabled={ambientEnabled}
-                  onEnabledChange={onAmbientEnabledChange}
+              <ZoomLevelIndicator className="mr-0.5" />
+              {showAutoplayControl ? (
+                <AutoplayToggle
+                  enabled={autoplayEnabled}
+                  mobileInteraction={mobileInteraction}
+                  onEnabledChange={onAutoplayEnabledChange}
                 />
-              }
-              side="bottom"
-            />
+              ) : null}
+              <span
+                className={`inline-flex sm:hidden ${mobileInteraction ? "sm:!inline-flex" : ""}`}
+                data-mobile-volume-control=""
+              >
+                <MuteButton
+                  className={getPlayerIconPillClass(mobileInteraction)}
+                  iconSize={22}
+                />
+              </span>
+              <SettingsMenu
+                includePictureInPicture
+                mobilePresentation="sheet"
+                mobileSheetPanelClassName={
+                  mobileLandscapeFullscreen
+                    ? fullscreenCoursePanelVisible
+                      ? "[&&]:!rounded-b-none !inset-x-auto !right-auto !left-[calc(var(--learning-fullscreen-video-offset-x)+var(--learning-fullscreen-video-width)/2)] !w-[min(100dvh,var(--learning-fullscreen-video-width))] !-translate-x-1/2"
+                      : "[&&]:!rounded-b-none mx-auto max-w-[100dvh]"
+                    : undefined
+                }
+                mobileSheetPortalTarget={
+                  mobileLandscapeFullscreen
+                    ? mobileSettingsSheetHost
+                    : undefined
+                }
+                triggerClassName={cn(
+                  getPlayerIconPillClass(
+                    mobileInteraction,
+                    circularSettingsControl,
+                  ),
+                  circularSettingsControl &&
+                    "!inline-flex !size-9 !w-9 !items-center !justify-center !p-0 !rounded-full !leading-none [&>svg]:!block [&>svg]:!shrink-0",
+                )}
+                extraMainItems={
+                  <AmbientSettingsItem
+                    enabled={ambientEnabled}
+                    onEnabledChange={onAmbientEnabledChange}
+                  />
+                }
+                side="bottom"
+              />
             </PlayerControlSurface>
           </div>
 

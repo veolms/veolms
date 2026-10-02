@@ -5,9 +5,9 @@ export function isInfiniteCacheData<TPage>(
 ): value is InfiniteData<TPage> {
   return Boolean(
     value &&
-      typeof value === "object" &&
-      Array.isArray((value as { pages?: unknown }).pages) &&
-      Array.isArray((value as { pageParams?: unknown }).pageParams),
+    typeof value === "object" &&
+    Array.isArray((value as { pages?: unknown }).pages) &&
+    Array.isArray((value as { pageParams?: unknown }).pageParams),
   );
 }
 

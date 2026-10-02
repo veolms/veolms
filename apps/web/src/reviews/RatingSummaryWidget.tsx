@@ -93,7 +93,9 @@ export function RatingSummaryWidget({
                   type="button"
                   onClick={() =>
                     onSelectRatingFilter?.(
-                      isSelected ? "all" : (String(row.stars) as RatingFilterOption),
+                      isSelected
+                        ? "all"
+                        : (String(row.stars) as RatingFilterOption),
                     )
                   }
                   className={`group flex items-center gap-2 text-xs transition-colors rounded-lg px-2 py-1.5 text-left cursor-pointer ${
@@ -104,7 +106,8 @@ export function RatingSummaryWidget({
                   title={`Filter by ${row.stars} star reviews`}
                 >
                   <span className="w-6 font-medium flex items-center gap-0.5">
-                    {row.stars} <Star size={11} weight="fill" className="opacity-80" />
+                    {row.stars}{" "}
+                    <Star size={11} weight="fill" className="opacity-80" />
                   </span>
 
                   {/* Progress Bar Container */}

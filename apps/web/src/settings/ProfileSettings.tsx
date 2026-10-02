@@ -1065,10 +1065,7 @@ export function ProfileSettings({
         setActiveControl: setActiveLockedControl,
       }}
     >
-      <section
-        className="settings-profile"
-        aria-label="Profile settings"
-      >
+      <section className="settings-profile" aria-label="Profile settings">
         <div className="settings-profile__layout">
           <div className="settings-profile__preview-column">
             <section

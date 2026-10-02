@@ -28,9 +28,7 @@ export function resolveQuizCharge(
     };
   }
   const salePrice =
-    row.sale_price !== null &&
-    row.sale_price > 0 &&
-    row.sale_price < row.price
+    row.sale_price !== null && row.sale_price > 0 && row.sale_price < row.price
       ? row.sale_price
       : null;
   return {
@@ -40,4 +38,3 @@ export function resolveQuizCharge(
     effectivePrice: salePrice ?? row.price,
   };
 }
-

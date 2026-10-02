@@ -15,9 +15,13 @@ export function ReviewHighlightsWidget({
       case "recommend":
         return <ThumbsUp size={18} weight="fill" className="text-(--accent)" />;
       case "verified":
-        return <ShieldCheck size={18} weight="fill" className="text-emerald-500" />;
+        return (
+          <ShieldCheck size={18} weight="fill" className="text-emerald-500" />
+        );
       case "replies":
-        return <ChatCircleDots size={18} weight="fill" className="text-blue-400" />;
+        return (
+          <ChatCircleDots size={18} weight="fill" className="text-blue-400" />
+        );
     }
   };
 

@@ -37,7 +37,8 @@ const discountTypeOptions: readonly [string, string][] = [
 
 function generateRandomCode(): string {
   const prefixes = ["PROMO", "SPECIAL", "SUPER", "SAVE", "FLASH", "MEGA"];
-  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)] ?? "PROMO";
+  const prefix =
+    prefixes[Math.floor(Math.random() * prefixes.length)] ?? "PROMO";
   const num = Math.floor(10 + Math.random() * 89);
   return `${prefix}${num}`;
 }
@@ -55,7 +56,9 @@ export function CreateCouponDrawer({
   const [code, setCode] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage");
+  const [discountType, setDiscountType] = useState<"percentage" | "fixed">(
+    "percentage",
+  );
   const [discountValue, setDiscountValue] = useState<number | "">(20);
   const [maxDiscountAmount, setMaxDiscountAmount] = useState<string>("");
   const [minOrderAmount, setMinOrderAmount] = useState<string>("");
@@ -75,12 +78,18 @@ export function CreateCouponDrawer({
   const handleDiscountTypeChange = (val: string) => {
     const nextType = val as "percentage" | "fixed";
     setDiscountType(nextType);
-    if (nextType === "percentage" && typeof discountValue === "number" && discountValue > 100) {
+    if (
+      nextType === "percentage" &&
+      typeof discountValue === "number" &&
+      discountValue > 100
+    ) {
       setDiscountValue(100);
     }
   };
 
-  const handleDiscountValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDiscountValueChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const sanitized = sanitizeNumberInput(e.target.value, {
       max: discountType === "percentage" ? 100 : 100000,
     });
@@ -113,7 +122,9 @@ export function CreateCouponDrawer({
       setDiscountType(couponToEdit.discountType);
       setDiscountValue(couponToEdit.discountValue);
       setMaxDiscountAmount(
-        couponToEdit.maxDiscountAmount ? String(couponToEdit.maxDiscountAmount) : "",
+        couponToEdit.maxDiscountAmount
+          ? String(couponToEdit.maxDiscountAmount)
+          : "",
       );
       setMinOrderAmount(
         couponToEdit.minOrderAmount ? String(couponToEdit.minOrderAmount) : "",
@@ -200,11 +211,7 @@ export function CreateCouponDrawer({
     const startDateObj = parseLocalDateTime(startsAt);
     const endDateObj = parseLocalDateTime(expiresAt);
 
-    if (
-      !startDateObj ||
-      !endDateObj ||
-      startDateObj >= endDateObj
-    ) {
+    if (!startDateObj || !endDateObj || startDateObj >= endDateObj) {
       setErrorMessage("Expiry date must be after start date.");
       return;
     }
@@ -217,12 +224,16 @@ export function CreateCouponDrawer({
           description: packedDescription,
           discountType,
           discountValue: numericDiscountValue,
-          maxDiscountAmount: maxDiscountAmount ? Number(maxDiscountAmount) : null,
+          maxDiscountAmount: maxDiscountAmount
+            ? Number(maxDiscountAmount)
+            : null,
           minOrderAmount: minOrderAmount ? Number(minOrderAmount) : 0,
           startsAt: startDateObj.toISOString(),
           expiresAt: endDateObj.toISOString(),
-          globalUsageLimit: hasUsageLimit && usageLimit ? Number(usageLimit) : null,
-          perUserLimit: hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
+          globalUsageLimit:
+            hasUsageLimit && usageLimit ? Number(usageLimit) : null,
+          perUserLimit:
+            hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
           isActive,
         });
       } else {
@@ -231,12 +242,16 @@ export function CreateCouponDrawer({
           description: packedDescription,
           discountType,
           discountValue: numericDiscountValue,
-          maxDiscountAmount: maxDiscountAmount ? Number(maxDiscountAmount) : undefined,
+          maxDiscountAmount: maxDiscountAmount
+            ? Number(maxDiscountAmount)
+            : undefined,
           minOrderAmount: minOrderAmount ? Number(minOrderAmount) : 0,
           startsAt: startDateObj.toISOString(),
           expiresAt: endDateObj.toISOString(),
-          globalUsageLimit: hasUsageLimit && usageLimit ? Number(usageLimit) : undefined,
-          perUserLimit: hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
+          globalUsageLimit:
+            hasUsageLimit && usageLimit ? Number(usageLimit) : undefined,
+          perUserLimit:
+            hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
           isActive,
         });
       }
@@ -308,7 +323,9 @@ export function CreateCouponDrawer({
                       disabled={isEditMode}
                       onChange={(e) =>
                         setCode(
-                          e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ""),
+                          e.target.value
+                            .toUpperCase()
+                            .replace(/[^A-Z0-9_-]/g, ""),
                         )
                       }
                       placeholder="e.g. DIWALI50"

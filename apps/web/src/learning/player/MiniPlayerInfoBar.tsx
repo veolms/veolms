@@ -55,15 +55,15 @@ export function MiniPlayerInfoBar({
   };
 
   const hasSectionActionsMenu =
-    sectionIds.length > 0 &&
-    onExpandAllSections &&
-    onCollapseAllSections;
+    sectionIds.length > 0 && onExpandAllSections && onCollapseAllSections;
 
   const infoBar = (
     <div
       role="button"
       tabIndex={0}
-      aria-label={expanded ? "Collapse curriculum menu" : "Expand curriculum menu"}
+      aria-label={
+        expanded ? "Collapse curriculum menu" : "Expand curriculum menu"
+      }
       aria-expanded={expanded}
       onClick={handleAction}
       onKeyDown={(event) => {

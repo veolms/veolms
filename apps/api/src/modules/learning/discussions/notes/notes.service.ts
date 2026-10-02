@@ -614,11 +614,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
     async updateNote(db, noteId, actor, updates) {
       const note = await notesRepo.findNoteById(db, noteId);
       assertOwnNote(note, actor.userId);
-      await courseAccess.assertCanParticipateInCourse(
-        db,
-        actor,
-        note.courseId,
-      );
+      await courseAccess.assertCanParticipateInCourse(db, actor, note.courseId);
       await courseAccess.assertNotesEnabled(db, note.courseId);
 
       const plainText =
@@ -713,11 +709,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
     async deleteNote(db, noteId, actor) {
       const note = await notesRepo.findNoteById(db, noteId);
       assertOwnNote(note, actor.userId);
-      await courseAccess.assertCanParticipateInCourse(
-        db,
-        actor,
-        note.courseId,
-      );
+      await courseAccess.assertCanParticipateInCourse(db, actor, note.courseId);
       await notesRepo.deleteNote(db, noteId);
     },
   };

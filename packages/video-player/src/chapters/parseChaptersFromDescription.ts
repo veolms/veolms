@@ -72,7 +72,9 @@ function isEligibleBlock(node: MarkdownNode | undefined): boolean {
   return node?.type === "paragraph" || node?.type === "heading";
 }
 
-function leadingEligibleBlock(node: MarkdownNode | undefined): MarkdownNode | null {
+function leadingEligibleBlock(
+  node: MarkdownNode | undefined,
+): MarkdownNode | null {
   if (!node) return null;
   if (isEligibleBlock(node)) return node;
 
@@ -146,9 +148,7 @@ function containsUnsafeOrAmbiguousContent(node: MarkdownNode): boolean {
 
 function startsWithLinkOrInlineCode(node: MarkdownNode): boolean {
   const firstInline = firstSemanticInline(node);
-  return (
-    firstInline?.type === "link" || firstInline?.type === "inlineCode"
-  );
+  return firstInline?.type === "link" || firstInline?.type === "inlineCode";
 }
 
 function extractChapterCandidate(semanticText: string): ChapterInput | null {

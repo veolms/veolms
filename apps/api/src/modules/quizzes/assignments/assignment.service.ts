@@ -311,10 +311,7 @@ export function createAssignmentService(options: QuizServiceOptions) {
     );
   }
 
-  function presentCoursePricing(
-    courseId: string,
-    row: PricingRow,
-  ) {
+  function presentCoursePricing(courseId: string, row: PricingRow) {
     return {
       id: row?.id ?? null,
       courseId,

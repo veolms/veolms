@@ -224,7 +224,9 @@ export function createAuthoringService(options: QuizServiceOptions) {
         })),
       });
     }
-    const assignmentRows = await repo.listAssignmentsForQuizzes(database, [quizId]);
+    const assignmentRows = await repo.listAssignmentsForQuizzes(database, [
+      quizId,
+    ]);
     const pricingByCourseId = new Map(
       (
         await pricingRepo.listPricingForCourses(database, [
@@ -235,28 +237,28 @@ export function createAuthoringService(options: QuizServiceOptions) {
     const assignments = assignmentRows.map((row) => {
       const pricing = pricingByCourseId.get(row.course_id);
       return {
-      id: row.id,
-      quizId: row.quiz_id,
-      quizVersionId: row.quiz_version_id,
-      courseId: row.course_id,
-      lessonId: row.lesson_id,
-      required: row.required,
-      passPercentage: Number(row.pass_percentage),
-      maxAttempts: row.max_attempts,
-      timeLimitSeconds: row.time_limit_seconds,
-      shuffleQuestions: row.shuffle_questions,
-      shuffleOptions: row.shuffle_options,
-      feedbackMode: row.feedback_mode,
-      availableFrom: row.available_from?.toISOString() ?? null,
-      availableUntil: row.available_until?.toISOString() ?? null,
-      quizPricingId: pricing?.id ?? null,
-      pricingType: pricing?.pricing_type ?? ("free" as const),
-      price: Number(pricing?.price ?? 0),
-      currency: pricing?.currency ?? "INR",
-      salePrice:
-        pricing?.sale_price !== null && pricing?.sale_price !== undefined
-          ? Number(pricing.sale_price)
-          : null,
+        id: row.id,
+        quizId: row.quiz_id,
+        quizVersionId: row.quiz_version_id,
+        courseId: row.course_id,
+        lessonId: row.lesson_id,
+        required: row.required,
+        passPercentage: Number(row.pass_percentage),
+        maxAttempts: row.max_attempts,
+        timeLimitSeconds: row.time_limit_seconds,
+        shuffleQuestions: row.shuffle_questions,
+        shuffleOptions: row.shuffle_options,
+        feedbackMode: row.feedback_mode,
+        availableFrom: row.available_from?.toISOString() ?? null,
+        availableUntil: row.available_until?.toISOString() ?? null,
+        quizPricingId: pricing?.id ?? null,
+        pricingType: pricing?.pricing_type ?? ("free" as const),
+        price: Number(pricing?.price ?? 0),
+        currency: pricing?.currency ?? "INR",
+        salePrice:
+          pricing?.sale_price !== null && pricing?.sale_price !== undefined
+            ? Number(pricing.sale_price)
+            : null,
       };
     });
     return {

@@ -604,13 +604,11 @@
   white-space: normal;
 }
 
-.creator-activity-comparison.is-negative
-  .creator-activity-comparison-value {
+.creator-activity-comparison.is-negative .creator-activity-comparison-value {
   color: var(--danger);
 }
 
-.creator-activity-comparison.is-neutral
-  .creator-activity-comparison-value {
+.creator-activity-comparison.is-neutral .creator-activity-comparison-value {
   color: var(--muted);
 }
 
@@ -867,11 +865,7 @@
 .creator-courses-table .creator-table-row {
   min-height: 51px;
   padding: 4px;
-  border-top-color: color-mix(
-    in srgb,
-    var(--border-strong) 42%,
-    transparent
-  );
+  border-top-color: color-mix(in srgb, var(--border-strong) 42%, transparent);
 }
 
 .creator-enrollment-table .creator-table-head,
@@ -1314,7 +1308,6 @@
   .creator-discussions-panel {
     align-self: start;
   }
-
 }
 
 .creator-enrollment-table .creator-table-row {
@@ -1863,7 +1856,8 @@
     white-space: nowrap;
   }
 
-  .creator-enrollment-table .creator-enrollment-skeleton-row
+  .creator-enrollment-table
+    .creator-enrollment-skeleton-row
     .creator-enrollment-skeleton-course {
     margin-inline-start: 0;
   }

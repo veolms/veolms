@@ -2,41 +2,101 @@ import { AppError } from "../../../lib/errors.ts";
 
 export const CommerceErrors = {
   COURSE_NOT_FOUND: (courseId: string) =>
-    new AppError(404, "COURSE_NOT_FOUND", `Course with id "${courseId}" was not found.`),
+    new AppError(
+      404,
+      "COURSE_NOT_FOUND",
+      `Course with id "${courseId}" was not found.`,
+    ),
   COURSE_NOT_AVAILABLE: (title: string) =>
-    new AppError(400, "COURSE_NOT_AVAILABLE", `Course "${title}" is not available for purchase.`),
+    new AppError(
+      400,
+      "COURSE_NOT_AVAILABLE",
+      `Course "${title}" is not available for purchase.`,
+    ),
   COURSE_ALREADY_OWNED: (title: string) =>
-    new AppError(409, "COURSE_ALREADY_OWNED", `You are already enrolled in "${title}".`),
+    new AppError(
+      409,
+      "COURSE_ALREADY_OWNED",
+      `You are already enrolled in "${title}".`,
+    ),
   BUNDLE_NOT_FOUND: (bundleId: string) =>
-    new AppError(404, "BUNDLE_NOT_FOUND", `Course bundle with id "${bundleId}" was not found.`),
+    new AppError(
+      404,
+      "BUNDLE_NOT_FOUND",
+      `Course bundle with id "${bundleId}" was not found.`,
+    ),
   BUNDLE_NOT_AVAILABLE: (title: string) =>
-    new AppError(400, "BUNDLE_NOT_AVAILABLE", `Course bundle "${title}" is not available for purchase.`),
+    new AppError(
+      400,
+      "BUNDLE_NOT_AVAILABLE",
+      `Course bundle "${title}" is not available for purchase.`,
+    ),
   BUNDLE_ALL_COURSES_OWNED: (title: string) =>
-    new AppError(409, "BUNDLE_ALL_COURSES_OWNED", `You already own all courses in bundle "${title}".`),
+    new AppError(
+      409,
+      "BUNDLE_ALL_COURSES_OWNED",
+      `You already own all courses in bundle "${title}".`,
+    ),
   QUIZ_NOT_FOUND: (id: string) =>
     new AppError(404, "QUIZ_NOT_FOUND", `Quiz offering "${id}" was not found.`),
   QUIZ_NOT_PURCHASABLE: (title: string) =>
-    new AppError(400, "QUIZ_NOT_PURCHASABLE", `Quiz "${title}" is free and does not need to be purchased.`),
+    new AppError(
+      400,
+      "QUIZ_NOT_PURCHASABLE",
+      `Quiz "${title}" is free and does not need to be purchased.`,
+    ),
   QUIZ_COURSE_ACCESS_REQUIRED: (title: string) =>
-    new AppError(403, "QUIZ_COURSE_ACCESS_REQUIRED", `Get access to the course before buying "${title}".`),
+    new AppError(
+      403,
+      "QUIZ_COURSE_ACCESS_REQUIRED",
+      `Get access to the course before buying "${title}".`,
+    ),
   QUIZ_NOT_AVAILABLE: (title: string) =>
-    new AppError(400, "QUIZ_NOT_AVAILABLE", `Quiz "${title}" is not available for purchase.`),
+    new AppError(
+      400,
+      "QUIZ_NOT_AVAILABLE",
+      `Quiz "${title}" is not available for purchase.`,
+    ),
   QUIZ_ALREADY_OWNED: (title: string) =>
-    new AppError(409, "QUIZ_ALREADY_OWNED", `You already have active access to "${title}".`),
+    new AppError(
+      409,
+      "QUIZ_ALREADY_OWNED",
+      `You already have active access to "${title}".`,
+    ),
   EMPTY_CHECKOUT_ITEMS: () =>
-    new AppError(400, "EMPTY_CHECKOUT_ITEMS", "No items provided for pricing calculation."),
+    new AppError(
+      400,
+      "EMPTY_CHECKOUT_ITEMS",
+      "No items provided for pricing calculation.",
+    ),
   INVALID_COUPON: (code: string) =>
     new AppError(400, "INVALID_COUPON", `Coupon code "${code}" is invalid.`),
   COUPON_INACTIVE: (code: string) =>
-    new AppError(400, "COUPON_INACTIVE", `Coupon "${code}" is currently inactive.`),
+    new AppError(
+      400,
+      "COUPON_INACTIVE",
+      `Coupon "${code}" is currently inactive.`,
+    ),
   COUPON_EXPIRED: (code: string) =>
     new AppError(400, "COUPON_EXPIRED", `Coupon "${code}" has expired.`),
   COUPON_NOT_STARTED: (code: string) =>
-    new AppError(400, "COUPON_NOT_STARTED", `Coupon "${code}" is not valid yet.`),
+    new AppError(
+      400,
+      "COUPON_NOT_STARTED",
+      `Coupon "${code}" is not valid yet.`,
+    ),
   COUPON_USAGE_LIMIT_REACHED: (code: string) =>
-    new AppError(400, "COUPON_USAGE_LIMIT_REACHED", `Coupon "${code}" usage limit has been reached.`),
+    new AppError(
+      400,
+      "COUPON_USAGE_LIMIT_REACHED",
+      `Coupon "${code}" usage limit has been reached.`,
+    ),
   COUPON_USER_LIMIT_REACHED: (code: string) =>
-    new AppError(400, "COUPON_USER_LIMIT_REACHED", `You have already used coupon "${code}" the maximum number of times.`),
+    new AppError(
+      400,
+      "COUPON_USER_LIMIT_REACHED",
+      `You have already used coupon "${code}" the maximum number of times.`,
+    ),
   COUPON_MIN_ORDER_NOT_MET: (code: string, minAmount: number) =>
     new AppError(
       400,
@@ -50,29 +110,77 @@ export const CommerceErrors = {
       `Coupon "${code}" is not applicable to any items in your order.`,
     ),
   CART_ITEM_ALREADY_EXISTS: () =>
-    new AppError(409, "CART_ITEM_ALREADY_EXISTS", "This item is already in your cart."),
+    new AppError(
+      409,
+      "CART_ITEM_ALREADY_EXISTS",
+      "This item is already in your cart.",
+    ),
   CART_ITEM_NOT_FOUND: () =>
-    new AppError(404, "CART_ITEM_NOT_FOUND", "The requested cart item was not found."),
+    new AppError(
+      404,
+      "CART_ITEM_NOT_FOUND",
+      "The requested cart item was not found.",
+    ),
   ORDER_NOT_FOUND: (orderId: string) =>
-    new AppError(404, "ORDER_NOT_FOUND", `Order with id "${orderId}" was not found.`),
+    new AppError(
+      404,
+      "ORDER_NOT_FOUND",
+      `Order with id "${orderId}" was not found.`,
+    ),
   ORDER_EXPIRED: () =>
-    new AppError(400, "ORDER_EXPIRED", "This order has expired. Please initiate a new checkout."),
+    new AppError(
+      400,
+      "ORDER_EXPIRED",
+      "This order has expired. Please initiate a new checkout.",
+    ),
   ORDER_ALREADY_PAID: () =>
-    new AppError(409, "ORDER_ALREADY_PAID", "This order has already been paid."),
+    new AppError(
+      409,
+      "ORDER_ALREADY_PAID",
+      "This order has already been paid.",
+    ),
   PAYMENT_NOT_FOUND: (identifier: string) =>
-    new AppError(404, "PAYMENT_NOT_FOUND", `Payment record "${identifier}" was not found.`),
+    new AppError(
+      404,
+      "PAYMENT_NOT_FOUND",
+      `Payment record "${identifier}" was not found.`,
+    ),
   PAYMENT_SIGNATURE_INVALID: () =>
-    new AppError(400, "PAYMENT_SIGNATURE_INVALID", "Payment signature verification failed."),
+    new AppError(
+      400,
+      "PAYMENT_SIGNATURE_INVALID",
+      "Payment signature verification failed.",
+    ),
   PAYMENT_AMOUNT_MISMATCH: () =>
-    new AppError(400, "PAYMENT_AMOUNT_MISMATCH", "Payment amount does not match the order total."),
+    new AppError(
+      400,
+      "PAYMENT_AMOUNT_MISMATCH",
+      "Payment amount does not match the order total.",
+    ),
   PAYMENT_CURRENCY_MISMATCH: () =>
-    new AppError(400, "PAYMENT_CURRENCY_MISMATCH", "Payment currency does not match the order currency."),
+    new AppError(
+      400,
+      "PAYMENT_CURRENCY_MISMATCH",
+      "Payment currency does not match the order currency.",
+    ),
   PAYMENT_ALREADY_PROCESSED: () =>
-    new AppError(409, "PAYMENT_ALREADY_PROCESSED", "This payment has already been processed."),
+    new AppError(
+      409,
+      "PAYMENT_ALREADY_PROCESSED",
+      "This payment has already been processed.",
+    ),
   PAYMENT_NOT_CAPTURED: (status: string) =>
-    new AppError(400, "PAYMENT_NOT_CAPTURED", `Payment cannot be finalized because gateway status is "${status}" (expected "captured").`),
+    new AppError(
+      400,
+      "PAYMENT_NOT_CAPTURED",
+      `Payment cannot be finalized because gateway status is "${status}" (expected "captured").`,
+    ),
   REFUND_NOT_ALLOWED: (reason: string) =>
-    new AppError(400, "REFUND_NOT_ALLOWED", `Refund could not be processed: ${reason}`),
+    new AppError(
+      400,
+      "REFUND_NOT_ALLOWED",
+      `Refund could not be processed: ${reason}`,
+    ),
   REFUND_IDEMPOTENCY_KEY_REUSED: () =>
     new AppError(
       409,
@@ -80,9 +188,17 @@ export const CommerceErrors = {
       "This idempotency key was already used for a different refund request on this order.",
     ),
   WEBHOOK_SIGNATURE_INVALID: () =>
-    new AppError(400, "WEBHOOK_SIGNATURE_INVALID", "Webhook signature verification failed."),
+    new AppError(
+      400,
+      "WEBHOOK_SIGNATURE_INVALID",
+      "Webhook signature verification failed.",
+    ),
   PRICE_CALCULATION_FAILED: (reason: string) =>
     new AppError(400, "PRICE_CALCULATION_FAILED", reason),
   IDEMPOTENCY_KEY_CONFLICT: () =>
-    new AppError(409, "IDEMPOTENCY_KEY_CONFLICT", "Idempotency key has already been used by another account."),
+    new AppError(
+      409,
+      "IDEMPOTENCY_KEY_CONFLICT",
+      "Idempotency key has already been used by another account.",
+    ),
 };

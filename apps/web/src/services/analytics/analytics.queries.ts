@@ -1,7 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import type { DashboardRange } from "@veolms/contracts";
 import { analyticsKeys } from "./analytics.keys";
-import { analyticsService, type AnalyticsFilterParams } from "./analytics.service";
+import {
+  analyticsService,
+  type AnalyticsFilterParams,
+} from "./analytics.service";
 
 export function useAdminAnalyticsOverview(
   params: AnalyticsFilterParams = {},

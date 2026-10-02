@@ -23,10 +23,7 @@ export class VonageProvider implements ISmsProvider {
   private readonly config: VonageProviderConfig;
   private readonly log?: FastifyBaseLogger | undefined;
 
-  constructor(
-    config: VonageProviderConfig,
-    logger?: FastifyBaseLogger,
-  ) {
+  constructor(config: VonageProviderConfig, logger?: FastifyBaseLogger) {
     this.config = config;
     this.log = logger?.child({ provider: "vonage" });
   }

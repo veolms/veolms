@@ -19,9 +19,7 @@ describe("PlayerChromePreview", () => {
     );
 
     expect(screen.getByRole("button", { name: "Play" })).toBeTruthy();
-    expect(
-      screen.getByLabelText("0:00 elapsed of 0:00"),
-    ).toBeTruthy();
+    expect(screen.getByLabelText("0:00 elapsed of 0:00")).toBeTruthy();
     expect(document.querySelector("video")).toBeNull();
   });
 

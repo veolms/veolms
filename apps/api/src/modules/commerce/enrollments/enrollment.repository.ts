@@ -206,10 +206,7 @@ export async function listTopCoursesByEnrollment(
 ): Promise<Array<{ courseId: string; enrollmentCount: number }>> {
   let query = database
     .selectFrom("enrollments")
-    .select([
-      "course_id",
-      sql<number>`count(*)::int`.as("enrollment_count"),
-    ])
+    .select(["course_id", sql<number>`count(*)::int`.as("enrollment_count")])
     .groupBy("course_id")
     .orderBy(sql`count(*)`, "desc")
     .limit(options.limit);
@@ -241,10 +238,7 @@ export async function listEnrollmentCountsByCourse(
 
   const rows = await database
     .selectFrom("enrollments")
-    .select([
-      "course_id",
-      sql<number>`count(*)::int`.as("enrollment_count"),
-    ])
+    .select(["course_id", sql<number>`count(*)::int`.as("enrollment_count")])
     .where("course_id", "in", courseIds)
     .groupBy("course_id")
     .execute();

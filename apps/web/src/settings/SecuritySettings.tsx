@@ -1,4 +1,10 @@
-import { useEffect, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import "../styles/features/workspace.css";
 import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
@@ -450,7 +456,8 @@ export function SecuritySettings({
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
       setTotpError(
-        errorObj?.message || "Failed to remove authenticator app. Please try again.",
+        errorObj?.message ||
+          "Failed to remove authenticator app. Please try again.",
       );
     }
   };
@@ -629,32 +636,42 @@ export function SecuritySettings({
                   icon={LockKey}
                   label="Passkey sign-in"
                   note={
-                    userLoading
-                      ? (
-                          <span
-                            role="status"
-                            aria-label="Loading passkey status"
-                            className="inline-flex min-h-5 items-center"
-                          >
-                            <LoadingSpinnerIcon size={15} />
-                          </span>
-                        )
-                      : passkeyEnabled
-                        ? "A passkey is registered on this account."
-                        : "No passkey registered yet."
+                    userLoading ? (
+                      <span
+                        role="status"
+                        aria-label="Loading passkey status"
+                        className="inline-flex min-h-5 items-center"
+                      >
+                        <LoadingSpinnerIcon size={15} />
+                      </span>
+                    ) : passkeyEnabled ? (
+                      "A passkey is registered on this account."
+                    ) : (
+                      "No passkey registered yet."
+                    )
                   }
                 >
                   {passkeyBrowserSupported ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
                       {passkeyEnabled && (
                         <button
                           aria-busy={deletePasskeysMutation.isPending}
                           className="settings-action settings-action--quiet"
-                          disabled={!isAuthenticated || deletePasskeysMutation.isPending}
+                          disabled={
+                            !isAuthenticated || deletePasskeysMutation.isPending
+                          }
                           onClick={handleRemovePasskey}
                           type="button"
                         >
-                          {deletePasskeysMutation.isPending ? "Removing…" : "Remove"}
+                          {deletePasskeysMutation.isPending
+                            ? "Removing…"
+                            : "Remove"}
                         </button>
                       )}
                       <button
@@ -722,27 +739,35 @@ export function SecuritySettings({
                   icon={LockKey}
                   label="Two-factor authentication"
                   note={
-                    userLoading
-                      ? (
-                          <span
-                            role="status"
-                            aria-label="Loading authenticator status"
-                            className="inline-flex min-h-5 items-center"
-                          >
-                            <LoadingSpinnerIcon size={15} />
-                          </span>
-                        )
-                      : totpEnabled
-                        ? "Authenticator app is active on this account."
-                        : "Add an extra layer of security to your sign-in."
+                    userLoading ? (
+                      <span
+                        role="status"
+                        aria-label="Loading authenticator status"
+                        className="inline-flex min-h-5 items-center"
+                      >
+                        <LoadingSpinnerIcon size={15} />
+                      </span>
+                    ) : totpEnabled ? (
+                      "Authenticator app is active on this account."
+                    ) : (
+                      "Add an extra layer of security to your sign-in."
+                    )
                   }
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
                     {totpEnabled && (
                       <button
                         aria-busy={disableTotpMutation.isPending}
                         className="settings-action settings-action--quiet"
-                        disabled={!isAuthenticated || disableTotpMutation.isPending}
+                        disabled={
+                          !isAuthenticated || disableTotpMutation.isPending
+                        }
                         onClick={handleDisableTotp}
                         type="button"
                       >
@@ -752,7 +777,9 @@ export function SecuritySettings({
                     <button
                       className="settings-action"
                       onClick={() => setShowTotpModal(true)}
-                      disabled={!isAuthenticated || disableTotpMutation.isPending}
+                      disabled={
+                        !isAuthenticated || disableTotpMutation.isPending
+                      }
                       type="button"
                     >
                       {totpEnabled ? "Reconfigure" : "Set up"}

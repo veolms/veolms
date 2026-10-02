@@ -15,8 +15,7 @@ import {
 } from "../services/learning-interactions/interaction-entities";
 
 export type UnifiedDiscussionShadow =
-  | LearningThreadEntity
-  | LearningNoteCacheItem;
+  LearningThreadEntity | LearningNoteCacheItem;
 
 export function getUnifiedDiscussionIdentity(
   item: LessonDiscussionItem,
@@ -51,11 +50,11 @@ export function adaptUnifiedDiscussionItem(
   const entry =
     item.sourceType === "thread"
       ? adaptLearningThreadToComment(
-          (shadow && "kind" in shadow ? shadow : item.thread),
+          shadow && "kind" in shadow ? shadow : item.thread,
           currentUserId,
         )
       : adaptLearningNoteToComment(
-          (shadow && "authorName" in shadow ? shadow : item.note),
+          shadow && "authorName" in shadow ? shadow : item.note,
           authorName,
           authorAvatar,
           currentUserId,
@@ -64,17 +63,13 @@ export function adaptUnifiedDiscussionItem(
   return withSourceAwareIdentity(entry, item.sourceType, item.entityId);
 }
 
-export function getDiscussionSourceType(
-  entry: Comment,
-): "thread" | "note" {
+export function getDiscussionSourceType(entry: Comment): "thread" | "note" {
   return entry.entryKind === "note" ? "note" : "thread";
 }
 
 export function getUnifiedEntryIdentity(entry: Comment): string | undefined {
   const serverId = getServerEntityId(entry);
-  return serverId
-    ? `${getDiscussionSourceType(entry)}:${serverId}`
-    : undefined;
+  return serverId ? `${getDiscussionSourceType(entry)}:${serverId}` : undefined;
 }
 
 export function orderUnifiedDiscussionEntries(
@@ -85,9 +80,7 @@ export function orderUnifiedDiscussionEntries(
   const byIdentity = new Map(
     entries
       .map((entry) => [getUnifiedEntryIdentity(entry), entry] as const)
-      .filter(
-        (pair): pair is readonly [string, Comment] => Boolean(pair[0]),
-      ),
+      .filter((pair): pair is readonly [string, Comment] => Boolean(pair[0])),
   );
   const hydratedIdentities = new Set(items.map(getUnifiedDiscussionIdentity));
   const ordered = items

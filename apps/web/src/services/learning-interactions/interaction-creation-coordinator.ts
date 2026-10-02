@@ -224,9 +224,10 @@ export class InteractionCreationCoordinator {
     return record;
   }
 
-  getActiveNoteRecords(
-    query?: { courseId?: string; lessonId?: string },
-  ): NoteCreationRecord[] {
+  getActiveNoteRecords(query?: {
+    courseId?: string;
+    lessonId?: string;
+  }): NoteCreationRecord[] {
     return [...this.noteRecords.values()]
       .filter(
         (record) =>
@@ -394,7 +395,11 @@ export class InteractionCreationCoordinator {
             (record.context.courseId === context.courseId &&
               record.context.lessonId === context.lessonId)),
       )
-      .sort((left, right) => left.optimisticThread.createdAt.localeCompare(right.optimisticThread.createdAt));
+      .sort((left, right) =>
+        left.optimisticThread.createdAt.localeCompare(
+          right.optimisticThread.createdAt,
+        ),
+      );
   }
 
   consumeConfirmedThreadCreationsObservedByUnified(
@@ -654,7 +659,7 @@ export class InteractionCreationCoordinator {
   }
 
   private createDiscardedReplyRecord(
-    currentUser: ReturnType<typeof authStore.getState>['user'],
+    currentUser: ReturnType<typeof authStore.getState>["user"],
     parentClientId: string,
     parentServerId: string | undefined,
     payload: CreateLearningReplyRequest,

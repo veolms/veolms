@@ -236,7 +236,8 @@ export function PersistentLearningPlayerHost({
     const sections = player.curriculumSections ?? EMPTY_CURRICULUM_SECTIONS;
     return sections.flatMap(({ lessons }) => lessons.map(([id]) => id));
   }, [player.curriculumSections]);
-  const miniCurriculumSections = player.curriculumSections ?? EMPTY_CURRICULUM_SECTIONS;
+  const miniCurriculumSections =
+    player.curriculumSections ?? EMPTY_CURRICULUM_SECTIONS;
   const miniSelectedLesson = player.selectedLesson ?? 1;
   const {
     sectionIds: miniSectionIds,
@@ -244,7 +245,10 @@ export function PersistentLearningPlayerHost({
     setExpandedSectionIds: setMiniExpandedSectionIds,
     expandAllSections: expandAllMiniSections,
     collapseAllSections: collapseAllMiniSections,
-  } = useMiniPlayerCurriculumSections(miniCurriculumSections, miniSelectedLesson);
+  } = useMiniPlayerCurriculumSections(
+    miniCurriculumSections,
+    miniSelectedLesson,
+  );
   const miniSelectedLessonIndex =
     miniLessonSequence.indexOf(miniSelectedLesson);
   const miniPreviousLessonId =

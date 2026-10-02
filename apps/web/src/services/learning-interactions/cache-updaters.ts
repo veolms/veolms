@@ -93,7 +93,8 @@ function matchesWorkspaceFilters(
       : item.kind === filters.kind;
     if (!matchesKind) return false;
   }
-  if (filters.visibility && item.visibility !== filters.visibility) return false;
+  if (filters.visibility && item.visibility !== filters.visibility)
+    return false;
   if (filters.search) {
     const searchableText = [item.title, item.plainText, item.content]
       .filter(Boolean)
@@ -265,7 +266,9 @@ export function optimisticallyUpdateDiscussionsWorkspaceMembership(
 ): DiscussionsWorkspaceCacheSnapshot {
   const cacheEntries = queryClient
     .getQueryCache()
-    .findAll({ predicate: (query) => isDiscussionsWorkspaceQuery(query.queryKey) })
+    .findAll({
+      predicate: (query) => isDiscussionsWorkspaceQuery(query.queryKey),
+    })
     .flatMap((query) => {
       const data = query.state.data as DiscussionsWorkspaceCache | undefined;
       return data ? [{ queryKey: query.queryKey, data }] : [];
@@ -353,9 +356,9 @@ function updateDiscussionsWorkspaceSource(
   sourceId: string,
   update: (item: WorkspaceDiscussionItem) => WorkspaceDiscussionItem,
 ): void {
-  for (const query of queryClient
-    .getQueryCache()
-    .findAll({ predicate: (entry) => isDiscussionsWorkspaceQuery(entry.queryKey) })) {
+  for (const query of queryClient.getQueryCache().findAll({
+    predicate: (entry) => isDiscussionsWorkspaceQuery(entry.queryKey),
+  })) {
     const old = query.state.data as DiscussionsWorkspaceCache | undefined;
     if (!old) continue;
     let changed = false;
@@ -386,8 +389,9 @@ function setThreadQueriesData(
   queryClient.setQueriesData<ThreadListCache>(filters, (old) =>
     old === undefined
       ? old
-      : mapPaginatedCache<LearningThreadsListResponse>(old, (page) =>
-          updater(page) ?? page,
+      : mapPaginatedCache<LearningThreadsListResponse>(
+          old,
+          (page) => updater(page) ?? page,
         ),
   );
 }
@@ -402,8 +406,9 @@ function setNoteQueriesData(
   queryClient.setQueriesData<NoteListCache>(filters, (old) =>
     old === undefined
       ? old
-      : mapPaginatedCache<LearningNotesCacheResponse>(old, (page) =>
-          updater(page) ?? page,
+      : mapPaginatedCache<LearningNotesCacheResponse>(
+          old,
+          (page) => updater(page) ?? page,
         ),
   );
 }
@@ -565,7 +570,8 @@ export function updateReplyLikeInCache(
         return hasChange ? { ...page, replies: nextReplies } : page;
       };
       return isInfiniteCacheData<LearningRepliesCacheResponse>(old)
-        ? mapPaginatedCache<LearningRepliesCacheResponse>(old, updatePage) ?? old
+        ? (mapPaginatedCache<LearningRepliesCacheResponse>(old, updatePage) ??
+            old)
         : old
           ? updatePage(old)
           : old;

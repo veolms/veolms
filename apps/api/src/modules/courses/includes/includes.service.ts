@@ -95,9 +95,17 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     courseId: string,
     includeId: string,
   ): Promise<CourseIncludeItem> {
-    const row = await includesRepo.findIncludeById(database, includeId, courseId);
+    const row = await includesRepo.findIncludeById(
+      database,
+      includeId,
+      courseId,
+    );
     if (!row) {
-      throw new AppError(404, "INCLUDE_NOT_FOUND", "Course include item not found.");
+      throw new AppError(
+        404,
+        "INCLUDE_NOT_FOUND",
+        "Course include item not found.",
+      );
     }
     return formatInclude(row);
   }
@@ -117,7 +125,11 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
       courseId,
     );
     if (!existing) {
-      throw new AppError(404, "INCLUDE_NOT_FOUND", "Course include item not found.");
+      throw new AppError(
+        404,
+        "INCLUDE_NOT_FOUND",
+        "Course include item not found.",
+      );
     }
 
     const now = new Date();
@@ -150,7 +162,11 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
       courseId,
     );
     if (!existing) {
-      throw new AppError(404, "INCLUDE_NOT_FOUND", "Course include item not found.");
+      throw new AppError(
+        404,
+        "INCLUDE_NOT_FOUND",
+        "Course include item not found.",
+      );
     }
 
     await includesRepo.deleteInclude(database, includeId, courseId);

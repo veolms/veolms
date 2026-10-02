@@ -1,6 +1,5 @@
 import { route, type RouteConfigEntry } from "@veolms/plugin-sdk";
 
-
 export function getPublicRoutes(): RouteConfigEntry[] {
   const publicCoursesRoute =
     process.env["VEO_REACT_ROUTER_BUILD"] === "true"

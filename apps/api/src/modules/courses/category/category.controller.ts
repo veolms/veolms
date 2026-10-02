@@ -11,19 +11,14 @@ export function createCategoryController({
     return await service.listCategories();
   }
 
-  async function createCategory(
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ) {
+  async function createCategory(request: FastifyRequest, reply: FastifyReply) {
     const { name } = request.body as CreateCategoryRequest;
     const category = await service.createCategory(name);
     reply.code(201);
     return category;
   }
 
-  async function deleteCategory(
-    request: FastifyRequest,
-  ) {
+  async function deleteCategory(request: FastifyRequest) {
     const { categoryId } = request.params as { categoryId: string };
     return await service.deleteCategory(categoryId);
   }

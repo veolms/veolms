@@ -154,7 +154,8 @@ const OrderRow = memo(function OrderRow({
 }: OrderRowProps) {
   // Student info
   const student = order.admin?.student;
-  const studentName = student?.name || student?.displayName || "Anonymous Student";
+  const studentName =
+    student?.name || student?.displayName || "Anonymous Student";
   const studentEmail = student?.email || "—";
 
   // Course info
@@ -189,7 +190,10 @@ const OrderRow = memo(function OrderRow({
 
   const handleDownloadInvoice = () => {
     setNotice?.(`Downloading invoice for order ${order.orderNumber}...`);
-    window.open(ordersService.getInvoiceDownloadUrl(order.id, "admin"), "_blank");
+    window.open(
+      ordersService.getInvoiceDownloadUrl(order.id, "admin"),
+      "_blank",
+    );
   };
 
   const handleRowKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -216,7 +220,10 @@ const OrderRow = memo(function OrderRow({
       style={{ transform }}
     >
       {/* Learner Cell */}
-      <div role="cell" className="min-w-0 pr-10 @3xl/orders:pr-0 @3xl/orders:px-5 @3xl/orders:py-3.5">
+      <div
+        role="cell"
+        className="min-w-0 pr-10 @3xl/orders:pr-0 @3xl/orders:px-5 @3xl/orders:py-3.5"
+      >
         <div className="flex items-center gap-3">
           <StudentAvatar
             name={studentName}
@@ -235,14 +242,19 @@ const OrderRow = memo(function OrderRow({
       </div>
 
       {/* Course Cell */}
-      <div role="cell" className="flex items-center justify-between gap-2.5 min-w-0 @3xl/orders:px-4 @3xl/orders:py-3.5">
+      <div
+        role="cell"
+        className="flex items-center justify-between gap-2.5 min-w-0 @3xl/orders:px-4 @3xl/orders:py-3.5"
+      >
         <div className="flex items-center gap-2.5 min-w-0">
           <span
             className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg text-[11px] font-extrabold tracking-tight shadow-xs"
             style={{
               backgroundColor: brand.bgColor,
               color: brand.textColor,
-              border: brand.borderColor ? `1px solid ${brand.borderColor}` : undefined,
+              border: brand.borderColor
+                ? `1px solid ${brand.borderColor}`
+                : undefined,
             }}
           >
             {brand.label}
@@ -270,7 +282,10 @@ const OrderRow = memo(function OrderRow({
       </div>
 
       {/* Coupon Cell (Desktop Grid) */}
-      <div role="cell" className="hidden @3xl/orders:flex px-4 py-3.5 items-center gap-1.5 min-w-0">
+      <div
+        role="cell"
+        className="hidden @3xl/orders:flex px-4 py-3.5 items-center gap-1.5 min-w-0"
+      >
         {coupon ? (
           <>
             <span className="inline-flex items-center rounded-md bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-2 py-0.5 text-[11px] font-bold text-(--accent) border border-[color-mix(in_srgb,var(--accent)_30%,transparent)]">
@@ -288,7 +303,10 @@ const OrderRow = memo(function OrderRow({
       </div>
 
       {/* Date Cell (Desktop Grid) */}
-      <div role="cell" className="hidden @3xl/orders:block px-4 py-3.5 whitespace-nowrap min-w-0">
+      <div
+        role="cell"
+        className="hidden @3xl/orders:block px-4 py-3.5 whitespace-nowrap min-w-0"
+      >
         <span className="block text-xs font-semibold text-(--text)">
           {dateStr}
         </span>
@@ -298,11 +316,16 @@ const OrderRow = memo(function OrderRow({
       </div>
 
       {/* Status Cell (Desktop Grid) */}
-      <div role="cell" className="hidden @3xl/orders:block px-4 py-3.5 whitespace-nowrap">
+      <div
+        role="cell"
+        className="hidden @3xl/orders:block px-4 py-3.5 whitespace-nowrap"
+      >
         <span
           className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.75 text-[11px] font-semibold ${statusStyle.pillClass}`}
         >
-          <span className={`h-1.5 w-1.5 rounded-full ${statusStyle.dotColor}`} />
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${statusStyle.dotColor}`}
+          />
           <span>{statusStyle.label}</span>
         </span>
       </div>
@@ -407,7 +430,6 @@ const OrderRow = memo(function OrderRow({
           />
 
           <MenuDivider />
-
         </CourseActionMenu>
       </div>
 
@@ -427,7 +449,9 @@ const OrderRow = memo(function OrderRow({
         <span
           className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${statusStyle.pillClass}`}
         >
-          <span className={`h-1.5 w-1.5 rounded-full ${statusStyle.dotColor}`} />
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${statusStyle.dotColor}`}
+          />
           <span>{statusStyle.label}</span>
         </span>
       </div>
@@ -454,7 +478,11 @@ export const OrdersTable = memo(function OrdersTable({
   const [openMenuOrderId, setOpenMenuOrderId] = useState<string | null>(null);
   const feedRef = useRef<HTMLDivElement>(null);
   const useWindowScroll = useOrderScrollMode();
-  const scrollMargin = useOrderScrollMargin(feedRef, useWindowScroll, orders.length);
+  const scrollMargin = useOrderScrollMargin(
+    feedRef,
+    useWindowScroll,
+    orders.length,
+  );
 
   // TanStack Virtualizer
   const windowVirtualizer = useWindowVirtualizer({
@@ -468,7 +496,8 @@ export const OrdersTable = memo(function OrdersTable({
 
   const elementVirtualizer = useVirtualizer({
     count: orders.length,
-    getScrollElement: () => getApplicationScrollElement() ?? document.documentElement,
+    getScrollElement: () =>
+      getApplicationScrollElement() ?? document.documentElement,
     estimateSize: getOrderRowEstimate,
     getItemKey: (index) => orders[index]?.id ?? index,
     overscan: ORDER_ROW_OVERSCAN,
@@ -490,7 +519,13 @@ export const OrdersTable = memo(function OrdersTable({
       return;
     }
     fetchNextPage();
-  }, [hasNextPage, isFetchingNextPage, lastVirtualIndex, orders.length, fetchNextPage]);
+  }, [
+    hasNextPage,
+    isFetchingNextPage,
+    lastVirtualIndex,
+    orders.length,
+    fetchNextPage,
+  ]);
 
   // Loading Initial Skeleton
   if (isLoading && orders.length === 0) {
@@ -527,7 +562,9 @@ export const OrdersTable = memo(function OrdersTable({
         >
           <ShoppingBag size={30} weight="duotone" />
         </div>
-        <h3 className="text-base sm:text-lg font-bold tracking-tight text-(--text)">No orders found</h3>
+        <h3 className="text-base sm:text-lg font-bold tracking-tight text-(--text)">
+          No orders found
+        </h3>
         <p className="mt-1.5 text-xs sm:text-sm text-(--muted) max-w-sm mx-auto leading-relaxed">
           {isFiltered
             ? "No orders match the selected filters. Try clearing some criteria to see more results."
@@ -554,11 +591,7 @@ export const OrdersTable = memo(function OrdersTable({
         style={{ boxShadow: "var(--card-shadow)" }}
       >
         <div className="@container/orders overflow-x-auto">
-          <div
-            role="table"
-            aria-label="Orders list"
-            className="min-w-0 w-full"
-          >
+          <div role="table" aria-label="Orders list" className="min-w-0 w-full">
             {/* Table Header */}
             <div
               role="row"
@@ -585,9 +618,17 @@ export const OrdersTable = memo(function OrdersTable({
                 >
                   <span>Date</span>
                   {sortOrder === "desc" ? (
-                    <ArrowDown size={13} weight="bold" className="text-(--accent)" />
+                    <ArrowDown
+                      size={13}
+                      weight="bold"
+                      className="text-(--accent)"
+                    />
                   ) : (
-                    <ArrowUp size={13} weight="bold" className="text-(--accent)" />
+                    <ArrowUp
+                      size={13}
+                      weight="bold"
+                      className="text-(--accent)"
+                    />
                   )}
                 </button>
               </div>
@@ -644,7 +685,11 @@ export const OrdersTable = memo(function OrdersTable({
           aria-label="Loading more orders"
           className="flex items-center justify-center py-6"
         >
-          <CircleNotch size={18} className="animate-spin text-(--accent)" aria-hidden="true" />
+          <CircleNotch
+            size={18}
+            className="animate-spin text-(--accent)"
+            aria-hidden="true"
+          />
         </div>
       )}
     </div>

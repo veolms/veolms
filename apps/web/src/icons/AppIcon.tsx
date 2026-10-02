@@ -100,7 +100,7 @@ export function AppIcon({ name, title, ...props }: AppIconProps) {
             fill={isFill ? "currentColor" : "none"}
             stroke={isFill ? "none" : "currentColor"}
             strokeWidth={
-              isFill ? undefined : ("strokeWidth" in mark ? mark.strokeWidth : 2)
+              isFill ? undefined : "strokeWidth" in mark ? mark.strokeWidth : 2
             }
             strokeLinecap={isFill ? undefined : "round"}
             strokeLinejoin={isFill ? undefined : "round"}

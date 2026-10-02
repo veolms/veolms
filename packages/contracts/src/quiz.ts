@@ -143,9 +143,10 @@ export const createQuizQuestionRequestSchema = z.strictObject({
   explanation: z.string().max(5_000).nullable().optional(),
   options: z.array(quizOptionInputSchema).min(1).max(100),
 });
-export const createQuizWithQuestionsRequestSchema = createQuizRequestSchema.extend({
-  questions: z.array(createQuizQuestionRequestSchema).max(100),
-});
+export const createQuizWithQuestionsRequestSchema =
+  createQuizRequestSchema.extend({
+    questions: z.array(createQuizQuestionRequestSchema).max(100),
+  });
 export const updateQuizQuestionRequestSchema = createQuizQuestionRequestSchema
   .partial()
   .extend({

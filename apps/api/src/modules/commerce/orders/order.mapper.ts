@@ -91,7 +91,10 @@ export function toOrderPaymentMethod(raw: unknown): OrderPaymentMethod | null {
 }
 
 export function toOrderPaymentSummary(
-  payment?: Pick<Selectable<Database["payments"]>, "gateway_provider" | "payment_method">,
+  payment?: Pick<
+    Selectable<Database["payments"]>,
+    "gateway_provider" | "payment_method"
+  >,
 ): OrderPaymentSummary | null {
   if (!payment) return null;
   const method = toOrderPaymentMethod(payment.payment_method);

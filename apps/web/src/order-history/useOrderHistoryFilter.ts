@@ -99,7 +99,10 @@ export function useOrderHistoryFilter(
   } = useOrders(queryParams);
 
   const ordersList = useMemo(
-    () => (data?.pages.flatMap((page) => page.orders) ?? []).map(adaptOrderToOrderHistoryItem),
+    () =>
+      (data?.pages.flatMap((page) => page.orders) ?? []).map(
+        adaptOrderToOrderHistoryItem,
+      ),
     [data?.pages],
   );
 
@@ -107,7 +110,10 @@ export function useOrderHistoryFilter(
     const search = debouncedSearch.toLocaleLowerCase();
     return ordersList.filter((order) => {
       if (statusFilter !== "all" && order.status !== statusFilter) return false;
-      if (paymentMethodFilter !== "all" && order.payment.type !== paymentMethodFilter) {
+      if (
+        paymentMethodFilter !== "all" &&
+        order.payment.type !== paymentMethodFilter
+      ) {
         return false;
       }
       if (!search) return true;

@@ -20,9 +20,7 @@ export interface CreatorGatewayService {
     creatorId: string,
     provider?: PaymentProvider,
   ): Promise<CreatorPaymentConfig | null>;
-  resolveGatewayForCreator(
-    creatorId?: string | null,
-  ): Promise<PaymentGateway>;
+  resolveGatewayForCreator(creatorId?: string | null): Promise<PaymentGateway>;
 }
 
 export function createCreatorGatewayService({

@@ -41,13 +41,21 @@ export async function up(database: Kysely<unknown>): Promise<void> {
         .defaultTo("active")
         .check(sql`status IN ('active', 'hidden', 'deleted')`),
     )
-    .addColumn("is_locked", "boolean", (column) => column.notNull().defaultTo(false))
+    .addColumn("is_locked", "boolean", (column) =>
+      column.notNull().defaultTo(false),
+    )
     .addColumn("accepted_answer_id", "uuid")
     .addColumn("likes_count", "integer", (column) =>
-      column.notNull().defaultTo(0).check(sql`likes_count >= 0`),
+      column
+        .notNull()
+        .defaultTo(0)
+        .check(sql`likes_count >= 0`),
     )
     .addColumn("replies_count", "integer", (column) =>
-      column.notNull().defaultTo(0).check(sql`replies_count >= 0`),
+      column
+        .notNull()
+        .defaultTo(0)
+        .check(sql`replies_count >= 0`),
     )
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
@@ -99,7 +107,9 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("timestamp_seconds", "integer", (column) =>
       column.check(sql`timestamp_seconds IS NULL OR timestamp_seconds >= 0`),
     )
-    .addColumn("is_accepted", "boolean", (column) => column.notNull().defaultTo(false))
+    .addColumn("is_accepted", "boolean", (column) =>
+      column.notNull().defaultTo(false),
+    )
     .addColumn("status", "text", (column) =>
       column
         .notNull()
@@ -107,7 +117,10 @@ export async function up(database: Kysely<unknown>): Promise<void> {
         .check(sql`status IN ('active', 'hidden', 'deleted')`),
     )
     .addColumn("likes_count", "integer", (column) =>
-      column.notNull().defaultTo(0).check(sql`likes_count >= 0`),
+      column
+        .notNull()
+        .defaultTo(0)
+        .check(sql`likes_count >= 0`),
     )
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
@@ -295,7 +308,9 @@ export async function up(database: Kysely<unknown>): Promise<void> {
       column.notNull().references("users.id").onDelete("cascade"),
     )
     .addColumn("target_type", "text", (column) =>
-      column.check(sql`target_type IS NULL OR target_type IN ('thread', 'reply')`),
+      column.check(
+        sql`target_type IS NULL OR target_type IN ('thread', 'reply')`,
+      ),
     )
     .addColumn("target_id", "uuid")
     .addColumn("kind", "text", (column) =>
@@ -404,7 +419,9 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     )
     .addColumn("reason", "text", (column) => column.notNull())
     .addColumn("expires_at", "timestamptz")
-    .addColumn("is_active", "boolean", (column) => column.notNull().defaultTo(true))
+    .addColumn("is_active", "boolean", (column) =>
+      column.notNull().defaultTo(true),
+    )
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )

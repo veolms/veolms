@@ -43,8 +43,13 @@ const paymentRoutes: RoutePlugin = async (app, options) => {
           "Verifies the payment signature returned by Razorpay after checkout, marks the order as paid, and grants course access.",
         body: verifyPaymentRequestSchema,
         response: {
-          200: jsonResponse("Payment verified and order fulfilled", verifyPaymentResponseSchema),
-          400: errorResponse("Signature invalid, amount mismatch, or order expired"),
+          200: jsonResponse(
+            "Payment verified and order fulfilled",
+            verifyPaymentResponseSchema,
+          ),
+          400: errorResponse(
+            "Signature invalid, amount mismatch, or order expired",
+          ),
           401: errorResponse("Unauthorized"),
           404: errorResponse("Order or payment not found"),
           409: errorResponse("Payment already processed"),
@@ -63,11 +68,15 @@ const paymentRoutes: RoutePlugin = async (app, options) => {
         operationId: "submitManualPayment",
         tags: ["Commerce - Manual Payments"],
         summary: "Submit offline UPI / bank transfer proof",
-        description: "Submits transaction reference / UTR for offline payment verification.",
+        description:
+          "Submits transaction reference / UTR for offline payment verification.",
         params: z.object({ orderId: z.uuid() }),
         body: submitManualPaymentRequestSchema,
         response: {
-          201: jsonResponse("Manual payment submitted", manualPaymentRequestSchema),
+          201: jsonResponse(
+            "Manual payment submitted",
+            manualPaymentRequestSchema,
+          ),
           400: errorResponse("Invalid order or status"),
           401: errorResponse("Unauthorized"),
           404: errorResponse("Order not found"),
@@ -136,7 +145,10 @@ const paymentRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ requestId: z.uuid() }),
         body: verifyManualPaymentRequestSchema,
         response: {
-          200: jsonResponse("Manual payment reviewed", manualPaymentRequestSchema),
+          200: jsonResponse(
+            "Manual payment reviewed",
+            manualPaymentRequestSchema,
+          ),
           400: errorResponse("Invalid request or already resolved"),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),

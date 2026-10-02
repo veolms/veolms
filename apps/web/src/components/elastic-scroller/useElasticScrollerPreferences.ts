@@ -39,10 +39,7 @@ export function useElasticScrollerPreferences(): ElasticScrollPreferences {
     };
 
     syncPreferences();
-    window.addEventListener(
-      ELASTIC_SCROLL_PREFERENCES_EVENT,
-      syncPreferences,
-    );
+    window.addEventListener(ELASTIC_SCROLL_PREFERENCES_EVENT, syncPreferences);
     window.addEventListener("storage", handleStorage);
     return () => {
       window.removeEventListener(

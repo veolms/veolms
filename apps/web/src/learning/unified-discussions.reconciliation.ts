@@ -74,9 +74,7 @@ function remoteIsNewer(
  * entity so optimistic creation reconciliation does not change its client
  * identity.
  */
-export function reconcileUnifiedEntity<
-  T extends ReconciliationEntity,
->(
+export function reconcileUnifiedEntity<T extends ReconciliationEntity>(
   remote: T,
   existing: T | undefined,
   previousRemote?: Readonly<Record<string, unknown>>,

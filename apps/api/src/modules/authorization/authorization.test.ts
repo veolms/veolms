@@ -61,7 +61,10 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
         }
 
         // 3. Explicit deny policy override
-        if (userId === USER_DENIED_CURRICULUM && permission === "course.curriculum.update") {
+        if (
+          userId === USER_DENIED_CURRICULUM &&
+          permission === "course.curriculum.update"
+        ) {
           return {
             allowed: false,
             code: "PERMISSION_DENIED" as const,
@@ -72,7 +75,11 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
 
         // 4. Admin scope (all permissions across platform & all courses)
         if (userId === USER_ADMIN) {
-          return { allowed: true, code: "ALLOWED" as const, scope: { courseId } };
+          return {
+            allowed: true,
+            code: "ALLOWED" as const,
+            scope: { courseId },
+          };
         }
 
         // 5. Course Manager scope (Course 1 only)
@@ -102,7 +109,11 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
               "certificate.issue",
             ];
             if (courseManagerPerms.includes(permission)) {
-              return { allowed: true, code: "ALLOWED" as const, scope: { courseId } };
+              return {
+                allowed: true,
+                code: "ALLOWED" as const,
+                scope: { courseId },
+              };
             }
           }
           return {
@@ -122,7 +133,11 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
               permission === "course.read" ||
               permission === "lesson.read")
           ) {
-            return { allowed: true, code: "ALLOWED" as const, scope: { courseId } };
+            return {
+              allowed: true,
+              code: "ALLOWED" as const,
+              scope: { courseId },
+            };
           }
           return {
             allowed: false,
@@ -172,7 +187,10 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
             "course.publish",
             "quiz.create",
           ];
-        } else if (userId === USER_THUMBNAIL_EDITOR_1 && courseId === COURSE_1) {
+        } else if (
+          userId === USER_THUMBNAIL_EDITOR_1 &&
+          courseId === COURSE_1
+        ) {
           perms = [
             "course.read",
             "course.thumbnail.update",
@@ -490,7 +508,11 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
     });
 
     it("blocks request with 403 FEATURE_DISABLED when feature is disabled on the platform", async () => {
-      const handler = guard.authorize("certificate.issue", "course", "certificates");
+      const handler = guard.authorize(
+        "certificate.issue",
+        "course",
+        "certificates",
+      );
       let statusCode = 200;
       let sentBody: any = null;
 
@@ -515,4 +537,3 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
     });
   });
 });
-
