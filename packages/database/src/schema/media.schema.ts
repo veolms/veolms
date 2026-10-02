@@ -1,5 +1,6 @@
-import type { Generated } from "kysely";
+import type { Generated, JSONColumnType } from "kysely";
 import type { Json } from "./json.schema.ts";
+import type { VideoJobStatus, VideoQualityLevel } from "@veolms/contracts";
 
 export type MediaAssetStatus =
   | "uploading"
@@ -45,6 +46,33 @@ export interface MediaAssetTable {
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
+
+export interface VideoJobTable {
+  id: string;
+  video_id: string;
+  status: VideoJobStatus;
+  video_key: string;
+  output_prefix: string;
+  video_size: number;
+  qualities: VideoQualityLevel[];
+  worker_id: string | null;
+  progress_percent: Generated<number>;
+  attempts: Generated<number>;
+  max_attempts: Generated<number>;
+  error_message: string | null;
+  original_file_key: string | null;
+  video_metadata: JSONColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | string,
+    Record<string, unknown> | string
+  > | null;
+  created_at: Generated<Date>;
+  started_at: Date | null;
+  completed_at: Date | null;
+  failed_at: Date | null;
+  updated_at: Generated<Date>;
+}
+
 
 export type ImageJobStatus = "queued" | "processing" | "completed" | "failed";
 

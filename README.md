@@ -2,7 +2,7 @@
 
 VeoLMS is a lightweight learning-management platform foundation. This repository currently proves one public vertical slice: PostgreSQL to Kysely to Fastify to a statically generated React Router course catalogue.
 
-It intentionally does not implement authentication, enrolment, payments, media processing, fleet orchestration, dashboards, monitoring, or deployment infrastructure. The public Astro website and documentation website belong in a separate repository.
+It intentionally does not implement authentication, enrolment, payments, media processing,  dashboards, monitoring, or deployment infrastructure. The public Astro website and documentation website belong in a separate repository.
 
 ## Stack
 
@@ -14,8 +14,6 @@ Node.js 24, TypeScript 7, pnpm, Turborepo, Fastify 5, PostgreSQL 18, Kysely, Zod
 apps/
   api/             Fastify public API
   web/             React Router static frontend
-  fleet-manager/   Future service shell only
-  media-worker/    Future worker shell only
 packages/
   config/          Shared environment validation
   contracts/       Public course contracts

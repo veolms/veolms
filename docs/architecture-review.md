@@ -27,8 +27,6 @@ veolms-code/
 ├── apps/
 │   ├── api/                     # Fastify Backend API
 │   ├── web/                     # React Frontend Web App
-│   ├── fleet-manager/           # Infrastructure Manager (Future shell)
-│   └── media-worker/            # Media Transcoding Worker (Future shell)
 ├── packages/
 │   ├── config/                  # Validated environment schemas (@veolms/config)
 │   ├── contracts/               # Shared Zod API request/response contracts (@veolms/contracts)

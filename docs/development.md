@@ -80,8 +80,7 @@ The Web application currently runs independently of the API and database. Start 
 pnpm dev:web
 ```
 
-It is available at `http://localhost:3000`. Set `WEB_PORT` in `.env` to override the frontend port. Use `pnpm dev` only when developing the Web and API applications together; the fleet manager and media worker remain inactive shells.
-
+It is available at `http://localhost:3000`. Set `WEB_PORT` in `.env` to override the frontend port. Use `pnpm dev` only when developing the Web and API applications together;
 API logs are formatted for readability in development by default. Set `API_DEV_PRETTY_LOGS=false` in `.env` to keep the original JSON log format. This setting is development-only; production logs always remain structured JSON.
 
 ## API documentation

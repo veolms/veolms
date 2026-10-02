@@ -4,13 +4,13 @@ import type { Kysely } from "kysely";
 import type {
   Database,
   MediaAssetStatus,
-  VideoQualityLevel,
 } from "@veolms/database";
 import type {
   MediaImageVariantManifest,
   PresignMediaRequest,
   VideoPlaybackBootstrap,
   VideoPlaybackToken,
+  VideoQualityLevel,
 } from "@veolms/contracts";
 import { AppError } from "../../lib/errors.ts";
 import type { AppServices } from "../../services/index.ts";
@@ -802,10 +802,6 @@ export function createMediaService({
       );
     }
 
-    const workerProgress = job.worker_id
-      ? await mediaRepo.findWorkerProgressByWorkerId(database, job.worker_id)
-      : undefined;
-
     if (job.status === "completed" && media.status !== "ready") {
       await mediaRepo.updateMediaAssetStatus(database, videoId, "ready");
     } else if (job.status === "failed" && media.status !== "failed") {
@@ -831,7 +827,7 @@ export function createMediaService({
         Math.min(
           100,
           Math.floor(
-            Number(workerProgress?.progress_percent ?? job.progress_percent),
+            Number(job.progress_percent),
           ),
         ),
       ),

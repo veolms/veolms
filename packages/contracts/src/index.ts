@@ -11,7 +11,6 @@ export * from "./learning-progress.ts";
 export * from "./learning-recent-updates.ts";
 export * from "./health.ts";
 export * from "./error.ts";
-export * from "./fleet.ts";
 export * from "./quiz.ts";
 export * from "./permissions.ts";
 export * from "./student.ts";

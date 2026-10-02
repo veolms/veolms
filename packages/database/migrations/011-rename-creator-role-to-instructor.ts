@@ -2,7 +2,7 @@ import { sql, type Kysely } from "kysely";
 
 /**
  * Keeps existing databases aligned with the three supported roles. This
- * migration follows the notification, fleet, and hardware migrations. The
+ * migration follows the notification,, and hardware migrations. The
  * instructor retains the creator role's UUID, so user-role and permission
  * assignments remain valid while the role name changes.
  */

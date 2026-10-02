@@ -331,16 +331,6 @@ export async function findPlaybackMediaContext(
     .executeTakeFirst();
 }
 
-export async function findWorkerProgressByWorkerId(
-  database: Kysely<Database>,
-  workerId: string,
-) {
-  return await database
-    .selectFrom("worker_monitoring")
-    .select("progress_percent")
-    .where("worker_id", "=", workerId)
-    .executeTakeFirst();
-}
 
 export async function findVideoOutputsByVideoIds(
   database: Kysely<Database>,

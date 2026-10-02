@@ -377,9 +377,7 @@ Examples: unsupported codec, corrupt source, invalid size/type, duration/quality
 
 Behavior: show a clear user-safe reason, offer **Choose another video**, and keep the current ready video if this was a replacement. Do not repeatedly auto-retry a permanent source failure.
 
-### Worker loss or lease expiry
 
-The fleet manager must mark stale jobs recoverable after lease expiry, prevent two workers from processing the same attempt, and emit a status event when ownership changes. A user should see **Processing resumed** or **Retrying attempt 2 of 3**, not an unexplained reset to zero.
 
 ### Browser refresh, tab close, and offline mode
 
@@ -486,12 +484,6 @@ Support tooling should be able to display the state timeline and manually retry 
 - Output verification and media status synchronization.
 - Reference-aware cleanup does not delete assets still used by another lesson/course field.
 
-### Worker/fleet tests
-
-- Progress monotonicity and stage weighting.
-- Compression, transcode, finalization, and verification failures.
-- Worker lease expiry, retry attempt limits, cancellation, duplicate claim, and idempotent completion.
-- Rendition status for applicable and not-applicable qualities.
 
 ### Browser end-to-end matrix
 

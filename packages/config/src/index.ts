@@ -455,18 +455,3 @@ export function loadWebConfig(environment: Record<string, string | undefined>) {
     VITE_CDN_URL: environment.VITE_CDN_URL || environment.CDN_URL,
   });
 }
-
-export {
-  resolveProviderName,
-  fleetManagerConfigSchema,
-  loadFleetManagerConfig,
-  type FleetManagerConfig,
-} from "./fleet-manager.ts";
-
-export {
-  resolveDefaultUploadConcurrency,
-  mediaWorkerConfigSchema,
-  loadMediaWorkerConfig,
-  type DefaultUploadConcurrency,
-  type MediaWorkerConfig,
-} from "./media-worker.ts";
