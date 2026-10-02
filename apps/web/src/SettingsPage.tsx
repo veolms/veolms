@@ -34,7 +34,6 @@ import type {
   SidebarPreferences,
 } from "./settings/settingsPreferences";
 import type { NavigateTo } from "./routing/navigation";
-import type { NavigationItemWithMetadata } from "./shell/navigation";
 import {
   normalizeSettingsTab,
   readSettingsTab,
@@ -123,9 +122,6 @@ export interface SettingsPageProps {
   onSidebarPreferencesChange: (preferences: SidebarPreferences) => void;
   sidebarMode: SidebarMode;
   onSidebarModeChange: (mode: SidebarMode) => void;
-  navigationItems?: readonly NavigationItemWithMetadata[];
-  navigationVisibleItems?: readonly string[];
-  onNavigationVisibilityChange?: (visibleItems: string[]) => void;
   userRoles?: readonly string[] | null;
 }
 
@@ -164,11 +160,6 @@ const SettingsTabContent = memo(function SettingsTabContent({
           academyTheme={pageProps.academyTheme}
           sidebarMode={pageProps.sidebarMode}
           onSidebarModeChange={pageProps.onSidebarModeChange}
-          navigationItems={pageProps.navigationItems}
-          role={pageProps.role}
-          userRoles={pageProps.userRoles}
-          navigationVisibleItems={pageProps.navigationVisibleItems}
-          onNavigationVisibilityChange={pageProps.onNavigationVisibilityChange}
         />
       );
     case "learning":
@@ -208,9 +199,6 @@ export function SettingsPage({
   onSidebarPreferencesChange,
   sidebarMode,
   onSidebarModeChange,
-  navigationItems,
-  navigationVisibleItems,
-  onNavigationVisibilityChange,
 }: SettingsPageProps) {
   const activeTab = normalizeSettingsTab(tab);
   const storeIsAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -241,19 +229,13 @@ export function SettingsPage({
       onSidebarPreferencesChange,
       sidebarMode,
       onSidebarModeChange,
-      navigationItems,
-      navigationVisibleItems,
-      onNavigationVisibilityChange,
     }),
     [
       academyTheme,
       canEditAuthenticatedSettings,
-      navigationItems,
-      navigationVisibleItems,
       onAcademyThemeChange,
       onExitSettings,
       onNavigatePage,
-      onNavigationVisibilityChange,
       onPageTabColorsChange,
       onProfileSaved,
       onSidebarModeChange,

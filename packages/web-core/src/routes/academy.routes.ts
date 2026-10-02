@@ -22,6 +22,18 @@ export function getAcademyRoutes(): RouteConfigEntry {
       id: "course-create-tab",
       caseSensitive: true,
     }),
+    route("courses/enrolled", marker, {
+      id: "courses-enrolled",
+      caseSensitive: true,
+    }),
+    route("courses/not-enrolled", marker, {
+      id: "courses-not-enrolled",
+      caseSensitive: true,
+    }),
+    route("courses/wishlist", marker, {
+      id: "courses-wishlist",
+      caseSensitive: true,
+    }),
     route("courses/:courseId/edit/:editTab", marker, {
       id: "course-edit",
       caseSensitive: true,
@@ -74,8 +86,8 @@ export function getAcademyRoutes(): RouteConfigEntry {
     route("analytics", marker, { id: "analytics", caseSensitive: true }),
     route("orders", marker, { id: "orders", caseSensitive: true }),
     route("messages", marker, { id: "messages", caseSensitive: true }),
-    route("order-history", marker, {
-      id: "order-history",
+    route("purchase-history", marker, {
+      id: "purchase-history",
       caseSensitive: true,
     }),
     route("notifications", marker, {
@@ -104,6 +116,8 @@ export function getAcademyRoutes(): RouteConfigEntry {
       id: "learning",
       caseSensitive: true,
     }),
+    // Registered after static catalogue filter routes so `/courses/enrolled` et
+    // al. are not treated as legacy course slugs when the router rank ties.
     route("courses/:courseSlug/:lectureSlug?", "routes/legacy-learning.tsx", {
       id: "legacy-learning",
       caseSensitive: true,

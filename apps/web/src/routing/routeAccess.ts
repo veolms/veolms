@@ -4,7 +4,7 @@ import { normalizeNavigationPath } from "./routeDescriptors";
 import { CREATOR_ROLES, normalizeRoles } from "../shell/workspaceRole";
 import { isCourseEditorPath } from "../courses/courseEditorRouting";
 
-export const APP_HOME_PATH = "/courses";
+export const APP_HOME_PATH = "/";
 export const LOGIN_PATH = "/login";
 export const MFA_CHALLENGE_PATH = "/mfa-setup?mfa=required";
 
@@ -72,18 +72,18 @@ export function shouldRedirectFromCourseAuthorPath(
 }
 
 export function resolveCourseAuthorRouteFallback(pathname: string): string {
-  return normalizeAppPath(pathname) === "/dashboard" ? APP_HOME_PATH : "/";
+  const path = normalizeAppPath(pathname);
+  return path === "/dashboard" || path === "/" ? "/courses" : "/";
 }
 
 export function isCoursesPublicPath(pathname: string): boolean {
   const path = normalizeAppPath(pathname);
-  if (path === "/courses") {
-    return true;
-  }
-  if (path === "/explore-courses") {
-    return true;
-  }
-  return /^\/explore-courses\/[^/]+$/.test(path);
+  return (
+    path === "/courses" ||
+    path === "/courses/enrolled" ||
+    path === "/courses/not-enrolled" ||
+    path === "/courses/wishlist"
+  );
 }
 
 export function isLearningPath(pathname: string): boolean {
@@ -181,7 +181,8 @@ export function shouldBlockAcademyRender(
 export function resolveAcademyLandingDestination(
   access: SessionAccess,
 ): string {
-  return access.needsMfaChallenge ? MFA_CHALLENGE_PATH : APP_HOME_PATH;
+  if (access.needsMfaChallenge) return MFA_CHALLENGE_PATH;
+  return APP_HOME_PATH;
 }
 
 export function resolveSessionAccess(input: {

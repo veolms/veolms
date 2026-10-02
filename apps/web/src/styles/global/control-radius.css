@@ -37,7 +37,7 @@
     .lesson-tool-tab
   ):not(.player-menu-row):not(.player-text-control):not(
     .settings-tabs button
-  ):not(.settings-tabs [role="tab"]) {
+  ):not(.settings-tabs [role="tab"]):not(.profile-menu__item) {
   border-radius: var(--control-radius-structured) !important;
 }
 

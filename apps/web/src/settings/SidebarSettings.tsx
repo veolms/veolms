@@ -60,13 +60,6 @@ import type {
   SidebarMode,
   SidebarPreferences,
 } from "./settingsPreferences";
-import {
-  getDefaultNavigationVisibility,
-  getPublicNavigationItems,
-} from "../shell/navigation";
-import type { NavigationItemWithMetadata } from "../shell/navigation";
-import type { ProfileRole } from "./profileTypes";
-import { getRoleDisplayName } from "../shell/workspaceRole";
 
 // Keep Settings in lockstep with the sidebar and mobile palette menus. This is
 // deliberately the shared registry rather than a display-only subset.
@@ -202,11 +195,6 @@ export interface SidebarSettingsProps {
   academyTheme: AcademyTheme["id"];
   sidebarMode: SidebarMode;
   onSidebarModeChange?: (mode: SidebarMode) => void;
-  role?: ProfileRole;
-  userRoles?: readonly string[] | null;
-  navigationItems?: readonly NavigationItemWithMetadata[];
-  navigationVisibleItems?: readonly string[];
-  onNavigationVisibilityChange?: (visibleItems: string[]) => void;
 }
 
 export function SidebarSettings({
@@ -215,11 +203,6 @@ export function SidebarSettings({
   academyTheme,
   sidebarMode,
   onSidebarModeChange,
-  role = "student",
-  userRoles,
-  navigationItems: providedNavigationItems,
-  navigationVisibleItems,
-  onNavigationVisibilityChange,
 }: SidebarSettingsProps) {
   const preferences = sidebarPreferences || {};
   const iconStyle = preferences.iconStyle || "monochrome";
@@ -258,10 +241,6 @@ export function SidebarSettings({
   const glowBlur = normalizeSidebarGlowBlur(preferences.glowBlur);
   const glowIntensity = normalizeSidebarGlowIntensity(
     preferences.glowIntensity,
-  );
-  const navigationItems = providedNavigationItems ?? getPublicNavigationItems();
-  const visibleNavigationItems = new Set(
-    navigationVisibleItems ?? getDefaultNavigationVisibility(navigationItems),
   );
   const glowIsDefault =
     glowPalette === SIDEBAR_GLOW_DEFAULT &&
@@ -318,16 +297,6 @@ export function SidebarSettings({
       return;
     }
     update({ dockItems: [...dockItems, item] });
-  };
-
-  const toggleNavigationItem = (label: string, selected: boolean) => {
-    const current = navigationItems
-      .map(([currentLabel]) => currentLabel)
-      .filter((currentLabel) => visibleNavigationItems.has(currentLabel));
-    const next = selected
-      ? current.filter((currentLabel) => currentLabel !== label)
-      : [...current, label];
-    onNavigationVisibilityChange?.(next);
   };
 
   const reorderDockItem = (
@@ -510,58 +479,12 @@ export function SidebarSettings({
         <div>
           <h2>Sidebar menus</h2>
           <p>
-            Customize the middle navigation area, its icons, labels, and layout.
+            Menu items follow your workspace role and stay in a fixed order.
           </p>
         </div>
       </div>
 
       <>
-        <section className="settings-section settings-sidebar-navigation-section">
-          <div className="settings-section__heading-row">
-            <div>
-              <h2>Menu items</h2>
-              <p>
-                Choose which menu items appear in the sidebar. More items can be
-                added here later.
-              </p>
-            </div>
-            <output className="settings-section__count" aria-live="polite">
-              {
-                navigationItems.filter(([label]) =>
-                  visibleNavigationItems.has(label),
-                ).length
-              }{" "}
-              visible
-            </output>
-          </div>
-          <div
-            className="settings-row-list"
-            aria-label={`${getRoleDisplayName(role, userRoles)} sidebar menu items`}
-          >
-            {navigationItems.map(([label, Icon]) => {
-              const selected = visibleNavigationItems.has(label);
-              return (
-                <SettingRow
-                  key={label}
-                  icon={Icon}
-                  label={label}
-                  note={
-                    label === "Settings"
-                      ? "Show Settings in the menu when it is not placed in the dock"
-                      : `Show ${label} in the sidebar menu`
-                  }
-                >
-                  <SettingsToggle
-                    checked={selected}
-                    onChange={() => toggleNavigationItem(label, selected)}
-                    label={`Show ${label} in sidebar menu`}
-                  />
-                </SettingRow>
-              );
-            })}
-          </div>
-        </section>
-
         <section className="settings-section">
           <div className="settings-section__heading-row">
             <div>

@@ -32,12 +32,24 @@ const SIDEBAR_MAX_WIDTH_LIMIT = 520;
 export const SIDEBAR_DEFAULT_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH_DEFAULT_VERSION = "300px-v1";
 const SIDEBAR_ICON_DEFAULT_VERSION = "monochrome-theme-v1";
-const SIDEBAR_DOCK_DEFAULT_VERSION = "three-controls-v2";
+const SIDEBAR_DOCK_DEFAULT_VERSION = "three-controls-v3";
 const LEGACY_SIDEBAR_DOCK_DEFAULT_ITEMS = [
   "appearance",
   "theme",
   "reading-mode",
   "fullscreen",
+];
+const PREVIOUS_SIDEBAR_DOCK_DEFAULT_ITEMS = [
+  "appearance",
+  "reading-mode",
+  "fullscreen",
+];
+const PREVIOUS_SIDEBAR_DOCK_DEFAULT_ORDER = [
+  "appearance",
+  "theme",
+  "reading-mode",
+  "fullscreen",
+  "settings",
 ];
 const LEGACY_SIDEBAR_DOCK_DEFAULT_ORDER = [
   "appearance",
@@ -289,9 +301,18 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
         JSON.stringify(LEGACY_SIDEBAR_DOCK_DEFAULT_ITEMS) &&
       JSON.stringify(storedPreferences.dockOrder) ===
         JSON.stringify(LEGACY_SIDEBAR_DOCK_DEFAULT_ORDER);
+    const usesKnownPreviousDockDefault =
+      localStorage.getItem("veolms-sidebar-dock-default-version") ===
+        "three-controls-v2" &&
+      JSON.stringify(storedPreferences.dockItems) ===
+        JSON.stringify(PREVIOUS_SIDEBAR_DOCK_DEFAULT_ITEMS) &&
+      JSON.stringify(storedPreferences.dockOrder) ===
+        JSON.stringify(PREVIOUS_SIDEBAR_DOCK_DEFAULT_ORDER);
     const needsDockDefaultMigration =
       !hasCurrentDockDefault &&
-      (storedPreferences.dockItems === undefined || usesKnownLegacyDockDefault);
+      (storedPreferences.dockItems === undefined ||
+        usesKnownLegacyDockDefault ||
+        usesKnownPreviousDockDefault);
     preferences.dockItems =
       needsDockDefaultMigration && storedPreferences.showThemeIcon !== false
         ? [...SIDEBAR_DOCK_DEFAULT_ITEMS]

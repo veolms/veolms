@@ -138,9 +138,7 @@ export function Layout({ children }: LayoutProps) {
     pathname === "/login" ||
     pathname === "/mfa-setup" ||
     pathname === "/register" ||
-    pathname === "/auth/callback" ||
-    pathname === "/explore-courses" ||
-    pathname.startsWith("/explore-courses/");
+    pathname === "/auth/callback";
   const shouldPreloadAcademyRoute = import.meta.env.DEV && !isPublicRoute;
 
   // The preference scripts run before hydration so they can prevent visual

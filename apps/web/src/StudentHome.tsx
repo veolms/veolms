@@ -669,8 +669,9 @@ export function StudentHome({
                 className="primary-learning-action"
                 onClick={() =>
                   onNavigatePage(
-                    "/explore-courses/" +
-                      encodeURIComponent(discoveryCourse.slug),
+                    "/courses/" +
+                      encodeURIComponent(discoveryCourse.slug) +
+                      "/overview",
                   )
                 }
               >

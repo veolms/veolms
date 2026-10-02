@@ -26,8 +26,8 @@ import {
   type Course,
   type CourseOpenOptions,
 } from "../courses/catalogue";
+import { getStudentCatalogueEnrollmentFilterFromPath } from "../courses/catalogueRoutes";
 import { useCurrentUser, useSignOut } from "../services/auth";
-import { useSidenav } from "../services/navigation";
 import { useAuthStore } from "../store/auth.store";
 import type { LearningCourse } from "../StudentPages";
 import {
@@ -91,16 +91,17 @@ import type { NavigateTo, NavigationOptions } from "../routing/navigation";
 import { AcademyRouteGuard } from "../routing/RouteGuards";
 import { buildLoginPath } from "../routing/routeAccess";
 import {
-  getDefaultNavigationOrder,
-  getDefaultNavigationVisibility,
-  getInitialNavigationOrder,
-  getInitialNavigationVisibility,
-  getVisibleOrderedNavigation,
   getNavigationDestination,
-  resolveShellNavigation,
+  getRoleNavigationItems,
   type NavigationItemWithMetadata,
 } from "../shell/navigation";
-import { getWorkspaceRoleStorageKey } from "../shell/workspaceRole";
+import {
+  getUserRoles,
+  getWorkspaceRoleStorageKey,
+  hasAdminRole,
+  isStaffRole,
+  resolveWorkspaceRole,
+} from "../shell/workspaceRole";
 import {
   readApplicationScrollPosition,
   scrollApplicationTo,
@@ -180,7 +181,7 @@ const resolveLearningBackgroundSurface = (
     }
     if (pathname === "/" || pathname === "/home") return { page: "home" };
     if (pathname === "/wishlist") {
-      return { page: "courses", section: "Wishlist" };
+      return { page: "courses", section: "Courses" };
     }
     if (pathname === "/settings" || pathname.startsWith("/settings/")) {
       return {
@@ -326,11 +327,6 @@ export default function AcademyLayout() {
   } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
-  const { data: sidenavData } = useSidenav();
-  const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
-    () => resolveShellNavigation(sidenavData?.menus),
-    [sidenavData?.menus],
-  );
 
   useLayoutEffect(() => {
     locationPathRef.current = currentLocationPath;
@@ -342,12 +338,14 @@ export default function AcademyLayout() {
   const { signOut } = useSignOut();
 
   useLayoutEffect(() => {
-    if (normalizeNavigationPath(location.pathname) !== "/") return;
+    const pathname = normalizeNavigationPath(location.pathname);
+    if (pathname !== "/home" && pathname !== "/dashboard") return;
+    void navigate(`/${location.search}${location.hash}`, { replace: true });
+  }, [location.hash, location.pathname, location.search, navigate]);
 
-    // The root document already renders the catalogue. Replace only the
-    // client-side URL so navigating to /courses does not request the document
-    // again or briefly mount the future home page.
-    void navigate(`/courses${location.search}${location.hash}`, {
+  useLayoutEffect(() => {
+    if (normalizeNavigationPath(location.pathname) !== "/wishlist") return;
+    void navigate(`/courses/wishlist${location.search}${location.hash}`, {
       replace: true,
     });
   }, [location.hash, location.pathname, location.search, navigate]);
@@ -363,12 +361,7 @@ export default function AcademyLayout() {
       });
       return;
     }
-    const destination =
-      pathname === "/my-learning" ||
-      pathname === "/my-courses" ||
-      pathname === "/explore-courses"
-        ? "/courses"
-        : null;
+    const destination = pathname === "/my-learning" ? "/courses" : null;
     if (destination)
       void navigate(`${destination}${location.search}`, { replace: true });
   }, [location.pathname, location.search, navigate, signOut]);
@@ -580,26 +573,22 @@ export default function AcademyLayout() {
           : null;
       if (cycleDirection === null && numberIndex === null) return;
 
-      const navigationRole =
-        localStorage.getItem(getWorkspaceRoleStorageKey(activeUser?.id)) ||
-        "student";
-      const orderedNavigation = getVisibleOrderedNavigation(
-        isPublicNavigation
-          ? getDefaultNavigationOrder(navigationItems)
-          : getInitialNavigationOrder(
-              navigationRole,
-              navigationItems,
-              activeUser?.id,
-            ),
-        isPublicNavigation
-          ? getDefaultNavigationVisibility(navigationItems)
-          : getInitialNavigationVisibility(
-              navigationRole,
-              navigationItems,
-              activeUser?.id,
-            ),
-        navigationItems,
-      ).filter(
+      const storedWorkspaceRole = localStorage.getItem(
+        getWorkspaceRoleStorageKey(activeUser?.id),
+      );
+      const userRoles = getUserRoles(activeUser);
+      const rolePreference =
+        storedWorkspaceRole === "creator" || storedWorkspaceRole === "student"
+          ? storedWorkspaceRole
+          : isStaffRole(userRoles)
+            ? "creator"
+            : "student";
+      const navigationRole = resolveWorkspaceRole(userRoles, rolePreference);
+      const navigationItems = getRoleNavigationItems(
+        navigationRole,
+        hasAdminRole(userRoles),
+      );
+      const orderedNavigation = navigationItems.filter(
         ([label]) =>
           label !== "Settings" ||
           !normalizeSidebarDockItems(
@@ -674,7 +663,7 @@ export default function AcademyLayout() {
         window.clearTimeout(numberNavigationTimerRef.current);
       }
     };
-  }, [activeUser, isPublicNavigation, navigationItems]);
+  }, [activeUser]);
 
   const openCourse = useCallback(
     (course: Course | LearningCourse, options?: CourseOpenOptions) => {
@@ -1338,9 +1327,10 @@ export default function AcademyLayout() {
   return (
     <AcademyRouteGuard>
       <CoursesPage
-        isDashboardRoute={
-          normalizeNavigationPath(location.pathname) === "/dashboard"
-        }
+        cataloguePathname={location.pathname}
+        routeCatalogueEnrollmentFilter={getStudentCatalogueEnrollmentFilterFromPath(
+          location.pathname,
+        )}
         initialPublishedCoursePage={staticCourseRouteData?.publishedCoursePage}
         initialPublishedCoursePageNeedsRefresh={
           staticCourseRouteData?.publishedCoursePageNeedsRefresh

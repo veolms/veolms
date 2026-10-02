@@ -6,7 +6,6 @@ import { CopySimpleIcon as CopySimple } from "@phosphor-icons/react/CopySimple";
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
-import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
 import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
 import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullets";
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
@@ -20,6 +19,7 @@ import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { getCourseRouteKey } from "./catalogue";
 import type { Course, CourseRole } from "./catalogue";
 import { CourseActionMenu, MenuAction, MenuDivider } from "./CourseActionMenu";
+import { CourseWishlistHeartButton } from "./CourseWishlistHeartButton";
 import { CourseCardThumbnail } from "./CourseCardThumbnail";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
 export {
@@ -30,41 +30,11 @@ export {
 const courseOverviewPath = (course: Course) =>
   `/courses/${encodeURIComponent(getCourseRouteKey(course))}/overview`;
 
-const creatorStatusStyles = {
-  published: "course-tag--published",
-  draft: "course-tag--draft",
-  archived: "course-tag--archived",
-  bin: "course-tag--bin",
-} as const;
-
-const studentStatusStyles = {
-  "not-enrolled": "course-tag--not-enrolled",
-  "not-started": "course-tag--not-started",
-  "in-progress": "course-tag--in-progress",
-  completed: "course-tag--completed",
-} as const;
-
-const getStudentStatus = (course: Course) => {
-  if (!course.enrolled) return "not-enrolled" as const;
-  const progress = course.progress ?? 0;
-  if (progress >= 100) return "completed" as const;
-  if (progress > 0) return "in-progress" as const;
-  return "not-started" as const;
-};
-
-const getStudentStatusLabel = (course: Course) => {
-  const status = getStudentStatus(course);
-  if (status === "not-enrolled") return "Not Enrolled";
-  if (status === "completed") return "Completed";
-  if (status === "in-progress") return "In Progress";
-  return "Not Started";
-};
-
 export interface CourseCardProps {
   course: Course;
   role: CourseRole;
   wishlisted: boolean;
-  onWishlist: (courseId: string) => void;
+  onWishlist: (course: Course) => void;
   onOpen: (course: Course) => void;
   onExplore: (course: Course) => void;
   onEdit?: (course: Course) => void;
@@ -112,7 +82,6 @@ export function CourseCard({
     (Boolean(currentUserId) &&
       Boolean(course.creatorId) &&
       course.creatorId === currentUserId);
-  const studentStatus = getStudentStatus(course);
   const progress = course.progress ?? 0;
   const overviewPath = courseOverviewPath(course);
   const absoluteCourseUrl =
@@ -232,43 +201,22 @@ export function CourseCard({
               <span>Deleting...</span>
             </span>
           </div>
-        ) : role === "creator" ? (
-          <div className="absolute left-3.5 top-3.5 z-20 flex flex-wrap items-center gap-1.5">
-            <span
-              className={`course-tag ${isBin || course.deletedAt ? creatorStatusStyles.bin : creatorStatusStyles[course.lifecycleStatus]}`}
-              data-course-card-tag
-            >
-              {isBin || course.deletedAt ? "Deleted" : course.lifecycleStatus}
-            </span>
-          </div>
-        ) : (
-          <>
-            <div className="absolute left-3.5 top-3.5 z-20 flex flex-wrap items-center gap-1.5">
-              <span
-                className={`course-tag ${studentStatusStyles[studentStatus]}`}
-                data-course-card-tag
-              >
-                {getStudentStatusLabel(course)}
-              </span>
-            </div>
-            {!course.enrolled && (
-              <button
-                type="button"
-                className={`absolute right-3 top-3 z-20 flex min-h-11 min-w-11 items-center justify-center rounded-full border border-white/15 bg-slate-950/70 text-white shadow-lg transition-colors hover:bg-slate-950/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${wishlisted ? "text-rose-400" : ""}`}
-                aria-label={
-                  wishlisted
-                    ? `Remove ${course.title} from wishlist`
-                    : `Add ${course.title} to wishlist`
-                }
-                aria-pressed={wishlisted}
-                disabled={isDeleting}
-                onClick={() => onWishlist(course.id)}
-              >
-                <Heart size={21} weight={wishlisted ? "fill" : "regular"} />
-              </button>
-            )}
-          </>
-        )}
+        ) : !course.enrolled ? (
+          <CourseWishlistHeartButton
+            variant="card-media"
+            wishlisted={wishlisted}
+            disabled={isDeleting}
+            aria-label={
+              wishlisted
+                ? `Remove ${course.title} from wishlist`
+                : `Add ${course.title} to wishlist`
+            }
+            onClick={(event) => {
+              event.stopPropagation();
+              onWishlist(course);
+            }}
+          />
+        ) : null}
       </div>
 
       <div
@@ -678,15 +626,15 @@ export function CourseCard({
                       aria-hidden="true"
                     />
                   ) : (
-                    <ListBullets
+                    <GraduationCap
                       className="shrink-0"
                       size={17}
-                      weight="regular"
+                      weight="bold"
                       aria-hidden="true"
                     />
                   )}
                   <span className="truncate">
-                    {course.enrolled ? "Continue Learning" : "View Curriculum"}
+                    {course.enrolled ? "Continue Learning" : "Enroll Now"}
                   </span>
                 </span>
               )}

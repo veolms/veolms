@@ -36,8 +36,11 @@ import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { MoonIcon as Moon } from "@phosphor-icons/react/Moon";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
+import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
+import { StudentIcon as Student } from "@phosphor-icons/react/Student";
 import { ToastNotification, type ToastMessage } from "./ToastNotification";
 import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
+import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import logoDarkSvg from "./assets/procodrr-logo-dark.svg?raw";
 import type { LearningCourse } from "./StudentPages";
 import {
@@ -46,7 +49,18 @@ import {
   subscribeToPointerGestureClaims,
 } from "./gestures/pointerGestureOwnership";
 import { useSecondPressHold } from "./gestures/useSecondPressHold";
-import { getVisibleCourses } from "./courses/catalogue";
+import {
+  getCourseQuickFilterCounts,
+  getVisibleCourses,
+} from "./courses/catalogue";
+import {
+  getStudentCataloguePathForEnrollmentFilter,
+  isStudentCatalogueFilterSubpath,
+} from "./courses/catalogueRoutes";
+import {
+  toggleWishlistCourse,
+  useWishlistIds,
+} from "./courses/wishlistStorage";
 import { CourseCatalogue } from "./courses/CourseCatalogue";
 import type {
   Course,
@@ -62,9 +76,7 @@ import { FloatingScrollbar } from "./shell/FloatingScrollbar";
 import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
 import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
-import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
 import { useCurrentUser, useSignOut } from "./services/auth";
-import { useSidenav } from "./services/navigation";
 import {
   authStore,
   useAuthIdentityHint,
@@ -87,19 +99,11 @@ import {
   adaptDeletedCourseToCatalogueCourse,
 } from "./courses/courseAdapter";
 import {
-  getDefaultNavigationOrder,
-  getDefaultNavigationVisibility,
-  getInitialNavigationOrder,
-  getInitialNavigationVisibility,
   getMobileOverflowNavigation,
   getMobilePrimaryNavigation,
-  getPublicNavigationItems,
+  getRoleNavigationItems,
   getNavigationDestination,
   getNavigationIconColor,
-  getNavigationPreferenceStorageKey,
-  getVisibleOrderedNavigation,
-  ensureRequiredNavigationVisibility,
-  resolveShellNavigation,
 } from "./shell/navigation";
 import type { NavigationItemWithMetadata } from "./shell/navigation";
 import {
@@ -109,19 +113,10 @@ import {
   isStaffRole,
   resolveWorkspaceRole,
   getWorkspaceRoleStorageKey,
-  getRoleDisplayName,
+  getShellProfileSubtitle,
 } from "./shell/workspaceRole";
+import { useNotificationSummary } from "./services/notifications";
 
-const FALLBACK_DASHBOARD_NAVIGATION_ITEM: NavigationItemWithMetadata = [
-  "Dashboard",
-  SquaresFour,
-  {
-    id: "dashboard-capability",
-    routeLink: "/dashboard",
-    parentId: null,
-    source: "default",
-  },
-];
 import {
   SIDEBAR_MIN_WIDTH,
   applySidebarShellToDocument,
@@ -334,8 +329,6 @@ function AcademyPageFallback() {
 type ThemePreference = "light" | "dark" | "device";
 type AppearanceOption = ThemePreference | "theme";
 type AppearanceSwipeSource = AppearanceOption;
-type NavigationDropPosition = "before" | "after";
-
 interface CoursesPageProps {
   initialPublishedCoursePage?: CourseListResponse;
   initialPublishedCoursePageNeedsRefresh?: boolean;
@@ -346,7 +339,11 @@ interface CoursesPageProps {
   ) => void;
   onNavigatePage: NavigateTo;
   onExitSettings?: () => void;
-  isDashboardRoute?: boolean;
+  cataloguePathname?: string;
+  routeCatalogueEnrollmentFilter?: Extract<
+    CourseEnrollmentFilter,
+    "all" | "enrolled" | "not-enrolled" | "wishlist"
+  >;
   page?: string;
   section?: string | null;
   settingsTab?: string;
@@ -371,25 +368,6 @@ interface CoursesPageProps {
 export interface CoursesPageRenderContext {
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden: boolean;
-}
-
-interface NavigationDropTarget {
-  label: string;
-  position: NavigationDropPosition;
-}
-
-interface NavigationDrag {
-  pointerId: number;
-  label: string;
-  startX: number;
-  startY: number;
-  dragging: boolean;
-  requiresLongPress: boolean;
-  timer: number | null;
-  handle: HTMLButtonElement;
-  scrolling: boolean;
-  scrollRegion: HTMLElement | null;
-  startScrollTop: number;
 }
 
 interface AppearanceSwipe {
@@ -561,8 +539,6 @@ const SIDEBAR_HIDDEN_OFFSET_EXTRA = 18;
 const SIDEBAR_REVEAL_COMMIT_THRESHOLD = 0.4;
 const APPEARANCE_LONG_PRESS_DURATION = 500;
 const APPEARANCE_LONG_PRESS_MOVE_TOLERANCE = 10;
-const NAVIGATION_LONG_PRESS_DURATION = 480;
-const NAVIGATION_LONG_PRESS_MOVE_TOLERANCE = 10;
 const MOBILE_NAV_HIDE_SCROLL_THRESHOLD = 56;
 const MOBILE_NAV_SHOW_SCROLL_THRESHOLD = 18;
 const MOBILE_NAV_TOP_GUARD = 12;
@@ -680,7 +656,8 @@ export function CoursesPage({
   onOpenCourse,
   onNavigatePage,
   onExitSettings,
-  isDashboardRoute = false,
+  cataloguePathname = "/courses",
+  routeCatalogueEnrollmentFilter = "all",
   page = "courses",
   section: requestedSection = null,
   settingsTab = "profile",
@@ -713,7 +690,6 @@ export function CoursesPage({
   const [hydratedWorkspaceRoleKey, setHydratedWorkspaceRoleKey] = useState<
     string | null
   >(null);
-  const publicNavigationItems = getPublicNavigationItems();
   const [savedShellProfiles, setSavedShellProfiles] = useState<
     Record<CourseRole, ProfilePreferences | null>
   >({ student: null, creator: null });
@@ -732,23 +708,6 @@ export function CoursesPage({
   const [sidebarOverlaySwipeOffset, setSidebarOverlaySwipeOffset] = useState<
     number | null
   >(null);
-  const [navigationOrders, setNavigationOrders] = useState<
-    Record<CourseRole, string[]>
-  >(() => ({
-    student: getDefaultNavigationOrder(publicNavigationItems),
-    creator: getDefaultNavigationOrder(publicNavigationItems),
-  }));
-  const [navigationVisibility, setNavigationVisibility] = useState<
-    Record<CourseRole, string[]>
-  >(() => ({
-    student: getDefaultNavigationOrder(publicNavigationItems),
-    creator: getDefaultNavigationOrder(publicNavigationItems),
-  }));
-  const [draggedNavigationLabel, setDraggedNavigationLabel] = useState<
-    string | null
-  >(null);
-  const [navigationDropTarget, setNavigationDropTarget] =
-    useState<NavigationDropTarget | null>(null);
   // Browser-only input capabilities are applied after startup so the loading
   // boundary remains deterministic across the build and the first client pass.
   const [compactNavigation, setCompactNavigation] = useState(
@@ -798,14 +757,14 @@ export function CoursesPage({
   });
   const readingModeEnabled = readingModePreferences.enabled;
   const [activeSection, setActiveSection] = useState(() => {
-    if (page === "home") return isDashboardRoute ? "Dashboard" : "Home";
+    if (page === "home") return "Home";
     if (page === "courses") return "Courses";
     if (requestedSection) return requestedSection;
     // Keep the initializer deterministic to avoid a server/client hydration
     // mismatch. Route props become authoritative in the effect below.
     return "Courses";
   });
-  const [enrollmentFilter, setEnrollmentFilter] =
+  const [creatorEnrollmentFilter, setCreatorEnrollmentFilter] =
     useState<CourseEnrollmentFilter>("all");
   const [search, setSearch] = useSessionStorageState(
     "veolms-course-catalogue-search",
@@ -815,7 +774,7 @@ export function CoursesPage({
   const debouncedSearch = useDebounce(search, DEFAULT_DEBOUNCE_DELAY_MS);
   const [statusFilter, setStatusFilter] = useState<CourseStatusFilter>("all");
   const [sort, setSort] = useState<CourseSort>("latest");
-  const [wishlisted, setWishlisted] = useState<Set<string>>(() => new Set());
+  const wishlisted = useWishlistIds();
   const [storedPreferencesReady, setStoredPreferencesReady] = useState(false);
   const [courseMenu, setCourseMenu] = useState<string | null>(null);
   const [profileMenu, setProfileMenu] = useState(false);
@@ -850,9 +809,6 @@ export function CoursesPage({
   >(MOBILE_DRAWER_INITIAL_SNAP_POINT);
   const [mobileBottomNavHidden, setMobileBottomNavHidden] = useState(false);
   const [notice, setNotice] = useState<ToastMessage | null>(null);
-  const [hydratedNavigationKey, setHydratedNavigationKey] = useState<
-    string | null
-  >(null);
   const [isFullscreen, setIsFullscreen] = useState(() =>
     typeof document === "undefined"
       ? false
@@ -885,48 +841,26 @@ export function CoursesPage({
   // same-page navigation after login; it is never persisted across reloads.
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
   const isAuthenticated = Boolean(activeUser);
-  const {
-    canAccessDashboard,
-    dashboardCapabilitiesResolved,
-    routeContentBlocked,
-  } = useAcademyRouteGuardState();
-  const isEditingOrCreatingCourse = page === "course-create";
-  const { data: sidenavData } = useSidenav();
-  const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
-    () => resolveShellNavigation(sidenavData?.menus),
-    [sidenavData?.menus],
-  );
-  const navigationItemsWithDashboard = useMemo(() => {
-    const authorizedItems = navigationItems.filter(
-      ([label]) => label !== "Dashboard" || canAccessDashboard,
-    );
-    if (
-      !canAccessDashboard ||
-      authorizedItems.some(([label]) => label === "Dashboard")
-    ) {
-      return authorizedItems;
-    }
-    return [...authorizedItems, FALLBACK_DASHBOARD_NAVIGATION_ITEM];
-  }, [canAccessDashboard, navigationItems]);
-  const navigationSignature = useMemo(
-    () =>
-      navigationItemsWithDashboard
-        .map(([label, , metadata]) =>
-          [metadata?.id ?? label, label, metadata?.routeLink ?? ""].join(":"),
-        )
-        .join("|"),
-    [navigationItemsWithDashboard],
-  );
   const userRoles = getUserRoles(activeUser);
   const isAdmin = hasAdminRole(userRoles);
   const allowedWorkspaceRoles = useMemo(
     () => getVisibleWorkspaceRoles(userRoles, role),
     [role, userRoles],
   );
+  const canSwitchWorkspace =
+    allowedWorkspaceRoles.includes("student") &&
+    allowedWorkspaceRoles.includes("creator");
   const effectiveRole = useMemo(
     () => (isAuthenticated ? resolveWorkspaceRole(userRoles, role) : "student"),
     [isAuthenticated, role, userRoles],
   );
+  const isDashboardRoute = page === "home" && effectiveRole === "creator";
+  const roleNavigationItems = useMemo(
+    () => getRoleNavigationItems(effectiveRole, isAdmin),
+    [effectiveRole, isAdmin],
+  );
+  const { routeContentBlocked } = useAcademyRouteGuardState();
+  const isEditingOrCreatingCourse = page === "course-create";
   const isAuthReady = Boolean(storeUser) || authUserFetched;
   const workspaceRoleKey =
     storedPreferencesReady && authUserFetched
@@ -944,6 +878,11 @@ export function CoursesPage({
   }, [signOut]);
   const isCourseCataloguePage =
     page === "courses" || learningBackground?.page === "courses";
+  const isStudentCatalogueRoute =
+    isCourseCataloguePage && effectiveRole === "student";
+  const enrollmentFilter = isStudentCatalogueRoute
+    ? routeCatalogueEnrollmentFilter
+    : creatorEnrollmentFilter;
   const shouldLoadCourseSurface =
     (!renderMain || Boolean(learningBackground)) && !isEditingOrCreatingCourse;
   const shouldQueryCourses =
@@ -962,10 +901,7 @@ export function CoursesPage({
     (effectiveRole === "creator" || workspaceRoleHint === "creator");
 
   const needsCompleteCourseList =
-    activeSection === "Wishlist" ||
-    enrollmentFilter !== "all" ||
-    statusFilter !== "all" ||
-    sort === "progress";
+    enrollmentFilter !== "all" || statusFilter !== "all" || sort === "progress";
   const pagedCourseQuery = useInfiniteCourses({
     enabled:
       shouldQueryCourses &&
@@ -1061,12 +997,39 @@ export function CoursesPage({
 
   useEffect(() => {
     if (
-      enrollmentFilter === "bin" &&
+      creatorEnrollmentFilter === "bin" &&
       (!isAdmin || effectiveRole !== "creator")
     ) {
-      setEnrollmentFilter("all");
+      setCreatorEnrollmentFilter("all");
     }
-  }, [enrollmentFilter, isAdmin, effectiveRole]);
+  }, [creatorEnrollmentFilter, isAdmin, effectiveRole]);
+
+  useEffect(() => {
+    if (!isCourseCataloguePage || !isWorkspaceRoleHydrated) return;
+    if (
+      effectiveRole === "creator" &&
+      isStudentCatalogueFilterSubpath(cataloguePathname)
+    ) {
+      onNavigatePage?.("/courses");
+    }
+  }, [
+    cataloguePathname,
+    effectiveRole,
+    isCourseCataloguePage,
+    isWorkspaceRoleHydrated,
+    onNavigatePage,
+  ]);
+
+  const handleEnrollmentFilterChange = useCallback(
+    (filter: CourseEnrollmentFilter) => {
+      if (isStudentCatalogueRoute) {
+        onNavigatePage?.(getStudentCataloguePathForEnrollmentFilter(filter));
+        return;
+      }
+      setCreatorEnrollmentFilter(filter);
+    },
+    [isStudentCatalogueRoute, onNavigatePage],
+  );
   const deleteCourseMutation = useDeleteCourse();
   const restoreCourseMutation = useRestoreCourse();
   const [deletingCourseIds, setDeletingCourseIds] = useState<Set<string>>(
@@ -1077,8 +1040,26 @@ export function CoursesPage({
     activeUser?.displayName?.trim() ||
     (!authUserFetched ? authIdentityHint?.displayName : undefined) ||
     "Your name";
+  const shellProfileSubtitle = useMemo(
+    () =>
+      getShellProfileSubtitle(
+        effectiveRole,
+        userRoles,
+        activeUser?.username,
+        canSwitchWorkspace,
+      ),
+    [activeUser?.username, canSwitchWorkspace, effectiveRole, userRoles],
+  );
+  const ProfileSubtitleIcon =
+    effectiveRole === "student"
+      ? Student
+      : hasAdminRole(userRoles)
+        ? ShieldCheck
+        : Users;
   const shellProfileAvatarUrl = activeUser?.avatarDataUrl ?? null;
   const shellProfileAvatarSrcSet = activeUser?.avatarSrcSet ?? [];
+  const { data: notificationSummary } = useNotificationSummary();
+  const unreadNotificationCount = notificationSummary?.unreadCount ?? 0;
   const profileRef = useRef<HTMLDivElement>(null);
   const coursesAppRef = useRef<HTMLDivElement>(null);
   const appliedThemeRef = useRef<"light" | "dark" | null>(null);
@@ -1101,7 +1082,7 @@ export function CoursesPage({
     setProfileMenu(false);
     setLogoutConfirmOpen(true);
   }, [setLogoutConfirmOpen]);
-  useBackDismiss({
+  const dismissProfileMenuThen = useBackDismiss({
     open: profileMenu,
     onDismiss: () => setProfileMenu(false),
   });
@@ -1146,7 +1127,7 @@ export function CoursesPage({
     ? null
     : (requestedSection ??
       (page === "home"
-        ? effectiveRole === "creator"
+        ? effectiveRole === "creator" && !isAdmin
           ? "Dashboard"
           : "Home"
         : page === "courses"
@@ -1156,7 +1137,7 @@ export function CoursesPage({
     const label = item[0];
     return (
       activeNavigationSection === label ||
-      (label === "Notification" && activeNavigationSection === "Notifications")
+      (label === "Notifications" && activeNavigationSection === "Notification")
     );
   };
   const sidebarResizeRef = useRef<SidebarResize | null>(null);
@@ -1170,9 +1151,6 @@ export function CoursesPage({
     ((event: PointerPositionEvent, cancelled?: boolean) => void) | null
   >(null);
   const sidebarOverlaySwipeConsumedRef = useRef(false);
-  const navigationDragRef = useRef<NavigationDrag | null>(null);
-  const navigationDropRef = useRef<NavigationDropTarget | null>(null);
-  const navigationDragConsumedRef = useRef(false);
   const appearanceSwipeRef = useRef<AppearanceSwipe | null>(null);
   const appearanceSwipeConsumedRef = useRef(false);
   const dockLongPressRef = useRef<DockLongPress | null>(null);
@@ -1218,22 +1196,8 @@ export function CoursesPage({
       setSidebarPreferences(getInitialSidebarPreferences());
       setPageTabColors(readPageTabColors());
       setReadingModePreferences(readReadingModePreferences());
-      const storedWishlist: unknown = JSON.parse(
-        localStorage.getItem("veolms-wishlist") || "[]",
-      );
-      setWishlisted(
-        new Set(
-          Array.isArray(storedWishlist)
-            ? storedWishlist.filter(
-                (courseId): courseId is string =>
-                  typeof courseId === "string" && Boolean(courseId.trim()),
-              )
-            : [],
-        ),
-      );
     } catch {
       // Deterministic defaults remain usable when storage is unavailable.
-      setWishlisted(new Set());
     } finally {
       setStoredPreferencesReady(true);
     }
@@ -1252,87 +1216,25 @@ export function CoursesPage({
     applySidebarShellToDocument(shellState);
   }, [sidebarMode, sidebarWidth]);
 
-  const navigationHydrationKey = [
-    activeUser ? `authenticated:${activeUser.id}` : "guest",
-    effectiveRole,
-    dashboardCapabilitiesResolved ? "dashboard:resolved" : "dashboard:pending",
-    navigationSignature,
-  ].join(":");
-
   useEffect(() => {
-    if (!storedPreferencesReady || !authUserFetched) return;
+    if (!authUserFetched) return;
     const storedRole = localStorage.getItem(
       getWorkspaceRoleStorageKey(activeUser?.id),
     );
-    setRole(storedRole === "creator" ? "creator" : "student");
+    setRole(
+      storedRole === "student"
+        ? "student"
+        : storedRole === "creator" || hasAdminRole(userRoles)
+          ? "creator"
+          : "student",
+    );
     setHydratedWorkspaceRoleKey(activeUser?.id ?? "guest");
-  }, [activeUser, authUserFetched, storedPreferencesReady]);
-
-  useEffect(() => {
-    if (!storedPreferencesReady) return;
-    if (!activeUser && !authUserFetched) return;
-    if (!dashboardCapabilitiesResolved) return;
-    if (hydratedNavigationKey === navigationHydrationKey) return;
-
-    setNavigationOrders((current) => ({
-      ...current,
-      [effectiveRole]: isPublicNavigation
-        ? getDefaultNavigationOrder(navigationItemsWithDashboard)
-        : getInitialNavigationOrder(
-            effectiveRole,
-            navigationItemsWithDashboard,
-            activeUser?.id,
-          ),
-    }));
-    setNavigationVisibility((current) => ({
-      ...current,
-      [effectiveRole]: isPublicNavigation
-        ? getDefaultNavigationVisibility(navigationItemsWithDashboard)
-        : getInitialNavigationVisibility(
-            effectiveRole,
-            navigationItemsWithDashboard,
-            activeUser?.id,
-          ),
-    }));
-    setHydratedNavigationKey(navigationHydrationKey);
-  }, [
-    activeUser,
-    authUserFetched,
-    dashboardCapabilitiesResolved,
-    hydratedNavigationKey,
-    isPublicNavigation,
-    navigationHydrationKey,
-    navigationItemsWithDashboard,
-    effectiveRole,
-    storedPreferencesReady,
-  ]);
-
-  const navigationPreferencesReady =
-    dashboardCapabilitiesResolved &&
-    hydratedNavigationKey === navigationHydrationKey;
-
-  const getSafeInitialNavigationOrder = (
-    items: readonly NavigationItemWithMetadata[],
-  ) =>
-    isPublicNavigation || dashboardCapabilitiesResolved
-      ? getInitialNavigationOrder(effectiveRole, items, activeUser?.id)
-      : getDefaultNavigationOrder(items);
-
-  const getSafeInitialNavigationVisibility = (
-    items: readonly NavigationItemWithMetadata[],
-  ) =>
-    isPublicNavigation || dashboardCapabilitiesResolved
-      ? getInitialNavigationVisibility(effectiveRole, items, activeUser?.id)
-      : getDefaultNavigationVisibility(items);
+  }, [activeUser, authUserFetched, userRoles]);
 
   useEffect(
     () => () => {
       const press = dockLongPressRef.current;
       if (press) window.clearTimeout(press.timer);
-      const navigationDrag = navigationDragRef.current;
-      if (navigationDrag?.timer != null) {
-        window.clearTimeout(navigationDrag.timer);
-      }
       void longPressAudioContextRef.current?.close();
     },
     [],
@@ -1528,52 +1430,6 @@ export function CoursesPage({
   }, [sidebarMaxWidth, storedPreferencesReady]);
 
   useEffect(() => {
-    if (!storedPreferencesReady) return;
-    if (isPublicNavigation) return;
-    if (!dashboardCapabilitiesResolved) return;
-    if (hydratedNavigationKey !== navigationHydrationKey) return;
-    Object.entries(navigationOrders).forEach(([roleName, order]) => {
-      localStorage.setItem(
-        getNavigationPreferenceStorageKey("order", roleName, activeUser?.id),
-        JSON.stringify(order),
-      );
-    });
-  }, [
-    dashboardCapabilitiesResolved,
-    hydratedNavigationKey,
-    isPublicNavigation,
-    navigationHydrationKey,
-    navigationOrders,
-    storedPreferencesReady,
-    activeUser?.id,
-  ]);
-
-  useEffect(() => {
-    if (!storedPreferencesReady) return;
-    if (isPublicNavigation) return;
-    if (!dashboardCapabilitiesResolved) return;
-    if (hydratedNavigationKey !== navigationHydrationKey) return;
-    Object.entries(navigationVisibility).forEach(([roleName, visibleItems]) => {
-      localStorage.setItem(
-        getNavigationPreferenceStorageKey(
-          "visibility",
-          roleName,
-          activeUser?.id,
-        ),
-        JSON.stringify(visibleItems),
-      );
-    });
-  }, [
-    dashboardCapabilitiesResolved,
-    hydratedNavigationKey,
-    isPublicNavigation,
-    navigationHydrationKey,
-    navigationVisibility,
-    storedPreferencesReady,
-    activeUser?.id,
-  ]);
-
-  useEffect(() => {
     const nextRole = resolveWorkspaceRole(userRoles, role);
     if (nextRole !== role) {
       setRole(nextRole);
@@ -1585,10 +1441,13 @@ export function CoursesPage({
       return;
     localStorage.setItem(getWorkspaceRoleStorageKey(activeUser?.id), role);
     setCourseMenu(null);
-    setEnrollmentFilter("all");
+    setCreatorEnrollmentFilter("all");
     setStatusFilter("all");
     if (page === "home")
-      setActiveSection(effectiveRole === "creator" ? "Dashboard" : "Home");
+      setActiveSection(
+        effectiveRole === "creator" && !isAdmin ? "Dashboard" : "Home",
+      );
+    else if (requestedSection === "Wishlist") setActiveSection("Courses");
     else if (requestedSection) setActiveSection(requestedSection);
     else if (page === "courses") setActiveSection("Courses");
     else setActiveSection("Courses");
@@ -1599,6 +1458,7 @@ export function CoursesPage({
     requestedSection,
     role,
     effectiveRole,
+    isAdmin,
     isWorkspaceRoleHydrated,
     storedPreferencesReady,
   ]);
@@ -1843,11 +1703,6 @@ export function CoursesPage({
   }, [showSidebarAppearanceControl, showSidebarThemeIcon]);
 
   useEffect(() => {
-    if (!storedPreferencesReady) return;
-    localStorage.setItem("veolms-wishlist", JSON.stringify([...wishlisted]));
-  }, [storedPreferencesReady, wishlisted]);
-
-  useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
       if (
         !(event.target instanceof Element) ||
@@ -1938,34 +1793,9 @@ export function CoursesPage({
     };
   }, [edgeSidebarOpen, onNavigatePage, sidebarMode]);
 
-  const roleFilteredNavigationItems = useMemo(() => {
-    return navigationItemsWithDashboard.filter(([label]) => {
-      if (label === "Dashboard") {
-        return canAccessDashboard;
-      }
-      if (effectiveRole === "student") {
-        return label !== "Students";
-      }
-      if (effectiveRole === "creator") {
-        return label !== "Home";
-      }
-      return true;
-    });
-  }, [canAccessDashboard, effectiveRole, navigationItemsWithDashboard]);
-
-  const navigation = getVisibleOrderedNavigation(
-    navigationPreferencesReady && !isPublicNavigation
-      ? navigationOrders[effectiveRole]
-      : isPublicNavigation
-        ? getDefaultNavigationOrder(roleFilteredNavigationItems)
-        : getSafeInitialNavigationOrder(roleFilteredNavigationItems),
-    navigationPreferencesReady && !isPublicNavigation
-      ? navigationVisibility[effectiveRole]
-      : isPublicNavigation
-        ? getDefaultNavigationVisibility(roleFilteredNavigationItems)
-        : getSafeInitialNavigationVisibility(roleFilteredNavigationItems),
-    roleFilteredNavigationItems,
-  ).filter(([label]) => label !== "Settings" || !settingsInSidebarDock);
+  const navigation = roleNavigationItems.filter(
+    ([label]) => label !== "Settings" || !settingsInSidebarDock,
+  );
   const updateNavigationScrollFade = () => {
     const nav = navigationRef.current;
     if (!nav) return;
@@ -2142,10 +1972,46 @@ export function CoursesPage({
     }
   };
 
+  const catalogueForQuickFilterCounts = useMemo(() => {
+    if (effectiveRole === "creator") {
+      return (myCoursesData?.courses || []).map(
+        adaptApiCourseToCatalogueCourse,
+      );
+    }
+    return allCourses;
+  }, [allCourses, effectiveRole, myCoursesData?.courses]);
+
+  const quickFilterCounts = useMemo(() => {
+    const counts = getCourseQuickFilterCounts(catalogueForQuickFilterCounts, {
+      wishlisted,
+      role: effectiveRole,
+      statusFilter,
+      search:
+        !needsCompleteCourseList && pagedCourseQuery.isPlaceholderData
+          ? ""
+          : debouncedSearch,
+    });
+    if (effectiveRole === "creator") {
+      return {
+        ...counts,
+        bin: deletedCoursesData?.courses?.length ?? 0,
+      };
+    }
+    return counts;
+  }, [
+    catalogueForQuickFilterCounts,
+    debouncedSearch,
+    deletedCoursesData?.courses?.length,
+    effectiveRole,
+    needsCompleteCourseList,
+    pagedCourseQuery.isPlaceholderData,
+    statusFilter,
+    wishlisted,
+  ]);
+
   const visibleCourses = useMemo(
     () =>
       getVisibleCourses(allCourses, {
-        activeSection,
         wishlisted,
         role: effectiveRole,
         enrollmentFilter,
@@ -2157,7 +2023,6 @@ export function CoursesPage({
         sort,
       }),
     [
-      activeSection,
       allCourses,
       effectiveRole,
       enrollmentFilter,
@@ -2170,19 +2035,18 @@ export function CoursesPage({
     ],
   );
 
-  const toggleWishlist = (courseId: string) => {
-    setWishlisted((current) => {
-      const next = new Set(current);
-      if (next.has(courseId)) next.delete(courseId);
-      else next.add(courseId);
-      return next;
-    });
+  const toggleWishlist = (course: Course) => {
+    toggleWishlistCourse(course);
   };
 
   const resetCatalogue = () => {
     setSearch("");
     setStatusFilter("all");
-    setEnrollmentFilter("all");
+    if (isStudentCatalogueRoute) {
+      onNavigatePage?.("/courses");
+    } else {
+      setCreatorEnrollmentFilter("all");
+    }
   };
 
   const closeMobileMenu = () => {
@@ -2209,223 +2073,6 @@ export function CoursesPage({
     dismissMobileMenuThen(() => {
       onNavigatePage?.(getNavigationDestination(item ?? label));
     });
-  };
-
-  const reorderNavigation = (
-    sourceLabel: string,
-    targetLabel: string,
-    position: NavigationDropPosition = "before",
-  ) => {
-    if (!sourceLabel || !targetLabel || sourceLabel === targetLabel) return;
-    setNavigationOrders((current) => {
-      const currentOrder =
-        navigationPreferencesReady && !isPublicNavigation
-          ? current[effectiveRole] ||
-            getSafeInitialNavigationOrder(navigationItemsWithDashboard)
-          : isPublicNavigation
-            ? getDefaultNavigationOrder(navigationItemsWithDashboard)
-            : getSafeInitialNavigationOrder(navigationItemsWithDashboard);
-      const sourceIndex = currentOrder.indexOf(sourceLabel);
-      if (sourceIndex < 0 || !currentOrder.includes(targetLabel))
-        return current;
-      const nextOrder = [...currentOrder];
-      nextOrder.splice(sourceIndex, 1);
-      const targetIndex = nextOrder.indexOf(targetLabel);
-      nextOrder.splice(
-        targetIndex + (position === "after" ? 1 : 0),
-        0,
-        sourceLabel,
-      );
-      return { ...current, [effectiveRole]: nextOrder };
-    });
-  };
-
-  const moveNavigationWithKeyboard = (label: string, direction: -1 | 1) => {
-    const currentOrder =
-      navigationPreferencesReady && !isPublicNavigation
-        ? navigationOrders[effectiveRole] ||
-          getSafeInitialNavigationOrder(navigationItemsWithDashboard)
-        : isPublicNavigation
-          ? getDefaultNavigationOrder(navigationItemsWithDashboard)
-          : getSafeInitialNavigationOrder(navigationItemsWithDashboard);
-    const currentIndex = currentOrder.indexOf(label);
-    const targetLabel = currentOrder[currentIndex + direction];
-    if (!targetLabel) return;
-    reorderNavigation(label, targetLabel, direction < 0 ? "before" : "after");
-    setNotice(`${label} moved ${direction < 0 ? "up" : "down"}.`);
-  };
-
-  const activateNavigationPointerDrag = (
-    drag: NavigationDrag,
-    acknowledge = false,
-  ) => {
-    if (navigationDragRef.current !== drag || drag.dragging) return;
-    if (drag.timer !== null) {
-      window.clearTimeout(drag.timer);
-      drag.timer = null;
-    }
-    drag.dragging = true;
-    navigationDragConsumedRef.current = true;
-    try {
-      drag.handle.setPointerCapture?.(drag.pointerId);
-    } catch {
-      // Pointer capture is optional; hit testing still determines drop targets.
-    }
-    setDraggedNavigationLabel(drag.label);
-    setSidebarTooltip(null);
-    if (acknowledge) acknowledgeLongPress();
-  };
-
-  const startNavigationPointerDrag = (
-    event: ReactPointerEvent<HTMLButtonElement>,
-    label: string,
-  ) => {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    const requiresLongPress =
-      event.pointerType !== "mouse" ||
-      compactNavigation ||
-      coarseNavigationInput;
-    const drag: NavigationDrag = {
-      pointerId: event.pointerId,
-      label,
-      startX: event.clientX,
-      startY: event.clientY,
-      dragging: false,
-      requiresLongPress,
-      timer: null,
-      handle: event.currentTarget,
-      scrolling: false,
-      scrollRegion: event.currentTarget.closest<HTMLElement>(
-        ".courses-nav, .mobile-menu-sheet__list",
-      ),
-      startScrollTop:
-        event.currentTarget.closest<HTMLElement>(
-          ".courses-nav, .mobile-menu-sheet__list",
-        )?.scrollTop ?? 0,
-    };
-    navigationDragRef.current = drag;
-    navigationDropRef.current = null;
-    navigationDragConsumedRef.current = false;
-    setNavigationDropTarget(null);
-    if (!requiresLongPress) return;
-
-    event.stopPropagation();
-    primeLongPressFeedback();
-    drag.timer = window.setTimeout(
-      () => activateNavigationPointerDrag(drag, true),
-      NAVIGATION_LONG_PRESS_DURATION,
-    );
-    try {
-      event.currentTarget.setPointerCapture?.(event.pointerId);
-    } catch {
-      // Native scrolling may retain the pointer until long press activates.
-    }
-  };
-
-  const moveNavigationPointerDrag = (
-    event: ReactPointerEvent<HTMLButtonElement>,
-  ) => {
-    const drag = navigationDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    if (drag.requiresLongPress) event.stopPropagation();
-    if (drag.scrolling) {
-      event.preventDefault();
-      if (drag.scrollRegion) {
-        drag.scrollRegion.scrollTop =
-          drag.startScrollTop - (event.clientY - drag.startY);
-      }
-      return;
-    }
-    if (!drag.dragging) {
-      const distance = Math.hypot(
-        event.clientX - drag.startX,
-        event.clientY - drag.startY,
-      );
-      if (drag.requiresLongPress) {
-        if (distance <= NAVIGATION_LONG_PRESS_MOVE_TOLERANCE) return;
-        if (drag.timer !== null) window.clearTimeout(drag.timer);
-        drag.timer = null;
-        drag.scrolling = true;
-        navigationDragConsumedRef.current = true;
-        event.preventDefault();
-        if (drag.scrollRegion) {
-          drag.scrollRegion.scrollTop =
-            drag.startScrollTop - (event.clientY - drag.startY);
-        }
-        return;
-      }
-      if (distance < 7) return;
-      activateNavigationPointerDrag(drag);
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    const targetButton = document
-      .elementFromPoint(event.clientX, event.clientY)
-      ?.closest<HTMLElement>("[data-navigation-label]");
-    const targetLabel = targetButton?.dataset.navigationLabel;
-    if (!targetLabel || targetLabel === drag.label) {
-      navigationDropRef.current = null;
-      setNavigationDropTarget(null);
-      return;
-    }
-    const targetRect = targetButton.getBoundingClientRect();
-    const position: NavigationDropPosition =
-      event.clientY >= targetRect.top + targetRect.height / 2
-        ? "after"
-        : "before";
-    const dropTarget = { label: targetLabel, position };
-    navigationDropRef.current = dropTarget;
-    setNavigationDropTarget((current) =>
-      current?.label === targetLabel && current.position === position
-        ? current
-        : dropTarget,
-    );
-  };
-
-  const finishNavigationPointerDrag = (
-    event: ReactPointerEvent<HTMLButtonElement>,
-    cancelled = false,
-  ) => {
-    const drag = navigationDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    navigationDragRef.current = null;
-    if (drag.timer !== null) window.clearTimeout(drag.timer);
-    if (drag.requiresLongPress) event.stopPropagation();
-    try {
-      event.currentTarget.releasePointerCapture?.(event.pointerId);
-    } catch {
-      // Capture may already have been released by the browser.
-    }
-    if (!drag.dragging && !drag.scrolling) return;
-    event.preventDefault();
-    navigationDragConsumedRef.current = true;
-    if (drag.dragging && !cancelled && navigationDropRef.current) {
-      reorderNavigation(
-        drag.label,
-        navigationDropRef.current.label,
-        navigationDropRef.current.position,
-      );
-      setNotice("Navigation order saved.");
-    }
-    navigationDropRef.current = null;
-    setDraggedNavigationLabel(null);
-    setNavigationDropTarget(null);
-    window.setTimeout(() => {
-      navigationDragConsumedRef.current = false;
-    }, 1000);
-  };
-
-  const handleNavigationClick = (
-    event: ReactMouseEvent<HTMLButtonElement>,
-    label: string,
-    item?: NavigationItemWithMetadata,
-  ) => {
-    if (navigationDragConsumedRef.current) {
-      navigationDragConsumedRef.current = false;
-      event.preventDefault();
-      return;
-    }
-    selectNavigation(label, item);
   };
 
   const navigationUsesCompactInteraction =
@@ -2986,7 +2633,6 @@ export function CoursesPage({
     sidebarOverlaySwipeOffset !== null ? "courses-app--overlay-swiping" : "",
     sidebarResizing ? "courses-app--resizing" : "",
     sidebarResizeContentVisible ? "courses-app--resize-content-visible" : "",
-    draggedNavigationLabel ? "courses-app--navigation-dragging" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -3026,8 +2672,7 @@ export function CoursesPage({
       (!sidebarCollapsed && !showWhenExpanded) ||
       sidebarHidden ||
       compactNavigation ||
-      coarseNavigationInput ||
-      navigationDragRef.current?.dragging
+      coarseNavigationInput
     )
       return;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -3608,10 +3253,7 @@ export function CoursesPage({
 
     const surfaceActiveSection =
       surfaceSection ?? (surfacePage === "courses" ? "Courses" : activeSection);
-    if (
-      surfacePage === "home" &&
-      (effectiveRole === "creator" || (isDashboardRoute && canAccessDashboard))
-    ) {
+    if (surfacePage === "home" && effectiveRole === "creator") {
       return (
         <Suspense fallback={<AcademyPageFallback />}>
           <CreatorDashboard
@@ -3656,25 +3298,6 @@ export function CoursesPage({
             onSidebarPreferencesChange={setSidebarPreferences}
             sidebarMode={renderedSidebarMode}
             onSidebarModeChange={setSidebarMode}
-            navigationItems={roleFilteredNavigationItems}
-            navigationVisibleItems={
-              navigationPreferencesReady && !isPublicNavigation
-                ? navigationVisibility[effectiveRole]
-                : isPublicNavigation
-                  ? getDefaultNavigationVisibility(roleFilteredNavigationItems)
-                  : getSafeInitialNavigationVisibility(
-                      roleFilteredNavigationItems,
-                    )
-            }
-            onNavigationVisibilityChange={(visibleItems) =>
-              setNavigationVisibility((current) => ({
-                ...current,
-                [effectiveRole]: ensureRequiredNavigationVisibility(
-                  visibleItems,
-                  roleFilteredNavigationItems,
-                ),
-              }))
-            }
           />
         </Suspense>
       );
@@ -3786,8 +3409,8 @@ export function CoursesPage({
       );
     }
     if (
-      surfacePage === "order-history" ||
-      surfaceActiveSection === "Order History"
+      surfacePage === "purchase-history" ||
+      surfaceActiveSection === "Purchase History"
     ) {
       return (
         <Suspense
@@ -3922,8 +3545,9 @@ export function CoursesPage({
         }}
         preloadFirstCourseImage={Boolean(initialPublishedCoursePage)}
         wishlisted={wishlisted}
+        quickFilterCounts={quickFilterCounts}
         enrollmentFilter={enrollmentFilter}
-        onEnrollmentFilterChange={setEnrollmentFilter}
+        onEnrollmentFilterChange={handleEnrollmentFilterChange}
         statusFilter={statusFilter}
         onStatusFilterChange={setStatusFilter}
         search={search}
@@ -4121,14 +3745,7 @@ export function CoursesPage({
                 const active = isNavigationItemActive(item);
                 const navigationShortcutIndex = navigationIndex + 1;
                 const displayLabel = label;
-                const accessibleLabel = [
-                  displayLabel,
-                  label === "Wishlist" && wishlisted.size > 0
-                    ? `${wishlisted.size} saved`
-                    : null,
-                ]
-                  .filter(Boolean)
-                  .join(", ");
+                const accessibleLabel = displayLabel;
                 return (
                   <Fragment key={label}>
                     <button
@@ -4146,37 +3763,14 @@ export function CoursesPage({
                       aria-current={active ? "page" : undefined}
                       aria-keyshortcuts={
                         label === "Settings"
-                          ? `${navigationIndex + 1} ${primaryShortcutModifier}+Comma Control+ArrowUp Control+ArrowDown Alt+ArrowUp Alt+ArrowDown`
-                          : `${navigationIndex + 1} Control+ArrowUp Control+ArrowDown Alt+ArrowUp Alt+ArrowDown`
+                          ? `${navigationIndex + 1} ${primaryShortcutModifier}+Comma`
+                          : String(navigationIndex + 1)
                       }
-                      data-navigation-label={label}
-                      data-sortable="true"
-                      onClick={(event) =>
-                        handleNavigationClick(event, label, item)
-                      }
+                      data-sidebar-swipe-ignore
+                      onClick={() => selectNavigation(label, item)}
                       onContextMenu={(event) => {
                         if (navigationUsesCompactInteraction)
                           event.preventDefault();
-                      }}
-                      onPointerDown={(event) =>
-                        startNavigationPointerDrag(event, label)
-                      }
-                      onPointerMove={moveNavigationPointerDrag}
-                      onPointerUp={finishNavigationPointerDrag}
-                      onPointerCancel={(event) =>
-                        finishNavigationPointerDrag(event, true)
-                      }
-                      onKeyDown={(event) => {
-                        if (
-                          !event.altKey ||
-                          (event.key !== "ArrowUp" && event.key !== "ArrowDown")
-                        )
-                          return;
-                        event.preventDefault();
-                        moveNavigationWithKeyboard(
-                          label,
-                          event.key === "ArrowUp" ? -1 : 1,
-                        );
                       }}
                       onMouseEnter={(event) =>
                         showSidebarTooltip(event, displayLabel, active)
@@ -4199,9 +3793,6 @@ export function CoursesPage({
                           }
                         />
                       )}
-                      {label === "Wishlist" && wishlisted.size > 0 && (
-                        <b>{wishlisted.size}</b>
-                      )}
                     </button>
                   </Fragment>
                 );
@@ -4214,10 +3805,19 @@ export function CoursesPage({
                   role={effectiveRole}
                   allowedRoles={allowedWorkspaceRoles}
                   userRoles={userRoles}
+                  unreadNotificationCount={
+                    isAuthenticated ? unreadNotificationCount : 0
+                  }
                   sidebarHidden={sidebarPresentedAsOverlay}
                   includeSidebarControl={!compactNavigation}
                   onClose={() => setProfileMenu(false)}
                   onRoleChange={setRole}
+                  onNavigate={(path) => {
+                    setEdgeSidebarOpen(false);
+                    dismissProfileMenuThen(() => {
+                      dismissMobileMenuThen(() => onNavigatePage(path));
+                    });
+                  }}
                   onToggleSidebar={() => {
                     setSidebarMode(sidebarHidden ? "expanded" : "hidden");
                     setEdgeSidebarOpen(false);
@@ -4229,24 +3829,45 @@ export function CoursesPage({
                 <button
                   type="button"
                   className="courses-profile__button"
-                  aria-label={`${shellProfileDisplayName}, ${getRoleDisplayName(
-                    effectiveRole,
-                    userRoles,
-                  )}. Open role and appearance menu`}
+                  aria-label={`${shellProfileDisplayName}, ${shellProfileSubtitle}. Open profile menu`}
                   aria-expanded={profileMenu}
                   onClick={() => setProfileMenu((current) => !current)}
                 >
-                  <ShellProfileAvatar
-                    avatarUrl={shellProfileAvatarUrl}
-                    avatarSrcSet={shellProfileAvatarSrcSet}
-                  />
+                  <span className="courses-profile__avatar-wrap">
+                    <ShellProfileAvatar
+                      avatarUrl={shellProfileAvatarUrl}
+                      avatarSrcSet={shellProfileAvatarSrcSet}
+                    />
+                    {unreadNotificationCount > 0 ? (
+                      <i
+                        className="courses-profile__presence"
+                        aria-label={`${unreadNotificationCount} unread notifications`}
+                      />
+                    ) : null}
+                  </span>
                   <span>
                     <strong>{shellProfileDisplayName}</strong>
                     <small>
-                      {getRoleDisplayName(effectiveRole, userRoles)} <i />
+                      {shellProfileSubtitle}
+                      {canSwitchWorkspace ? (
+                        <ProfileSubtitleIcon
+                          className={`courses-profile__role-icon courses-profile__role-icon--${effectiveRole === "student" ? "student" : hasAdminRole(userRoles) ? "admin" : "creator"}`}
+                          size={15}
+                          weight="duotone"
+                          aria-hidden="true"
+                        />
+                      ) : null}
                     </small>
                   </span>
-                  <CaretDown size={17} aria-hidden="true" />
+                  <CaretDown
+                    size={19}
+                    aria-hidden="true"
+                    className={
+                      profileMenu
+                        ? "courses-profile__caret is-open"
+                        : "courses-profile__caret"
+                    }
+                  />
                 </button>
               ) : (
                 <LoginProfileButton
@@ -4637,22 +4258,12 @@ export function CoursesPage({
                     } as CSSProperties
                   }
                   aria-current={active ? "page" : undefined}
-                  aria-label={[
-                    displayLabel,
-                    label === "Wishlist" && wishlisted.size > 0
-                      ? `${wishlisted.size} saved`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(", ")}
-                  data-navigation-label={label}
+                  data-sidebar-swipe-ignore
+                  aria-label={displayLabel}
                   onClick={() => selectNavigation(label, item)}
                 >
                   <span>
                     <Icon size={23} weight={active ? "fill" : "regular"} />
-                    {label === "Wishlist" && wishlisted.size > 0 && (
-                      <b>{wishlisted.size}</b>
-                    )}
                   </span>
                   <small>{displayLabel}</small>
                 </button>
@@ -4745,20 +4356,44 @@ export function CoursesPage({
                   aria-haspopup="menu"
                   aria-expanded={profileMenu}
                   aria-controls="mobile-profile-menu"
-                  aria-label={`${shellProfileDisplayName}, ${getRoleDisplayName(effectiveRole, userRoles)}. Open role menu`}
+                  aria-label={`${shellProfileDisplayName}, ${shellProfileSubtitle}. Open profile menu`}
                   onClick={() => setProfileMenu((current) => !current)}
                 >
-                  <ShellProfileAvatar
-                    avatarUrl={shellProfileAvatarUrl}
-                    avatarSrcSet={shellProfileAvatarSrcSet}
-                  />
+                  <span className="courses-profile__avatar-wrap">
+                    <ShellProfileAvatar
+                      avatarUrl={shellProfileAvatarUrl}
+                      avatarSrcSet={shellProfileAvatarSrcSet}
+                    />
+                    {unreadNotificationCount > 0 ? (
+                      <i
+                        className="courses-profile__presence"
+                        aria-label={`${unreadNotificationCount} unread notifications`}
+                      />
+                    ) : null}
+                  </span>
                   <span>
                     <strong>{shellProfileDisplayName}</strong>
                     <small>
-                      {getRoleDisplayName(effectiveRole, userRoles)}
+                      {shellProfileSubtitle}
+                      {canSwitchWorkspace ? (
+                        <ProfileSubtitleIcon
+                          className={`courses-profile__role-icon courses-profile__role-icon--${effectiveRole === "student" ? "student" : hasAdminRole(userRoles) ? "admin" : "creator"}`}
+                          size={15}
+                          weight="duotone"
+                          aria-hidden="true"
+                        />
+                      ) : null}
                     </small>
                   </span>
-                  <CaretDown size={17} aria-hidden="true" />
+                  <CaretDown
+                    size={19}
+                    aria-hidden="true"
+                    className={
+                      profileMenu
+                        ? "courses-profile__caret is-open"
+                        : "courses-profile__caret"
+                    }
+                  />
                 </button>
               ) : (
                 <LoginProfileButton
@@ -4775,9 +4410,16 @@ export function CoursesPage({
                   role={effectiveRole}
                   allowedRoles={allowedWorkspaceRoles}
                   userRoles={userRoles}
+                  unreadNotificationCount={unreadNotificationCount}
                   includeSidebarControl={false}
                   onClose={() => setProfileMenu(false)}
                   onRoleChange={setRole}
+                  onNavigate={(path) => {
+                    setEdgeSidebarOpen(false);
+                    dismissProfileMenuThen(() => {
+                      dismissMobileMenuThen(() => onNavigatePage(path));
+                    });
+                  }}
                   onLogout={() => {
                     closeMobileMenu();
                     setLogoutConfirmOpen(true);
@@ -4797,19 +4439,7 @@ export function CoursesPage({
                   <button
                     type="button"
                     key={label}
-                    className={[
-                      active ? "is-active" : "",
-                      draggedNavigationLabel === label ? "is-dragging" : "",
-                      navigationDropTarget?.label === label
-                        ? "is-drop-target"
-                        : "",
-                      navigationDropTarget?.label === label &&
-                      navigationDropTarget.position === "after"
-                        ? "is-drop-after"
-                        : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
+                    className={active ? "is-active" : ""}
                     style={
                       {
                         "--nav-icon-color": getNavigationIconColor(
@@ -4819,24 +4449,12 @@ export function CoursesPage({
                       } as CSSProperties
                     }
                     aria-current={active ? "page" : undefined}
-                    aria-label={[
-                      displayLabel,
-                      label === "Wishlist" && wishlisted.size > 0
-                        ? `${wishlisted.size} saved`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(", ")}
-                    data-navigation-label={label}
-                    onClick={(event) =>
-                      handleNavigationClick(event, label, item)
-                    }
+                    data-sidebar-swipe-ignore
+                    aria-label={displayLabel}
+                    onClick={() => selectNavigation(label, item)}
                   >
                     <Icon size={23} weight={active ? "fill" : "regular"} />
                     <span>{displayLabel}</span>
-                    {label === "Wishlist" && wishlisted.size > 0 && (
-                      <b>{wishlisted.size}</b>
-                    )}
                   </button>
                 );
               })}

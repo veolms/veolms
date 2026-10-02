@@ -182,12 +182,13 @@
 .courses-profile__button {
   display: flex;
   width: 100%;
-  min-height: 89px;
+  min-height: 0;
   align-items: center;
   gap: 12px;
   border: 1px solid var(--border);
   border-radius: 11px;
-  padding: 13px;
+  padding-block: 4px;
+  padding-inline: 13px;
   background: color-mix(in srgb, var(--surface) 38%, transparent);
   text-align: left;
   transition:
@@ -196,22 +197,52 @@
 }
 
 .courses-profile__button:hover {
-  border-color: var(--border-strong);
   background: var(--surface);
 }
 
 .courses-profile__button img {
-  width: 49px;
-  height: 49px;
-  flex: 0 0 auto;
-  border-radius: 50%;
   object-fit: cover;
 }
 
-.courses-profile__button > span {
+.courses-profile__avatar-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  padding: 3px;
+  box-shadow: none;
+}
+
+.courses-profile__avatar-wrap > .shell-profile-avatar,
+.courses-profile__avatar-wrap img {
+  width: 100%;
+  height: 100%;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: none;
+}
+
+.courses-profile__presence {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--surface-strong);
+  border-radius: 50%;
+  background: #ff3b30;
+}
+
+.courses-profile__button > span:not(.courses-profile__avatar-wrap) {
   min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
 }
 
@@ -227,20 +258,28 @@
 .courses-profile__button small {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: var(--muted);
   font-size: 0.76rem;
 }
 
-.courses-profile__button small i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--success);
+.courses-profile__role-icon--student,
+.courses-profile__role-icon--admin,
+.courses-profile__role-icon--creator {
+  color: var(--accent-ink, var(--accent));
 }
 
 .courses-profile__button > svg {
   color: var(--muted);
+}
+
+.courses-profile__button > svg.courses-profile__caret {
+  flex: 0 0 auto;
+  transition: transform 180ms ease;
+}
+
+.courses-profile__button > svg.courses-profile__caret.is-open {
+  transform: rotate(-180deg);
 }
 
 .courses-profile__login-button {
@@ -305,57 +344,153 @@
 .profile-menu {
   position: absolute;
   right: 0;
+  left: 0;
   bottom: calc(100% + 8px);
-  z-index: 40;
-  width: max-content;
-  min-width: 172px;
-  max-width: min(260px, calc(100vw - 32px));
+  z-index: 120;
+  box-sizing: border-box;
+  width: auto;
+  min-width: 0;
+  max-width: none;
   border: 1px solid var(--border-strong);
-  border-radius: 11px;
-  padding: 7px;
-  background: color-mix(in srgb, var(--surface) 96%, black);
-  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+  border-radius: 17px;
+  padding-top: 15px;
+  padding-bottom: 10px;
+  padding-inline: 0;
+  background: var(--surface-strong);
+  --profile-menu-cast-shadow: 0 1px 5px rgb(0 0 0 / 20%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
+    var(--profile-menu-cast-shadow);
 }
 
-.profile-menu p {
-  padding: 7px 9px 5px;
+.profile-menu__divider {
+  height: 1px;
+  margin: 9px 10px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--text) 10%, var(--surface-strong)) 10%,
+    color-mix(in srgb, var(--text) 15%, var(--surface-strong)) 50%,
+    color-mix(in srgb, var(--text) 10%, var(--surface-strong)) 90%,
+    transparent
+  );
+}
+
+.profile-menu__section {
+  padding: 2px 10px 7px 14px;
   color: var(--muted);
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 0.82rem;
+  font-weight: 600;
   white-space: nowrap;
 }
 
-.profile-menu button {
-  display: flex;
+.profile-menu__item {
+  display: grid;
   width: 100%;
-  min-height: 40px;
+  min-height: 44px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 9px;
-  border-radius: 8px;
-  padding: 0 9px;
+  column-gap: 12px;
+  border: 0;
+  border-radius: 0 !important;
+  padding: 0 10px;
   color: var(--text-secondary);
-  font-size: 0.8rem;
+  font-size: 0.84rem;
+  text-decoration: none;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
 }
 
-.profile-menu button:hover {
+.profile-menu__item:hover {
   color: var(--text);
   background: var(--hover);
 }
 
-.profile-menu button > svg:first-child {
-  flex: 0 0 auto;
+.profile-menu__item:focus-visible {
+  outline: 2px solid
+    color-mix(in srgb, var(--accent-ink, var(--accent)) 75%, transparent);
+  outline-offset: 2px;
 }
 
-.profile-menu button > span {
+.profile-menu__item > svg:first-child {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: center;
+}
+
+.profile-menu__item > span:first-of-type {
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
-  flex: 1;
   text-align: left;
   white-space: nowrap;
 }
 
-.profile-menu button .profile-menu__check {
-  margin-left: auto;
+.profile-menu__check,
+.profile-menu__trail,
+.profile-menu__badge {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+}
+
+.profile-menu__trail {
+  width: 21px;
+  height: 21px;
+}
+
+.profile-menu__role-icon--student,
+.profile-menu__role-icon--admin,
+.profile-menu__role-icon--creator {
+  color: var(--accent-ink, var(--accent));
+}
+
+.profile-menu__item .profile-menu__check {
+  color: var(--success);
+}
+
+.profile-menu__item-icon--profile,
+.profile-menu__item-icon--notifications {
+  color: var(--accent-ink, var(--accent));
+}
+
+.profile-menu__item-icon--orders,
+.profile-menu__item-icon--sidebar {
+  color: color-mix(in srgb, var(--accent-ink, var(--accent)) 76%, var(--text));
+}
+
+.profile-menu__item--logout {
+  color: var(--danger);
+}
+
+.profile-menu__item--logout:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 9%, var(--surface-strong));
+}
+
+.profile-menu__item-icon--logout {
+  color: var(--danger);
+}
+
+.profile-menu__badge {
+  display: inline-flex;
+  box-sizing: border-box;
+  width: 20px;
+  min-width: 20px;
+  max-width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 50%;
+  background: #ff3b30;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .courses-app--collapsed .courses-sidebar {
@@ -383,7 +518,9 @@
 .courses-app--collapsed .courses-sidebar__label,
 .courses-app--collapsed .courses-nav button > span,
 .courses-app--collapsed .courses-nav button > b,
-.courses-app--collapsed .courses-profile__button > span,
+.courses-app--collapsed
+  .courses-profile__button
+  > span:not(.courses-profile__avatar-wrap),
 .courses-app--collapsed .courses-profile__button > svg {
   display: none;
 }
@@ -400,20 +537,25 @@
 }
 
 .courses-app--collapsed .courses-profile__button {
-  min-height: 60px;
+  height: 64px;
+  min-height: 64px;
   justify-content: center;
-  padding: 6px;
+  padding: 4px 0;
 }
 
-.courses-app--collapsed .courses-profile__button img {
-  width: 43px;
-  height: 43px;
+.courses-app--collapsed .courses-profile__avatar-wrap {
+  width: 54px;
+  height: 54px;
+  flex-basis: 54px;
 }
 
 .courses-app--collapsed .profile-menu {
   left: calc(100% + 8px);
   right: auto;
   bottom: 0;
+  width: 220px;
+  min-width: 0;
+  max-width: min(220px, calc(100vw - 32px));
 }
 
 .courses-app--hidden {
@@ -1107,7 +1249,9 @@
   .courses-app:not(.courses-app--hidden) .courses-sidebar__label,
   .courses-app:not(.courses-app--hidden) .courses-nav button > span,
   .courses-app:not(.courses-app--hidden) .courses-nav button > b,
-  .courses-app:not(.courses-app--hidden) .courses-profile__button > span,
+  .courses-app:not(.courses-app--hidden)
+    .courses-profile__button
+    > span:not(.courses-profile__avatar-wrap),
   .courses-app:not(.courses-app--hidden) .courses-profile__button > svg {
     display: none;
   }
@@ -1122,20 +1266,25 @@
   }
 
   .courses-app:not(.courses-app--hidden) .courses-profile__button {
-    min-height: 58px;
+    height: 64px;
+    min-height: 64px;
     justify-content: center;
-    padding: 5px;
+    padding: 4px 0;
   }
 
-  .courses-app:not(.courses-app--hidden) .courses-profile__button img {
-    width: 42px;
-    height: 42px;
+  .courses-app:not(.courses-app--hidden) .courses-profile__avatar-wrap {
+    width: 54px;
+    height: 54px;
+    flex-basis: 54px;
   }
 
   .courses-app:not(.courses-app--hidden) .profile-menu {
     left: calc(100% + 8px);
     right: auto;
     bottom: 0;
+    width: 220px;
+    min-width: 0;
+    max-width: min(220px, calc(100vw - 32px));
   }
 
   .courses-main {

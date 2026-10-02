@@ -9,6 +9,7 @@ import {
   isCourseCreateEditorPath,
   isCourseEditEditorPath,
 } from "../courses/courseEditorRouting";
+import { getCatalogueRouteIdFromPath } from "../courses/catalogueRoutes";
 
 export const productName = "ProCodrr";
 
@@ -22,7 +23,7 @@ export type ShellPage =
   | "quiz-builder"
   | "quiz-attempt"
   | "orders"
-  | "order-history"
+  | "purchase-history"
   | "notifications"
   | "analytics"
   | "placeholder"
@@ -75,10 +76,9 @@ const discussionsRouteBase = {
 export const routeDescriptors = {
   "root-courses": {
     kind: "shell",
-    page: "courses",
-    section: "Courses",
-    title: "Courses",
-    description: "Browse available courses and continue learning in ProCodrr.",
+    page: "home",
+    title: "Home",
+    description: "Your ProCodrr home screen.",
   },
   home: {
     kind: "shell",
@@ -97,11 +97,28 @@ export const routeDescriptors = {
   dashboard: {
     kind: "shell",
     page: "home",
-    title: "Dashboard",
-    description:
-      "Review academy performance and instructor activity in ProCodrr.",
+    title: "Home",
+    description: "Your ProCodrr home screen.",
   },
   courses: {
+    kind: "shell",
+    page: "courses",
+    title: "Courses",
+    description: "Browse available courses and continue learning in ProCodrr.",
+  },
+  "courses-enrolled": {
+    kind: "shell",
+    page: "courses",
+    title: "Courses",
+    description: "Browse available courses and continue learning in ProCodrr.",
+  },
+  "courses-not-enrolled": {
+    kind: "shell",
+    page: "courses",
+    title: "Courses",
+    description: "Browse available courses and continue learning in ProCodrr.",
+  },
+  "courses-wishlist": {
     kind: "shell",
     page: "courses",
     title: "Courses",
@@ -134,9 +151,9 @@ export const routeDescriptors = {
   wishlist: {
     kind: "shell",
     page: "courses",
-    section: "Wishlist",
-    title: "Wishlist",
-    description: "Review the courses saved to your ProCodrr wishlist.",
+    section: "Courses",
+    title: "Courses",
+    description: "Browse available courses and continue learning in ProCodrr.",
   },
   students: {
     kind: "shell",
@@ -237,11 +254,11 @@ export const routeDescriptors = {
     title: "Messages",
     description: "Manage direct communication with your learners.",
   },
-  "order-history": {
+  "purchase-history": {
     kind: "shell",
-    page: "order-history",
-    section: "Order History",
-    title: "Order History",
+    page: "purchase-history",
+    section: "Purchase History",
+    title: "Purchase History",
     description: "Review your academy purchases and payment activity.",
   },
   notifications: {
@@ -367,14 +384,13 @@ const courseOverviewDescriptor = {
 
 export const destinationPaths: Readonly<Record<string, string>> = {
   home: "/",
-  dashboard: "/dashboard",
+  dashboard: "/",
   courses: "/courses",
   coupons: "/coupons",
   "coupon-create": "/coupons/create",
   "coupon-edit": "/coupons/:couponId",
   "create-course": "/courses/create",
   "edit-course": "/courses/:courseId/edit/basics",
-  wishlist: "/wishlist",
   students: "/students",
   "student-details": "/students/:username",
   reviews: "/reviews",
@@ -388,14 +404,13 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   messages: "/messages",
   settings: "/settings",
   notifications: "/notifications",
+  "purchase-history": "/purchase-history",
   logout: "/logout",
   Courses: "/courses",
   "/Courses": "/courses",
   Coupons: "/coupons",
   "/Coupons": "/coupons",
   "/coupons": "/coupons",
-  "/explore-courses": "/explore-courses",
-  "/my-courses": "/courses",
   "/my-learning": "/courses",
   Students: "/students",
   Reviews: "/reviews",
@@ -405,7 +420,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   Messages: "/messages",
   Settings: "/settings",
   "Create Course": "/courses/create",
-  "Order History": "/order-history",
+  "Purchase History": "/purchase-history",
   Notifications: "/notifications",
   Logout: "/logout",
 };
@@ -422,6 +437,9 @@ const canonicalPathsByRouteId = {
   "course-create": "/courses/create",
   "course-create-tab": "/courses/create/:editTab",
   "course-edit": "/courses/:courseId/edit/:editTab",
+  "courses-enrolled": "/courses/enrolled",
+  "courses-not-enrolled": "/courses/not-enrolled",
+  "courses-wishlist": "/courses/wishlist",
   wishlist: "/wishlist",
   students: "/students",
   "student-details": "/students/:username",
@@ -440,7 +458,7 @@ const canonicalPathsByRouteId = {
   analytics: "/analytics",
   orders: "/orders",
   messages: "/messages",
-  "order-history": "/order-history",
+  "purchase-history": "/purchase-history",
   notifications: "/notifications",
   settings: "/settings",
   "settings-profile": "/settings/profile",
@@ -469,6 +487,8 @@ export const getEffectiveRouteId = (
   pathname: string,
 ): string => {
   const normalizedPath = normalizeNavigationPath(pathname);
+  const catalogueRouteId = getCatalogueRouteIdFromPath(normalizedPath);
+  if (catalogueRouteId) return catalogueRouteId;
 
   if (routeId === "settings") {
     if (normalizedPath === "/settings") return routeId;
@@ -581,6 +601,14 @@ export const getMatchedRouteDescriptor = (
   matches: readonly MatchIdentity[],
   pathname?: string,
 ): RouteDescriptor => {
+  if (pathname !== undefined) {
+    const catalogueRouteId = getCatalogueRouteIdFromPath(pathname);
+    if (catalogueRouteId) {
+      const catalogueDescriptor = getRouteDescriptor(catalogueRouteId);
+      if (catalogueDescriptor) return catalogueDescriptor;
+    }
+  }
+
   for (let index = matches.length - 1; index >= 0; index -= 1) {
     const match = matches[index];
     if (!match) continue;

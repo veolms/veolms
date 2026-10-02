@@ -172,10 +172,10 @@ async function main() {
               : await resolveCourseSlug(base, courseId),
         },
       ].filter((course) => typeof course.slug === "string");
-  const paths = ["/explore-courses"];
+  const paths = ["/courses"];
   for (const course of courses) {
     validateSlug(course.slug);
-    paths.push(`/explore-courses/${encodeURIComponent(course.slug)}`);
+    paths.push(`/courses/${encodeURIComponent(course.slug)}/overview`);
   }
 
   const handler = createRequestHandler(build, "production");
