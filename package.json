@@ -33,7 +33,8 @@
     "db:seed": "pnpm --filter @veolms/database seed",
     "db:reset": "pnpm --filter @veolms/database reset",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build",
-    "migration:create": "pnpm --filter @veolms/database migration:create"
+    "migration:create": "pnpm --filter @veolms/database migration:create",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
@@ -43,10 +44,15 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "globals": "^17.3.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
     "prettier": "^3.9.6",
     "turbo": "^2.10.8",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "typescript-eslint": "^8.65.0",
     "wrangler": "^4.131.2"
+  },
+  "lint-staged": {
+    "*": "prettier --write --ignore-unknown"
   }
 }
