@@ -5,7 +5,9 @@
   "exports": "./src/index.ts",
   "scripts": {
     "build": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --cache --cache-location .eslintcache/",
+    "lint:fix": "eslint . --fix --cache --cache-location .eslintcache/"
   },
   "devDependencies": {
     "fastify": "5.11.0",

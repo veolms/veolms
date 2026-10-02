@@ -22,7 +22,9 @@
     "test:e2e:update": "node -e \"console.log('No E2E tests configured')\"",
     "test:e2e:visual": "node -e \"console.log('No E2E tests configured')\"",
     "check": "pnpm typecheck",
-    "check:ci": "pnpm typecheck"
+    "check:ci": "pnpm typecheck",
+    "lint": "eslint . --cache --cache-location .eslintcache/",
+    "lint:fix": "eslint . --fix --cache --cache-location .eslintcache/"
   },
   "dependencies": {
     "@atomic-editor/editor": "0.6.2",

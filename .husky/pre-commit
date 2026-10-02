@@ -1,6 +1,13 @@
+#!/usr/bin/env sh
 current_branch=$(git rev-parse --abbrev-ref HEAD)
-if [ "$current_branch" = "development" ]; then
-  echo "Direct commits to the development branch are not allowed. Please switch to a feature/fix/chore branch."
+if [ "$current_branch" = "development" ] || [ "$current_branch" = "dev" ] || [ "$current_branch" = "main" ]; then
+  echo "❌ Direct commits to '$current_branch' are forbidden. Please work on a feature/fix/chore branch."
+  exit 1
+fi
+
+# Prevent accidental commit of environment secret files
+if git diff --cached --name-only | grep -E "(^|/)\.env(\..+)?$" | grep -v "\.env\.example"; then
+  echo "❌ Staged files contain private environment secrets (.env). Please unstage before committing."
   exit 1
 fi
 

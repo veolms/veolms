@@ -20,6 +20,21 @@
       "dependsOn": ["^typecheck"],
       "outputs": []
     },
+    "lint": {
+      "inputs": [
+        "src/**",
+        "*.ts",
+        "*.tsx",
+        "*.js",
+        "*.mjs",
+        "tsconfig.json",
+        "../../eslint.config.js"
+      ],
+      "outputs": [".eslintcache/**"]
+    },
+    "lint:fix": {
+      "cache": false
+    },
     "test": {
       "outputs": []
     }

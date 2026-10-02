@@ -16,6 +16,8 @@
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint . --cache --cache-location .eslintcache/",
+    "lint:fix": "eslint . --fix --cache --cache-location .eslintcache/",
     "test": "vitest run"
   },
   "dependencies": {

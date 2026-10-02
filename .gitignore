@@ -13,6 +13,10 @@ s3-bucket/
 dist/
 scratch/
 
+# Caches
+.eslintcache
+.prettiercache
+
 # Local Impeccable hook manifests
 .codex/hooks.json
 .github/hooks/impeccable.json

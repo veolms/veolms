@@ -8,6 +8,8 @@
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint . --cache --cache-location .eslintcache/",
+    "lint:fix": "eslint . --fix --cache --cache-location .eslintcache/",
     "migrate": "node --env-file-if-exists=../../.env src/migrate.ts",
     "seed": "node --env-file-if-exists=../../.env src/seed.ts",
     "seed:admins": "node --env-file-if-exists=../../.env src/seed-admins.ts",

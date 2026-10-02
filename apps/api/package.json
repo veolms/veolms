@@ -14,7 +14,9 @@
     "user:cli": "node --env-file-if-exists=../../.env src/cli/user.ts",
     "import:youtube": "node --env-file-if-exists=../../.env src/cli/import-youtube.ts",
     "build": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --cache --cache-location .eslintcache/",
+    "lint:fix": "eslint . --fix --cache --cache-location .eslintcache/"
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.1115.0",

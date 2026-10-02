@@ -24,9 +24,11 @@
     "build:web": "pnpm --filter @veolms/web build",
     "build:api": "pnpm --filter @veolms/api build",
     "deploy:web": "pnpm build:web && wrangler deploy",
-    "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "lint": "turbo run lint",
+    "lint:root": "eslint . --cache --cache-location .eslintcache/",
+    "lint:fix": "turbo run lint:fix",
+    "format": "prettier --write . --cache --cache-location .prettiercache",
+    "format:check": "prettier --check . --cache --cache-location .prettiercache",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "db:migrate": "pnpm --filter @veolms/database migrate",
@@ -37,22 +39,33 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
     "@eslint/js": "^9.39.2",
     "@types/node": "^24.10.13",
     "@typescript/native": "catalog:",
     "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-simple-import-sort": "^14.0.0",
     "globals": "^17.3.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
     "prettier": "^3.9.6",
+    "prettier-plugin-tailwindcss": "^0.8.1",
     "turbo": "^2.10.8",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "typescript-eslint": "^8.65.0",
     "wrangler": "^4.131.2"
   },
   "lint-staged": {
-    "*": "node ./node_modules/prettier/bin/prettier.cjs --write --ignore-unknown"
+    "*.{js,mjs,cjs,ts,tsx}": [
+      "node ./node_modules/prettier/bin/prettier.cjs --write",
+      "node ./node_modules/eslint/bin/eslint.js --fix --max-warnings=0"
+    ],
+    "*.{json,css,md,yaml,yml}": [
+      "node ./node_modules/prettier/bin/prettier.cjs --write"
+    ]
   }
 }
