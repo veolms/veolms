@@ -34,7 +34,11 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
   const permissions = createDiscussionPermissions(options);
   const store = createDiscussionUploadStore(options.services.storage);
   const attachmentsRepo = createAttachmentsRepository();
-  const attachmentsService = createAttachmentsService(attachmentsRepo, store);
+  const attachmentsService = createAttachmentsService(
+    attachmentsRepo,
+    store,
+    options.services.storage,
+  );
   const threadsRepo = createThreadsRepository();
   const repliesRepo = createRepliesRepository();
   const notesRepo = createNotesRepository();

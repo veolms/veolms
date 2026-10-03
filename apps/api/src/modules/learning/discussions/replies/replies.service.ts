@@ -10,6 +10,7 @@ import type {
   ListLearningRepliesQuery,
   UpdateLearningReplyRequest,
 } from "@veolms/contracts";
+import type { S3StorageService } from "@veolms/storage";
 import { httpError } from "../../../../lib/errors.ts";
 import { DiscussionErrors } from "../shared/discussion.errors.ts";
 import {
@@ -37,6 +38,7 @@ import {
 } from "../shared/lesson-discussion-access.ts";
 import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import type { ThreadsRepository } from "../threads/threads.repository.ts";
+import { getCdnDeliveryUrl } from "../../../../services/cdn-delivery.ts";
 import type {
   RepliesRepository,
   ReplyRowWithAuthor,
@@ -91,10 +93,12 @@ export function createRepliesService({
   threadsRepo,
   repliesRepo,
   lessonAccess = createLessonDiscussionAccess(),
+  storage,
 }: {
   threadsRepo: ThreadsRepository;
   repliesRepo: RepliesRepository;
   lessonAccess?: LessonDiscussionAccess;
+  storage?: S3StorageService;
 }): RepliesService {
   const outbox = createDiscussionOutbox();
   const courseAccess = createDiscussionAccess();
@@ -148,7 +152,9 @@ export function createRepliesService({
         id: a.id,
         kind: a.kind,
         fileName: a.file_name,
-        fileUrl: a.file_url,
+        fileUrl: storage
+          ? getCdnDeliveryUrl(storage, a.storage_key).url
+          : a.file_url,
         mimeType: a.mime_type,
         fileSize: Number(a.file_size || 0),
         ...getAttachmentDimensionFields(a.metadata),

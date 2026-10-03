@@ -4,7 +4,13 @@ import {
 } from "@atomic-editor/editor";
 import "@atomic-editor/editor/styles.css";
 import { autocompletion } from "@codemirror/autocomplete";
-import { EditorView, placeholder, ViewPlugin } from "@codemirror/view";
+import {
+  EditorView,
+  placeholder,
+  tooltips,
+  ViewPlugin,
+  type Rect,
+} from "@codemirror/view";
 import {
   useEffect,
   useMemo,
@@ -31,6 +37,64 @@ import { createDiscussionDraft, type DiscussionDraft } from "./types";
 import "./atomic-editor.css";
 import { DISCUSSION_ATTACHMENTS_ENABLED } from "./image-storage";
 import type { LocalComposerAttachment } from "../../services/learning-interactions";
+
+const mentionTooltipViewportExtension = ViewPlugin.fromClass(
+  class {
+    private readonly view: EditorView;
+
+    private readonly visualViewport =
+      typeof window === "undefined" ? null : window.visualViewport;
+
+    private readonly handleVisualViewportChange = () => {
+      this.view.requestMeasure();
+    };
+
+    constructor(view: EditorView) {
+      this.view = view;
+      this.visualViewport?.addEventListener(
+        "resize",
+        this.handleVisualViewportChange,
+      );
+      this.visualViewport?.addEventListener(
+        "scroll",
+        this.handleVisualViewportChange,
+      );
+    }
+
+    destroy() {
+      this.visualViewport?.removeEventListener(
+        "resize",
+        this.handleVisualViewportChange,
+      );
+      this.visualViewport?.removeEventListener(
+        "scroll",
+        this.handleVisualViewportChange,
+      );
+    }
+  },
+);
+
+function getMentionTooltipSpace(): Rect {
+  const visualViewport = window.visualViewport;
+  if (visualViewport) {
+    const left = Math.max(0, visualViewport.offsetLeft);
+    const top = Math.max(0, visualViewport.offsetTop);
+    return {
+      left,
+      top,
+      right: left + visualViewport.width,
+      bottom: top + visualViewport.height,
+    };
+  }
+
+  const documentElement = document.documentElement;
+  return {
+    left: 0,
+    top: 0,
+    right: documentElement.clientWidth || window.innerWidth,
+    bottom: documentElement.clientHeight || window.innerHeight,
+  };
+}
 
 export interface DiscussionEditorController extends DiscussionEditorCommands {
   attach(file: File): Promise<{ accepted: boolean; message: string | null }>;
@@ -121,7 +185,21 @@ export function DiscussionEditorImpl({
 
   const mentionExtensions = useMemo(() => {
     if (!courseId || mentionsEnabled === false) return [];
+
+    const tooltipExtensions =
+      typeof document !== "undefined" && document.body
+        ? [
+            tooltips({
+              parent: document.body,
+              position: "fixed",
+              tooltipSpace: getMentionTooltipSpace,
+            }),
+            mentionTooltipViewportExtension,
+          ]
+        : [];
+
     return [
+      ...tooltipExtensions,
       autocompletion({
         override: [createMentionCompletionSource(courseId)],
         activateOnTyping: true,

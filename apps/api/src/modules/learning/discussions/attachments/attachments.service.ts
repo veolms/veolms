@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import type { DatabaseExecutor } from "@veolms/database";
+import type { S3StorageService } from "@veolms/storage";
 import { attachmentDimensionsSchema } from "@veolms/contracts";
 import type {
   AttachmentKind,
@@ -28,6 +29,7 @@ import { getAttachmentDimensionFields } from "../shared/discussion-attachment-me
 import { fetchSafeHtml, extractLinkMetadata } from "./attachments.preview.ts";
 import type { AttachmentsRepository } from "./attachments.repository.ts";
 import type { DiscussionAttachmentUploadContext } from "./attachment-upload-context.ts";
+import { getCdnDeliveryUrl } from "../../../../services/cdn-delivery.ts";
 
 const LINK_PREVIEW_CACHE_TTL_MS = 5 * 60 * 1000;
 const LINK_PREVIEW_CACHE_MAX_ENTRIES = 500;
@@ -129,6 +131,7 @@ export interface AttachmentsService {
 export function createAttachmentsService(
   attachmentsRepo: AttachmentsRepository,
   uploadStore: DiscussionUploadStore,
+  storage: S3StorageService,
 ): AttachmentsService {
   const discussionAccess = createDiscussionAccess();
 
@@ -289,6 +292,12 @@ export function createAttachmentsService(
       const kind =
         input.kind || getAttachmentKind(input.mimeType, input.fileName);
 
+      const uploadUrl = await storage.getPresignedPutUrl(
+        storageKey,
+        input.mimeType,
+        input.fileSize,
+      );
+
       await attachmentsRepo.createAttachment(db, {
         id,
         ownerId: actor.userId,
@@ -309,7 +318,7 @@ export function createAttachmentsService(
 
       return {
         attachmentId: id,
-        uploadUrl: `/attachments/${id}/upload`,
+        uploadUrl,
         storageKey,
         fileName: input.fileName,
         kind,
@@ -413,7 +422,10 @@ export function createAttachmentsService(
           "Failed to finalize attachment upload",
         );
       }
-      return updated;
+      return {
+        ...updated,
+        fileUrl: getCdnDeliveryUrl(storage, updated.storageKey).url,
+      };
     },
 
     async completeUpload(db, attachmentId, userId) {
@@ -441,7 +453,15 @@ export function createAttachmentsService(
         );
       }
 
-      if (!existing.fileUrl || existing.fileSize <= 0) {
+      if (existing.status === "ready") {
+        return {
+          ...existing,
+          fileUrl: getCdnDeliveryUrl(storage, existing.storageKey).url,
+        };
+      }
+
+      const uploadedObject = await storage.headObject(existing.storageKey);
+      if (!uploadedObject) {
         throw httpError(
           400,
           "UPLOAD_INCOMPLETE",
@@ -449,14 +469,37 @@ export function createAttachmentsService(
         );
       }
 
-      if (existing.status === "ready") {
-        return existing;
+      if (
+        uploadedObject.contentLength !== undefined &&
+        uploadedObject.contentLength !== existing.fileSize
+      ) {
+        throw httpError(
+          400,
+          "FILE_SIZE_MISMATCH",
+          "Uploaded file size does not match the initiated upload.",
+        );
+      }
+
+      if (
+        uploadedObject.contentType &&
+        uploadedObject.contentType.split(";", 1)[0]!.trim().toLowerCase() !==
+          existing.mimeType.split(";", 1)[0]!.trim().toLowerCase()
+      ) {
+        throw httpError(
+          400,
+          "MIME_TYPE_MISMATCH",
+          "Uploaded file type does not match the initiated upload.",
+        );
       }
 
       await db
         .updateTable("learning_attachments")
         .set({
           status: "ready",
+          file_url:
+            storage.getCdnObjectUrl(existing.storageKey) ||
+            existing.fileUrl ||
+            existing.storageKey,
           metadata: JSON.stringify({
             ...(existing.metadata || {}),
             completedAt: new Date().toISOString(),
@@ -476,7 +519,10 @@ export function createAttachmentsService(
           "Failed to finalize attachment upload",
         );
       }
-      return completed;
+      return {
+        ...completed,
+        fileUrl: getCdnDeliveryUrl(storage, completed.storageKey).url,
+      };
     },
 
     async processUpload(db, actor, context, file) {
