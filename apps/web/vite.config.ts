@@ -180,6 +180,7 @@ export default defineConfig(({ command, mode }) => {
         "react",
         "react-dom/client",
         "react-router",
+        "react-easy-crop",
         "@base-ui/react/drawer",
         "@tanstack/react-query",
         "@tanstack/query-async-storage-persister",

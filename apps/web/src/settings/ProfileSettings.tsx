@@ -30,6 +30,7 @@ import {
   getDefaultCountry,
 } from "../auth/CountryCodeSelect";
 import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
+import { ToastNotification } from "../ToastNotification";
 import { PublicProfileCard } from "../components/PublicProfileCard";
 import "../styles/features/profile.css";
 import { OtpCodeInput } from "../auth/OtpCodeInput";
@@ -43,6 +44,7 @@ import {
 } from "../auth/identifier";
 import type { CountryOption } from "../auth/identifier";
 import { useBackDismiss } from "../navigation/useBackDismiss";
+import { AvatarCropDialog } from "./AvatarCropDialog";
 import { AvatarStylePicker } from "./AvatarStylePicker";
 import type {
   ProfileIdentity,
@@ -85,7 +87,7 @@ type EditableProfile = ProfilePreferences & {
 type SocialVisibilityField = "linkedin" | "github" | "portfolio";
 const SIGN_IN_REQUIRED_MESSAGE = "Sign in to edit your profile.";
 
-const MAX_PROFILE_PHOTO_BYTES = 2 * 1024 * 1024;
+const MAX_PROFILE_PHOTO_BYTES = 20 * 1024 * 1024;
 
 export interface ProfileSettingsProps {
   role?: ProfileRole;
@@ -477,7 +479,13 @@ export function ProfileSettings({
     Partial<Record<SocialVisibilityField, string>>
   >({});
   const [photoError, setPhotoError] = useState("");
+  const [photoSelectionError, setPhotoSelectionError] = useState<string | null>(
+    null,
+  );
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [optimisticAvatarUrl, setOptimisticAvatarUrl] = useState<string | null>(
+    null,
+  );
   const [blockedControl, setBlockedControl] = useState("");
   const [activeLockedControl, setActiveLockedControl] = useState<string | null>(
     null,
@@ -571,7 +579,16 @@ export function ProfileSettings({
     useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [avatarCropOpen, setAvatarCropOpen] = useState(false);
+  const [avatarCropSource, setAvatarCropSource] = useState<string | null>(null);
+  const [avatarCropFileName, setAvatarCropFileName] =
+    useState("profile-photo.webp");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const avatarCropSourceRef = useRef<string | null>(null);
+  const optimisticAvatarUrlRef = useRef<string | null>(null);
+  const avatarUploadGenerationRef = useRef(0);
+  const avatarUploadActiveRef = useRef(false);
+  const isMountedRef = useRef(false);
   const mobileVisibilityDialogRef = useRef<HTMLDialogElement>(null);
   const verificationDialogRef = useRef<HTMLDivElement>(null);
   const verificationCloseButtonRef = useRef<HTMLButtonElement>(null);
@@ -579,13 +596,66 @@ export function ProfileSettings({
   const verificationSubmitButtonRef = useRef<HTMLButtonElement>(null);
   const displayName = draftProfile.displayName.trim() || "Your name";
   const username = draftProfile.username?.trim() || "username";
-  const showAvatar = Boolean(draftProfile.avatarDataUrl) && !avatarFailed;
+  const avatarUrl = optimisticAvatarUrl ?? draftProfile.avatarDataUrl;
+  const avatarSrcSet = optimisticAvatarUrl ? [] : draftProfile.avatarSrcSet;
+  const showAvatar = Boolean(avatarUrl) && !avatarFailed;
   const activeEmail = activeUser?.email || "";
   const isEmailVerified =
     Boolean(activeUser?.emailVerified) || emailVerifiedLocally;
   const isMobileVerified = Boolean(draftProfile.mobileVerified);
   const mobileCountry: CountryOption =
     findCountry(mobileCountryId) ?? getDefaultCountry();
+
+  const revokeAvatarCropSource = useCallback(() => {
+    const source = avatarCropSourceRef.current;
+    if (source) {
+      URL.revokeObjectURL(source);
+      avatarCropSourceRef.current = null;
+    }
+  }, []);
+
+  const revokeOptimisticAvatarPreview = useCallback(() => {
+    const previewUrl = optimisticAvatarUrlRef.current;
+    if (!previewUrl) return;
+    URL.revokeObjectURL(previewUrl);
+    optimisticAvatarUrlRef.current = null;
+  }, []);
+
+  const replaceOptimisticAvatarPreview = useCallback(
+    (previewUrl: string | null) => {
+      revokeOptimisticAvatarPreview();
+      optimisticAvatarUrlRef.current = previewUrl;
+      setOptimisticAvatarUrl(previewUrl);
+    },
+    [revokeOptimisticAvatarPreview],
+  );
+
+  const closeAvatarCropDialog = useCallback(() => {
+    setAvatarCropOpen(false);
+    setAvatarCropSource(null);
+    revokeAvatarCropSource();
+  }, [revokeAvatarCropSource]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      avatarUploadGenerationRef.current += 1;
+      avatarUploadActiveRef.current = false;
+      revokeAvatarCropSource();
+      revokeOptimisticAvatarPreview();
+    };
+  }, [revokeAvatarCropSource, revokeOptimisticAvatarPreview]);
+
+  useEffect(() => {
+    avatarUploadGenerationRef.current += 1;
+    avatarUploadActiveRef.current = false;
+    if (optimisticAvatarUrlRef.current) {
+      revokeOptimisticAvatarPreview();
+      setOptimisticAvatarUrl(null);
+    }
+    setPhotoUploading(false);
+  }, [activeUser?.id, revokeOptimisticAvatarPreview]);
 
   useEffect(() => {
     setNameError("");
@@ -594,6 +664,7 @@ export function ProfileSettings({
     setMobileError("");
     setSocialVisibilityErrors({});
     setPhotoError("");
+    setPhotoSelectionError(null);
     setPhotoUploading(false);
     setBlockedControl("");
     setActiveLockedControl(null);
@@ -606,7 +677,8 @@ export function ProfileSettings({
     setMobileVisibilityPromptOpen(false);
     setMobileVisibilityAcknowledged(false);
     setAvatarPickerOpen(false);
-  }, [activeUser, role]);
+    closeAvatarCropDialog();
+  }, [activeUser, closeAvatarCropDialog, role]);
 
   useEffect(() => {
     setMobileCountryId(
@@ -961,27 +1033,69 @@ export function ProfileSettings({
   };
 
   const handlePhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (photoUploading || avatarUploadActiveRef.current) return;
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
     if (!resolveAvatarUploadContentType(file)) {
-      setPhotoError("Choose an image file and try again.");
+      setPhotoSelectionError("Choose an image file and try again.");
       return;
     }
     if (file.size > MAX_PROFILE_PHOTO_BYTES) {
-      setPhotoError("Choose a profile photo that is 2 MB or smaller.");
+      setPhotoSelectionError(
+        "Choose a profile photo that is 20 MB or smaller.",
+      );
       return;
     }
 
     const activeUserId = authStore.getState().user?.id;
     if (!activeUserId) return;
 
+    setPhotoSelectionError(null);
+    closeAvatarCropDialog();
     setPhotoError("");
+    const source = URL.createObjectURL(file);
+    avatarCropSourceRef.current = source;
+    setAvatarCropFileName(file.name);
+    setAvatarCropSource(source);
+    setAvatarCropOpen(true);
+  };
+
+  const handleCroppedPhoto = (file: File) => {
+    const activeUserId = authStore.getState().user?.id;
+    if (
+      !activeUserId ||
+      photoUploading ||
+      avatarUploadActiveRef.current ||
+      !isMountedRef.current
+    ) {
+      return;
+    }
+
+    const previousAvatar = {
+      avatarDataUrl: draftProfile.avatarDataUrl,
+      avatarSrcSet: draftProfile.avatarSrcSet,
+    };
+    const previousAvatarFailed = avatarFailed;
+    const previewUrl = URL.createObjectURL(file);
+    const uploadGeneration = ++avatarUploadGenerationRef.current;
+    avatarUploadActiveRef.current = true;
+
+    setPhotoError("");
+    setAvatarFailed(false);
+    replaceOptimisticAvatarPreview(previewUrl);
     setPhotoUploading(true);
-    authService
-      .uploadAvatarPhoto(file)
-      .then((updated) => {
-        if (authStore.getState().user?.id !== activeUserId) return;
+    closeAvatarCropDialog();
+
+    const canApplyUploadResult = () =>
+      isMountedRef.current &&
+      avatarUploadGenerationRef.current === uploadGeneration &&
+      authStore.getState().user?.id === activeUserId;
+
+    void (async () => {
+      try {
+        const updated = await authService.uploadAvatarPhoto(file);
+        if (!canApplyUploadResult()) return;
         authStore.setUser(updated);
         queryClient.setQueryData(authKeys.me(), updated);
         setAvatarFailed(false);
@@ -990,24 +1104,30 @@ export function ProfileSettings({
           avatarSrcSet: updated.avatarSrcSet,
         });
         queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
-      })
-      .catch((error: unknown) => {
-        if (authStore.getState().user?.id !== activeUserId) return;
+      } catch (error: unknown) {
+        if (!canApplyUploadResult()) return;
+        mergeFromServer(previousAvatar);
+        setAvatarFailed(previousAvatarFailed);
         const message =
           error && typeof error === "object" && "message" in error
             ? String((error as { message?: unknown }).message)
             : "We couldn't upload that photo. Please try again.";
         setPhotoError(message);
-      })
-      .finally(() => setPhotoUploading(false));
+      } finally {
+        if (!canApplyUploadResult()) return;
+        replaceOptimisticAvatarPreview(null);
+        avatarUploadActiveRef.current = false;
+        setPhotoUploading(false);
+      }
+    })();
   };
 
   const avatar = (className: string) => (
     <span className={className} aria-hidden="true">
       {showAvatar ? (
         <ResponsiveAvatar
-          src={draftProfile.avatarDataUrl ?? undefined}
-          srcSet={draftProfile.avatarSrcSet}
+          src={avatarUrl ?? undefined}
+          srcSet={avatarSrcSet}
           sizes="116px"
           alt=""
           width={160}
@@ -1891,6 +2011,16 @@ export function ProfileSettings({
           </dialog>
         )}
 
+        <AvatarCropDialog
+          open={avatarCropOpen && canEdit}
+          imageUrl={avatarCropSource}
+          fileName={avatarCropFileName}
+          error={photoError}
+          isSaving={photoUploading}
+          onClose={closeAvatarCropDialog}
+          onConfirm={handleCroppedPhoto}
+        />
+
         <AvatarStylePicker
           open={avatarPickerOpen && canEdit}
           seed={activeUser?.id ?? ""}
@@ -1980,6 +2110,11 @@ export function ProfileSettings({
           }}
         />
       </section>
+      <ToastNotification
+        message={photoSelectionError}
+        type="error"
+        onDismiss={() => setPhotoSelectionError(null)}
+      />
     </LockedProfileControlContext.Provider>
   );
 }
