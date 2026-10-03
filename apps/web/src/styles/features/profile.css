@@ -1935,41 +1935,75 @@ html:has(.settings-profile__verification-dialog-overlay) {
 }
 
 .settings-profile__crop-dialog {
+  display: flex;
+  flex-direction: column;
   width: min(calc(100vw - 32px), 520px);
+  height: min(720px, calc(100dvh - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow: hidden;
+  padding: clamp(16px, 2.5dvh, 24px);
+}
+
+.settings-profile__crop-dialog .settings-profile__privacy-dialog-copy {
+  flex: 0 0 auto;
+  margin-top: 4px;
+}
+
+.settings-profile__crop-dialog .settings-profile__privacy-dialog-copy p {
+  margin-top: 5px;
+  line-height: 1.4;
 }
 
 .settings-profile__crop-dialog-body {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-top: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 9px;
+  margin-top: 10px;
 }
 
 .settings-profile__crop-viewport {
   position: relative;
-  width: min(100%, 420px);
+  width: min(100%, clamp(176px, calc(100dvh - 320px), 420px));
   aspect-ratio: 1;
+  flex: 0 1 auto;
   margin: 0 auto;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
   border-radius: 16px;
-  background: var(--canvas);
+  background: radial-gradient(
+    circle at 50% 42%,
+    color-mix(
+      in srgb,
+      var(--surface-strong, var(--surface)) 88%,
+      var(--canvas)
+    ),
+    var(--canvas) 78%
+  );
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
   touch-action: none;
 }
 
 .settings-profile__crop-viewport .reactEasyCrop_Container {
   border-radius: inherit;
+  background: transparent;
+}
+
+.settings-profile__crop-viewport .reactEasyCrop_CropArea {
+  border-color: color-mix(in srgb, var(--text) 58%, transparent);
+  box-shadow: 0 0 0 9999px color-mix(in srgb, var(--canvas) 64%, transparent);
 }
 
 .settings-profile__crop-controls {
   display: grid;
-  gap: 13px;
+  flex: 0 0 auto;
+  gap: 8px;
 }
 
 .settings-profile__crop-control-group {
   display: grid;
-  gap: 7px;
+  gap: 4px;
 }
 
 .settings-profile__crop-control-label {
@@ -1977,7 +2011,7 @@ html:has(.settings-profile__verification-dialog-overlay) {
   align-items: center;
   justify-content: space-between;
   color: var(--text-secondary);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
 }
 
@@ -1990,7 +2024,7 @@ html:has(.settings-profile__verification-dialog-overlay) {
 .settings-profile__crop-rotation-control {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 6px;
 }
 
 .settings-profile__crop-zoom-control input[type="range"] {
@@ -2004,16 +2038,16 @@ html:has(.settings-profile__verification-dialog-overlay) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  min-width: 36px;
-  min-height: 36px;
+  gap: 4px;
+  min-width: 34px;
+  min-height: 34px;
   border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
-  border-radius: 9px;
-  padding: 0 9px;
+  border-radius: 8px;
+  padding: 0 7px;
   color: var(--text-secondary);
   background: color-mix(in srgb, var(--canvas) 72%, var(--surface));
   font: inherit;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
   cursor: pointer;
 }
@@ -2036,14 +2070,19 @@ html:has(.settings-profile__verification-dialog-overlay) {
 }
 
 .settings-profile__crop-error {
-  margin: 13px 0 0;
+  flex: 0 0 auto;
+  margin: 8px 0 0;
   color: var(--danger, #f27991);
   font-size: 0.75rem;
   line-height: 1.45;
 }
 
 .settings-profile__crop-dialog-actions {
+  flex: 0 0 auto;
   flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+  padding-top: 10px;
 }
 
 .settings-profile__crop-dialog-actions button {
@@ -2061,7 +2100,7 @@ html:has(.settings-profile__verification-dialog-overlay) {
 
 @media (max-width: 430px) {
   .settings-profile__crop-dialog {
-    padding: 20px;
+    padding: 16px;
   }
 
   .settings-profile__crop-dialog-actions {
@@ -2071,6 +2110,13 @@ html:has(.settings-profile__verification-dialog-overlay) {
 
   .settings-profile__crop-dialog-actions button:last-child {
     grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 431px) {
+  .settings-profile__crop-controls {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    align-items: end;
   }
 }
 
