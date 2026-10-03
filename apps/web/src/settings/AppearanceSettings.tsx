@@ -1,4 +1,5 @@
 import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
+import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
 import { MoonIcon as Moon } from "@phosphor-icons/react/Moon";
 import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
 import { academyThemes } from "../themes";
@@ -7,7 +8,12 @@ import { themeRevealOriginFromClick } from "../shell/themeViewTransition";
 import type { ThemeRevealOrigin } from "../shell/themeViewTransition";
 import AppearanceAdditionalSettings from "./AppearanceDeferredSettings";
 import type { PageTabColors } from "./settingsPreferences";
-import { ChoiceCard, RadioGroup } from "./SettingsControls";
+import {
+  ChoiceCard,
+  RadioGroup,
+  SettingRow,
+  SettingsToggle,
+} from "./SettingsControls";
 import { MiniSurface } from "./SettingsPreviews";
 
 export type DisplayMode = "light" | "dark" | "device";
@@ -35,6 +41,8 @@ const COLOR_THEMES = academyThemes;
 
 export interface AppearanceSettingsProps {
   theme: DisplayMode;
+  isFullscreen: boolean;
+  onToggleFullscreen: () => void;
   onThemeChange?: (theme: DisplayMode, origin?: ThemeRevealOrigin) => void;
   academyTheme: string;
   onAcademyThemeChange?: (
@@ -47,6 +55,8 @@ export interface AppearanceSettingsProps {
 
 export function AppearanceSettings({
   theme,
+  isFullscreen,
+  onToggleFullscreen,
   onThemeChange,
   academyTheme,
   onAcademyThemeChange,
@@ -127,6 +137,25 @@ export function AppearanceSettings({
         pageTabColors={pageTabColors}
         onPageTabColorsChange={onPageTabColorsChange}
       />
+
+      <section className="settings-section">
+        <h2>Screen</h2>
+        <div className="settings-row-list">
+          <SettingRow
+            icon={CornersOut}
+            label="Full screen"
+            note="Expand the app to fill your screen."
+          >
+            <SettingsToggle
+              checked={isFullscreen}
+              onChange={(enabled) => {
+                if (enabled !== isFullscreen) onToggleFullscreen();
+              }}
+              label="Full screen"
+            />
+          </SettingRow>
+        </div>
+      </section>
     </div>
   );
 }

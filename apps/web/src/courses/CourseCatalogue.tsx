@@ -1,7 +1,13 @@
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
-import { useCallback, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
 import { ExpandableSearch } from "../ExpandableSearch";
 import { ThemedSelect } from "../ThemedSelect";
@@ -119,6 +125,8 @@ export function CourseCatalogue({
   deletingCourseIds,
 }: CourseCatalogueProps) {
   const [pendingDelete, setPendingDelete] = useState<Course | null>(null);
+  const quickFilterTabsRef = useRef<HTMLDivElement>(null);
+  const [hasQuickFilterOverflow, setHasQuickFilterOverflow] = useState(false);
   const [localDeletingIds, setLocalDeletingIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -156,6 +164,31 @@ export function CourseCatalogue({
           ["not-enrolled", "Not Enrolled"],
         ]
   ) satisfies readonly (readonly [CourseEnrollmentFilter, string])[];
+
+  useEffect(() => {
+    const tabs = quickFilterTabsRef.current;
+    if (!tabs) return;
+
+    const updateOverflow = () => {
+      setHasQuickFilterOverflow(
+        tabs.scrollWidth > tabs.clientWidth + 1 &&
+          tabs.scrollLeft + tabs.clientWidth < tabs.scrollWidth - 1,
+      );
+    };
+
+    updateOverflow();
+    const resizeObserver = new ResizeObserver(updateOverflow);
+    resizeObserver.observe(tabs);
+    for (const child of tabs.children) {
+      resizeObserver.observe(child);
+    }
+    tabs.addEventListener("scroll", updateOverflow, { passive: true });
+
+    return () => {
+      resizeObserver.disconnect();
+      tabs.removeEventListener("scroll", updateOverflow);
+    };
+  }, [quickFilters.length]);
 
   const sortOptions = (
     role === "creator"
@@ -348,8 +381,11 @@ export function CourseCatalogue({
       >
         <div className="min-w-0 text-left">
           <div
-            className="inline-flex min-h-9 w-fit max-w-full gap-2 overflow-x-auto max-[640px]:-mx-(--application-page-inline-gutter) max-[640px]:w-[calc(100%+var(--application-page-inline-gutter)+var(--application-page-inline-gutter))]! max-[640px]:max-w-none! max-[640px]:px-(--application-page-inline-gutter) min-[641px]:-ml-(--application-page-inline-gutter) min-[641px]:pl-(--application-page-inline-gutter) sm:min-h-10"
+            ref={quickFilterTabsRef}
+            className="inline-flex min-h-9 w-fit max-w-full gap-2 overflow-x-auto max-[640px]:-mx-(--application-page-inline-gutter) max-[640px]:w-[calc(100%+var(--application-page-inline-gutter)+var(--application-page-inline-gutter))]! max-[640px]:max-w-none! max-[640px]:px-(--application-page-inline-gutter) min-[641px]:-ml-(--application-page-inline-gutter) min-[641px]:pl-(--application-page-inline-gutter) min-[821px]:w-[calc(100%_+_var(--application-page-inline-gutter))]! min-[821px]:max-w-none! sm:min-h-10"
             role="tablist"
+            data-course-quick-filters
+            data-fade-right={hasQuickFilterOverflow ? "true" : undefined}
             aria-label={
               role === "creator" ? "Course lifecycle" : "Course enrollment"
             }

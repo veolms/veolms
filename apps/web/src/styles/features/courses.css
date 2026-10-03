@@ -337,19 +337,7 @@
   transform: translateX(2px);
 }
 
-/* The profile surface can be resized independently of the viewport. Container
-   queries keep its content stable at narrow custom sidebar and drawer widths. */
-@container (max-width: 245px) {
-  .courses-profile__login-icon {
-    width: 39px;
-    height: 39px;
-  }
-
-  .courses-profile__login-button .courses-profile__login-subtitle {
-    display: none;
-  }
-}
-
+/* Keep the login affordance compact when its containing sidebar is very narrow. */
 @container (max-width: 120px) {
   .courses-profile__login-button {
     justify-content: center;
@@ -459,6 +447,32 @@
   .courses-profile > .profile-menu--animated[data-open="true"] {
     transition: none !important;
   }
+}
+
+.settings-quick-menu[aria-hidden="true"] {
+  display: none;
+}
+
+.courses-profile:has(> .settings-quick-menu:not([aria-hidden="true"])) {
+  z-index: 2;
+}
+
+.courses-profile > .settings-quick-menu {
+  right: auto;
+  bottom: 0;
+  left: calc(100% + 8px);
+  z-index: 140;
+  min-width: min(200px, calc(100vw - 32px));
+  max-width: min(250px, calc(100vw - 32px));
+}
+
+.settings-quick-menu__item[aria-current="page"] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-strong));
+}
+
+.settings-quick-menu__item[aria-current="page"]:hover {
+  background: color-mix(in srgb, var(--accent) 30%, var(--surface-strong));
 }
 
 .profile-menu__divider {
@@ -888,6 +902,18 @@
 .courses-toolbar__filters {
   display: flex;
   gap: 12px;
+}
+
+@media (min-width: 821px) {
+  /* The stateful fade follows horizontal overflow and cannot be expressed as a Tailwind utility. */
+  [data-courses-toolbar] [data-course-quick-filters][data-fade-right="true"] {
+    mask-image: linear-gradient(
+      to right,
+      #000 0%,
+      #000 calc(100% - 1.5rem),
+      transparent 100%
+    );
+  }
 }
 
 .course-select {

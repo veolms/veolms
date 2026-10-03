@@ -27,8 +27,9 @@ import {
   type CourseOpenOptions,
 } from "../courses/catalogue";
 import { getStudentCatalogueEnrollmentFilterFromPath } from "../courses/catalogueRoutes";
-import { useCurrentUser, useSignOut } from "../services/auth";
+import { authKeys, useCurrentUser, useSignOut } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
+import { queryClient } from "../lib/query-client";
 import type { LearningCourse } from "../StudentPages";
 import {
   getCoursePlayerLaunchPath,
@@ -517,6 +518,30 @@ export default function AcademyLayout() {
 
   const navigateTo: NavigateTo = useCallback(
     (destination, options) => {
+      const requestedPath = decorateCoursePlayerLaunch(
+        options?.exact ? destination : getDestinationPath(destination),
+        locationPathRef.current,
+      );
+      const requestedPathname = normalizeNavigationPath(
+        requestedPath.split(/[?#]/, 1)[0] || "/",
+      );
+      const isDiscussionsPath =
+        requestedPathname === "/discussions" ||
+        requestedPathname.startsWith("/discussions/");
+
+      if (
+        isDiscussionsPath &&
+        authUserFetched &&
+        !authUserError &&
+        !activeUser
+      ) {
+        // Keep the confirmed signed-out state fresh so the login route can
+        // render immediately without revalidating the same session query.
+        queryClient.setQueryData(authKeys.me(), null);
+        void navigate(buildLoginPath(requestedPath), { replace: true });
+        return;
+      }
+
       const performNavigation = () => {
         const destinationPath = options?.exact
           ? destination
@@ -673,7 +698,15 @@ export default function AcademyLayout() {
 
       void autosyncManager.flushAll().then(performNavigation);
     },
-    [location.state, navigate, route.section, workspaceNavigationItems],
+    [
+      activeUser,
+      authUserError,
+      authUserFetched,
+      location.state,
+      navigate,
+      route.section,
+      workspaceNavigationItems,
+    ],
   );
   const navigateToRef = useRef(navigateTo);
   useLayoutEffect(() => {

@@ -123,7 +123,12 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
 
     if (!access.isAuthenticated) {
       if (requiresAcademyAuth(path) && !isGuestLandingPath(path)) {
-        navigate(APP_HOME_PATH, { replace: true });
+        const returnPath = `${location.pathname}${location.search}`;
+        const destination =
+          path === "/discussions" || path.startsWith("/discussions/")
+            ? buildLoginPath(returnPath)
+            : APP_HOME_PATH;
+        navigate(destination, { replace: true });
       }
       return;
     }

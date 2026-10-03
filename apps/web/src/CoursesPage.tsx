@@ -24,6 +24,11 @@ import type {
   CourseListResponse,
   CourseOverviewResponse,
 } from "@veolms/contracts";
+import {
+  normalizeSettingsTab,
+  rememberSettingsTab,
+  type SettingsTab,
+} from "./routing/tabSessionState";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
@@ -39,6 +44,7 @@ import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldChec
 import { StudentIcon as Student } from "@phosphor-icons/react/Student";
 import { ToastNotification, type ToastMessage } from "./ToastNotification";
 import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
+import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import logoDarkSvg from "./assets/procodrr-logo-dark.svg?raw";
 import type { LearningCourse } from "./StudentPages";
@@ -48,6 +54,7 @@ import {
   subscribeToPointerGestureClaims,
 } from "./gestures/pointerGestureOwnership";
 import { useSecondPressHold } from "./gestures/useSecondPressHold";
+import { useTripleTap } from "./gestures/useTripleTap";
 import {
   getCourseQuickFilterCounts,
   getVisibleCourses,
@@ -227,6 +234,11 @@ const CreatorDashboard = lazy(() =>
 const ReadingModeQuickMenu = lazy(() =>
   import("./reading-mode/ReadingModeQuickMenu").then((module) => ({
     default: module.ReadingModeQuickMenu,
+  })),
+);
+const SettingsQuickMenu = lazy(() =>
+  import("./settings/SettingsQuickMenu").then((module) => ({
+    default: module.SettingsQuickMenu,
   })),
 );
 const CourseOverviewPage = lazy(() =>
@@ -631,12 +643,17 @@ function LoginProfileButton({
       aria-label={
         displayName
           ? `Account for ${displayName}. Open account access`
-          : "Login. Access Your Learning Journey"
+          : "Login. Sign in for more"
       }
       data-auth-identity-button=""
       onClick={onLogin}
     >
-      <ShellProfileAvatar avatarUrl={null} />
+      <i
+        aria-hidden="true"
+        className="courses-profile__login-icon flex shrink-0 items-center justify-center text-(--accent)"
+      >
+        <UserCircle size={45.36} weight="thin" />
+      </i>
       <span className="courses-profile__login-copy">
         <strong
           className="courses-profile__login-title"
@@ -648,7 +665,7 @@ function LoginProfileButton({
           className="courses-profile__login-subtitle"
           data-auth-identity-subtitle=""
         >
-          {displayName ? "Account" : "Access Your Learning Journey"}
+          {displayName ? "Account" : "Sign in for more"}
         </small>
       </span>
       <i
@@ -800,13 +817,13 @@ export function CoursesPage({
   const paletteMenuDockIndex = sidebarDockItems.indexOf(
     paletteMenuSource === "appearance" ? "appearance" : "theme",
   );
-  const mobilePaletteAnchorX =
-    ((Math.max(0, paletteMenuDockIndex) + 0.5) /
-      Math.max(1, sidebarDockItems.length)) *
-    100;
   const [readingModeMenu, setReadingModeMenu] = useState<
     "desktop" | "mobile" | null
   >(null);
+  const [settingsQuickMenu, setSettingsQuickMenu] = useState<
+    "desktop" | "mobile" | null
+  >(null);
+  const [settingsQuickMenuLoaded, setSettingsQuickMenuLoaded] = useState(false);
   const [sidebarTooltip, setSidebarTooltip] = useState<SidebarTooltip | null>(
     null,
   );
@@ -1132,6 +1149,10 @@ export function CoursesPage({
   const mobileMoreRef = useRef<HTMLButtonElement>(null);
   const mobileSheetRef = useRef<HTMLDivElement>(null);
   const mobileMenuDismissThenRef = useRef<DrawerDismissThen>(null);
+  useBackDismiss({
+    open: settingsQuickMenu !== null,
+    onDismiss: () => setSettingsQuickMenu(null),
+  });
   const toggleSettingsNavigationRef = useRef<(() => void) | null>(null);
   const mobileMenuSnapPoints = useMemo(
     () => [mobileMenuCollapsedSnapPoint, 1],
@@ -1704,6 +1725,9 @@ export function CoursesPage({
     if (!compactNavigation) {
       setMobileMenuOpen(false);
       setMobilePaletteMenu(false);
+      setSettingsQuickMenu((current) =>
+        current === "mobile" ? null : current,
+      );
       setReadingModeMenu((current) => (current === "mobile" ? null : current));
     }
   }, [compactNavigation]);
@@ -1714,6 +1738,9 @@ export function CoursesPage({
     if (mobileSidebarNavigationActive) {
       setMobileMenuOpen(false);
       setMobilePaletteMenu(false);
+      setSettingsQuickMenu((current) =>
+        current === "mobile" ? null : current,
+      );
       setReadingModeMenu((current) => (current === "mobile" ? null : current));
       return;
     }
@@ -2067,6 +2094,14 @@ export function CoursesPage({
       ) {
         setReadingModeMenu(null);
       }
+      if (
+        !(event.target instanceof Element) ||
+        !event.target.closest(
+          "[data-settings-quick-menu], [data-settings-quick-trigger]",
+        )
+      ) {
+        setSettingsQuickMenu(null);
+      }
     };
     const onEscape = (event: KeyboardEvent) => {
       const isEditingText = isEditingShortcutTarget(event.target);
@@ -2084,6 +2119,7 @@ export function CoursesPage({
         setCourseMenu(null);
         setProfileMenu(false);
         setPaletteMenu(false);
+        setSettingsQuickMenu(null);
         return;
       }
 
@@ -2093,6 +2129,7 @@ export function CoursesPage({
         revertPalettePreviewRef.current?.();
         setPaletteMenu(false);
         setReadingModeMenu(null);
+        setSettingsQuickMenu(null);
         setMobileMenuOpen(false);
         setMobilePaletteMenu(false);
         setEdgeSidebarOpen(false);
@@ -2443,9 +2480,19 @@ export function CoursesPage({
     setMobileMenuOpen(false);
     setProfileMenu(false);
     setMobilePaletteMenu(false);
+    setSettingsQuickMenu((current) => (current === "mobile" ? null : current));
     setReadingModeMenu((current) => (current === "mobile" ? null : current));
   };
 
+  const openMobileNavigationMenu = () => {
+    const nextSnapPoint = isLearningSurface
+      ? Math.max(getLearningMobileMenuSnapPoint(), mobileMenuContentSnapPoint)
+      : mobileMenuContentSnapPoint;
+    setMobilePaletteMenu(false);
+    setMobileMenuCollapsedSnapPoint(nextSnapPoint);
+    setMobileMenuSnapPoint(nextSnapPoint);
+    setMobileMenuOpen(true);
+  };
   const dismissMobileMenuThen = (action: () => void) => {
     if (mobileMenuOpen && mobileMenuDismissThenRef.current) {
       mobileMenuDismissThenRef.current(action);
@@ -2466,6 +2513,7 @@ export function CoursesPage({
   };
 
   const toggleSettingsNavigation = () => {
+    setSettingsQuickMenu(null);
     if (page !== "settings") {
       selectNavigation("Settings");
       return;
@@ -2475,6 +2523,20 @@ export function CoursesPage({
     dismissMobileMenuThen(() => onExitSettings?.());
   };
   toggleSettingsNavigationRef.current = toggleSettingsNavigation;
+
+  const navigateSettingsQuickMenu = (tab: SettingsTab) => {
+    const surface = settingsQuickMenu;
+    rememberSettingsTab(tab);
+    setSettingsQuickMenu(null);
+    const navigate = () =>
+      onNavigatePage?.(`/settings/${tab}`, { resetScroll: true });
+    if (surface === "mobile") {
+      setEdgeSidebarOpen(false);
+      dismissMobileMenuThen(navigate);
+    } else {
+      navigate();
+    }
+  };
 
   const navigationUsesCompactInteraction =
     compactNavigation || coarseNavigationInput;
@@ -2607,7 +2669,30 @@ export function CoursesPage({
     revertPalettePreviewRef.current?.();
     setPaletteMenu(false);
     setMobilePaletteMenu(false);
+    setSettingsQuickMenu(null);
     setReadingModeMenu(mobile ? "mobile" : "desktop");
+  };
+  const showSettingsQuickMenu = (mobile = false) => {
+    revertPalettePreviewRef.current?.();
+    setProfileMenu(false);
+    setPaletteMenu(false);
+    setMobilePaletteMenu(false);
+    setReadingModeMenu(null);
+    setSettingsQuickMenuLoaded(true);
+    setSettingsQuickMenu(mobile ? "mobile" : "desktop");
+  };
+  const openSettingsQuickMenu = (
+    event: ReactMouseEvent<HTMLButtonElement>,
+    mobile = false,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const target = mobile ? "mobile" : "desktop";
+    if (settingsQuickMenu === target) {
+      setSettingsQuickMenu(null);
+      return;
+    }
+    showSettingsQuickMenu(mobile);
   };
   const openReadingModeMenu = (
     event: ReactMouseEvent<HTMLButtonElement>,
@@ -2615,6 +2700,10 @@ export function CoursesPage({
   ) => {
     event.preventDefault();
     event.stopPropagation();
+    if (readingModeMenu === (mobile ? "mobile" : "desktop")) {
+      setReadingModeMenu(null);
+      return;
+    }
     showReadingModeMenu(mobile);
   };
   const fullscreenActionLabel = isFullscreen ? "Exit fullscreen" : "Fullscreen";
@@ -2625,6 +2714,7 @@ export function CoursesPage({
       setNotice("Fullscreen is not available in this browser.");
     }
   }, [setNotice]);
+  useTripleTap(() => void toggleFullscreen());
 
   useEffect(() => {
     const syncFullscreenState = () =>
@@ -2826,6 +2916,15 @@ export function CoursesPage({
   ) => {
     event.preventDefault();
     event.stopPropagation();
+    const isOpen = mobile
+      ? mobilePaletteMenu && paletteMenuSource === "appearance"
+      : paletteMenu && paletteMenuSource === "appearance";
+    if (isOpen) {
+      revertPalettePreviewRef.current?.();
+      if (mobile) setMobilePaletteMenu(false);
+      else setPaletteMenu(false);
+      return;
+    }
     setReadingModeMenu(null);
     activateAppearanceOption("theme", mobile, "appearance");
   };
@@ -2889,10 +2988,11 @@ export function CoursesPage({
   const startDockLongPress = (
     event: ReactPointerEvent<HTMLButtonElement>,
     action: () => void,
+    includeMouse = false,
   ) => {
     if (event.button !== 0) return;
     event.stopPropagation();
-    if (event.pointerType === "mouse") return;
+    if (event.pointerType === "mouse" && !includeMouse) return;
 
     primeLongPressFeedback();
     const previousPress = dockLongPressRef.current;
@@ -3711,6 +3811,8 @@ export function CoursesPage({
             onExitSettings={onExitSettings}
             showBackButton={showPageBackButton}
             theme={theme}
+            isFullscreen={isFullscreen}
+            onToggleFullscreen={() => void toggleFullscreen()}
             onThemeChange={(next, origin) => {
               if (next !== theme) themeRevealOriginRef.current = origin ?? null;
               setTheme(next);
@@ -4513,7 +4615,27 @@ export function CoursesPage({
                         title={settingsControlTitle}
                         aria-current={settingsActive ? "page" : undefined}
                         aria-keyshortcuts={`${primaryShortcutModifier}+Comma`}
-                        onClick={toggleSettingsNavigation}
+                        aria-haspopup="menu"
+                        aria-expanded={settingsQuickMenu === "desktop"}
+                        aria-controls="desktop-settings-quick-menu"
+                        data-settings-quick-trigger
+                        onClick={(event) => {
+                          if (consumeAppearanceGestureClick(event)) return;
+                          toggleSettingsNavigation();
+                        }}
+                        onContextMenu={(event) =>
+                          openSettingsQuickMenu(event, false)
+                        }
+                        onPointerDown={(event) =>
+                          startDockLongPress(
+                            event,
+                            () => showSettingsQuickMenu(false),
+                            true,
+                          )
+                        }
+                        onPointerMove={moveDockLongPress}
+                        onPointerUp={finishDockLongPress}
+                        onPointerCancel={finishDockLongPress}
                       >
                         <GearSix
                           size={20}
@@ -4570,6 +4692,20 @@ export function CoursesPage({
                   />
                 )}
               </div>
+              {settingsQuickMenuLoaded && (
+                <Suspense fallback={null}>
+                  <SettingsQuickMenu
+                    id="desktop-settings-quick-menu"
+                    isOpen={settingsQuickMenu === "desktop"}
+                    activeTab={
+                      page === "settings"
+                        ? normalizeSettingsTab(settingsTab)
+                        : null
+                    }
+                    onNavigate={navigateSettingsQuickMenu}
+                  />
+                </Suspense>
+              )}
             </div>
           </aside>
         </>
@@ -4728,29 +4864,27 @@ export function CoursesPage({
             ref={mobileMoreRef}
             type="button"
             className={mobileMoreActive || mobileMenuOpen ? "is-active" : ""}
-            aria-label="Open profile and navigation menu"
+            aria-label="Open navigation and appearance menu"
             aria-expanded={mobileMenuOpen}
             aria-controls="mobile-navigation-sheet"
-            onClick={() => {
-              const nextSnapPoint = isLearningSurface
-                ? Math.max(
-                    getLearningMobileMenuSnapPoint(),
-                    mobileMenuContentSnapPoint,
-                  )
-                : mobileMenuContentSnapPoint;
-              setMobilePaletteMenu(false);
-              setMobileMenuCollapsedSnapPoint(nextSnapPoint);
-              setMobileMenuSnapPoint(nextSnapPoint);
-              setMobileMenuOpen(true);
-            }}
+            onClick={openMobileNavigationMenu}
           >
             <span>
               <span className="mobile-bottom-nav__profile-avatar">
-                <ShellProfileAvatar
-                  avatarUrl={shellProfileAvatarUrl}
-                  avatarSrcSet={shellProfileAvatarSrcSet}
-                />
-                {unreadNotificationCount > 0 ? (
+                {shellProfileAvatarUrl ? (
+                  <ShellProfileAvatar
+                    avatarUrl={shellProfileAvatarUrl}
+                    avatarSrcSet={shellProfileAvatarSrcSet}
+                  />
+                ) : (
+                  <UserCircle
+                    size={24}
+                    weight="regular"
+                    className="!text-(--accent)"
+                    aria-hidden="true"
+                  />
+                )}
+                {isAuthenticated && unreadNotificationCount > 0 ? (
                   <i className="courses-profile__presence" aria-hidden="true" />
                 ) : null}
               </span>
@@ -4786,6 +4920,48 @@ export function CoursesPage({
           finalFocus={mobileMoreRef}
           tabIndex={-1}
           className="mobile-menu-sheet [--mobile-menu-sheet-top-space:3px] data-expanded:rounded-none data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] rounded-t-[22px] px-3 pb-[max(14px,var(--app-safe-area-bottom))]"
+          floatingContent={
+            <>
+              {mobilePaletteMenu && (
+                <AcademyPaletteMenu
+                  themes={academyThemes}
+                  selectedTheme={displayedAcademyTheme}
+                  id="mobile-theme-menu"
+                  className="sidebar-palette-menu mobile-palette-menu absolute! right-auto bottom-[calc(68px_+_var(--app-viewport-safe-area-bottom))] left-3 z-[190]! w-[min(216px,calc(100vw_-_24px))]! max-h-[calc(100dvh_-_92px_-_env(safe-area-inset-top))] overflow-y-auto"
+                  mobile
+                  onSelect={changePalette}
+                  onPreview={previewAcademyTheme}
+                  onConfirm={confirmMobilePaletteTheme}
+                  onCancel={cancelMobilePalettePreview}
+                />
+              )}
+              {settingsQuickMenuLoaded && (
+                <Suspense fallback={null}>
+                  <SettingsQuickMenu
+                    id="mobile-settings-quick-menu"
+                    className="settings-quick-menu--mobile absolute! right-3 bottom-[calc(68px_+_var(--app-viewport-safe-area-bottom))] left-auto z-[190]! w-[min(250px,calc(100vw_-_24px))]! min-w-[min(200px,calc(100vw_-_24px))]! max-h-[calc(100dvh_-_92px_-_env(safe-area-inset-top))] overflow-y-auto"
+                    isOpen={settingsQuickMenu === "mobile"}
+                    activeTab={
+                      page === "settings"
+                        ? normalizeSettingsTab(settingsTab)
+                        : null
+                    }
+                    onNavigate={navigateSettingsQuickMenu}
+                  />
+                </Suspense>
+              )}
+              {readingModeMenu === "mobile" && (
+                <Suspense fallback={null}>
+                  <ReadingModeQuickMenu
+                    id="mobile-reading-mode-quick-settings"
+                    className="reading-mode-quick-menu--mobile"
+                    preferences={readingModePreferences}
+                    onChange={updateReadingMode}
+                  />
+                </Suspense>
+              )}
+            </>
+          }
           data-sidebar-swipe-ignore
           onPointerDownCapture={(event) => {
             if (
@@ -4829,7 +5005,7 @@ export function CoursesPage({
                 />
               ) : (
                 <LoginProfileButton
-                  className="mobile-menu-sheet__profile"
+                  className="mobile-menu-sheet__profile courses-profile__button profile-menu__identity rounded-2xl! p-0! ps-2! pe-3! bg-[color-mix(in_srgb,var(--surface-strong)_94%,white_6%)]! hover:bg-[color-mix(in_srgb,var(--surface-strong)_90%,white_10%)]!"
                   arrowSize={17}
                   displayName={authIdentityHint?.displayName}
                   onLogin={() => onNavigatePage("/login")}
@@ -4903,11 +5079,6 @@ export function CoursesPage({
               className={`mobile-menu-sheet__appearance sidebar-appearance--mobile-dock${mobilePaletteMenu ? " mobile-menu-sheet__appearance--palette-open" : ""}`}
               role="group"
               aria-label="Appearance controls"
-              style={
-                {
-                  "--mobile-palette-anchor-x": `${mobilePaletteAnchorX}%`,
-                } as CSSProperties
-              }
             >
               {sidebarDockItems.map((item) => {
                 if (item === "appearance") {
@@ -5078,7 +5249,27 @@ export function CoursesPage({
                       title={settingsControlTitle}
                       aria-current={settingsActive ? "page" : undefined}
                       aria-keyshortcuts={`${primaryShortcutModifier}+Comma`}
-                      onClick={toggleSettingsNavigation}
+                      aria-haspopup="menu"
+                      aria-expanded={settingsQuickMenu === "mobile"}
+                      aria-controls="mobile-settings-quick-menu"
+                      data-settings-quick-trigger
+                      onClick={(event) => {
+                        if (consumeAppearanceGestureClick(event)) return;
+                        toggleSettingsNavigation();
+                      }}
+                      onContextMenu={(event) =>
+                        openSettingsQuickMenu(event, true)
+                      }
+                      onPointerDown={(event) =>
+                        startDockLongPress(
+                          event,
+                          () => showSettingsQuickMenu(true),
+                          true,
+                        )
+                      }
+                      onPointerMove={moveDockLongPress}
+                      onPointerUp={finishDockLongPress}
+                      onPointerCancel={finishDockLongPress}
                     >
                       <GearSix
                         size={21}
@@ -5108,30 +5299,7 @@ export function CoursesPage({
                   </button>
                 );
               })}
-              {mobilePaletteMenu && (
-                <AcademyPaletteMenu
-                  themes={academyThemes}
-                  selectedTheme={displayedAcademyTheme}
-                  id="mobile-theme-menu"
-                  className="sidebar-palette-menu mobile-palette-menu"
-                  mobile
-                  onSelect={changePalette}
-                  onPreview={previewAcademyTheme}
-                  onConfirm={confirmMobilePaletteTheme}
-                  onCancel={cancelMobilePalettePreview}
-                />
-              )}
             </div>
-            {readingModeMenu === "mobile" && (
-              <Suspense fallback={null}>
-                <ReadingModeQuickMenu
-                  id="mobile-reading-mode-quick-settings"
-                  className="reading-mode-quick-menu--mobile"
-                  preferences={readingModePreferences}
-                  onChange={updateReadingMode}
-                />
-              </Suspense>
-            )}
           </div>
         </DrawerContent>
       </Drawer>

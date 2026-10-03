@@ -420,10 +420,6 @@
     overflow: hidden;
   }
 
-  .mobile-menu-sheet__appearance--palette-open {
-    overflow: visible;
-  }
-
   .mobile-menu-sheet__appearance--palette-open > button.is-active {
     box-shadow: none;
   }
@@ -451,6 +447,39 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
+  }
+
+  /* The floating menus are children of the translated drawer popup. Add its
+     current swipe offset so their viewport-based dock anchor stays in place. */
+  #mobile-navigation-sheet > .mobile-palette-menu,
+  #mobile-navigation-sheet > .settings-quick-menu--mobile,
+  #mobile-navigation-sheet > .reading-mode-quick-menu--mobile {
+    top: auto;
+    bottom: calc(
+      68px + var(--app-viewport-safe-area-bottom, 0px) + var(--translate-y, 0px)
+    );
+    max-height: calc(100dvh - 92px - env(safe-area-inset-top, 0px));
+  }
+
+  #mobile-navigation-sheet > .mobile-palette-menu {
+    right: auto;
+    left: calc(var(--mobile-menu-sheet-inline-inset) + 5px);
+    width: min(216px, calc(100vw - 24px));
+  }
+
+  #mobile-navigation-sheet > .settings-quick-menu--mobile {
+    right: calc(var(--mobile-menu-sheet-inline-inset) + 5px);
+    left: auto;
+    width: min(250px, calc(100vw - 24px));
+    min-width: min(200px, calc(100vw - 24px));
+    max-width: min(250px, calc(100vw - 24px));
+  }
+
+  #mobile-navigation-sheet > .reading-mode-quick-menu--mobile {
+    right: auto;
+    left: 50%;
+    translate: -50% 0;
+    width: min(264px, calc(100vw - 24px));
   }
 }
 

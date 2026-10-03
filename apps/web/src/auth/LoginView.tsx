@@ -17,10 +17,14 @@ import {
 import type { AuthFlowState, AuthIdentifier } from "./authFlow";
 import { generateUniqueUsername } from "./username";
 import { getSecondaryVerificationMethodRequired } from "./authConfig";
-import { resolveAuthenticatedDestination } from "../routing/routeAccess";
+import {
+  resolveAuthenticatedDestination,
+  sanitizeReturnTo,
+} from "../routing/routeAccess";
 import { productName } from "../routing/routeDescriptors";
 import { useLogin, useRegister, useSendOtp } from "../services/auth";
 import { authStore } from "../store/auth.store";
+import { ToastNotification } from "../ToastNotification";
 
 function resolvePayload(identifier: AuthIdentifier) {
   return identifier.method === "email"
@@ -72,6 +76,10 @@ export function LoginView() {
   } | null>(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
+  const returnPath = returnTo?.split(/[?#]/, 1)[0] ?? "";
+  const isReturningToDiscussions =
+    returnPath === "/discussions" || returnPath.startsWith("/discussions/");
 
   // Keep the last OTP screen so it stays visible (as "verifying") during the
   // authenticated redirect. Written in an effect, not during render.
@@ -382,7 +390,11 @@ export function LoginView() {
 
       return (
         <AuthProgress
-          detail="Opening your courses."
+          detail={
+            isReturningToDiscussions
+              ? "Opening Discussions."
+              : "Opening your courses."
+          }
           title="Signing you in"
         />
       );
@@ -457,18 +469,23 @@ export function LoginView() {
       (flow.status === "sendingOtp" && flow.sendCount === 0));
 
   return (
-    <section aria-labelledby={AUTH_CARD_HEADING_ID} className="auth-card">
-      {renderStep()}
-      {welcomeStep ? (
-        <GoogleOneTap
-          onError={(message) => {
-            setOneTapPending(false);
-            setIdentifierError(message);
-          }}
-          onPendingChange={setOneTapPending}
-          returnTo={searchParams.get("returnTo")}
-        />
+    <>
+      <section aria-labelledby={AUTH_CARD_HEADING_ID} className="auth-card">
+        {renderStep()}
+        {welcomeStep ? (
+          <GoogleOneTap
+            onError={(message) => {
+              setOneTapPending(false);
+              setIdentifierError(message);
+            }}
+            onPendingChange={setOneTapPending}
+            returnTo={searchParams.get("returnTo")}
+          />
+        ) : null}
+      </section>
+      {isReturningToDiscussions ? (
+        <ToastNotification message="Log in to continue to Discussions." />
       ) : null}
-    </section>
+    </>
   );
 }

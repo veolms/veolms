@@ -641,18 +641,6 @@
     border: 0;
     border-radius: 0;
   }
-
-  .mobile-menu-sheet .mobile-palette-menu {
-    --mobile-palette-menu-width: min(216px, calc(100% - 24px));
-    right: auto;
-    bottom: calc(100% + 10px);
-    left: clamp(
-      0px,
-      calc(var(--mobile-palette-anchor-x, 50%) - 108px),
-      calc(100% - var(--mobile-palette-menu-width))
-    );
-    width: var(--mobile-palette-menu-width);
-  }
 }
 
 @media (max-width: 820px) {
