@@ -9,6 +9,7 @@ import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { TargetIcon as Target } from "@phosphor-icons/react/Target";
 import type {
   CourseSummary,
+  EnrolledCoursesResponse,
   LearningProgressResumeContextResponse,
 } from "@veolms/contracts";
 import {
@@ -29,7 +30,6 @@ import { getCoursePlayerPath } from "./learning/coursePlayerNavigation";
 import { formatRelativeTime } from "./learning/learning-notes.adapter";
 import { HomeSectionHeader } from "./home/HomePresentation";
 import { useCourses } from "./services/courses";
-import { useEnrolledCourses } from "./services/enrollments";
 import { useLearningProgressResumeContext } from "./services/learning-progress";
 import { useDashboardRecentDiscussions } from "./services/learning-interactions";
 import { useRecentLearningUpdates } from "./services/recent-updates";
@@ -47,6 +47,15 @@ interface StudentHomeProps {
   onOpenCourse: (course: LearningCourse) => void;
   onNavigatePage: (page: string) => void;
   studentName?: string;
+  enrollment: StudentHomeEnrollmentState;
+}
+
+export interface StudentHomeEnrollmentState {
+  data: EnrolledCoursesResponse | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  isFetching: boolean;
+  refetch: () => Promise<unknown>;
 }
 
 function getCourseTimestamp(value: string | Date | null | undefined) {
@@ -349,6 +358,7 @@ export function StudentHome({
   onOpenCourse,
   onNavigatePage,
   studentName,
+  enrollment,
 }: StudentHomeProps) {
   const navigate = useNavigate();
   const goalCompletion = 72;
@@ -361,7 +371,7 @@ export function StudentHome({
     isError: enrolledCoursesError,
     isFetching: enrolledCoursesFetching,
     refetch: refetchEnrolledCourses,
-  } = useEnrolledCourses();
+  } = enrollment;
   const hasEnrolledCourseData = enrolledData !== undefined;
   const enrolledCourses = useMemo(() => {
     return (enrolledData?.courses || []).map((course) => ({

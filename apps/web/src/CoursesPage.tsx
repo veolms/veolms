@@ -263,8 +263,10 @@ const SettingsPage = lazy(() =>
   })),
 );
 
-const StudentHome = lazy(() =>
-  import("./StudentHome").then((module) => ({ default: module.StudentHome })),
+const AuthenticatedHomeBoundary = lazy(() =>
+  import("./home/AuthenticatedHomeBoundary").then((module) => ({
+    default: module.AuthenticatedHomeBoundary,
+  })),
 );
 const GuestHome = lazy(() =>
   import("./GuestHome").then((module) => ({ default: module.GuestHome })),
@@ -888,6 +890,7 @@ export function CoursesPage({
   // same-page navigation after login; it is never persisted across reloads.
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
   const isAuthenticated = Boolean(activeUser);
+  const isAuthPending = !authUserFetched && !storeUser;
   const {
     canAccessDashboard,
     dashboardCapabilitiesResolved,
@@ -3628,8 +3631,10 @@ export function CoursesPage({
     if (effectiveRole === "student" && surfacePage === "home") {
       return (
         <Suspense fallback={<AcademyPageFallback />}>
-          {isAuthenticated ? (
-            <StudentHome
+          {isAuthPending ? (
+            <AcademyPageFallback />
+          ) : isAuthenticated ? (
+            <AuthenticatedHomeBoundary
               onOpenCourse={onOpenCourse}
               onNavigatePage={onNavigatePage}
               studentName={shellProfileDisplayName}
