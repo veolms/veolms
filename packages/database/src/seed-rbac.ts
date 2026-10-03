@@ -482,13 +482,6 @@ export const ROLE_MENU_PERMISSIONS: Record<
       canDelete: false,
     },
     {
-      menuId: MENUS.wishlist.id,
-      canCreate: true,
-      canRead: true,
-      canUpdate: true,
-      canDelete: true,
-    },
-    {
       menuId: MENUS.discussions.id,
       canCreate: true,
       canRead: true,
