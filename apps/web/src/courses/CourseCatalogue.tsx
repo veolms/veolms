@@ -190,7 +190,7 @@ export function CourseCatalogue({
   };
 
   const quickFilterTabClassName =
-    "inline-flex min-h-9 shrink-0 items-center gap-2 rounded-(--control-radius-structured) border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))] px-3.5 text-xs! leading-5! font-semibold max-[640px]:font-bold text-(--text-secondary) shadow-[0_5px_14px_color-mix(in_srgb,var(--accent-shadow)_16%,transparent)] transition-[background-color,border-color,color,box-shadow] hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-(--hover) hover:text-(--text) aria-selected:border-[color-mix(in_srgb,var(--accent)_70%,transparent)] aria-selected:bg-(--accent) aria-selected:text-(--on-accent) aria-selected:shadow-[0_7px_18px_color-mix(in_srgb,var(--accent-shadow)_45%,transparent)] aria-selected:hover:bg-(--accent-hover) sm:min-h-9 sm:px-4 sm:text-[0.8rem]!";
+    "inline-flex min-h-9 shrink-0 items-center gap-2 rounded-(--control-radius-structured) border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))] px-3.5 text-xs! leading-5! font-semibold max-[640px]:font-semibold! text-(--text-secondary) shadow-[0_5px_14px_color-mix(in_srgb,var(--accent-shadow)_16%,transparent)] transition-[background-color,border-color,color,box-shadow] hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-(--hover) hover:text-(--text) aria-selected:border-[color-mix(in_srgb,var(--accent)_70%,transparent)] aria-selected:bg-(--accent) aria-selected:text-(--on-accent) aria-selected:shadow-[0_7px_18px_color-mix(in_srgb,var(--accent-shadow)_45%,transparent)] aria-selected:hover:bg-(--accent-hover) sm:min-h-9 sm:px-4 sm:text-[0.8rem]!";
   const quickFilterCountClassName = (active: boolean) =>
     [
       "inline-flex h-5 min-w-5 items-center justify-center rounded-[5px] border px-1 text-[0.625rem]! leading-none font-bold tabular-nums",
@@ -284,7 +284,7 @@ export function CourseCatalogue({
         />
       ) : null}
       <header
-        className={`relative flex ${desktopLayout ? "flex-row items-center gap-3" : "flex-col gap-4"} border-b border-(--border) ${mediumLayout ? "pb-4" : "pb-0"} min-[640px]:pb-4 min-[900px]:flex-row min-[900px]:items-center min-[900px]:gap-3`}
+        className={`relative flex ${desktopLayout ? "flex-row items-center gap-3" : "flex-col gap-4"} border-b border-(--border) ${mediumLayout ? "pb-4" : "pb-0"} max-[640px]:px-(--application-page-inline-gutter) min-[640px]:pb-4 min-[900px]:flex-row min-[900px]:items-center min-[900px]:gap-3`}
       >
         <ExpandableSearch
           inputId="courses-search-input"
@@ -332,7 +332,7 @@ export function CourseCatalogue({
       </header>
 
       <div
-        className={`mt-2 flex flex-col gap-3 ${mediumLayout ? "mt-5 flex-row items-center justify-between" : ""} min-[640px]:mt-5 min-[640px]:flex-row min-[640px]:items-center min-[640px]:justify-between`}
+        className={`mt-2 flex flex-col gap-3 ${mediumLayout ? "mt-5 flex-row items-center justify-between" : ""} max-[640px]:px-(--application-page-inline-gutter) min-[640px]:mt-5 min-[640px]:flex-row min-[640px]:items-center min-[640px]:justify-between`}
         data-courses-toolbar
         style={
           mediumLayout
@@ -348,7 +348,7 @@ export function CourseCatalogue({
       >
         <div className="min-w-0 text-left">
           <div
-            className="inline-flex min-h-9 w-fit max-w-full gap-2 overflow-x-auto max-[640px]:-mx-(--application-page-inline-gutter) max-[640px]:w-[calc(100%+var(--application-page-inline-gutter)+var(--application-page-inline-gutter))] max-[640px]:max-w-none max-[640px]:px-(--application-page-inline-gutter) min-[641px]:-ml-(--application-page-inline-gutter) min-[641px]:pl-(--application-page-inline-gutter) sm:min-h-10"
+            className="inline-flex min-h-9 w-fit max-w-full gap-2 overflow-x-auto max-[640px]:-mx-(--application-page-inline-gutter) max-[640px]:w-[calc(100%+var(--application-page-inline-gutter)+var(--application-page-inline-gutter))]! max-[640px]:max-w-none! max-[640px]:px-(--application-page-inline-gutter) min-[641px]:-ml-(--application-page-inline-gutter) min-[641px]:pl-(--application-page-inline-gutter) sm:min-h-10"
             role="tablist"
             aria-label={
               role === "creator" ? "Course lifecycle" : "Course enrollment"
@@ -382,7 +382,7 @@ export function CourseCatalogue({
                 aria-selected={enrollmentFilter === "wishlist"}
                 tabIndex={enrollmentFilter === "wishlist" ? 0 : -1}
                 className={quickFilterTabClassName}
-                aria-label={`Wishlist, ${quickFilterCounts.wishlist} saved`}
+                aria-label={`Wishlisted, ${quickFilterCounts.wishlist} saved`}
                 onClick={() => onEnrollmentFilterChange("wishlist")}
                 onKeyDown={handleRovingTabKeyDown}
               >
@@ -396,7 +396,7 @@ export function CourseCatalogue({
                   }
                   aria-hidden
                 />
-                <span>Wishlist</span>
+                <span>Wishlisted</span>
                 <span
                   className={quickFilterCountClassName(
                     enrollmentFilter === "wishlist",

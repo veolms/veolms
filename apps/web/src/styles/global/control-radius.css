@@ -57,6 +57,13 @@
   border-radius: var(--control-radius-action) !important;
 }
 
+:root[data-control-radius]
+  .courses-app
+  [data-course-card-actions]
+  [data-control-radius-action] {
+  border-radius: 10px !important;
+}
+
 /* Course Creation Wizard & Course Overview Panels */
 :root[data-control-radius]
   .courses-app
@@ -145,7 +152,7 @@
 /* Course cards use the same capped family, with smaller limits for compact
    tags and six-pixel progress bars. Circular media controls stay fixed. */
 :root[data-control-radius] .courses-app [data-course-card] {
-  --control-radius-course-card: var(--control-radius-structured);
+  --control-radius-course-card: 16px;
   --control-radius-course-tag: min(var(--control-radius-structured), 8px);
   --control-radius-course-progress: min(var(--control-radius-structured), 2px);
   border-radius: var(--control-radius-course-card) !important;

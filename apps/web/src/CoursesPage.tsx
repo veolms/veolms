@@ -4239,6 +4239,7 @@ export function CoursesPage({
               : page !== "courses"
                 ? "student-surface-main"
                 : "",
+            !renderMain && page === "courses" ? "max-[640px]:px-0!" : "",
             !renderMain && page === "settings" ? "courses-main--settings" : "",
             mobileSidebarNavigationActive
               ? renderMain

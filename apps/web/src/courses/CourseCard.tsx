@@ -1,11 +1,12 @@
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
+import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { CertificateIcon as Certificate } from "@phosphor-icons/react/Certificate";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { CopySimpleIcon as CopySimple } from "@phosphor-icons/react/CopySimple";
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
-import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
+import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
 import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
 import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullets";
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
@@ -19,7 +20,6 @@ import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { getCourseRouteKey } from "./catalogue";
 import type { Course, CourseRole } from "./catalogue";
 import { CourseActionMenu, MenuAction, MenuDivider } from "./CourseActionMenu";
-import { CourseWishlistHeartButton } from "./CourseWishlistHeartButton";
 import { CourseCardThumbnail } from "./CourseCardThumbnail";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
 export {
@@ -156,7 +156,7 @@ export function CourseCard({
 
   return (
     <article
-      className={`group relative min-w-0 overflow-hidden rounded-xl border transition-[background-color,box-shadow,opacity,border-color] duration-200 ${
+      className={`group relative min-w-0 overflow-hidden rounded-2xl border transition-[background-color,box-shadow,opacity,border-color] duration-200 ${
         isDeleting
           ? "border-(--border) bg-(--card-surface,var(--surface)) opacity-60 pointer-events-none select-none"
           : "border-(--border) bg-(--card-surface,var(--surface)) shadow-(--card-shadow) hover:bg-(--card-surface-hover,var(--hover)) hover:shadow-(--card-hover-shadow)"
@@ -167,7 +167,7 @@ export function CourseCard({
       data-deleting={isDeleting ? "true" : undefined}
     >
       <div
-        className="relative aspect-video overflow-hidden rounded-t-[11px] bg-(--track)"
+        className="relative aspect-video overflow-hidden rounded-t-2xl bg-(--track)"
         data-course-card-media
       >
         {course.thumbnail ? (
@@ -201,31 +201,16 @@ export function CourseCard({
               <span>Deleting...</span>
             </span>
           </div>
-        ) : !course.enrolled ? (
-          <CourseWishlistHeartButton
-            variant="card-media"
-            wishlisted={wishlisted}
-            disabled={isDeleting}
-            aria-label={
-              wishlisted
-                ? `Remove ${course.title} from wishlist`
-                : `Add ${course.title} to wishlist`
-            }
-            onClick={(event) => {
-              event.stopPropagation();
-              onWishlist(course);
-            }}
-          />
         ) : null}
       </div>
 
       <div
-        className="relative flex min-h-46 flex-col p-4"
+        className="relative flex min-h-46 flex-col px-4 pt-3 pb-4"
         data-course-card-details
       >
         <a
           href={overviewPath}
-          className="absolute inset-0 z-10 cursor-pointer rounded-b-[11px] outline-none transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
+          className="absolute inset-0 z-10 cursor-pointer rounded-b-2xl outline-none transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
           aria-label={`View course overview for ${course.title}`}
           title="View Course Overview"
           data-course-card-curriculum
@@ -251,8 +236,8 @@ export function CourseCard({
           className="-mx-2 flex min-w-0 items-start"
           data-course-card-info-row
         >
-          <div className="min-w-0 flex-1 px-2 py-1.5 text-left">
-            <h2 className="truncate text-[0.92rem] font-semibold leading-8 tracking-[-0.015em] text-(--text) lg:text-[0.98rem]">
+          <div className="min-w-0 flex-1 px-2 text-left">
+            <h2 className="truncate text-base font-semibold leading-10 tracking-[-0.015em] text-(--text) lg:text-lg">
               {course.title}
             </h2>
             <p className="mt-0.5 truncate text-[0.75rem] leading-6 text-(--muted)">
@@ -447,6 +432,19 @@ export function CourseCard({
                   />
                   <MenuDivider />
                   <MenuAction
+                    icon={
+                      <Heart
+                        size={17}
+                        weight={wishlisted ? "fill" : "regular"}
+                        aria-hidden="true"
+                      />
+                    }
+                    label={
+                      wishlisted ? "Remove from Wishlist" : "Add to Wishlist"
+                    }
+                    onClick={() => closeThen(() => onWishlist(course))}
+                  />
+                  <MenuAction
                     Icon={ShareNetwork}
                     label="Share Course"
                     onClick={() => closeThen(() => void shareCourse())}
@@ -523,7 +521,7 @@ export function CourseCard({
                   Boolean(isBin || course.deletedAt) &&
                   (!onRestoreRequested || !canEdit))
               }
-              className={`relative z-20 min-h-11 w-full items-center rounded-(--control-radius-action) border border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-(--accent) px-3.25 text-[14px]! font-[650]! text-(--on-accent) shadow-[0_10px_22px_color-mix(in_srgb,var(--accent-shadow)_48%,transparent)] transition-[color,background-color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) ${
+              className={`relative z-20 min-h-11 w-full items-center !rounded-[10px] border border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-(--accent) px-3.25 text-[15px]! font-semibold! text-(--on-accent) shadow-[0_10px_22px_color-mix(in_srgb,var(--accent-shadow)_48%,transparent)] transition-[color,background-color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) ${
                 role === "creator"
                   ? "flex justify-center gap-2 hover:bg-(--accent-hover)"
                   : "flex justify-center gap-3 hover:bg-(--accent-hover)"
@@ -617,25 +615,30 @@ export function CourseCard({
                   </>
                 )
               ) : (
-                <span className="flex min-w-0 items-center gap-3">
+                <span
+                  className={`flex min-w-0 items-center ${course.enrolled ? "gap-3" : "gap-2.5"}`}
+                >
                   {course.enrolled ? (
-                    <Play
-                      className="shrink-0"
-                      size={17}
-                      weight="fill"
-                      aria-hidden="true"
-                    />
+                    <>
+                      <Play
+                        className="shrink-0"
+                        size={17}
+                        weight="fill"
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">Continue Learning</span>
+                    </>
                   ) : (
-                    <GraduationCap
-                      className="shrink-0"
-                      size={17}
-                      weight="bold"
-                      aria-hidden="true"
-                    />
+                    <>
+                      <span className="truncate">Enroll Now</span>
+                      <ArrowRight
+                        className="shrink-0 translate-y-[0.5px]"
+                        size={18}
+                        weight="bold"
+                        aria-hidden="true"
+                      />
+                    </>
                   )}
-                  <span className="truncate">
-                    {course.enrolled ? "Continue Learning" : "Enroll Now"}
-                  </span>
                 </span>
               )}
             </button>

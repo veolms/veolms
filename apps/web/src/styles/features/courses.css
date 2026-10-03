@@ -539,24 +539,33 @@
   height: 21px;
 }
 
-.profile-menu__role-icon--student,
+.profile-menu__role-icon--student {
+  color: #5da9ff;
+}
+
 .profile-menu__role-icon--admin,
 .profile-menu__role-icon--creator {
-  color: var(--accent-ink, var(--accent));
+  color: #a16cff;
 }
 
 .profile-menu__item .profile-menu__check {
   color: var(--accent-ink, var(--accent));
 }
 
-.profile-menu__item-icon--profile,
-.profile-menu__item-icon--notifications {
-  color: var(--accent-ink, var(--accent));
+.profile-menu__item-icon--profile {
+  color: #5da9ff;
 }
 
-.profile-menu__item-icon--orders,
+.profile-menu__item-icon--notifications {
+  color: #f1be4b;
+}
+
+.profile-menu__item-icon--orders {
+  color: #d68eea;
+}
+
 .profile-menu__item-icon--sidebar {
-  color: color-mix(in srgb, var(--accent-ink, var(--accent)) 76%, var(--text));
+  color: #63c8d5;
 }
 
 .profile-menu__item--logout {
