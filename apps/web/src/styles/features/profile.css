@@ -231,8 +231,8 @@
     0 6px 16px color-mix(in srgb, var(--canvas) 35%, transparent),
     inset 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent);
   cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
+  opacity: 1;
+  pointer-events: auto;
   transform: none;
   transition:
     opacity 150ms ease,
@@ -377,11 +377,6 @@
 .settings-profile__photo:focus-within .settings-profile__camera {
   opacity: 1;
   pointer-events: auto;
-}
-
-.settings-profile__photo:hover::after,
-.settings-profile__photo:focus-within::after {
-  opacity: 1;
 }
 
 .settings-profile__camera:hover,
@@ -2658,11 +2653,16 @@ html:has(.settings-profile__verification-dialog-overlay) {
   .settings-profile__privacy-dialog-copy {
     padding-right: 20px;
   }
-  .settings-profile__privacy-dialog-actions {
+  .settings-profile__privacy-dialog-actions:not(
+    .settings-profile__crop-dialog-actions
+  ) {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
   }
-  .settings-profile__privacy-dialog-actions button {
+  .settings-profile__privacy-dialog-actions:not(
+      .settings-profile__crop-dialog-actions
+    )
+    button {
     width: 100%;
   }
 }
