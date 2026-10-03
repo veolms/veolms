@@ -144,6 +144,7 @@ import {
 import {
   applyRootPalette,
   applyWithThemeViewTransition,
+  skipActiveThemeViewTransitions,
   themeRevealOriginFromClick,
 } from "./shell/themeViewTransition";
 import {
@@ -1740,7 +1741,294 @@ export function CoursesPage({
   }, [showSidebarAppearanceControl, showSidebarThemeIcon]);
 
   useEffect(() => {
+    let transitionPointer: {
+      pointerId: number;
+      kind: "palette" | "mode";
+      key: string | null;
+      startX: number;
+      startY: number;
+      longPressTimer: number | null;
+      longPressModeControl: boolean;
+      longPressActivated: boolean;
+    } | null = null;
+    let suppressNextModeClick = false;
+    let resetSuppressedModeClickTimer: number | null = null;
+    let lastPointerX = 0;
+    let lastPointerY = 0;
+    let hasLastPointerPosition = false;
+    const root = document.documentElement;
+    const getThemeTransitionKind = (): "palette" | "mode" | null => {
+      const kind = root.dataset.themeTransition;
+      return kind === "palette" || kind === "mode" ? kind : null;
+    };
+    const findTransitionControlAt = (
+      x: number,
+      y: number,
+      kind: "palette" | "mode",
+    ) =>
+      Array.from(
+        document.querySelectorAll<HTMLButtonElement>(
+          kind === "palette"
+            ? "[data-theme-swatch]"
+            : "[data-appearance-mode-toggle]",
+        ),
+      ).find((button) => {
+        const rect = button.getBoundingClientRect();
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          x >= rect.left &&
+          x <= rect.right &&
+          y >= rect.top &&
+          y <= rect.bottom
+        );
+      });
+    const findAppearanceModeControlAt = (x: number, y: number) =>
+      Array.from(
+        document.querySelectorAll<HTMLButtonElement>(
+          "[data-appearance-mode-toggle]",
+        ),
+      ).find((button) => {
+        const rect = button.getBoundingClientRect();
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          x >= rect.left &&
+          x <= rect.right &&
+          y >= rect.top &&
+          y <= rect.bottom
+        );
+      });
+    const openAppearancePaletteFromControl = (control: HTMLButtonElement) =>
+      activateAppearanceOption(
+        "theme",
+        control.hasAttribute("data-mobile-palette-trigger"),
+        "appearance",
+      );
+    const clearTransitionLongPress = (
+      press: NonNullable<typeof transitionPointer>,
+    ) => {
+      if (press.longPressTimer !== null) {
+        window.clearTimeout(press.longPressTimer);
+        press.longPressTimer = null;
+      }
+    };
+    const suppressNextModeClickOnce = () => {
+      suppressNextModeClick = true;
+      if (resetSuppressedModeClickTimer !== null) {
+        window.clearTimeout(resetSuppressedModeClickTimer);
+      }
+      resetSuppressedModeClickTimer = window.setTimeout(() => {
+        suppressNextModeClick = false;
+        resetSuppressedModeClickTimer = null;
+      }, 0);
+    };
+    const getTransitionControlKey = (
+      button: HTMLButtonElement,
+      kind: "palette" | "mode",
+    ) => (kind === "palette" ? (button.dataset.themeSwatch ?? null) : "mode");
+    const syncTransitionControlCursor = (x: number, y: number) => {
+      const kind = getThemeTransitionKind();
+      const overTransitionControl =
+        kind !== null && Boolean(findTransitionControlAt(x, y, kind));
+      if (overTransitionControl) {
+        if (root.dataset.themeControlCursor !== "pointer") {
+          root.dataset.themeControlCursor = "pointer";
+        }
+      } else if (root.dataset.themeControlCursor) {
+        delete root.dataset.themeControlCursor;
+      }
+    };
+    const onThemeTransitionPointerMove = (event: PointerEvent) => {
+      lastPointerX = event.clientX;
+      lastPointerY = event.clientY;
+      hasLastPointerPosition = true;
+      const press = transitionPointer;
+      if (
+        press?.pointerId === event.pointerId &&
+        press.longPressTimer !== null &&
+        Math.hypot(event.clientX - press.startX, event.clientY - press.startY) >
+          APPEARANCE_LONG_PRESS_MOVE_TOLERANCE
+      ) {
+        clearTransitionLongPress(press);
+        press.longPressModeControl = false;
+      }
+      if (getThemeTransitionKind()) {
+        syncTransitionControlCursor(lastPointerX, lastPointerY);
+      } else if (root.dataset.themeControlCursor) {
+        delete root.dataset.themeControlCursor;
+      }
+    };
+    const themeTransitionObserver = new MutationObserver(() => {
+      if (!getThemeTransitionKind()) {
+        delete root.dataset.themeControlCursor;
+        return;
+      }
+      if (hasLastPointerPosition) {
+        syncTransitionControlCursor(lastPointerX, lastPointerY);
+      }
+    });
+    themeTransitionObserver.observe(root, {
+      attributes: true,
+      attributeFilter: ["data-theme-transition"],
+    });
+    const dispatchTransitionControlClick = (
+      button: HTMLButtonElement,
+      event: MouseEvent,
+    ) => {
+      button.dispatchEvent(
+        new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          button: event.button,
+          buttons: event.buttons,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          detail: event.detail,
+          view: window,
+        }),
+      );
+    };
+    const isThemeTransitionSurfaceTarget = (target: EventTarget | null) =>
+      getThemeTransitionKind() !== null &&
+      (target === document || target === root || target === document.body);
+    const onThemeTransitionPointerDown = (event: PointerEvent) => {
+      const kind = getThemeTransitionKind();
+      if (kind) {
+        syncTransitionControlCursor(event.clientX, event.clientY);
+      }
+      if (
+        !isThemeTransitionSurfaceTarget(event.target) ||
+        !event.isPrimary ||
+        event.button !== 0
+      )
+        return;
+      if (!kind) return;
+      const modeControl = findAppearanceModeControlAt(
+        event.clientX,
+        event.clientY,
+      );
+      const control = findTransitionControlAt(
+        event.clientX,
+        event.clientY,
+        kind,
+      );
+      transitionPointer = {
+        pointerId: event.pointerId,
+        kind,
+        key: control ? getTransitionControlKey(control, kind) : null,
+        startX: event.clientX,
+        startY: event.clientY,
+        longPressTimer: null,
+        longPressModeControl:
+          Boolean(modeControl) && event.pointerType !== "mouse",
+        longPressActivated: false,
+      };
+      if (modeControl && event.pointerType !== "mouse") {
+        const pointerId = event.pointerId;
+        const isMobile = modeControl.hasAttribute(
+          "data-mobile-palette-trigger",
+        );
+        transitionPointer.longPressTimer = window.setTimeout(() => {
+          const press = transitionPointer;
+          if (!press || press.pointerId !== pointerId) return;
+          press.longPressTimer = null;
+          press.longPressActivated = true;
+          dockLongPressConsumedUntilRef.current = performance.now() + 1000;
+          acknowledgeLongPress();
+          activateAppearanceOption("theme", isMobile, "appearance");
+        }, APPEARANCE_LONG_PRESS_DURATION);
+      }
+      // Prevent a press on the transition snapshot from being replayed
+      // against the page beneath it when the reveal finishes.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+    const onThemeTransitionPointerUp = (event: PointerEvent) => {
+      const pressedControl = transitionPointer;
+      if (pressedControl?.pointerId !== event.pointerId) return;
+      clearTransitionLongPress(pressedControl);
+      transitionPointer = null;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      if (pressedControl.longPressActivated) {
+        suppressNextModeClickOnce();
+        return;
+      }
+
+      const control = findTransitionControlAt(
+        event.clientX,
+        event.clientY,
+        pressedControl.kind,
+      );
+      if (
+        !control ||
+        getTransitionControlKey(control, pressedControl.kind) !==
+          pressedControl.key
+      )
+        return;
+
+      if (pressedControl.kind === "mode") {
+        suppressNextModeClickOnce();
+      }
+      dispatchTransitionControlClick(control, event);
+    };
+    const onThemeTransitionPointerCancel = (event: PointerEvent) => {
+      if (transitionPointer?.pointerId === event.pointerId) {
+        clearTransitionLongPress(transitionPointer);
+        transitionPointer = null;
+      }
+    };
+    const onThemeTransitionContextMenu = (event: MouseEvent) => {
+      if (!isThemeTransitionSurfaceTarget(event.target)) return;
+      const control = findAppearanceModeControlAt(event.clientX, event.clientY);
+      if (!control) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (transitionPointer) {
+        clearTransitionLongPress(transitionPointer);
+        transitionPointer.longPressModeControl = true;
+        transitionPointer.longPressActivated = true;
+      }
+      openAppearancePaletteFromControl(control);
+    };
+    const onThemeTransitionSelectStart = (event: Event) => {
+      if (transitionPointer?.longPressModeControl) event.preventDefault();
+    };
+    const onThemeTransitionClick = (event: MouseEvent) => {
+      if (suppressNextModeClick && event.isTrusted) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        suppressNextModeClick = false;
+        if (resetSuppressedModeClickTimer !== null) {
+          window.clearTimeout(resetSuppressedModeClickTimer);
+          resetSuppressedModeClickTimer = null;
+        }
+        return;
+      }
+
+      const target = event.target;
+      if (!isThemeTransitionSurfaceTarget(target)) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      const kind = getThemeTransitionKind();
+      if (!kind) return;
+      const control = findTransitionControlAt(
+        event.clientX,
+        event.clientY,
+        kind,
+      );
+      if (control) dispatchTransitionControlClick(control, event);
+    };
     const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      const themeTransitionSurfaceTarget =
+        isThemeTransitionSurfaceTarget(target);
       if (
         !(event.target instanceof Element) ||
         !event.target.closest("[data-course-menu]")
@@ -1764,8 +2052,9 @@ export function CoursesPage({
         setEdgeSidebarOpen(false);
       }
       if (
-        !(event.target instanceof Element) ||
-        !event.target.closest("[data-palette-menu], [data-palette-trigger]")
+        !themeTransitionSurfaceTarget &&
+        (!(event.target instanceof Element) ||
+          !event.target.closest("[data-palette-menu], [data-palette-trigger]"))
       ) {
         revertPalettePreviewRef.current?.();
         setPaletteMenu(false);
@@ -1822,9 +2111,73 @@ export function CoursesPage({
         setEdgeSidebarOpen(false);
       }
     };
+    document.addEventListener("click", onThemeTransitionClick, true);
+    document.addEventListener(
+      "pointermove",
+      onThemeTransitionPointerMove,
+      true,
+    );
+    document.addEventListener(
+      "pointerdown",
+      onThemeTransitionPointerDown,
+      true,
+    );
+    document.addEventListener("pointerup", onThemeTransitionPointerUp, true);
+    document.addEventListener(
+      "pointercancel",
+      onThemeTransitionPointerCancel,
+      true,
+    );
+    document.addEventListener(
+      "contextmenu",
+      onThemeTransitionContextMenu,
+      true,
+    );
+    document.addEventListener(
+      "selectstart",
+      onThemeTransitionSelectStart,
+      true,
+    );
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onEscape);
     return () => {
+      themeTransitionObserver.disconnect();
+      if (transitionPointer) clearTransitionLongPress(transitionPointer);
+      delete root.dataset.themeControlCursor;
+      if (resetSuppressedModeClickTimer !== null) {
+        window.clearTimeout(resetSuppressedModeClickTimer);
+      }
+      document.removeEventListener("click", onThemeTransitionClick, true);
+      document.removeEventListener(
+        "pointermove",
+        onThemeTransitionPointerMove,
+        true,
+      );
+      document.removeEventListener(
+        "pointerdown",
+        onThemeTransitionPointerDown,
+        true,
+      );
+      document.removeEventListener(
+        "pointerup",
+        onThemeTransitionPointerUp,
+        true,
+      );
+      document.removeEventListener(
+        "pointercancel",
+        onThemeTransitionPointerCancel,
+        true,
+      );
+      document.removeEventListener(
+        "contextmenu",
+        onThemeTransitionContextMenu,
+        true,
+      );
+      document.removeEventListener(
+        "selectstart",
+        onThemeTransitionSelectStart,
+        true,
+      );
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onEscape);
     };
@@ -2453,6 +2806,9 @@ export function CoursesPage({
   ) => {
     setReadingModeMenu(null);
     if (option === "theme") {
+      if (document.documentElement.dataset.themeTransition) {
+        skipActiveThemeViewTransitions();
+      }
       setPaletteMenuSource(source);
       if (mobile) setMobilePaletteMenu(true);
       else setPaletteMenu(true);
@@ -3964,7 +4320,7 @@ export function CoursesPage({
               )}
               <div
                 ref={appearanceControlsRef}
-                className={`sidebar-appearance sidebar-appearance--${appearanceControlsHorizontal ? "horizontal" : "vertical"}`}
+                className={`sidebar-appearance sidebar-appearance--mobile-dock sidebar-appearance--${appearanceControlsHorizontal ? "horizontal" : "vertical"}`}
                 role="group"
                 aria-label="Appearance controls"
                 data-control-radius-surface
@@ -3989,6 +4345,7 @@ export function CoursesPage({
                         key={item}
                         ref={appearanceModeTriggerRef}
                         data-dock-item={item}
+                        data-appearance-mode-toggle
                         data-palette-trigger
                         type="button"
                         className="is-active"
@@ -4020,9 +4377,19 @@ export function CoursesPage({
                         onPointerCancel={finishDockLongPress}
                       >
                         {resolvedTheme === "dark" ? (
-                          <Moon size={19} />
+                          <Moon
+                            size={19}
+                            weight="fill"
+                            className="appearance-mode-icon"
+                            data-appearance-mode-icon
+                          />
                         ) : (
-                          <Sun size={19} />
+                          <Sun
+                            size={19}
+                            weight="fill"
+                            className="appearance-mode-icon"
+                            data-appearance-mode-icon
+                          />
                         )}
                       </button>
                     );
@@ -4533,7 +4900,7 @@ export function CoursesPage({
               )}
             </div>
             <div
-              className={`mobile-menu-sheet__appearance${mobilePaletteMenu ? " mobile-menu-sheet__appearance--palette-open" : ""}`}
+              className={`mobile-menu-sheet__appearance sidebar-appearance--mobile-dock${mobilePaletteMenu ? " mobile-menu-sheet__appearance--palette-open" : ""}`}
               role="group"
               aria-label="Appearance controls"
               style={
@@ -4549,6 +4916,7 @@ export function CoursesPage({
                       key={item}
                       ref={mobileAppearanceModeTriggerRef}
                       data-dock-item={item}
+                      data-appearance-mode-toggle
                       data-mobile-palette-trigger
                       type="button"
                       className="is-active"
@@ -4578,9 +4946,19 @@ export function CoursesPage({
                       onPointerCancel={finishDockLongPress}
                     >
                       {resolvedTheme === "dark" ? (
-                        <Moon size={20} />
+                        <Moon
+                          size={20}
+                          weight="fill"
+                          className="appearance-mode-icon"
+                          data-appearance-mode-icon
+                        />
                       ) : (
-                        <Sun size={20} />
+                        <Sun
+                          size={20}
+                          weight="fill"
+                          className="appearance-mode-icon"
+                          data-appearance-mode-icon
+                        />
                       )}
                     </button>
                   );

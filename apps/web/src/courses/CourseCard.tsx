@@ -430,7 +430,6 @@ export function CourseCard({
                     label="Course Overview"
                     onClick={() => closeThen(() => onExplore(course))}
                   />
-                  <MenuDivider />
                   <MenuAction
                     icon={
                       <Heart

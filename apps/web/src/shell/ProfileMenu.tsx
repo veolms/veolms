@@ -325,10 +325,23 @@ export function ProfileMenu({
           <span>Notifications</span>
           {unreadNotificationCount > 0 ? (
             <span
-              className="profile-menu__badge"
+              className={
+                unreadNotificationCount > 9
+                  ? "profile-menu__badge profile-menu__badge--overflow"
+                  : "profile-menu__badge"
+              }
               aria-label={`${unreadNotificationCount} unread notifications`}
             >
-              {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
+              {unreadNotificationCount > 9 ? (
+                <>
+                  <span className="profile-menu__badge-count">9</span>
+                  <span className="profile-menu__badge-plus" aria-hidden="true">
+                    +
+                  </span>
+                </>
+              ) : (
+                unreadNotificationCount
+              )}
             </span>
           ) : null}
         </a>

@@ -392,16 +392,16 @@
 }
 
 .courses-profile > .profile-menu--animated {
-  /* Matching the slide distance and bottom inset keeps the clipping edge at
-     the fixed profile control, including throughout an interrupted slide. */
+  /* Keep the clipping edge at the fixed profile control, then reverse the
+     entrance easing so the last visible slice clears without lingering. */
   transform: translateY(calc(100% + 8px));
   clip-path: inset(0 -8px 100% -8px);
   z-index: 1;
   visibility: hidden;
   pointer-events: none;
   transition:
-    transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
-    clip-path 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 280ms cubic-bezier(0.7, 0, 0.84, 0),
+    clip-path 280ms cubic-bezier(0.7, 0, 0.84, 0),
     visibility 0s linear 280ms;
 }
 
@@ -428,11 +428,12 @@
   .courses-app:not(.courses-app--collapsed)
   .courses-profile
   > .profile-menu--animated {
-  transform: translateX(calc(-100% - 8px));
+  /* Match the clip travel so the visible edge stays at the rail boundary. */
+  transform: translateX(-100%);
   clip-path: inset(0 0 0 100%);
   transition:
-    transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
-    clip-path 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 280ms cubic-bezier(0.7, 0, 0.84, 0),
+    clip-path 280ms cubic-bezier(0.7, 0, 0.84, 0),
     visibility 0s linear 280ms;
 }
 
@@ -597,6 +598,34 @@
   font-size: 0.68rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.profile-menu__badge--overflow {
+  position: relative;
+  width: 21px;
+  min-width: 21px;
+  max-width: 21px;
+  height: 21px;
+}
+
+.profile-menu__badge-count {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.profile-menu__badge-plus {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 0.56rem;
+  font-weight: 800;
   line-height: 1;
 }
 

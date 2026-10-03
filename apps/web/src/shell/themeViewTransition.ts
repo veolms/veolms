@@ -23,6 +23,20 @@ const revealOriginProperties = [
 let nextTransitionId = 0;
 let taggedTransitionId: number | null = null;
 let stagedOriginTransitionId: number | null = null;
+const activeThemeViewTransitions = new Set<ViewTransition>();
+
+// Opening the appearance palette during a reveal must show the newly mounted
+// menu immediately. Finishing active snapshots exposes that live UI without
+// making the user wait for the reveal animation to end.
+export function skipActiveThemeViewTransitions(): void {
+  for (const transition of activeThemeViewTransitions) {
+    try {
+      transition.skipTransition();
+    } catch {
+      // A transition can finish between the call site and this loop.
+    }
+  }
+}
 
 // The center of an element's box, used as the reveal origin for keyboard
 // navigation: the focused control is where the interaction happened. A
@@ -123,6 +137,7 @@ export function applyWithThemeViewTransition(
   // pointer instead of the mask's corner fallback.
   stageRevealOrigin(transitionId, origin ?? null);
   const transition = document.startViewTransition(commit);
+  activeThemeViewTransitions.add(transition);
   const clear = () => {
     // A newer transition may have retagged the root or restaged the origin;
     // only clear what this transition still owns, by identity rather than by
@@ -132,6 +147,7 @@ export function applyWithThemeViewTransition(
       taggedTransitionId = null;
     }
     clearStagedRevealOrigin(transitionId);
+    activeThemeViewTransitions.delete(transition);
   };
   transition.finished.then(clear, clear);
 }
