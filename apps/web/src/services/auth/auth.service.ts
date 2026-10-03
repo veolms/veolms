@@ -7,6 +7,8 @@ import type {
   CurrentUserResponse,
   EmailVerificationSendRequest,
   EmailVerificationVerifyRequest,
+  AuthConfigResponse,
+  GoogleOneTapLoginRequest,
   LoginRequest,
   LoginResponse,
   OauthLoginRequest,
@@ -18,6 +20,7 @@ import type {
   PasskeyAuthenticationOptionsResponse,
   PasskeyRegistrationOptionsResponse,
   ProfileUpdateRequest,
+  PublicProfileResponse,
   RegisterRequest,
   SessionResponse,
   UserAvatarListResponse,
@@ -30,6 +33,7 @@ import {
   DICEBEAR_BASE_URL,
   passkeyAuthenticationOptionsResponseSchema,
   passkeyRegistrationOptionsResponseSchema,
+  publicProfileResponseSchema,
   sessionResponseSchema,
 } from "@veolms/contracts";
 
@@ -167,6 +171,20 @@ export const authService = {
     return api.post<LoginResponse>("/auth/oauth/login", payload);
   },
 
+  getAuthConfig: (): Promise<AuthConfigResponse> => {
+    return api.get<AuthConfigResponse>("/auth/config");
+  },
+
+  googleOneTapLogin: (
+    payload: GoogleOneTapLoginRequest,
+  ): Promise<LoginResponse> => {
+    // The client has no global timeout; without one a hung request leaves the
+    // One Tap UI stuck on "Verifying…" with the login buttons locked.
+    return api.post<LoginResponse>("/auth/oauth/google/one-tap", payload, {
+      timeout: 20_000,
+    });
+  },
+
   setupTotp: (): Promise<TotpSetupResponse> => {
     return api.post<TotpSetupResponse>("/auth/totp/setup");
   },
@@ -234,6 +252,15 @@ export const authService = {
   getMe: async (): Promise<CurrentUserResponse> => {
     const response = await api.get<CurrentUserResponse>("/auth/me");
     return response;
+  },
+
+  getPublicProfile: async (
+    username: string,
+  ): Promise<PublicProfileResponse> => {
+    const response = await api.get<unknown>(
+      `/auth/profiles/${encodeURIComponent(username)}`,
+    );
+    return publicProfileResponseSchema.parse(response);
   },
 
   updateProfile: (

@@ -11,6 +11,7 @@ import type {
   EmailVerificationVerifyRequest,
   PasskeyAuthenticationOptionsResponse,
   PasskeyRegistrationOptionsResponse,
+  GoogleOneTapLoginRequest,
   LoginRequest,
   LoginResponse,
   OauthLoginRequest,
@@ -30,8 +31,8 @@ import { autosyncManager } from "../../lib/autosync";
 import { authStore } from "../../store/auth.store";
 import { clearCoursePlayerSessions } from "../../learning/coursePlayerNavigation";
 import { authKeys } from "./auth.keys";
+import { updatePublicProfileCacheFromUser } from "./auth.queries";
 import { authService, type TotpSetupResponse } from "./auth.service";
-import { navigationKeys } from "../navigation";
 import {
   learningInteractionKeys,
   desiredStateCoordinator,
@@ -80,7 +81,6 @@ function persistAuthenticatedSession(
   queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
   queryClient.removeQueries({ queryKey: authKeys.avatars() });
   queryClient.setQueryData(authKeys.me(), currentUser);
-  queryClient.invalidateQueries({ queryKey: navigationKeys.all });
 }
 
 export function useSendOtp() {
@@ -167,8 +167,12 @@ export function useUpdateProfile() {
   return useMutation<UserProfileResponse, ApiError, ProfileUpdateRequest>({
     mutationFn: (payload) => authService.updateProfile(payload),
     onSuccess: async (profile) => {
+      const previousUsername = queryClient.getQueryData<CurrentUserResponse>(
+        authKeys.me(),
+      )?.username;
       authStore.setUser(profile);
       queryClient.setQueryData(authKeys.me(), profile);
+      updatePublicProfileCacheFromUser(queryClient, profile, previousUsername);
       queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
       // The PATCH response updates the UI immediately, but `/auth/me` remains
       // the canonical source after a reload. Re-fetch it here so visibility
@@ -184,8 +188,12 @@ export function useSelectAvatar() {
   return useMutation<UserProfileResponse, ApiError, string>({
     mutationFn: (avatarId) => authService.selectAvatar(avatarId),
     onSuccess: (profile) => {
+      const previousUsername = queryClient.getQueryData<CurrentUserResponse>(
+        authKeys.me(),
+      )?.username;
       authStore.setUser(profile);
       queryClient.setQueryData(authKeys.me(), profile);
+      updatePublicProfileCacheFromUser(queryClient, profile, previousUsername);
       queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
     },
   });
@@ -197,8 +205,12 @@ export function useDeleteUploadedAvatars() {
   return useMutation<UserProfileResponse, ApiError, void>({
     mutationFn: () => authService.deleteUploadedAvatars(),
     onSuccess: (profile) => {
+      const previousUsername = queryClient.getQueryData<CurrentUserResponse>(
+        authKeys.me(),
+      )?.username;
       authStore.setUser(profile);
       queryClient.setQueryData(authKeys.me(), profile);
+      updatePublicProfileCacheFromUser(queryClient, profile, previousUsername);
       queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
     },
   });
@@ -215,6 +227,17 @@ export function useOauthLogin() {
 
   return useMutation<LoginResponse, ApiError, OauthLoginRequest>({
     mutationFn: (payload) => authService.oauthLogin(payload),
+    onSuccess: (data) => {
+      persistAuthenticatedSession(queryClient, data);
+    },
+  });
+}
+
+export function useGoogleOneTapLogin() {
+  const queryClient = useQueryClient();
+
+  return useMutation<LoginResponse, ApiError, GoogleOneTapLoginRequest>({
+    mutationFn: (payload) => authService.googleOneTapLogin(payload),
     onSuccess: (data) => {
       persistAuthenticatedSession(queryClient, data);
     },
@@ -342,9 +365,7 @@ export function useLogout() {
       queryClient.removeQueries({ queryKey: authKeys.me() });
       queryClient.removeQueries({ queryKey: authKeys.avatars() });
       queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
-      queryClient.removeQueries({ queryKey: navigationKeys.all });
       queryClient.invalidateQueries({ queryKey: authKeys.me() });
-      queryClient.invalidateQueries({ queryKey: navigationKeys.all });
     },
   });
 }

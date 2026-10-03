@@ -12,7 +12,6 @@ const staticApplicationPages = [
   "/register",
   "/auth/callback",
   "/courses",
-  "/explore-courses",
   "/settings",
   "/settings/profile",
   "/settings/appearance",
@@ -71,7 +70,7 @@ async function getStaticCataloguePaths() {
     );
   }
   return result.data.courses.map(
-    ({ slug }) => `/explore-courses/${encodeURIComponent(slug)}`,
+    ({ slug }) => `/courses/${encodeURIComponent(slug)}/overview`,
   );
 }
 

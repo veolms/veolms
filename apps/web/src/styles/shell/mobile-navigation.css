@@ -19,9 +19,8 @@
     bottom: var(--mobile-nav-offset);
     left: 0;
     z-index: 140;
-    display: grid;
+    display: flex;
     min-height: calc(58px + var(--app-viewport-safe-area-max-bottom));
-    grid-template-columns: repeat(5, minmax(0, 1fr));
     align-items: stretch;
     border: 0;
     border-radius: 0;
@@ -78,6 +77,7 @@
   .mobile-bottom-nav > button {
     position: relative;
     display: flex;
+    flex: 1 1 0;
     min-width: 0;
     min-height: 54px;
     align-items: center;
@@ -93,6 +93,30 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .mobile-bottom-nav__profile-avatar {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    overflow: visible;
+    border-radius: 50%;
+  }
+
+  .mobile-bottom-nav__profile-avatar .shell-profile-avatar {
+    width: 100%;
+    height: 100%;
+  }
+
+  .mobile-bottom-nav__profile-avatar > .courses-profile__presence {
+    top: 0;
+    right: 0;
+    bottom: auto;
+    z-index: 1;
+    width: 7px;
+    height: 7px;
+    border-width: 1px;
   }
 
   .mobile-bottom-nav > button svg {
@@ -137,7 +161,8 @@
 
   .mobile-menu-sheet {
     --mobile-menu-sheet-vertical-chrome: calc(
-      3px + max(14px, var(--app-safe-area-bottom))
+      var(--mobile-menu-sheet-top-space) +
+        max(14px, var(--app-safe-area-bottom))
     );
     --mobile-menu-sheet-inline-inset: 0.75rem;
 
@@ -145,6 +170,11 @@
     min-height: 0;
     flex: 1 1 auto;
     flex-direction: column;
+  }
+
+  #mobile-navigation-sheet [data-slot="drawer-content"] {
+    margin-inline: calc(-1 * var(--mobile-menu-sheet-inline-inset));
+    padding-inline: var(--mobile-menu-sheet-inline-inset);
   }
 
   .mobile-menu-sheet__body {
@@ -160,6 +190,8 @@
     );
     flex: 0 0 auto;
     flex-direction: column;
+    margin-inline: calc(-1 * var(--mobile-menu-sheet-inline-inset));
+    padding-inline: var(--mobile-menu-sheet-inline-inset);
     /* The drawer content owns the rounded outer clip. Keeping this inner
        layout visible lets the navigation scroll lane use its negative margin
        to reach both drawer edges without cutting selected-item shadows at the
@@ -191,6 +223,12 @@
   .mobile-menu-sheet__profile-wrap {
     position: relative;
     z-index: 2;
+    flex: 0 0 auto;
+  }
+
+  .mobile-menu-sheet__profile-wrap > .profile-menu__identity {
+    width: 100%;
+    margin-inline: 0;
   }
 
   .mobile-menu-sheet__profile {
@@ -200,7 +238,7 @@
     flex: 0 0 auto;
     align-items: center;
     gap: 11px;
-    border: 0;
+    border: 1px solid var(--border-strong);
     border-radius: 13px;
     padding: 10px 12px;
     color: var(--text);
@@ -208,11 +246,6 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
-      inset 1px 0 0 color-mix(in srgb, var(--text) 4%, transparent),
-      0 10px 24px color-mix(in srgb, var(--canvas) 32%, transparent),
-      0 2px 9px color-mix(in srgb, var(--accent-shadow) 18%, transparent);
   }
 
   .mobile-menu-sheet__profile:hover,
@@ -231,18 +264,18 @@
 
   .mobile-menu-sheet__profile > .shell-profile-avatar,
   .mobile-menu-sheet__profile img {
-    width: 43px;
-    height: 43px;
     flex: 0 0 auto;
     border-radius: 50%;
     object-fit: cover;
   }
 
-  .mobile-menu-sheet__profile > .shell-profile-avatar {
-    display: inline-flex;
+  .mobile-menu-sheet__profile > .courses-profile__avatar-wrap {
+    width: 52px;
+    height: 52px;
+    flex-basis: 52px;
   }
 
-  .mobile-menu-sheet__profile > span {
+  .mobile-menu-sheet__profile > span:not(.courses-profile__avatar-wrap) {
     min-width: 0;
     display: grid;
     gap: 3px;
@@ -254,6 +287,9 @@
   }
 
   .mobile-menu-sheet__profile small {
+    display: flex;
+    align-items: center;
+    gap: 5px;
     color: var(--muted);
     font-size: 0.69rem;
   }
@@ -264,23 +300,37 @@
     color: var(--muted);
   }
 
-  .mobile-menu-sheet__profile-menu {
-    position: absolute;
-    top: calc(100% + 8px);
-    bottom: auto;
-    right: 0;
-    z-index: 40;
-    width: min(220px, calc(100vw - 32px));
-    min-width: 180px;
-    max-width: 220px;
-    max-height: min(14rem, calc(100dvh - 9rem));
+  .mobile-menu-sheet .mobile-menu-sheet__profile-menu {
+    position: static;
+    z-index: auto;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    max-height: none;
     margin: 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    padding: 6px 0 0;
+    background: transparent;
+    box-shadow: none;
+    --profile-menu-cast-shadow: none;
+  }
+
+  .mobile-menu-sheet .profile-menu__group--roles > .profile-menu__section {
+    margin: 16px 0 2px;
+    padding: 2px 10px 4px 14px;
+  }
+
+  .mobile-menu-sheet__scroll {
+    min-height: 0;
+    flex: 1 1 auto;
     overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .mobile-menu-sheet__list {
-    min-height: 0;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     display: grid;
     align-content: start;
     gap: 3px;
@@ -288,8 +338,27 @@
     margin-inline: calc(-1 * var(--mobile-menu-sheet-inline-inset));
     padding-block: 6px 18px;
     padding-inline: var(--mobile-menu-sheet-inline-inset);
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    overflow: visible;
+  }
+
+  .mobile-menu-sheet__profile-navigation {
+    padding-bottom: 0;
+  }
+
+  .mobile-menu-sheet .profile-menu__item-icon--profile {
+    color: #5da9ff;
+  }
+
+  .mobile-menu-sheet .profile-menu__item-icon--notifications {
+    color: #f1be4b;
+  }
+
+  .mobile-menu-sheet .profile-menu__item-icon--orders {
+    color: #d68eea;
+  }
+
+  .mobile-menu-sheet .profile-menu__item {
+    border-radius: 10px !important;
   }
 
   .mobile-menu-sheet__list > button {
@@ -347,40 +416,70 @@
     flex: 0 0 auto;
     grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
     gap: 5px;
-    margin-top: 10px;
-    border-radius: 13px;
-    padding: 5px;
-    background: var(--surface-strong);
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
-      inset 1px 0 0 color-mix(in srgb, var(--text) 4%, transparent),
-      0 10px 24px color-mix(in srgb, var(--canvas) 32%, transparent),
-      0 2px 9px color-mix(in srgb, var(--accent-shadow) 18%, transparent);
+    margin: 10px 0 12px;
+    overflow: hidden;
+  }
+
+  .mobile-menu-sheet__appearance--palette-open > button.is-active {
+    box-shadow: none;
   }
 
   .mobile-menu-sheet__appearance > button {
-    position: relative;
-    display: inline-flex;
-    min-width: 0;
     min-height: 44px;
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-    border-radius: 9px;
-    color: var(--muted);
-    font-size: 0.7rem;
-    font-weight: 600;
   }
 
   .mobile-menu-sheet__appearance > button.is-active {
     color: var(--text);
-    background: var(--app-shell);
+    border-color: transparent;
+    background: var(--sidebar-menu-active-background);
+    box-shadow: var(--sidebar-menu-active-shadow);
+  }
+
+  :root[data-reading-mode="true"]
+    .mobile-menu-sheet__appearance
+    > .sidebar-appearance__reading-mode {
+    border-color: transparent;
+    background: var(--sidebar-menu-active-background);
+    box-shadow: var(--sidebar-menu-active-shadow);
   }
 
   .mobile-menu-sheet__appearance > button > i {
     width: 8px;
     height: 8px;
     border-radius: 50%;
+  }
+
+  /* The floating menus are children of the translated drawer popup. Add its
+     current swipe offset so their viewport-based dock anchor stays in place. */
+  #mobile-navigation-sheet > .mobile-palette-menu,
+  #mobile-navigation-sheet > .settings-quick-menu--mobile,
+  #mobile-navigation-sheet > .reading-mode-quick-menu--mobile {
+    top: auto;
+    bottom: calc(
+      68px + var(--app-viewport-safe-area-bottom, 0px) + var(--translate-y, 0px)
+    );
+    max-height: calc(100dvh - 92px - env(safe-area-inset-top, 0px));
+  }
+
+  #mobile-navigation-sheet > .mobile-palette-menu {
+    right: auto;
+    left: calc(var(--mobile-menu-sheet-inline-inset) + 5px);
+    width: min(216px, calc(100vw - 24px));
+  }
+
+  #mobile-navigation-sheet > .settings-quick-menu--mobile {
+    right: calc(var(--mobile-menu-sheet-inline-inset) + 5px);
+    left: auto;
+    width: min(250px, calc(100vw - 24px));
+    min-width: min(200px, calc(100vw - 24px));
+    max-width: min(250px, calc(100vw - 24px));
+  }
+
+  #mobile-navigation-sheet > .reading-mode-quick-menu--mobile {
+    right: auto;
+    left: 50%;
+    translate: -50% 0;
+    width: min(264px, calc(100vw - 24px));
   }
 }
 

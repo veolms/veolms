@@ -1,4 +1,5 @@
 import type {
+  GoogleOneTapLoginRequest,
   OauthCallbackRequest,
   OauthRegisterRequest,
   OauthUrlRequest,
@@ -49,6 +50,24 @@ export function createOauthController(context: AuthContext) {
     return presentLogin(result.user, result.session.mfa);
   }
 
+  async function loginWithGoogleOneTap(
+    request: FastifyRequest<{ Body: GoogleOneTapLoginRequest }>,
+    reply: FastifyReply,
+  ) {
+    const existingSessionToken = request.cookies["veolms-session"] ?? null;
+    const result = await oauthService.loginWithGoogleCredential(
+      request.body.credential,
+      {
+        ip: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+        existingSessionToken,
+      },
+    );
+
+    setSessionCookie(reply, result.session.token);
+    return presentLogin(result.user, result.session.mfa);
+  }
+
   async function register(
     request: FastifyRequest<{ Body: OauthRegisterRequest }>,
     reply: FastifyReply,
@@ -71,7 +90,7 @@ export function createOauthController(context: AuthContext) {
     return presentLogin(result.user, result.session.mfa);
   }
 
-  return { getUrl, login, register };
+  return { getUrl, login, loginWithGoogleOneTap, register };
 }
 
 export type OauthController = ReturnType<typeof createOauthController>;

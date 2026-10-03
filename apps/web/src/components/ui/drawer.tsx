@@ -163,6 +163,7 @@ function DrawerSwipeHandle({
 type DrawerContentProps = DrawerPrimitive.Popup.Props & {
   viewportClassName?: string;
   viewportStyle?: React.CSSProperties;
+  floatingContent?: React.ReactNode;
 };
 
 function DrawerContent({
@@ -170,6 +171,7 @@ function DrawerContent({
   children,
   viewportClassName,
   viewportStyle,
+  floatingContent,
   ...props
 }: DrawerContentProps) {
   const {
@@ -240,6 +242,7 @@ function DrawerContent({
           >
             {children}
           </DrawerPrimitive.Content>
+          {floatingContent}
         </DrawerPrimitive.Popup>
       </DrawerPrimitive.Viewport>
     </DrawerPortal>

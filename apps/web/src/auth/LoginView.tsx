@@ -5,6 +5,7 @@ import { MfaEnrollmentSetup } from "./MfaEnrollmentSetup";
 import { AuthBrandMark } from "./AuthBrandPanel";
 import { IdentifierForm } from "./IdentifierForm";
 import { OtpForm } from "./OtpForm";
+import { AuthProgress } from "./AuthProgress";
 import { SocialLoginActions } from "./SocialLoginActions";
 import { MfaStepUp } from "./MfaStepUp";
 import {
@@ -12,19 +13,38 @@ import {
   authFlowReducer,
   initialAuthFlowState,
 } from "./authFlow";
-import type { AuthIdentifier } from "./authFlow";
+import type { AuthFlowState, AuthIdentifier } from "./authFlow";
 import { generateUniqueUsername } from "./username";
 import { getSecondaryVerificationMethodRequired } from "./authConfig";
-import { resolveAuthenticatedDestination } from "../routing/routeAccess";
+import {
+  resolveAuthenticatedDestination,
+  sanitizeReturnTo,
+} from "../routing/routeAccess";
 import { productName } from "../routing/routeDescriptors";
 import { useLogin, useRegister, useSendOtp } from "../services/auth";
 import { authStore } from "../store/auth.store";
-import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
+import { ToastNotification } from "../ToastNotification";
+import { GoogleOneTap } from "./GoogleOneTap.tsx";
 
 function resolvePayload(identifier: AuthIdentifier) {
   return identifier.method === "email"
     ? { email: identifier.email }
     : { phoneNo: identifier.phoneNo };
+}
+
+type OtpStepState = Extract<
+  AuthFlowState,
+  { status: "otp" | "verifyingOtp" | "sendingOtp" }
+>;
+
+// Returns the flow narrowed to an OTP-entry step, or null. Not a type guard:
+// a first send (sendCount 0) is a sendingOtp state that is NOT an OTP step.
+function getOtpStep(flow: AuthFlowState): OtpStepState | null {
+  return flow.status === "otp" ||
+    flow.status === "verifyingOtp" ||
+    (flow.status === "sendingOtp" && flow.sendCount > 0)
+    ? flow
+    : null;
 }
 
 export function LoginView() {
@@ -44,12 +64,37 @@ export function LoginView() {
     allowPasskey: true,
     allowAuthenticator: true,
   });
+  const [oneTapPending, setOneTapPending] = useState(false);
 
   const registrationOtpCodesRef = useRef<
     Partial<Record<"email" | "mobile", string>>
   >({});
+  const otpSnapshotRef = useRef<{
+    identifier: AuthIdentifier;
+    code: string;
+    sendCount: number;
+  } | null>(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
+  const returnPath = returnTo?.split(/[?#]/, 1)[0] ?? "";
+  const isReturningToDiscussions =
+    returnPath === "/discussions" || returnPath.startsWith("/discussions/");
+
+  // Keep the last OTP screen so it stays visible (as "verifying") during the
+  // authenticated redirect. Written in an effect, not during render.
+  useEffect(() => {
+    const otpStep = getOtpStep(flow);
+    if (otpStep) {
+      otpSnapshotRef.current = {
+        identifier: otpStep.identifier,
+        code: "code" in otpStep ? otpStep.code : "",
+        sendCount: otpStep.sendCount,
+      };
+    } else if (flow.status !== "authenticated") {
+      otpSnapshotRef.current = null;
+    }
+  }, [flow]);
 
   const sendOtpMutation = useSendOtp();
   const loginMutation = useLogin();
@@ -271,13 +316,14 @@ export function LoginView() {
       );
     }
 
-    if (flow.status === "otp" || flow.status === "verifyingOtp") {
+    const otpStep = getOtpStep(flow);
+    if (otpStep) {
       return (
         <OtpForm
-          code={flow.code}
+          code={"code" in otpStep ? otpStep.code : ""}
           errorMessage={otpError}
-          failure={flow.status === "otp" ? flow.failure : null}
-          identifier={flow.identifier}
+          failure={otpStep.status === "otp" ? otpStep.failure : null}
+          identifier={otpStep.identifier}
           onCodeChange={(code) => {
             setOtpError(null);
             dispatch({ type: "CHANGE_OTP_CODE", code });
@@ -290,13 +336,10 @@ export function LoginView() {
             dispatch({ type: "CHANGE_IDENTIFIER" });
           }}
           onResend={handleResendCode}
-          onSubmit={(code) => handleVerifyCode(flow.identifier, code)}
-          sendCount={flow.sendCount}
-          status={
-            flow.status === "verifyingOtp" || loginMutation.isPending
-              ? "verifying"
-              : "idle"
-          }
+          onSubmit={(code) => handleVerifyCode(otpStep.identifier, code)}
+          resending={otpStep.status === "sendingOtp"}
+          sendCount={otpStep.sendCount}
+          status={otpStep.status === "verifyingOtp" ? "verifying" : "idle"}
         />
       );
     }
@@ -327,23 +370,33 @@ export function LoginView() {
     }
 
     if (flow.status === "authenticated") {
+      const snapshot = otpSnapshotRef.current;
+      if (snapshot) {
+        return (
+          <OtpForm
+            code={snapshot.code}
+            errorMessage={otpError}
+            failure={null}
+            identifier={snapshot.identifier}
+            onCodeChange={() => undefined}
+            onIdentifierChange={() => undefined}
+            onResend={() => undefined}
+            onSubmit={() => undefined}
+            sendCount={snapshot.sendCount}
+            status="verifying"
+          />
+        );
+      }
+
       return (
-        <div
-          aria-label="Redirecting"
-          role="region"
-          style={{
-            display: "grid",
-            justifyItems: "center",
-            gap: "16px",
-            padding: "40px 0",
-            width: "100%",
-          }}
-        >
-          <AuthBrandMark />
-          <span role="status" aria-label="Redirecting to your profile">
-            <LoadingSpinnerIcon size={24} />
-          </span>
-        </div>
+        <AuthProgress
+          detail={
+            isReturningToDiscussions
+              ? "Opening Discussions."
+              : "Opening your courses."
+          }
+          title="Signing you in"
+        />
       );
     }
 
@@ -390,6 +443,7 @@ export function LoginView() {
 
         <div className="auth-card__form-slot">
           <IdentifierForm
+            disabled={oneTapPending}
             errorMessage={identifierError ?? undefined}
             onSubmit={(identifier) => handleSendCode(identifier)}
             status={
@@ -400,6 +454,7 @@ export function LoginView() {
           />
           <SocialLoginActions
             onError={setIdentifierError}
+            oneTapPending={oneTapPending}
             returnTo={searchParams.get("returnTo")}
           />
         </div>
@@ -407,9 +462,30 @@ export function LoginView() {
     );
   }
 
+  const welcomeStep =
+    !pendingSecondaryMethod &&
+    (flow.status === "identifier" ||
+      flow.status === "error" ||
+      (flow.status === "sendingOtp" && flow.sendCount === 0));
+
   return (
-    <section aria-labelledby={AUTH_CARD_HEADING_ID} className="auth-card">
-      {renderStep()}
-    </section>
+    <>
+      <section aria-labelledby={AUTH_CARD_HEADING_ID} className="auth-card">
+        {renderStep()}
+        {welcomeStep ? (
+          <GoogleOneTap
+            onError={(message) => {
+              setOneTapPending(false);
+              setIdentifierError(message);
+            }}
+            onPendingChange={setOneTapPending}
+            returnTo={searchParams.get("returnTo")}
+          />
+        ) : null}
+      </section>
+      {isReturningToDiscussions ? (
+        <ToastNotification message="Log in to continue to Discussions." />
+      ) : null}
+    </>
   );
 }

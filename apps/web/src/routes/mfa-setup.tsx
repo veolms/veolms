@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import "../auth/mfa-setup.css";
 import { useNavigate, useSearchParams } from "react-router";
+import { AuthProgress } from "../auth/AuthProgress";
 import { AUTH_CARD_HEADING_ID } from "../auth/authFlow";
 import { MfaEnrollmentSetup } from "../auth/MfaEnrollmentSetup";
 import { MfaStepUp } from "../auth/MfaStepUp";
@@ -11,7 +12,6 @@ import {
   sanitizeReturnTo,
 } from "../routing/routeAccess";
 import { useCurrentUser } from "../services/auth";
-import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 export default function MfaSetupRoute() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -38,10 +38,10 @@ export default function MfaSetupRoute() {
 
   if (isLoading || view === null || view === "login" || view === "done") {
     return (
-      <section className="auth-card">
-        <CenteredLoadingSpinner
-          label="Checking your account"
-          className="min-h-48 w-full"
+      <section aria-labelledby={AUTH_CARD_HEADING_ID} className="auth-card">
+        <AuthProgress
+          detail="Opening your security check."
+          title="Signing you in"
         />
       </section>
     );
@@ -59,11 +59,17 @@ export default function MfaSetupRoute() {
           allowAuthenticator={Boolean(user?.totpEnabled)}
           allowPasskey={Boolean(user?.passkeyEnabled)}
           onBack={() => navigate(backPath, { replace: true })}
-          onDone={() => navigate(APP_HOME_PATH, { replace: true })}
+          onDone={() => {
+            const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
+            navigate(returnTo ?? APP_HOME_PATH, { replace: true });
+          }}
         />
       ) : (
         <MfaEnrollmentSetup
-          onDone={() => navigate(APP_HOME_PATH, { replace: true })}
+          onDone={() => {
+            const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
+            navigate(returnTo ?? APP_HOME_PATH, { replace: true });
+          }}
           onError={setError}
           onClearError={() => setError(null)}
         />

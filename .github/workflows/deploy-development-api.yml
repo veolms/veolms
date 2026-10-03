@@ -3,7 +3,7 @@ name: Deploy development API
 on:
   push:
     branches:
-      - development
+      - dev
     paths:
       - "apps/api/**"
       - "packages/contracts/**"
@@ -136,13 +136,13 @@ jobs:
           fi
 
           echo "==> Fetching latest commit (${deploy_sha})..."
-          git fetch --prune origin development
+          git fetch --prune origin dev
           if ! git cat-file -e "${deploy_sha}^{commit}"; then
             git fetch origin "${deploy_sha}"
           fi
 
           echo "==> Checking out target commit..."
-          git checkout --force -B development "${deploy_sha}"
+          git checkout --force -B dev "${deploy_sha}"
           test "$(git rev-parse HEAD)" = "${deploy_sha}"
 
           echo "==> Installing dependencies..."

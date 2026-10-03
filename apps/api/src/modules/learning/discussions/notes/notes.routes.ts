@@ -18,7 +18,7 @@ import { createNotesService } from "./notes.service.ts";
 const notesRoutes: RoutePlugin = async (app, options) => {
   const permissions = createDiscussionPermissions(options);
   const repo = createNotesRepository();
-  const service = createNotesService(repo);
+  const service = createNotesService(repo, options.services.storage);
   const controller = createNotesController({
     database: options.database,
     service,

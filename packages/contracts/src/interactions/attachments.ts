@@ -95,7 +95,7 @@ export type InitiateAttachmentUploadRequest = z.infer<
 
 export const initiateAttachmentUploadResponseSchema = z.object({
   attachmentId: z.uuid(),
-  uploadUrl: z.string().min(1),
+  uploadUrl: z.url(),
   storageKey: z.string().min(1),
   fileName: z.string().min(1),
   kind: attachmentKindSchema,

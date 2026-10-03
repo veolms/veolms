@@ -101,7 +101,7 @@ export function ResponsiveAvatar({
   };
 
   const handleLoad: ImgHTMLAttributes<HTMLImageElement>["onLoad"] = (event) => {
-    if (avatarPrefix && activeSrc) {
+    if (avatarPrefix && activeSrc && !activeSrcSet) {
       resolvedAvatarCache.set(avatarPrefix, activeSrc);
     }
     props.onLoad?.(event);

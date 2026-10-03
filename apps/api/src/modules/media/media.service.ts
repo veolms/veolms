@@ -16,6 +16,7 @@ import { createAccessService } from "../access/index.ts";
 import * as mediaRepo from "./media.repository.ts";
 import { enqueueImageJob } from "@veolms/database";
 import { probeVideoSource } from "../../lib/video-prober.ts";
+import { getCdnDeliveryUrl } from "../../services/cdn-delivery.ts";
 import type {
   MediaConvertWebhookPayload,
   MediaConvertWebhookResponse,
@@ -890,16 +891,15 @@ export function createMediaService({
     mediaId: string,
     options: { verifyManifest?: boolean } = {},
   ) {
-    const [media, job, outputs] = await Promise.all([
+    const [media, outputs] = await Promise.all([
       mediaRepo.findMediaAssetById(database, mediaId),
-      mediaRepo.findVideoJobByVideoId(database, mediaId),
       mediaRepo.findVideoOutputsByVideoIds(database, [mediaId]),
     ]);
     if (!media || media.type !== "video") {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Video asset not found.");
     }
 
-    if (!job || job.status !== "completed" || media.status !== "ready") {
+    if (media.status !== "ready") {
       throw new AppError(
         409,
         "MEDIA_NOT_READY",
@@ -907,7 +907,7 @@ export function createMediaService({
       );
     }
 
-    const outputPrefix = normalizeOutputPrefix(job.output_prefix);
+    const outputPrefix = normalizeOutputPrefix(media.storage_key);
     const latestOutput = outputs
       .filter((output) => output.video_id === mediaId)
       .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())[0];
@@ -925,36 +925,11 @@ export function createMediaService({
       }
     }
 
-    return { media, job, outputPrefix, manifestKey };
+    return { media, outputPrefix, manifestKey };
   }
 
   function getDirectDelivery(storageKey: string) {
-    const requiresToken = !services.storage.isCdnPublicKey(storageKey);
-    const expiresAt = requiresToken
-      ? Math.floor(Date.now() / 1000) + services.storage.getCdnTokenTtlSeconds()
-      : undefined;
-    const token = requiresToken
-      ? services.storage.createCdnAccessToken(storageKey, expiresAt)
-      : undefined;
-    if (requiresToken && !token) {
-      throw new AppError(
-        503,
-        "CDN_NOT_CONFIGURED",
-        "Protected media delivery is not configured.",
-      );
-    }
-    const url = services.storage.getCdnObjectUrl(
-      storageKey,
-      token ?? undefined,
-    );
-    if (!url) {
-      throw new AppError(
-        503,
-        "CDN_NOT_CONFIGURED",
-        "Media delivery is not configured.",
-      );
-    }
-    return { url, expiresAt };
+    return getCdnDeliveryUrl(services.storage, storageKey);
   }
 
   async function getMediaDelivery(

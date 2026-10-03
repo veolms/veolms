@@ -27,6 +27,8 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
     attachmentsRepository,
     undefined,
     bookmarksRepository,
+    undefined,
+    options.services.storage,
   );
   const controller = createThreadsController({
     database: options.database,

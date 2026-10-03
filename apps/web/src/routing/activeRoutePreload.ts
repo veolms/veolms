@@ -47,7 +47,13 @@ export async function preloadActiveRouteForHydration(pathname: string) {
     return;
   }
 
-  if (pathname === "/courses" || pathname === "/wishlist") {
+  if (
+    pathname === "/courses" ||
+    pathname === "/courses/enrolled" ||
+    pathname === "/courses/not-enrolled" ||
+    pathname === "/courses/wishlist" ||
+    pathname === "/wishlist"
+  ) {
     await loadShellRouteModule(
       "catalogue",
       () => import("../courses/CourseCatalogue"),
