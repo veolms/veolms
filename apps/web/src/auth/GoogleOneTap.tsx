@@ -1,8 +1,11 @@
-import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
 import type { ApiError } from "../lib/api-client";
-import { useAuthConfig, useGoogleOneTapLogin } from "../services/auth";
+import { useAuthConfig, useCurrentUser, useGoogleOneTapLogin } from "../services/auth";
+import { useAuthStore } from "../store/auth.store";
+import { normalizeAppPath, sanitizeReturnTo } from "../routing/routeAccess";
 import { resolvePostAuthPath } from "./postAuthNavigation";
+import { ToastNotification } from "../ToastNotification";
 
 const GOOGLE_IDENTITY_SCRIPT = "https://accounts.google.com/gsi/client";
 
@@ -148,3 +151,110 @@ export function GoogleOneTap({
 
   return null;
 }
+
+const EXCLUDED_ONE_TAP_PATHS = new Set([
+  "/mfa-setup",
+  "/auth/callback",
+  "/logout",
+]);
+
+/**
+ * Global Google One Tap component.
+ * Renders across all application pages when a user is not authenticated.
+ * Handles credential exchange and MFA redirect.
+ */
+export function GlobalGoogleOneTap() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { data: user, isFetched, isLoading } = useCurrentUser();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const { data: authConfig } = useAuthConfig();
+  const login = useGoogleOneTapLogin();
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const clientId = authConfig?.googleClientId || "";
+  const normalizedPath = normalizeAppPath(location.pathname);
+
+  const isUserAuthenticated = isAuthenticated || Boolean(user);
+  const isExcludedRoute = EXCLUDED_ONE_TAP_PATHS.has(normalizedPath);
+  const shouldPrompt = !isUserAuthenticated && !isExcludedRoute && (!isLoading || isFetched);
+
+  // Compute return target
+  let returnTo: string | null = null;
+  if (normalizedPath === "/login") {
+    const searchParams = new URLSearchParams(location.search);
+    returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
+  } else {
+    returnTo = sanitizeReturnTo(`${location.pathname}${location.search}`) || location.pathname;
+  }
+
+  const returnToRef = useRef(returnTo);
+  returnToRef.current = returnTo;
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  const loginRef = useRef(login.mutate);
+  loginRef.current = login.mutate;
+
+  useEffect(() => {
+    if (!shouldPrompt || !clientId) {
+      cancelGoogleOneTap();
+      return;
+    }
+
+    let active = true;
+
+    void loadGoogleIdentityServices()
+      .then(() => {
+        const googleIdentity = window.google?.accounts?.id;
+        if (!active || !googleIdentity) return;
+
+        googleIdentity.initialize({
+          client_id: clientId,
+          auto_select: false,
+          cancel_on_tap_outside: true,
+          use_fedcm_for_prompt: true,
+          itp_support: true,
+          callback: (response) => {
+            if (!active || !response.credential) return;
+
+            loginRef.current(
+              { credential: response.credential },
+              {
+                onSuccess: (result) => {
+                  navigateRef.current(
+                    resolvePostAuthPath(result, returnToRef.current),
+                    { replace: true },
+                  );
+                },
+                onError: (error) => {
+                  setErrorMessage(toOneTapErrorMessage(error));
+                },
+              },
+            );
+          },
+        });
+        googleIdentity.prompt();
+      })
+      .catch(() => {
+        // Fallback gracefully
+      });
+
+    return () => {
+      active = false;
+      cancelGoogleOneTap();
+    };
+  }, [shouldPrompt, clientId, normalizedPath]);
+
+  return (
+    <>
+      {errorMessage ? (
+        <ToastNotification
+          message={errorMessage}
+          type="error"
+          onDismiss={() => setErrorMessage(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+
