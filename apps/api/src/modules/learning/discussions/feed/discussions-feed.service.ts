@@ -1,4 +1,5 @@
 import type { DatabaseExecutor } from "@veolms/database";
+import type { S3StorageService } from "@veolms/storage";
 import type {
   LessonDiscussionKind,
   LessonDiscussionSort,
@@ -320,6 +321,7 @@ export function createLearningDiscussionsFeedService(options?: {
   lessonAccess?: LessonDiscussionAccess;
   threads?: ThreadsService;
   notes?: NotesService;
+  storage?: S3StorageService;
 }): LearningDiscussionsFeedService {
   const lessonAccess = options?.lessonAccess ?? createLessonDiscussionAccess();
   const threads =
@@ -327,8 +329,14 @@ export function createLearningDiscussionsFeedService(options?: {
     createThreadsService(
       createThreadsRepository(),
       createAttachmentsRepository(),
+      undefined,
+      undefined,
+      undefined,
+      options?.storage,
     );
-  const notes = options?.notes ?? createNotesService(createNotesRepository());
+  const notes =
+    options?.notes ??
+    createNotesService(createNotesRepository(), options?.storage);
 
   return {
     async list(db, { courseId, lessonId, actor, query }) {

@@ -16,6 +16,7 @@ import { createAccessService } from "../access/index.ts";
 import * as mediaRepo from "./media.repository.ts";
 import { enqueueImageJob } from "@veolms/database";
 import { probeVideoSource } from "../../lib/video-prober.ts";
+import { getCdnDeliveryUrl } from "../../services/cdn-delivery.ts";
 import type {
   MediaConvertWebhookPayload,
   MediaConvertWebhookResponse,
@@ -929,32 +930,7 @@ export function createMediaService({
   }
 
   function getDirectDelivery(storageKey: string) {
-    const requiresToken = !services.storage.isCdnPublicKey(storageKey);
-    const expiresAt = requiresToken
-      ? Math.floor(Date.now() / 1000) + services.storage.getCdnTokenTtlSeconds()
-      : undefined;
-    const token = requiresToken
-      ? services.storage.createCdnAccessToken(storageKey, expiresAt)
-      : undefined;
-    if (requiresToken && !token) {
-      throw new AppError(
-        503,
-        "CDN_NOT_CONFIGURED",
-        "Protected media delivery is not configured.",
-      );
-    }
-    const url = services.storage.getCdnObjectUrl(
-      storageKey,
-      token ?? undefined,
-    );
-    if (!url) {
-      throw new AppError(
-        503,
-        "CDN_NOT_CONFIGURED",
-        "Media delivery is not configured.",
-      );
-    }
-    return { url, expiresAt };
+    return getCdnDeliveryUrl(services.storage, storageKey);
   }
 
   async function getMediaDelivery(

@@ -27,7 +27,10 @@ export function createDiscussionsFeedRoutes(
     const permissions =
       dependencies.permissions ?? createDiscussionPermissions(options);
     const service =
-      dependencies.service ?? createLearningDiscussionsFeedService();
+      dependencies.service ??
+      createLearningDiscussionsFeedService({
+        storage: options.services.storage,
+      });
 
     app.get(
       "/courses/:courseId/lessons/:lessonId/discussions",

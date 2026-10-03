@@ -21,7 +21,11 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
   const permissions = createDiscussionPermissions(options);
   const threadsRepo = createThreadsRepository();
   const repliesRepo = createRepliesRepository();
-  const service = createRepliesService({ threadsRepo, repliesRepo });
+  const service = createRepliesService({
+    threadsRepo,
+    repliesRepo,
+    storage: options.services.storage,
+  });
   const controller = createRepliesController({
     database: options.database,
     service,
