@@ -32,6 +32,7 @@ import {
   getSidebarShellBootstrapScript,
 } from "./shell/sidebarPreferences";
 import { getAcademyPaletteStylesheetBootstrapScript } from "./shell/academyPaletteStyles";
+import { GlobalGoogleOneTap } from "./auth/GoogleOneTap";
 import {
   ACADEMY_THEME_VERSION,
   DEFAULT_ACADEMY_THEME,
@@ -320,6 +321,7 @@ export default function Root() {
     <QueryProvider>
       <HydrationMarker />
       <SessionInitializer>
+        <GlobalGoogleOneTap />
         <Outlet />
       </SessionInitializer>
     </QueryProvider>

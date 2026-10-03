@@ -6,7 +6,6 @@ import { AuthBrandMark } from "./AuthBrandPanel";
 import { IdentifierForm } from "./IdentifierForm";
 import { OtpForm } from "./OtpForm";
 import { AuthProgress } from "./AuthProgress";
-import { GoogleOneTap } from "./GoogleOneTap";
 import { SocialLoginActions } from "./SocialLoginActions";
 import { MfaStepUp } from "./MfaStepUp";
 import {
@@ -459,16 +458,6 @@ export function LoginView() {
   return (
     <section aria-labelledby={AUTH_CARD_HEADING_ID} className="auth-card">
       {renderStep()}
-      {welcomeStep ? (
-        <GoogleOneTap
-          onError={(message) => {
-            setOneTapPending(false);
-            setIdentifierError(message);
-          }}
-          onPendingChange={setOneTapPending}
-          returnTo={searchParams.get("returnTo")}
-        />
-      ) : null}
     </section>
   );
 }
