@@ -42,6 +42,7 @@ import {
 } from "../auth/identifier";
 import type { CountryOption } from "../auth/identifier";
 import { useBackDismiss } from "../navigation/useBackDismiss";
+import { AvatarCropDialog } from "./AvatarCropDialog";
 import { AvatarStylePicker } from "./AvatarStylePicker";
 import type {
   ProfileIdentity,
@@ -559,7 +560,12 @@ export function ProfileSettings({
     useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [avatarCropOpen, setAvatarCropOpen] = useState(false);
+  const [avatarCropSource, setAvatarCropSource] = useState<string | null>(null);
+  const [avatarCropFileName, setAvatarCropFileName] =
+    useState("profile-photo.webp");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const avatarCropSourceRef = useRef<string | null>(null);
   const mobileVisibilityDialogRef = useRef<HTMLDialogElement>(null);
   const verificationDialogRef = useRef<HTMLDivElement>(null);
   const verificationCloseButtonRef = useRef<HTMLButtonElement>(null);
@@ -574,6 +580,27 @@ export function ProfileSettings({
   const isMobileVerified = Boolean(draftProfile.mobileVerified);
   const mobileCountry: CountryOption =
     findCountry(mobileCountryId) ?? getDefaultCountry();
+
+  const revokeAvatarCropSource = useCallback(() => {
+    const source = avatarCropSourceRef.current;
+    if (source) {
+      URL.revokeObjectURL(source);
+      avatarCropSourceRef.current = null;
+    }
+  }, []);
+
+  const closeAvatarCropDialog = useCallback(() => {
+    setAvatarCropOpen(false);
+    setAvatarCropSource(null);
+    revokeAvatarCropSource();
+  }, [revokeAvatarCropSource]);
+
+  useEffect(
+    () => () => {
+      revokeAvatarCropSource();
+    },
+    [revokeAvatarCropSource],
+  );
 
   useEffect(() => {
     setNameError("");
@@ -594,7 +621,8 @@ export function ProfileSettings({
     setMobileVisibilityPromptOpen(false);
     setMobileVisibilityAcknowledged(false);
     setAvatarPickerOpen(false);
-  }, [activeUser, role]);
+    closeAvatarCropDialog();
+  }, [activeUser, closeAvatarCropDialog, role]);
 
   useEffect(() => {
     setMobileCountryId(
@@ -964,30 +992,43 @@ export function ProfileSettings({
     const activeUserId = authStore.getState().user?.id;
     if (!activeUserId) return;
 
+    closeAvatarCropDialog();
+    setPhotoError("");
+    const source = URL.createObjectURL(file);
+    avatarCropSourceRef.current = source;
+    setAvatarCropFileName(file.name);
+    setAvatarCropSource(source);
+    setAvatarCropOpen(true);
+  };
+
+  const handleCroppedPhoto = async (file: File) => {
+    const activeUserId = authStore.getState().user?.id;
+    if (!activeUserId) return;
+
     setPhotoError("");
     setPhotoUploading(true);
-    authService
-      .uploadAvatarPhoto(file)
-      .then((updated) => {
-        if (authStore.getState().user?.id !== activeUserId) return;
-        authStore.setUser(updated);
-        queryClient.setQueryData(authKeys.me(), updated);
-        setAvatarFailed(false);
-        mergeFromServer({
-          avatarDataUrl: updated.avatarDataUrl,
-          avatarSrcSet: updated.avatarSrcSet,
-        });
-        queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
-      })
-      .catch((error: unknown) => {
-        if (authStore.getState().user?.id !== activeUserId) return;
-        const message =
-          error && typeof error === "object" && "message" in error
-            ? String((error as { message?: unknown }).message)
-            : "We couldn't upload that photo. Please try again.";
-        setPhotoError(message);
-      })
-      .finally(() => setPhotoUploading(false));
+    try {
+      const updated = await authService.uploadAvatarPhoto(file);
+      if (authStore.getState().user?.id !== activeUserId) return;
+      authStore.setUser(updated);
+      queryClient.setQueryData(authKeys.me(), updated);
+      setAvatarFailed(false);
+      mergeFromServer({
+        avatarDataUrl: updated.avatarDataUrl,
+        avatarSrcSet: updated.avatarSrcSet,
+      });
+      queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
+      closeAvatarCropDialog();
+    } catch (error: unknown) {
+      if (authStore.getState().user?.id !== activeUserId) return;
+      const message =
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: unknown }).message)
+          : "We couldn't upload that photo. Please try again.";
+      setPhotoError(message);
+    } finally {
+      setPhotoUploading(false);
+    }
   };
 
   const avatar = (className: string) => (
@@ -1880,6 +1921,16 @@ export function ProfileSettings({
             </div>
           </dialog>
         )}
+
+        <AvatarCropDialog
+          open={avatarCropOpen && canEdit}
+          imageUrl={avatarCropSource}
+          fileName={avatarCropFileName}
+          error={photoError}
+          isSaving={photoUploading}
+          onClose={closeAvatarCropDialog}
+          onConfirm={handleCroppedPhoto}
+        />
 
         <AvatarStylePicker
           open={avatarPickerOpen && canEdit}
