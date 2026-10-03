@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { AuthProgress } from "../auth/AuthProgress";
 import { AuthBrandMark } from "../auth/AuthBrandPanel";
 import { AUTH_CARD_HEADING_ID } from "../auth/authFlow";
 import { getAuthRouteMeta, productName } from "../routing/routeDescriptors";
@@ -12,7 +13,6 @@ import {
 } from "../auth/oauthFlow";
 import { useOauthLogin } from "../services/auth";
 import { authStore } from "../store/auth.store";
-import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 
 export function meta() {
   return Object.entries(
@@ -90,50 +90,34 @@ export default function AuthCallbackRoute() {
       });
   }, [searchParams, navigate, oauthLoginMutation]);
 
+  if (!errorMessage) {
+    return (
+      <section aria-labelledby={AUTH_CARD_HEADING_ID} className="auth-card">
+        <AuthProgress
+          detail="Verifying your account and opening a secure session."
+          title="Signing you in"
+        />
+      </section>
+    );
+  }
+
   return (
     <section aria-labelledby={AUTH_CARD_HEADING_ID} className="auth-card">
       <AuthBrandMark />
-      <h1
-        className={errorMessage ? "auth-card__heading" : "sr-only"}
-        id={AUTH_CARD_HEADING_ID}
-      >
-        {errorMessage ? "Authentication Failed" : "Signing in"}
+      <h1 className="auth-card__heading" id={AUTH_CARD_HEADING_ID}>
+        Authentication Failed
       </h1>
-      {errorMessage ? (
-        <p className="auth-card__subheading">{errorMessage}</p>
-      ) : null}
+      <p className="auth-card__subheading">{errorMessage}</p>
 
-      {!errorMessage ? (
-        <div
-          className="auth-card__form-slot"
-          style={{
-            marginTop: "1.5rem",
-            display: "grid",
-            placeItems: "center",
-            minHeight: "72px",
-            padding: "16px",
-            borderRadius: "10px",
-            background: "color-mix(in srgb, var(--canvas) 60%, var(--surface))",
-            border: "1px solid var(--auth-line)",
-          }}
+      <div className="auth-card__form-slot" style={{ marginTop: "1.5rem" }}>
+        <button
+          className="auth-form__submit"
+          onClick={() => navigate("/login", { replace: true })}
+          type="button"
         >
-          <CenteredLoadingSpinner
-            label="Verifying account and establishing secure session"
-            className="min-h-10 w-full"
-            size={22}
-          />
-        </div>
-      ) : (
-        <div className="auth-card__form-slot" style={{ marginTop: "1.5rem" }}>
-          <button
-            className="auth-form__submit"
-            onClick={() => navigate("/login", { replace: true })}
-            type="button"
-          >
-            <span className="auth-form__submit-label">Back to Login</span>
-          </button>
-        </div>
-      )}
+          <span className="auth-form__submit-label">Back to Login</span>
+        </button>
+      </div>
     </section>
   );
 }

@@ -4,6 +4,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import type {
+  AuthConfigResponse,
   CurrentUserResponse,
   SessionResponse,
   UserAvatarListResponse,
@@ -47,6 +48,15 @@ export function currentUserQueryOptions(queryClient: QueryClient) {
     staleTime: 5 * 60 * 1000,
     retry: false,
   };
+}
+
+export function useAuthConfig() {
+  return useQuery<AuthConfigResponse, ApiError>({
+    queryKey: authKeys.config(),
+    queryFn: () => authService.getAuthConfig(),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
 }
 
 export function useCurrentUser() {

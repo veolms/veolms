@@ -1,4 +1,5 @@
 import {
+  googleOneTapLoginRequestSchema,
   loginResponseSchema,
   oauthCallbackRequestSchema,
   oauthRegisterRequestSchema,
@@ -53,6 +54,32 @@ const oauthRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.login,
+  );
+
+  app.post(
+    "/auth/oauth/google/one-tap",
+    {
+      // Unauthenticated and each call hits Google + the DB, so cap per IP.
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: "1 minute",
+        },
+      },
+      schema: {
+        operationId: "googleOneTapLogin",
+        tags: ["Auth"],
+        summary: "Google One Tap login",
+        description:
+          "Verifies a Google One Tap ID token and logs the user in, creating or linking an account when needed.",
+        body: googleOneTapLoginRequestSchema,
+        response: {
+          200: jsonResponse("Login successful.", loginResponseSchema),
+          400: errorResponse("Authentication failed."),
+        },
+      },
+    },
+    controller.loginWithGoogleOneTap,
   );
 
   app.post(

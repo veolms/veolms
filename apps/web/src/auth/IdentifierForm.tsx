@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Icon } from "../icons/Icon";
+import { AuthBusySubmit } from "./AuthProgress";
 import { CountryCodeSelect, getDefaultCountry } from "./CountryCodeSelect";
 import { IdentifierMethodSwitch } from "./IdentifierMethodSwitch";
 import {
@@ -22,6 +23,7 @@ export type IdentifierSubmission =
 
 export interface IdentifierFormProps {
   status: "idle" | "sending";
+  disabled?: boolean;
   errorMessage?: string;
   forcedMethod?: IdentifierMethod;
   onSubmit: (submission: IdentifierSubmission) => void;
@@ -45,11 +47,13 @@ const DEFAULT_COUNTRY = getDefaultCountry();
 
 export function IdentifierForm({
   status,
+  disabled = false,
   errorMessage,
   forcedMethod,
   onSubmit,
 }: IdentifierFormProps) {
   const sending = status === "sending";
+  const locked = sending || disabled;
 
   const [method, setMethod] = useState<IdentifierMethod>(
     forcedMethod ?? getDefaultLoginMethod(),
@@ -149,6 +153,7 @@ export function IdentifierForm({
               aria-invalid={error !== null}
               autoComplete="email"
               className="auth-form__input"
+              disabled={locked}
               id={EMAIL_FIELD_ID}
               inputMode="email"
               name="email"
@@ -190,6 +195,7 @@ export function IdentifierForm({
                 aria-invalid={error !== null}
                 autoComplete="tel-national"
                 className="auth-form__input"
+                disabled={locked}
                 id={MOBILE_FIELD_ID}
                 inputMode="numeric"
                 name="mobile"
@@ -211,17 +217,13 @@ export function IdentifierForm({
         </div>
       )}
 
-      <button
-        aria-busy={sending}
-        className="auth-form__submit"
-        disabled={sending}
-        type="submit"
-      >
-        <span className="auth-form__submit-label">
-          {sending ? "Sending..." : "Continue"}
-        </span>
-        <Icon aria-hidden emphasis="bold" name="arrowRight" size={18} />
-      </button>
+      <AuthBusySubmit
+        busy={sending}
+        busyLabel="Sending code…"
+        disabled={disabled}
+        label="Continue"
+        pendingMessage="Sending your sign-in code. Please wait."
+      />
     </form>
   );
 }

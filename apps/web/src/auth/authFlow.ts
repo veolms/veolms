@@ -285,6 +285,16 @@ export function authFlowReducer(
   }
 
   if (state.status === "sendingOtp" && action.type === "OTP_SEND_FAILED") {
+    if (state.sendCount > 0) {
+      return {
+        status: "otp",
+        identifier: state.identifier,
+        code: "",
+        sendCount: state.sendCount,
+        failure: null,
+      };
+    }
+
     return { status: "identifier", message: OTP_MESSAGES.sendFailed.body };
   }
 

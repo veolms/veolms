@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { Icon } from "../icons/Icon.tsx";
 import { AuthBrandMark } from "./AuthBrandPanel.tsx";
+import { AuthBusySubmit } from "./AuthProgress.tsx";
 import { OtpCodeInput } from "./OtpCodeInput.tsx";
 import {
   AUTH_CARD_HEADING_ID,
@@ -29,6 +29,7 @@ export interface OtpFormProps {
   onSubmit: (code: string) => void;
   onResend: () => void;
   onIdentifierChange: () => void;
+  resending?: boolean;
 }
 
 const CODE_LABEL = "Verification code";
@@ -66,6 +67,7 @@ export function OtpForm({
   onIdentifierChange,
   onResend,
   onSubmit,
+  resending = false,
   sendCount,
   status,
 }: OtpFormProps) {
@@ -133,7 +135,7 @@ export function OtpForm({
           <div className="auth-form__field">
             <OtpCodeInput
               describedBy={message === null ? undefined : MESSAGE_ID}
-              disabled={verifying}
+              disabled={verifying || resending}
               invalid={message !== null}
               label={CODE_LABEL}
               autoFocus
@@ -160,36 +162,40 @@ export function OtpForm({
 
             <button
               className="auth-otp-form__resend-button"
-              disabled={cooling}
+              disabled={cooling || resending || verifying}
               onClick={onResend}
               type="button"
             >
-              {cooling
-                ? `Resend in ${formatResendCountdown(remaining)}`
-                : OTP_ACTION_LABELS.resend}
+              {resending
+                ? "Sending a new code…"
+                : cooling
+                  ? `Resend in ${formatResendCountdown(remaining)}`
+                  : OTP_ACTION_LABELS.resend}
             </button>
 
             <p className="auth-otp-form__status" role="status">
-              {cooling ? RESEND_WAITING_STATUS : RESEND_READY_STATUS}
+              {resending
+                ? "Sending a new code. Please wait."
+                : cooling
+                  ? RESEND_WAITING_STATUS
+                  : RESEND_READY_STATUS}
             </p>
           </div>
 
-          <button
-            aria-busy={verifying}
-            className="auth-form__submit"
-            disabled={verifying}
-            type="submit"
-          >
-            <span className="auth-form__submit-label">
-              {verifying
-                ? OTP_ACTION_LABELS.verifying
-                : OTP_ACTION_LABELS.verify}
-            </span>
-            <Icon aria-hidden emphasis="bold" name="arrowRight" size={18} />
-          </button>
+          <AuthBusySubmit
+            busy={verifying || resending}
+            busyLabel={
+              resending ? "Sending a new code…" : OTP_ACTION_LABELS.verifying
+            }
+            label={OTP_ACTION_LABELS.verify}
+            pendingMessage={
+              verifying ? "Checking your code. Please wait." : undefined
+            }
+          />
 
           <button
             className="auth-otp-form__change"
+            disabled={resending || verifying}
             onClick={onIdentifierChange}
             type="button"
           >

@@ -1,6 +1,7 @@
 export const authKeys = {
   all: ["auth"] as const,
   me: () => [...authKeys.all, "me"] as const,
+  config: () => [...authKeys.all, "config"] as const,
   avatars: () => [...authKeys.all, "avatars"] as const,
   sessions: () => [...authKeys.all, "sessions"] as const,
 };
